@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/engine_core",
+    "crates/renderer",
+    "crates/components",
+    "crates/input",
+    "crates/audio",
+    "crates/tooling/*",
+]
