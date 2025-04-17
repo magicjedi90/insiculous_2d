@@ -8,3 +8,9 @@ members = [
     "crates/audio",
     "crates/tooling/*",
 ]
+
+[workspace.dependencies]
+log = "0.4.27"
+anyhow = "1.0.98"
+winit = "0.30.9"
+glam = "0.30.2"

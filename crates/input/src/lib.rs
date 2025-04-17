@@ -1,14 +1,23 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::event::{ElementState, KeyEvent};
+
+#[derive(Debug, Clone, Copy)]
+pub enum PlayerCommand {
+    MoveLeft,
+    MoveRight,
+    Jump,
+    FireWeapon,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+pub fn interpret_keyboard_input(keyboard_input: &KeyEvent) -> Option<PlayerCommand> {
+    if keyboard_input.state != ElementState::Pressed {
+        return None;
+    }
+    match keyboard_input.physical_key {
+        PhysicalKey::Code(KeyCode::KeyA)      => Some(PlayerCommand::MoveLeft),
+        PhysicalKey::Code(KeyCode::KeyD)      => Some(PlayerCommand::MoveRight),
+        PhysicalKey::Code(KeyCode::Space)     => Some(PlayerCommand::Jump),
+        PhysicalKey::Code(KeyCode::Enter)     => Some(PlayerCommand::FireWeapon),
+        _ => None,
     }
 }

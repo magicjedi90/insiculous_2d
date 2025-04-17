@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Crate root for Insiculous2D Engine.
+//!
+//! This library provides the high‑level `launch()` entry point and the
+//! `GameState` trait implemented by the game.  Most engine users will
+//! `use engine_core::prelude::*;` rather than importing items
+//! one by one.  See `prelude.rs` for exactly what is re‑exported.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod engine;         // game loop + winit glue
+pub mod time;           // ApplicationClock
+pub mod events;         // EventBus wrapper
+pub mod prelude;        // curated re‑exports for game code
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Re‑export the façade so callers can `Engine::launch()` if they prefer
+pub use engine::{launch, GameState};
