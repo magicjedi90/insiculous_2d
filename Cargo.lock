@@ -264,6 +264,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "builtin_states"
+version = "0.1.0"
+dependencies = [
+ "engine_core",
+ "input",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,6 +898,18 @@ name = "input"
 version = "0.1.0"
 dependencies = [
  "winit",
+]
+
+[[package]]
+name = "insiculous_2d"
+version = "0.1.0"
+dependencies = [
+ "audio",
+ "builtin_states",
+ "components",
+ "engine_core",
+ "input",
+ "renderer",
 ]
 
 [[package]]

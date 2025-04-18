@@ -6,7 +6,7 @@ members = [
     "crates/components",
     "crates/input",
     "crates/audio",
-    "crates/tooling/*",
+    "crates/tooling/*", "crates/builtin_states", "crates/insiculous_2d",
 ]
 
 [workspace.dependencies]

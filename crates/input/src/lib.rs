@@ -7,6 +7,7 @@ pub enum PlayerCommand {
     MoveRight,
     Jump,
     FireWeapon,
+    TogglePause
 }
 
 pub fn interpret_keyboard_input(keyboard_input: &KeyEvent) -> Option<PlayerCommand> {
@@ -18,6 +19,7 @@ pub fn interpret_keyboard_input(keyboard_input: &KeyEvent) -> Option<PlayerComma
         PhysicalKey::Code(KeyCode::KeyD)      => Some(PlayerCommand::MoveRight),
         PhysicalKey::Code(KeyCode::Space)     => Some(PlayerCommand::Jump),
         PhysicalKey::Code(KeyCode::Enter)     => Some(PlayerCommand::FireWeapon),
+        PhysicalKey::Code(KeyCode::Escape)    => Some(PlayerCommand::TogglePause),
         _ => None,
     }
 }

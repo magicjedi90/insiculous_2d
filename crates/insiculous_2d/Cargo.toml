@@ -1,0 +1,13 @@
+[package]
+name = "insiculous_2d"
+version = "0.1.0"
+edition = "2024"
+description = "Insiculous2D Game Engine"
+
+[dependencies]
+engine_core = { path = "../engine_core" }
+renderer = { path = "../renderer" }
+components = { path = "../components" }
+input = { path = "../input" }
+audio = { path = "../audio" }
+builtin_states = { path = "../builtin_states" }

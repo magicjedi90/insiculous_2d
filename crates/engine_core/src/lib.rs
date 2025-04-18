@@ -8,7 +8,10 @@
 pub mod engine;         // game loop + winit glue
 pub mod time;           // ApplicationClock
 pub mod events;         // EventBus wrapper
-pub mod prelude;        // curated re‑exports for game code
+pub mod prelude;
+pub mod game_state;
+mod state_stack;
 
 // Re‑export the façade so callers can `Engine::launch()` if they prefer
-pub use engine::{launch, GameState};
+pub use engine::launch;
+pub use game_state::GameState;

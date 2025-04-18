@@ -1,0 +1,10 @@
+[package]
+name = "builtin_states"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wgpu  = "25.0.0"
+winit = { workspace = true }
+engine_core = { path = "../engine_core"}
+input = { path = "../input"}

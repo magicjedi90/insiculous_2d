@@ -1,101 +1,111 @@
+use std::marker::PhantomData;
 use anyhow::Result;
 use log::{error, info};
+
 use winit::{
-    application::ApplicationHandler,
-    event::{StartCause, WindowEvent},
+    application::ApplicationHandler,                           // trait for run_app :contentReference[oaicite:0]{index=0}
+    event::{Event, StartCause, WindowEvent},                   // StartCause::Init :contentReference[oaicite:1]{index=1}
     event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowAttributes, WindowId},
+    window::{Window, WindowAttributes, WindowId},              // WindowAttributes builder :contentReference[oaicite:2]{index=2}
 };
 
-use crate::time::ApplicationClock;
+use crate::{
+    game_state::GameState,
+    state_stack::{StateStack},
+    time::ApplicationClock,
+};
 
-/// Trait implemented by the game to hook into the engine lifecycle.
-pub trait GameState: Default {
-    fn update(&mut self, delta_seconds: f32);
-    fn render(&mut self, window: &Window);
+/// Internal struct that owns the state‑stack and drives updates / rendering.
+struct EngineApplication<RootState: GameState + Default> {
+    stack:              StateStack,
+    clock:              ApplicationClock,
+    primary_window:     Option<Window>,
+    primary_window_id:  Option<WindowId>,
+    _phantom:           PhantomData<RootState>,
+
 }
 
-/// Internal glue that lets the engine talk to winit’s trait system.
-struct EngineApplication<RootState: GameState> {
-    state:               RootState,
-    clock:               ApplicationClock,
-    primary_window:      Option<Window>,
-    primary_window_id:   Option<WindowId>,
-}
-
-impl<RootState: GameState> Default for EngineApplication<RootState> {
+impl<RootState: GameState + Default> Default for EngineApplication<RootState> {
     fn default() -> Self {
         Self {
-            state: RootState::default(),
+            stack: StateStack::new(Box::new(RootState::default())),
             clock: ApplicationClock::new(),
             primary_window: None,
             primary_window_id: None,
+            _phantom: PhantomData,
+
         }
     }
 }
 
-impl<RootState: GameState> ApplicationHandler for EngineApplication<RootState> {
-    // Optional: react to NewEvents StartCause for fixed‑timestep work
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+impl<RootState: GameState + Default> ApplicationHandler for EngineApplication<RootState> {
+    fn new_events(&mut self, _loop: &ActiveEventLoop, cause: StartCause) {
         if matches!(cause, StartCause::Init) {
             self.clock.advance_frame();
         }
     }
-
-    /// Called once the OS allows surface creation.
+    
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let attributes = Window::default_attributes().with_title("Insiculous2D");
-        match event_loop.create_window(attributes) {
+        let attrs: WindowAttributes = Window::default_attributes()
+            .with_title("Insiculous2D");                // title helper :contentReference[oaicite:3]{index=3}
+
+        match event_loop.create_window(attrs) {                  // create_window API :contentReference[oaicite:4]{index=4}
             Ok(window) => {
+                info!("Window created, id={:?}", window.id());
                 self.primary_window_id = Some(window.id());
                 self.primary_window = Some(window);
-                info!("Window created");
             }
-            Err(error) => {
-                error!("Failed to create window: {error}");
-                event_loop.exit();
+            Err(err) => {
+                error!("Could not create window: {err}");
+                event_loop.exit();                               // graceful shutdown :contentReference[oaicite:5]{index=5}
             }
         }
     }
-
+    
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
+        window_id:  WindowId,
+        event:      WindowEvent,
     ) {
+        // Discard events from non‑primary windows
         if Some(window_id) != self.primary_window_id {
             return;
         }
-        let window = match self.primary_window.as_ref() {
-            Some(window) => window,
-            None => return,
-        };
+
+        // Give the active state a chance to react
+        let transition = self
+            .stack
+            .active_mut()
+            .handle_winit_event(&Event::WindowEvent { window_id, event: event.clone() });
+        self.stack.apply(transition);
 
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),         // new exit helper :contentReference[oaicite:5]{index=5}
-            WindowEvent::RedrawRequested => self.state.render(window),
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => {
+                if let Some(w) = self.primary_window.as_ref() {
+                    self.stack.render(w);
+                }
+            }
             _ => {}
         }
     }
-
-    /// Per‑frame callback; good place to tick game logic.
+    
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         self.clock.advance_frame();
         if let Some(window) = self.primary_window.as_ref() {
-            self.state.update(self.clock.delta_seconds());
-            window.request_redraw();                                  // redraw request in about_to_wait :contentReference[oaicite:4]{index=4}
+            self.stack.update(self.clock.delta_seconds());
+            window.request_redraw();
         }
     }
 }
 
-/// **Public entry point** the game calls.
-pub fn launch<RootState: GameState>() -> Result<()> {
-    let mut event_loop: EventLoop<()> = EventLoop::new()?;            // Result‑returning ctor :contentReference[oaicite:6]{index=6}
-    let mut application = EngineApplication::<RootState>::default();
+/// Public façade: create the event‑loop, spin the engine.
+pub fn launch<RootState: GameState + Default>() -> Result<()> {
+    let event_loop: EventLoop<()> = EventLoop::new()?;
+    let mut app = EngineApplication::<RootState>::default();
 
-    // `run_app` is the stable loop since winit 0.30 :contentReference[oaicite:7]{index=7}
-    event_loop.run_app(&mut application)?;
+    event_loop.run_app(&mut app)?;
 
     Ok(())
 }
