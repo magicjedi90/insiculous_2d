@@ -153,7 +153,7 @@ impl Renderer {
         );
         
         // Create render pass and forget its lifetime
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("egui_render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
@@ -169,7 +169,7 @@ impl Renderer {
         });
         
         // Forget the lifetime of the render pass
-        let mut rpass = unsafe { std::mem::transmute::<_, wgpu::RenderPass<'static>>(rpass) };
+        let mut rpass = unsafe { std::mem::transmute::<_, wgpu::RenderPass<'static>>(render_pass) };
         
         // Render egui
         egui_renderer.render(&mut rpass, paint_jobs, screen_desc);

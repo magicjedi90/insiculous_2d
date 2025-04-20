@@ -118,7 +118,7 @@ impl<Root: GameState + Default> ApplicationHandler for EngineApplication<Root> {
 
         match event {
             WindowEvent::RedrawRequested => {
-                if let (Some(win), Some(renderer), Some(egui_rpass)) =
+                if let (Some(win), Some(renderer), Some(_)) =
                     (&self.window, &self.renderer, &self.egui_rpass)
                 {
                     // 8. Render game states + egui overlays
@@ -131,7 +131,7 @@ impl<Root: GameState + Default> ApplicationHandler for EngineApplication<Root> {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let (Some(win), Some(renderer)) = (&self.window, &self.renderer) {
+        if let (Some(win), Some(_)) = (&self.window, &self.renderer) {
             // 5. Update your game logic
             self.clock.advance_frame();
             self.stack.update(self.clock.delta_seconds());
