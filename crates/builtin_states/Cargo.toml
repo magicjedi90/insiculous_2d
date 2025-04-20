@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wgpu  = "25.0.0"
-winit = { workspace = true }
 engine_core = { path = "../engine_core"}
+renderer = { path = "../renderer"}
 input = { path = "../input"}
+winit = { workspace = true }
+egui       = { workspace = true }
+egui-wgpu  = { workspace = true }
+once_cell = { workspace = true }

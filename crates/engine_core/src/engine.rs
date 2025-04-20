@@ -1,111 +1,147 @@
+// crates/engine_core/src/engine.rs
+
+use std::rc::Rc;
 use std::marker::PhantomData;
 use anyhow::Result;
 use log::{error, info};
+use std::sync::{Arc, Mutex};
 
 use winit::{
-    application::ApplicationHandler,                           // trait for run_app :contentReference[oaicite:0]{index=0}
-    event::{Event, StartCause, WindowEvent},                   // StartCause::Init :contentReference[oaicite:1]{index=1}
-    event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowAttributes, WindowId},              // WindowAttributes builder :contentReference[oaicite:2]{index=2}
+    application::ApplicationHandler,
+    event::{Event, StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowId},
 };
 
-use crate::{
-    game_state::GameState,
-    state_stack::{StateStack},
-    time::ApplicationClock,
-};
+use egui::Context as EguiContext;
+use egui_wgpu::Renderer as EguiRenderer;
 
-/// Internal struct that owns the state‑stack and drives updates / rendering.
-struct EngineApplication<RootState: GameState + Default> {
-    stack:              StateStack,
-    clock:              ApplicationClock,
-    primary_window:     Option<Window>,
-    primary_window_id:  Option<WindowId>,
-    _phantom:           PhantomData<RootState>,
+use crate::game_state::GameState;
+use crate::state_stack::StateStack;
+use crate::time::ApplicationClock;
+use renderer::Renderer;  // your GPU renderer
 
+/// Public entry point: start the winit loop with your root state.
+pub fn launch<Root: GameState + Default>() -> Result<()> {
+    let event_loop = EventLoop::new()?;
+    let mut app = EngineApplication::<Root>::default();
+    event_loop.run_app(&mut app)?;
+    Ok(())
 }
 
-impl<RootState: GameState + Default> Default for EngineApplication<RootState> {
+struct EngineApplication<Root: GameState + Default> {
+    stack:      StateStack,
+    clock:      ApplicationClock,
+    window:     Option<Window>,
+    main_id:    Option<WindowId>,
+    renderer:   Option<Rc<Renderer>>,
+    egui_ctx:   EguiContext,
+    egui_rpass: Option<Arc<Mutex<EguiRenderer>>>,
+    _phantom:   PhantomData<Root>,
+}
+
+impl<Root: GameState + Default> Default for EngineApplication<Root> {
     fn default() -> Self {
         Self {
-            stack: StateStack::new(Box::new(RootState::default())),
-            clock: ApplicationClock::new(),
-            primary_window: None,
-            primary_window_id: None,
-            _phantom: PhantomData,
-
+            stack:      StateStack::new(Box::new(Root::default())),
+            clock:      ApplicationClock::new(),
+            window:     None,
+            main_id:    None,
+            renderer:   None,
+            egui_ctx:   EguiContext::default(),
+            egui_rpass: None,
+            _phantom:   PhantomData,
         }
     }
 }
 
-impl<RootState: GameState + Default> ApplicationHandler for EngineApplication<RootState> {
+impl<Root: GameState + Default> ApplicationHandler for EngineApplication<Root> {
     fn new_events(&mut self, _loop: &ActiveEventLoop, cause: StartCause) {
         if matches!(cause, StartCause::Init) {
+            // avoid huge dt on first frame
             self.clock.advance_frame();
         }
     }
-    
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let attrs: WindowAttributes = Window::default_attributes()
-            .with_title("Insiculous2D");                // title helper :contentReference[oaicite:3]{index=3}
 
-        match event_loop.create_window(attrs) {                  // create_window API :contentReference[oaicite:4]{index=4}
-            Ok(window) => {
-                info!("Window created, id={:?}", window.id());
-                self.primary_window_id = Some(window.id());
-                self.primary_window = Some(window);
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // 1. Create the OS window
+        let attrs = Window::default_attributes().with_title("Insiculous2D");
+        match event_loop.create_window(attrs) {
+            Ok(win) => {
+                info!("Window created, id={:?}", win.id());
+                self.main_id = Some(win.id());
+
+                // 2. Initialize your Renderer once
+                let renderer = Rc::new(pollster::block_on(Renderer::new(&win)));
+                let fmt    = renderer.target_format();
+
+                // 3. Now that you have a real Device+Format, create EguiRenderer
+                let egui_render_pass = Arc::new(Mutex::new(EguiRenderer::new(
+                    renderer.device(),    // &wgpu::Device
+                    fmt,                  // wgpu::TextureFormat
+                    None,                 // optional MSAA samples
+                    1,                    // max textures per frame
+                    true,                 // auto-submit render pass
+                )));
+
+                // Set handles with the new initialization structure
+                StateStack::set_gui_handles(self.egui_ctx.clone(), egui_render_pass.clone());
+
+                self.renderer   = Some(renderer.clone());
+                self.egui_rpass = Some(egui_render_pass);
+                self.window     = Some(win);
+
+                // 4. Start polling so we redraw continuously
+                event_loop.set_control_flow(ControlFlow::Poll);
             }
-            Err(err) => {
-                error!("Could not create window: {err}");
-                event_loop.exit();                               // graceful shutdown :contentReference[oaicite:5]{index=5}
+            Err(e) => {
+                error!("Failed to create window: {e}");
+                event_loop.exit();
             }
         }
     }
-    
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id:  WindowId,
-        event:      WindowEvent,
+        id:          WindowId,
+        event:       WindowEvent,
     ) {
-        // Discard events from non‑primary windows
-        if Some(window_id) != self.primary_window_id {
-            return;
+        if Some(id) != self.main_id {
+            return; // ignore
         }
 
-        // Give the active state a chance to react
-        let transition = self
-            .stack
-            .active_mut()
-            .handle_winit_event(&Event::WindowEvent { window_id, event: event.clone() });
+        // 7. Forward input to the top state
+        let wrapped = Event::WindowEvent { window_id: id, event: event.clone() };
+        let transition = self.stack.active_mut().handle_winit_event(&wrapped);
         self.stack.apply(transition);
 
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                if let Some(w) = self.primary_window.as_ref() {
-                    self.stack.render(w);
+                if let (Some(win), Some(renderer), Some(egui_rpass)) =
+                    (&self.window, &self.renderer, &self.egui_rpass)
+                {
+                    // 8. Render game states + egui overlays
+                    self.stack.render(win, renderer.clone());
                 }
             }
+            WindowEvent::CloseRequested => event_loop.exit(),
             _ => {}
         }
     }
-    
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        self.clock.advance_frame();
-        if let Some(window) = self.primary_window.as_ref() {
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let (Some(win), Some(renderer)) = (&self.window, &self.renderer) {
+            // 5. Update your game logic
+            self.clock.advance_frame();
             self.stack.update(self.clock.delta_seconds());
-            window.request_redraw();
+
+            // 6. Request a redraw and keep polling
+            win.request_redraw();
+            event_loop.set_control_flow(ControlFlow::Poll);
+        } else {
+            // no window yet -> wait for events
+            event_loop.set_control_flow(ControlFlow::Wait);
         }
     }
-}
-
-/// Public façade: create the event‑loop, spin the engine.
-pub fn launch<RootState: GameState + Default>() -> Result<()> {
-    let event_loop: EventLoop<()> = EventLoop::new()?;
-    let mut app = EngineApplication::<RootState>::default();
-
-    event_loop.run_app(&mut app)?;
-
-    Ok(())
 }

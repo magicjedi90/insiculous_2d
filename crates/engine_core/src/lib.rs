@@ -2,7 +2,7 @@
 //!
 //! This library provides the high‑level `launch()` entry point and the
 //! `GameState` trait implemented by the game.  Most engine users will
-//! `use engine_core::prelude::*;` rather than importing items
+//! `use engine_core::prelude:*;` rather than importing items
 //! one by one.  See `prelude.rs` for exactly what is re‑exported.
 
 pub mod engine;         // game loop + winit glue

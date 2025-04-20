@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+Always Use Best Practices - Especially The SRP And DRY Principals. Use Examples From The Docs When Generating Code as often as possible. Avoid Abbreviations And Make Variables, functions, And File Names Human Readable. Utilize Game Programming Patterns When Its Viable. Reference Godot Implementations When Stuck And For Additional Solution Ideas
