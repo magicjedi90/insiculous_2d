@@ -152,30 +152,31 @@ impl Renderer {
             screen_desc
         );
         
-        // Create render pass and forget its lifetime
-        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("egui_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-        
-        // Forget the lifetime of the render pass
-        let mut rpass = unsafe { std::mem::transmute::<_, wgpu::RenderPass<'static>>(render_pass) };
-        
-        // Render egui
-        egui_renderer.render(&mut rpass, paint_jobs, screen_desc);
-        
-        // Drop the render pass
-        drop(rpass);
+        // Use a scope to ensure render pass is dropped before encoder.finish()
+        {
+            // Create render pass and transmute to 'static
+            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            
+            // Transmute to 'static and render
+            let mut rpass = unsafe { std::mem::transmute::<_, wgpu::RenderPass<'static>>(render_pass) };
+            egui_renderer.render(&mut rpass, paint_jobs, screen_desc);
+            
+            // Drop the transmuted render pass
+            drop(rpass);
+        }
         
         // Submit work
         self.queue.submit(std::iter::once(encoder.finish()));
