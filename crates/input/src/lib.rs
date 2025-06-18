@@ -1,10 +1,7 @@
-pub mod event_mapper;
+pub mod player_command;
+pub mod input_map;
+pub mod binding;
 
-#[derive(Debug, Clone, Copy)]
-pub enum PlayerCommand {
-    MoveLeft,
-    MoveRight,
-    Jump,
-    FireWeapon,
-    TogglePause
-}
+pub use binding::InputBinding;
+pub use input_map::InputMap;
+pub use player_command::PlayerCommand;

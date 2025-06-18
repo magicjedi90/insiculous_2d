@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 winit = { workspace = true }
+hecs = { workspace = true }
+components = { path = '../components'}

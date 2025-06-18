@@ -7,8 +7,8 @@ use std::rc::Rc;
 use winit::{event::Event, window::Window};
 
 // Pull in your WGPU renderer and egui handles
-use renderer::Renderer;
-use input::{PlayerCommand, event_mapper::command_from_event};
+use renderer::core::Renderer;
+use input::{PlayerCommand};
 
 pub struct PauseState {
     // Cache the translucent panel style once
@@ -86,7 +86,7 @@ impl GameState for PauseState {
     }
     
     fn handle_winit_event(&mut self, e: &Event<()>) -> Transition {
-        if matches!(command_from_event(e), Some(PlayerCommand::TogglePause)) {
+        if matches!( Some(PlayerCommand::TogglePause)) {
             Transition::Pop
         } else {
             Transition::None

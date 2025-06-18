@@ -13,12 +13,10 @@ anyhow = { workspace = true }
 winit = { workspace = true }
 glam = { workspace = true }
 renderer = { path = "../renderer" }
+hecs = {workspace = true }
 pollster = { workspace = true }
 components = { path = "../components" }
 input = { path = "../input" }
 audio = { path = "../audio", optional = true }
 simple_event_bus = "0.0.5"
 time = "0.3.41"
-env_logger = "0.11.8"
-egui       = { workspace = true }
-egui-wgpu  = { workspace = true }

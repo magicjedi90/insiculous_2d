@@ -1,6 +1,7 @@
-mod core;
-mod clear;
-mod accessors;
-mod egui;
+pub mod core;
+pub mod clear;
+pub mod accessors;
+pub mod egui;
+pub mod sprite_animator;
 
-pub use core::Renderer;
+pub use sprite_animator::sprite_animator_system;

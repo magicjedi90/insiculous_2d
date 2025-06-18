@@ -8,6 +8,4 @@ engine_core = { path = "../engine_core"}
 renderer = { path = "../renderer"}
 input = { path = "../input"}
 winit = { workspace = true }
-egui       = { workspace = true }
-egui-wgpu  = { workspace = true }
 once_cell = { workspace = true }

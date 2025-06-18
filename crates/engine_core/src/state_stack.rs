@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use crate::game_state::GameState;
 use winit::window::Window;
-use renderer::Renderer;
+use renderer::core::Renderer;
 // For state_stack.rs
 // Use interior mutability for the egui renderer
 use std::sync::Mutex;
@@ -46,17 +46,4 @@ impl StateStack {
         self.layers.last_mut().expect("Stack is never empty").as_mut()
     }
     
-    pub fn set_gui_handles(ctx: egui::Context, render_pass: Arc<Mutex<egui_wgpu::Renderer>>) {
-        GUI_HANDLES.get_or_init(|| (
-            Arc::new(ctx), 
-            render_pass
-        ));
-    }
-    
-    pub fn egui_handles() -> (Arc<egui::Context>, Arc<Mutex<egui_wgpu::Renderer>>) {
-        GUI_HANDLES.get().expect("GUI handles not initialized").clone()
-    }
 }
-
-
-static GUI_HANDLES: OnceLock<(Arc<egui::Context>, Arc<Mutex<egui_wgpu::Renderer>>)> = OnceLock::new();

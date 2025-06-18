@@ -10,6 +10,7 @@ pub mod prelude;
 pub mod game_state;
 
 mod state_stack;
-
+mod game_object;
+mod scene;
 pub use engine::launch;
 pub use game_state::GameState;

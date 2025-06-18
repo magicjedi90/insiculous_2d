@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use winit::event::Event;
 use winit::window::Window;
-use renderer::Renderer;
+use renderer::core::Renderer;
 use crate::prelude::Transition;
 
 /// Public trait every game state must implement.
