@@ -469,6 +469,7 @@ dependencies = [
 name = "engine_core"
 version = "0.1.0"
 dependencies = [
+ "ecs",
  "log",
  "renderer",
  "thiserror 2.0.12",

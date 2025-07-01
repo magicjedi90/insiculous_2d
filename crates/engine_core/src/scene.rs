@@ -2,12 +2,16 @@
 //!
 //! This module provides functionality for managing the game scene graph, similar to Godot's scene system.
 
+use ecs::World;
+
 /// A simple scene graph container
 pub struct Scene {
     /// Whether the scene is initialized
     initialized: bool,
     /// Name of the scene
     name: String,
+    /// The ECS world
+    pub world: World,
 }
 
 impl Scene {
@@ -16,6 +20,7 @@ impl Scene {
         Self {
             initialized: false,
             name: name.into(),
+            world: World::default(),
         }
     }
 
@@ -41,7 +46,19 @@ impl Scene {
             return;
         }
 
-        // In a real implementation, this would update all entities and systems
+        // Update the world
+        self.world.update(delta_time);
         log::trace!("Updating scene '{}', delta: {:.4}s", self.name, delta_time);
+    }
+
+    /// Update the scene with a borrowed schedule
+    pub fn update_with_schedule(&mut self, schedule: &mut ecs::SystemRegistry, dt: f32) {
+        if !self.initialized {
+            return;
+        }
+
+        // Execute the schedule on the world
+        schedule.update_all(&mut self.world, dt);
+        log::trace!("Updating scene '{}' with schedule, delta: {:.4}s", self.name, dt);
     }
 }

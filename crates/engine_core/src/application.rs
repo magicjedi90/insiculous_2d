@@ -6,6 +6,7 @@ use winit::{
 use std::sync::Arc;
 use renderer::{Renderer, WindowConfig, create_window_with_active_loop, init};
 use crate::{Scene, GameLoop};
+use ecs::SystemRegistry;
 
 /// Core application handler for the engine
 pub struct EngineApplication {
@@ -15,22 +16,47 @@ pub struct EngineApplication {
     pub window: Option<Arc<Window>>,
     /// Window configuration
     pub window_config: WindowConfig,
-    /// Game scene
-    pub world: Scene,
+    /// Stack of scenes (0+ scenes)
+    pub scenes: Vec<Scene>,
+    /// Schedule for systems
+    pub schedule: SystemRegistry,
     /// Game loop
     pub game_loop: GameLoop,
 }
 
 impl EngineApplication {
     /// Create a new engine application with existing scene and game loop
-    pub fn new(world: Scene, game_loop: GameLoop) -> Self {
+    pub fn new(scene: Scene, game_loop: GameLoop) -> Self {
         Self {
             renderer: None,
             window: None,
             window_config: WindowConfig::default(),
-            world,
+            scenes: vec![scene],
+            schedule: SystemRegistry::new(),
             game_loop,
         }
+    }
+
+    /// Create a new engine application with a scene
+    pub fn with_scene(scene: Scene) -> Self {
+        Self {
+            renderer: None,
+            window: None,
+            window_config: WindowConfig::default(),
+            scenes: vec![scene],
+            schedule: SystemRegistry::new(),
+            game_loop: GameLoop::new(crate::GameLoopConfig::default()),
+        }
+    }
+
+    /// Push a scene onto the stack
+    pub fn push_scene(&mut self, scene: Scene) {
+        self.scenes.push(scene);
+    }
+
+    /// Pop a scene from the stack
+    pub fn pop_scene(&mut self) -> Option<Scene> {
+        self.scenes.pop()
     }
 
     /// Create a new engine application with a custom window configuration
@@ -55,14 +81,18 @@ impl EngineApplication {
         }
     }
 
-    /// Get a reference to the scene
-    pub fn world(&self) -> &Scene {
-        &self.world
-    }
-
-    /// Get a mutable reference to the scene
-    pub fn world_mut(&mut self) -> &mut Scene {
-        &mut self.world
+    /// Process a single frame
+    pub fn frame(&mut self, dt: f32) {
+        if let Some(active) = self.scenes.last_mut() {
+            active.update_with_schedule(&mut self.schedule, dt);
+            if let Some(renderer) = &mut self.renderer {
+                // Render the scene
+                // Note: This is a placeholder as the actual rendering implementation
+                // might differ based on the renderer's API
+                renderer.render().unwrap();
+                log::trace!("Rendering scene");
+            }
+        }
     }
 
     /// Get a reference to the game loop
@@ -74,9 +104,20 @@ impl EngineApplication {
     pub fn game_loop_mut(&mut self) -> &mut GameLoop {
         &mut self.game_loop
     }
+
     /// Get the window if it exists
     pub fn window(&self) -> Option<&Arc<Window>> {
         self.window.as_ref()
+    }
+
+    /// Get a reference to the active scene (last scene in the stack)
+    pub fn active_scene(&self) -> Option<&Scene> {
+        self.scenes.last()
+    }
+
+    /// Get a mutable reference to the active scene (last scene in the stack)
+    pub fn active_scene_mut(&mut self) -> Option<&mut Scene> {
+        self.scenes.last_mut()
     }
 
     /// Create a window using the configured window settings
@@ -134,9 +175,9 @@ impl ApplicationHandler<()> for EngineApplication {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Update the scene
+        // Update the active scene
         let delta_time = self.game_loop.timer().delta_time().as_secs_f32();
-        self.world.update(delta_time);
+        self.frame(delta_time);
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
