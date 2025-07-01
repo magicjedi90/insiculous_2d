@@ -5,7 +5,7 @@ use winit::{
 };
 use std::sync::Arc;
 use renderer::{Renderer, WindowConfig, create_window_with_active_loop, init};
-use crate::{World, GameLoop};
+use crate::{Scene, GameLoop};
 
 /// Core application handler for the engine
 pub struct EngineApplication {
@@ -15,15 +15,15 @@ pub struct EngineApplication {
     pub window: Option<Arc<Window>>,
     /// Window configuration
     pub window_config: WindowConfig,
-    /// Game world
-    pub world: World,
+    /// Game scene
+    pub world: Scene,
     /// Game loop
     pub game_loop: GameLoop,
 }
 
 impl EngineApplication {
-    /// Create a new engine application with existing world and game loop
-    pub fn new(world: World, game_loop: GameLoop) -> Self {
+    /// Create a new engine application with existing scene and game loop
+    pub fn new(world: Scene, game_loop: GameLoop) -> Self {
         Self {
             renderer: None,
             window: None,
@@ -55,13 +55,13 @@ impl EngineApplication {
         }
     }
 
-    /// Get a reference to the world
-    pub fn world(&self) -> &World {
+    /// Get a reference to the scene
+    pub fn world(&self) -> &Scene {
         &self.world
     }
 
-    /// Get a mutable reference to the world
-    pub fn world_mut(&mut self) -> &mut World {
+    /// Get a mutable reference to the scene
+    pub fn world_mut(&mut self) -> &mut Scene {
         &mut self.world
     }
 
@@ -134,7 +134,7 @@ impl ApplicationHandler<()> for EngineApplication {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Update the world
+        // Update the scene
         let delta_time = self.game_loop.timer().delta_time().as_secs_f32();
         self.world.update(delta_time);
     }

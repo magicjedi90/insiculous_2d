@@ -1,6 +1,6 @@
 //! A simple example that opens a window, clears the screen, and logs a message.
 
-use engine_core::{World, GameLoop, GameLoopConfig, EngineApplication};
+use engine_core::{Scene, GameLoop, GameLoopConfig, EngineApplication};
 use renderer::prelude::*;
 
 /// Main function
@@ -15,8 +15,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize engine core
     engine_core::init().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-    // Create a world
-    let mut world = World::new("Main World");
+    // Create a scene
+    let mut world = Scene::new("Main Scene");
     world.initialize();
 
     // Initialize ECS

@@ -8,6 +8,6 @@ pub use crate::{
     game_loop::{GameLoop, GameLoopConfig},
     init,
     timing::Timer,
-    world::World,
+    scene::Scene,
     EngineError,
 };

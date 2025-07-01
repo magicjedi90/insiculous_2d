@@ -1,11 +1,11 @@
 //! Core functionality for the insiculous_2d game engine.
 //!
-//! This crate provides the game loop, timing, and world state management.
+//! This crate provides the game loop, timing, and scene graph management.
 
 mod application;
 mod game_loop;
 mod timing;
-mod world;
+mod scene;
 
 pub mod prelude;
 
@@ -13,7 +13,7 @@ pub mod prelude;
 pub use application::*;
 pub use game_loop::*;
 pub use timing::*;
-pub use world::*;
+pub use scene::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {
