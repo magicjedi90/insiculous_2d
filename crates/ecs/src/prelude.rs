@@ -1,12 +1,13 @@
-//! Prelude module for the engine_core crate.
+//! Prelude module for the ecs crate.
 //!
 //! This module re-exports the most commonly used items from the crate
 //! for ergonomic imports.
 
 pub use crate::{
-    game_loop::{GameLoop, GameLoopConfig},
+    component::Component,
+    entity::{Entity, EntityId},
     init,
-    timing::Timer,
+    system::{SimpleSystem, System},
     world::World,
-    EngineError,
+    EcsError,
 };

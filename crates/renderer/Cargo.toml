@@ -1,10 +1,14 @@
 [package]
 name = "renderer"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "WGPU renderer for the insiculous_2d game engine"
 
 [dependencies]
+log = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
-egui       = { workspace = true }
-egui-wgpu  = { workspace = true }
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
+engine_core = { path = "../engine_core" }
+tokio = "1.45.1"

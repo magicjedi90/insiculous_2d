@@ -1,24 +1,11 @@
 [package]
 name = "engine_core"
 version = "0.1.0"
-edition = "2024"
-
-[features]
-audio = ["dep:audio"]   # optional Service‑Locator style
-default = ["audio"]
+edition = "2021"
+description = "Core functionality for the insiculous_2d game engine"
 
 [dependencies]
 log = { workspace = true }
-anyhow = { workspace = true }
+env_logger = { workspace = true }
+thiserror = { workspace = true }
 winit = { workspace = true }
-glam = { workspace = true }
-renderer = { path = "../renderer" }
-pollster = { workspace = true }
-components = { path = "../components" }
-input = { path = "../input" }
-audio = { path = "../audio", optional = true }
-simple_event_bus = "0.0.5"
-time = "0.3.41"
-env_logger = "0.11.8"
-egui       = { workspace = true }
-egui-wgpu  = { workspace = true }
