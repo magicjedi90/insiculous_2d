@@ -469,8 +469,8 @@ dependencies = [
 name = "engine_core"
 version = "0.1.0"
 dependencies = [
- "env_logger",
  "log",
+ "renderer",
  "thiserror 2.0.12",
  "winit",
 ]
@@ -1518,11 +1518,8 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 name = "renderer"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
- "engine_core",
  "log",
  "thiserror 2.0.12",
- "tokio",
  "wgpu",
  "winit",
 ]

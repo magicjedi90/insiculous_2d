@@ -49,6 +49,3 @@ pub fn create_window_with_active_loop(
 
     Ok(window)
 }
-
-// The deprecated create_window function has been removed.
-// Use create_window_with_active_loop instead with an ActiveEventLoop.

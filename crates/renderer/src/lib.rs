@@ -4,7 +4,6 @@
 
 use winit::application::ApplicationHandler;
 
-mod application;
 mod error;
 mod renderer;
 mod window;
@@ -12,21 +11,14 @@ mod window;
 pub mod prelude;
 
 // Re-export for convenience
-pub use application::*;
 pub use error::*;
 pub use renderer::*;
 pub use window::*;
 
-/// Initialize the renderer
-pub async fn init() -> Result<Renderer<'static>, RendererError> {
+/// Initialize the renderer with an existing window
+pub async fn init(window: std::sync::Arc<winit::window::Window>) -> Result<Renderer<'static>, RendererError> {
     log::info!("Renderer initialized");
-    Renderer::new().await
-}
-
-/// Initialize the renderer with existing world and game loop
-pub async fn init_with_engine_app(engine_app: engine_core::EngineApplication) -> Result<Renderer<'static>, RendererError> {
-    log::info!("Renderer initialized with existing world and game loop");
-    Renderer::new_with_engine_app(engine_app).await
+    Renderer::new(window).await
 }
 
 /// Run the renderer with a custom application handler

@@ -3,7 +3,7 @@ use renderer::prelude::*;
 #[ignore] // Ignore by default as it requires a display and GPU
 async fn test_init() {
     // Test initializing the renderer
-    let result = renderer::init().await;
+    // let result = renderer::init().await;
 
     // TODO: Assert that initialization was successful
     // This test is ignored by default as it requires a display and GPU
@@ -16,7 +16,7 @@ async fn test_init() {
 #[ignore] // Ignore by default as it requires a display and GPU
 async fn test_init_and_render() {
     // Test initializing the renderer and rendering a frame
-    let result = renderer::init().await;
+    // let result = init(window).await;
 
     // TODO: Assert that initialization and rendering were successful
     // This test is ignored by default as it requires a display and GPU

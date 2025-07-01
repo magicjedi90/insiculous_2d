@@ -1,6 +1,7 @@
 //! A simple example that opens a window, clears the screen, and logs a message.
 
-use engine_core::World;
+use engine_core::{World, GameLoop, GameLoopConfig, EngineApplication};
+use renderer::prelude::*;
 
 /// Main function
 #[tokio::main]
@@ -18,26 +19,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut world = World::new("Main World");
     world.initialize();
 
-    // Initialize renderer
-    let mut renderer = renderer::init().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-
     // Initialize ECS
     let _ecs_world = ecs::init().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     // Initialize input
     let _input = input::init().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
+    // Create game loop
+    let game_loop = GameLoop::new(GameLoopConfig::default());
+
+    // Create engine application with custom window config
+    let window_config = WindowConfig::default();
+    let mut engine_app = EngineApplication::new(world, game_loop)
+        .with_window_config(window_config);
+
+    // Run the event loop with the application to create the window
+    // This will keep the window open and handle events like window closing
+    log::info!("Starting event loop");
+    renderer::run_with_app(&mut engine_app)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+    // Get the window from the application
+    let window = engine_app.window().ok_or("Window not created")?.clone();
+
+    // Initialize renderer with the window
+    let mut renderer = init(window).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
     // Set clear color to a nice blue
     renderer.set_clear_color(0.1, 0.2, 0.3, 1.0);
 
-    // Render a frame
+    // Render initial frame
     if let Err(e) = renderer.render() {
         log::error!("Render error: {}", e);
     }
 
-    // The renderer already created an event loop and window internally,
-    // so we don't need to create another one or run an event loop here.
-    // In a real application, you would use the renderer's window to handle events.
+    // Store the renderer in the application
+    engine_app.renderer = Some(renderer);
+
     log::info!("Example completed successfully");
 
     Ok(())

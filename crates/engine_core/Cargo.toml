@@ -6,6 +6,6 @@ description = "Core functionality for the insiculous_2d game engine"
 
 [dependencies]
 log = { workspace = true }
-env_logger = { workspace = true }
 thiserror = { workspace = true }
 winit = { workspace = true }
+renderer = { path = "../renderer" }

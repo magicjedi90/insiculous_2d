@@ -10,9 +10,7 @@ use winit::{
     window::Window
 };
 
-use crate::application::RendererApplication;
 use crate::error::RendererError;
-use crate::window::WindowConfig;
 
 /// The main renderer struct
 pub struct Renderer<'a> {
@@ -23,20 +21,9 @@ pub struct Renderer<'a> {
     clear_color: wgpu::Color,
 }
 
-impl<'a> Renderer<'a> {
-    /// Create a new renderer with existing world and game loop
-    pub async fn new_with_engine_app(engine_app: engine_core::EngineApplication) -> Result<Self, RendererError> {
-        // Create an event loop and application with the provided world and game loop
-        let event_loop = EventLoop::new().map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
-        let window_config = WindowConfig::default();
-        let mut app = RendererApplication::new(window_config, engine_app);
-
-        // Run the event loop to create the window
-        event_loop.run_app(&mut app).map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
-
-        // Get the window from the application
-        let window = app.window().ok_or_else(|| RendererError::WindowCreationError("Window not created".to_string()))?.clone();
-
+impl Renderer<'static> {
+    /// Create a new renderer with an existing window
+    pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
         // Create WGPU instance
         let instance = wgpu::Instance::default();
 
@@ -99,17 +86,6 @@ impl<'a> Renderer<'a> {
                 a: 1.0,
             },
         })
-    }
-
-    /// Create a new renderer
-    pub async fn new() -> Result<Self, RendererError> {
-        // Create a world and game loop
-        let mut world = engine_core::World::new("Renderer World");
-        world.initialize();
-        let game_loop = engine_core::GameLoop::new(engine_core::GameLoopConfig::default());
-        let engine_app = engine_core::EngineApplication::new(world, game_loop);
-        // Use the new_with_world_and_game_loop method
-        Self::new_with_engine_app(engine_app).await
     }
 
     /// Set the clear color

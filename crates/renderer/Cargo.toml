@@ -8,7 +8,4 @@ description = "WGPU renderer for the insiculous_2d game engine"
 log = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
-bytemuck = { workspace = true }
 thiserror = { workspace = true }
-engine_core = { path = "../engine_core" }
-tokio = "1.45.1"
