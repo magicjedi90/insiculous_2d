@@ -4,6 +4,7 @@
 //! for ergonomic imports.
 
 pub use crate::{
+    application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},
     init,
     timing::Timer,

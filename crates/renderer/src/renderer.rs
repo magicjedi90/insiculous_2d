@@ -2,32 +2,40 @@
 
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Device, Instance, Queue, Surface, SurfaceConfiguration, TextureUsages,
+    Device, Queue, Surface, SurfaceConfiguration, TextureUsages,
 };
-use winit::{event_loop::EventLoop, window::Window};
+use winit::{
+    application::ApplicationHandler,
+    event_loop::EventLoop,
+    window::Window
+};
 
+use crate::application::RendererApplication;
 use crate::error::RendererError;
-use crate::window::{create_window, WindowConfig};
+use crate::window::WindowConfig;
 
 /// The main renderer struct
 pub struct Renderer<'a> {
     window: Arc<Window>,
-    instance: Instance,
     surface: Surface<'a>,
-    adapter: Adapter,
     device: Device,
     queue: Queue,
-    config: SurfaceConfiguration,
     clear_color: wgpu::Color,
 }
 
 impl<'a> Renderer<'a> {
-    /// Create a new renderer
-    pub async fn new() -> Result<Self, RendererError> {
-        // Create an event loop and window
+    /// Create a new renderer with existing world and game loop
+    pub async fn new_with_engine_app(engine_app: engine_core::EngineApplication) -> Result<Self, RendererError> {
+        // Create an event loop and application with the provided world and game loop
         let event_loop = EventLoop::new().map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
         let window_config = WindowConfig::default();
-        let window = Arc::new(create_window(&window_config, &event_loop)?);
+        let mut app = RendererApplication::new(window_config, engine_app);
+
+        // Run the event loop to create the window
+        event_loop.run_app(&mut app).map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
+
+        // Get the window from the application
+        let window = app.window().ok_or_else(|| RendererError::WindowCreationError("Window not created".to_string()))?.clone();
 
         // Create WGPU instance
         let instance = wgpu::Instance::default();
@@ -81,12 +89,9 @@ impl<'a> Renderer<'a> {
 
         Ok(Self {
             window,
-            instance,
             surface,
-            adapter,
             device,
             queue,
-            config,
             clear_color: wgpu::Color {
                 r: 0.1,
                 g: 0.2,
@@ -94,6 +99,17 @@ impl<'a> Renderer<'a> {
                 a: 1.0,
             },
         })
+    }
+
+    /// Create a new renderer
+    pub async fn new() -> Result<Self, RendererError> {
+        // Create a world and game loop
+        let mut world = engine_core::World::new("Renderer World");
+        world.initialize();
+        let game_loop = engine_core::GameLoop::new(engine_core::GameLoopConfig::default());
+        let engine_app = engine_core::EngineApplication::new(world, game_loop);
+        // Use the new_with_world_and_game_loop method
+        Self::new_with_engine_app(engine_app).await
     }
 
     /// Set the clear color
@@ -163,5 +179,19 @@ impl<'a> Renderer<'a> {
     /// Get a reference to the queue
     pub fn queue(&self) -> &Queue {
         &self.queue
+    }
+
+    /// Run the renderer with a custom application handler
+    pub fn run_with_app<T>(app: &mut T) -> Result<(), RendererError> 
+    where 
+        T: ApplicationHandler<()> + 'static
+    {
+        // Create an event loop
+        let event_loop = EventLoop::new()
+            .map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
+
+        // Run the event loop with the application
+        event_loop.run_app(app)
+            .map_err(|e| RendererError::WindowCreationError(e.to_string()))
     }
 }

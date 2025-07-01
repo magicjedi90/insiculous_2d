@@ -1,9 +1,9 @@
 //! Window management for the renderer.
 
 use winit::{
-    event_loop::{EventLoop, ActiveEventLoop},
-    window::{Window, WindowAttributes},
     dpi::PhysicalSize,
+    event_loop::ActiveEventLoop,
+    window::{Window, WindowAttributes},
 };
 
 use crate::error::RendererError;
@@ -50,24 +50,5 @@ pub fn create_window_with_active_loop(
     Ok(window)
 }
 
-/// Create a new window with the given configuration using an EventLoop
-/// This is a wrapper around create_window_with_active_loop that uses the deprecated create_window method
-pub fn create_window(
-    config: &WindowConfig,
-    event_loop: &EventLoop<()>,
-) -> Result<Window, RendererError> {
-    // Create window attributes
-    let mut attributes = WindowAttributes::default();
-    attributes.title = config.title.clone();
-    attributes.inner_size = Some(PhysicalSize::new(config.width, config.height).into());
-    attributes.resizable = config.resizable;
-
-    // Create the window using the deprecated create_window method
-    // Note: create_window is deprecated but still works in winit 0.30
-    // In a future update, this should be replaced with ActiveEventLoop::create_window
-    #[allow(deprecated)]
-    let window = event_loop.create_window(attributes)
-        .map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
-
-    Ok(window)
-}
+// The deprecated create_window function has been removed.
+// Use create_window_with_active_loop instead with an ActiveEventLoop.

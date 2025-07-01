@@ -64,4 +64,7 @@ impl GameLoop {
     pub fn target_frame_duration(&self) -> Duration {
         Duration::from_secs_f64(1.0 / self.config.target_fps as f64)
     }
+    pub fn timer(&self) -> &Timer {
+        &self.timer
+    }
 }

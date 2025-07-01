@@ -4,7 +4,7 @@
 //! for ergonomic imports.
 
 pub use crate::{
-    init,
-    window::{create_window, create_window_with_active_loop, WindowConfig},
-    Renderer, RendererError,
+    init, init_with_engine_app, run_with_app,
+    window::{create_window_with_active_loop, WindowConfig},
+    Renderer, RendererError, RendererApplication,
 };

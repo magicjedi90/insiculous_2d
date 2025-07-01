@@ -2,6 +2,7 @@
 //!
 //! This crate provides the game loop, timing, and world state management.
 
+mod application;
 mod game_loop;
 mod timing;
 mod world;
@@ -9,6 +10,7 @@ mod world;
 pub mod prelude;
 
 // Re-export for convenience
+pub use application::*;
 pub use game_loop::*;
 pub use timing::*;
 pub use world::*;
