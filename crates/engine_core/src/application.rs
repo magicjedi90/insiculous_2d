@@ -22,6 +22,8 @@ pub struct EngineApplication {
     pub schedule: SystemRegistry,
     /// Game loop
     pub game_loop: GameLoop,
+    /// Flag to track whether the renderer needs to be initialized
+    needs_renderer_init: bool,
 }
 
 impl EngineApplication {
@@ -34,6 +36,7 @@ impl EngineApplication {
             scenes: vec![scene],
             schedule: SystemRegistry::new(),
             game_loop,
+            needs_renderer_init: false,
         }
     }
 
@@ -46,6 +49,7 @@ impl EngineApplication {
             scenes: vec![scene],
             schedule: SystemRegistry::new(),
             game_loop: GameLoop::new(crate::GameLoopConfig::default()),
+            needs_renderer_init: false,
         }
     }
 
@@ -86,6 +90,7 @@ impl EngineApplication {
         if let Some(active) = self.scenes.last_mut() {
             active.update_with_schedule(&mut self.schedule, dt);
             if let Some(renderer) = &mut self.renderer {
+
                 // Render the scene
                 // Note: This is a placeholder as the actual rendering implementation
                 // might differ based on the renderer's API
@@ -151,16 +156,22 @@ impl ApplicationHandler<()> for EngineApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create the window when the application is resumed if it doesn't exist
         if self.window.is_none() {
-            let _ = self.create_window(event_loop);
+            if let Ok(_) = self.create_window(event_loop) {
+                // Set the flag to indicate that the renderer needs to be initialized
+                self.needs_renderer_init = true;
+                log::info!("Window created, renderer initialization needed");
+            }
         }
 
-        // Start the game loop
-        let _ = self.start_game_loop();
+        // Start the game loop if it's not already running
+        if !self.game_loop.is_running() {
+            let _ = self.start_game_loop();
+        }
     }
 
     fn window_event(
         &mut self,
-        _event_loop: &ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
@@ -169,12 +180,36 @@ impl ApplicationHandler<()> for EngineApplication {
             winit::event::WindowEvent::CloseRequested => {
                 self.game_loop.stop();
                 log::info!("Game loop stopped");
+                // Request exit from the event loop
+                event_loop.exit();
+                log::info!("Requested exit from event loop");
             }
             _ => {}
         }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // Initialize the renderer if needed
+        if self.needs_renderer_init && self.renderer.is_none() && self.window.is_some() {
+            // Use the current tokio runtime handle to run the async init_renderer call
+            match tokio::runtime::Handle::try_current() {
+                Ok(handle) => {
+                    // Use block_in_place to allow blocking within an async context
+                    tokio::task::block_in_place(|| {
+                        if let Err(e) = handle.block_on(self.init_renderer()) {
+                            log::error!("Failed to initialize renderer: {}", e);
+                        } else {
+                            log::info!("Renderer initialized successfully");
+                            self.needs_renderer_init = false;
+                        }
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to get current tokio runtime handle: {}", e);
+                }
+            }
+        }
+
         // Update the active scene
         let delta_time = self.game_loop.timer().delta_time().as_secs_f32();
         self.frame(delta_time);

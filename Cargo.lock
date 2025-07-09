@@ -473,6 +473,7 @@ dependencies = [
  "log",
  "renderer",
  "thiserror 2.0.12",
+ "tokio",
  "winit",
 ]
 
