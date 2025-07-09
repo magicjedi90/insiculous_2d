@@ -178,6 +178,12 @@ impl ApplicationHandler<()> for EngineApplication {
         // Update the active scene
         let delta_time = self.game_loop.timer().delta_time().as_secs_f32();
         self.frame(delta_time);
+
+        // Request a redraw after each frame update
+        if let Some(window) = &self.window {
+            window.request_redraw();
+            log::trace!("Requested redraw");
+        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

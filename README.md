@@ -18,9 +18,11 @@ insiculous_2d/
 
 Data flow:
 1. Input events are captured by the input system
-2. Game state is updated in the ECS
-3. Rendering is handled by the WGPU renderer
-4. The engine core coordinates all systems
+2. The Application manages one or more Scenes
+3. Each Scene encapsulates its own ECS World and Scene Graph
+4. Game state is updated in the Scene's ECS World
+5. Rendering is handled by the WGPU renderer
+6. The engine core coordinates all systems
 
 ## Quick Start
 

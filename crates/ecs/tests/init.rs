@@ -1,4 +1,3 @@
-use ecs::prelude::*;
 
 #[test]
 fn test_init() {

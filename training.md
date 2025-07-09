@@ -4,22 +4,23 @@
 Insiculous 2D is a lightweight, modular game engine designed for creating 2D games with Rust. It aims to provide a simple yet powerful API that allows developers to focus on game logic rather than boilerplate code. The engine prioritizes performance, cross-platform compatibility, and a clean, intuitive interface. The architecture follows a component-based design with clear separation of concerns between systems.
 
 ## Directory Map
-- **crates/engine_core/** - Core functionality including game loop, timing, and world state management
+- **crates/engine_core/** - Core functionality including game loop, timing, and scene state management
   - `game_loop.rs` - Main game loop implementation with configurable FPS and timestep
   - `timing.rs` - Utilities for time measurement and frame timing
-  - `world.rs` - Game world state management
-  
+  - `scene.rs` - Game scene state management
+  - `application.rs` - Launcher and dependency coordinator
+
 - **crates/renderer/** - WGPU-based rendering system
   - `renderer.rs` - Core rendering functionality using WGPU
   - `window.rs` - Window creation and management using winit
   - `error.rs` - Error handling specific to rendering
-  
+
 - **crates/ecs/** - Entity Component System for game object management
   - `component.rs` - Component trait and storage implementation
   - `entity.rs` - Entity management and identification
   - `system.rs` - System trait for game logic processing
   - `world.rs` - ECS world that ties entities, components, and systems together
-  
+
 - **crates/input/** - Input handling abstraction
   - `input_handler.rs` - Unified input handling facade
   - `keyboard.rs` - Keyboard state tracking
@@ -70,6 +71,14 @@ Used in `InputHandler` to provide a unified interface to different input subsyst
 ### Observer Pattern
 Implemented through event systems for handling input and game events.
 
+### Scene Encapsulation Pattern
+Used to encapsulate an ECS World within each Scene, providing isolation between game scenes. This pattern enables:
+- Isolated hot-reload of individual scenes
+- Easy save-game implementation through scene serialization
+- Multi-scene streaming similar to Bevy sub-worlds and Godot packed scenes
+
+The architecture follows "Application → Scene(s) { World + Scene Graph }" where each Scene contains its own World and Scene Graph.
+
 ### Resource Acquisition Is Initialization (RAII)
 Used throughout the codebase for resource management, particularly in the renderer.
 
@@ -113,7 +122,7 @@ pub fn new(config: GameLoopConfig) -> Self {
 pub enum EngineError {
     #[error("Failed to initialize engine: {0}")]
     InitializationError(String),
-    
+
     #[error("Game loop error: {0}")]
     GameLoopError(String),
 }

@@ -16,7 +16,7 @@ pub use renderer::*;
 pub use window::*;
 
 /// Initialize the renderer with an existing window
-pub async fn init(window: std::sync::Arc<winit::window::Window>) -> Result<Renderer<'static>, RendererError> {
+pub async fn init(window: std::sync::Arc<Window>) -> Result<Renderer<'static>, RendererError> {
     log::info!("Renderer initialized");
     Renderer::new(window).await
 }

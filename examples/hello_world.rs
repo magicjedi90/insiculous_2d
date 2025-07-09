@@ -7,8 +7,8 @@ use renderer::prelude::*;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logger
-    env_logger::init();
-
+    // env_logger::init();
+    env_logger::Builder::from_default_env().filter_level(log::LevelFilter::Debug).init();
     // Log startup message
     log::info!("Engine booted");
 
@@ -33,28 +33,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut engine_app = EngineApplication::new(world, game_loop)
         .with_window_config(window_config);
 
-    // Run the event loop with the application to create the window
-    // This will keep the window open and handle events like window closing
-    log::info!("Starting event loop");
-    renderer::run_with_app(&mut engine_app)
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-
-    // Get the window from the application
-    let window = engine_app.window().ok_or("Window not created")?.clone();
-
-    // Initialize renderer with the window
-    let mut renderer = init(window).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-
-    // Set clear color to a nice blue
-    renderer.set_clear_color(0.1, 0.2, 0.3, 1.0);
-
-    // Render initial frame
-    if let Err(e) = renderer.render() {
-        log::error!("Render error: {}", e);
+    // Start the game loop before running the event loop
+    // This ensures the game loop is running alongside the event loop
+    if let Err(e) = engine_app.start_game_loop() {
+        log::error!("Failed to start game loop: {}", e);
+        return Err(format!("Failed to start game loop: {}", e).into());
     }
 
-    // Store the renderer in the application
-    engine_app.renderer = Some(renderer);
+    // Run the event loop with the application
+    // This will create the window, initialize the renderer, and handle events
+    log::info!("Starting event loop");
+    run_with_app(&mut engine_app)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     log::info!("Example completed successfully");
 

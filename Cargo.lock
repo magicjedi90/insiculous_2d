@@ -738,7 +738,6 @@ dependencies = [
  "log",
  "renderer",
  "tokio",
- "winit",
 ]
 
 [[package]]

@@ -17,7 +17,7 @@ struct Sprite {
 #[test]
 fn test_scene_runs() {
     // Create a new scene
-    let mut scene = Scene::new("Test Scene");
+    let scene = Scene::new("Test Scene");
     
     // Create application with the scene
     let mut app = EngineApplication::with_scene(scene);

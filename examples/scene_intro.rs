@@ -1,6 +1,7 @@
 //! A minimal example showing how to create a scene and run it in the application.
 
 use engine_core::{Scene, EngineApplication};
+use renderer::prelude::*;
 
 // Simple Transform component
 #[derive(Default)]
@@ -31,11 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create application with the scene
     let mut app = EngineApplication::with_scene(scene);
 
-    // Simple game loop (in a real application, you'd use the event loop)
-    let dt = 0.016; // 60 FPS
-    for _ in 0..10 {  // Run for 10 frames for this example
-        app.frame(dt);
+    // Start the game loop
+    if let Err(e) = app.start_game_loop() {
+        log::error!("Failed to start game loop: {}", e);
+        return Err(format!("Failed to start game loop: {}", e).into());
     }
+
+    // Run the event loop with the application
+    // This will create the window, initialize the renderer, and handle events
+    log::info!("Starting event loop");
+    renderer::run_with_app(&mut app)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     log::info!("Example completed successfully");
 

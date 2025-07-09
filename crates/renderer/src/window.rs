@@ -1,6 +1,6 @@
 //! Window management for the renderer.
 
-use winit::{
+pub(crate) use winit::{
     dpi::PhysicalSize,
     event_loop::ActiveEventLoop,
     window::{Window, WindowAttributes},
