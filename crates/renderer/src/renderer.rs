@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use wgpu::{
-    Device, Queue, Surface, SurfaceConfiguration, TextureUsages,
+    Adapter, Device, Queue, Surface, SurfaceConfiguration, TextureFormat, TextureUsages,
 };
 use winit::{
     application::ApplicationHandler,
@@ -16,8 +16,10 @@ use crate::error::RendererError;
 pub struct Renderer<'a> {
     window: Arc<Window>,
     surface: Surface<'a>,
+    adapter: Adapter,
     device: Device,
     queue: Queue,
+    config: SurfaceConfiguration,
     clear_color: wgpu::Color,
 }
 
@@ -77,12 +79,14 @@ impl Renderer<'static> {
         Ok(Self {
             window,
             surface,
+            adapter,
             device,
             queue,
+            config,
             clear_color: wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
+                r: 0.392, // Cornflower blue (100/255)
+                g: 0.584, // (149/255)
+                b: 0.929, // (237/255)
                 a: 1.0,
             },
         })
@@ -96,10 +100,22 @@ impl Renderer<'static> {
     /// Render a frame
     pub fn render(&self) -> Result<(), RendererError> {
         // Get a frame
-        let frame = self
-            .surface
-            .get_current_texture()
-            .map_err(|e| RendererError::RenderingError(e.to_string()))?;
+        let frame = match self.surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(wgpu::SurfaceError::Lost) => {
+                // Surface was lost, return error so caller can recreate it
+                return Err(RendererError::SurfaceError("Surface lost".to_string()));
+            }
+            Err(wgpu::SurfaceError::OutOfMemory) => {
+                // Fatal error, we can't recover
+                return Err(RendererError::RenderingError("Out of memory".to_string()));
+            }
+            Err(e) => {
+                // Other errors can be logged and ignored
+                log::warn!("Surface error: {:?}, skipping frame", e);
+                return Ok(());
+            }
+        };
 
         // Create a view
         let view = frame
@@ -143,6 +159,74 @@ impl Renderer<'static> {
         Ok(())
     }
 
+    /// Render a frame with a sprite pipeline
+    pub fn render_with_sprites(
+        &self, 
+        sprite_pipeline: &crate::sprite::SpritePipeline,
+        camera: &crate::sprite::Camera2D,
+        sprite_batches: &[crate::sprite::SpriteBatch]
+    ) -> Result<(), RendererError> {
+        // Get a frame
+        let frame = match self.surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(wgpu::SurfaceError::Lost) => {
+                // Surface was lost, return error so caller can recreate it
+                return Err(RendererError::SurfaceError("Surface lost".to_string()));
+            }
+            Err(wgpu::SurfaceError::OutOfMemory) => {
+                // Fatal error, we can't recover
+                return Err(RendererError::RenderingError("Out of memory".to_string()));
+            }
+            Err(e) => {
+                // Other errors can be logged and ignored
+                log::warn!("Surface error: {:?}, skipping frame", e);
+                return Ok(());
+            }
+        };
+
+        // Create a view
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create a command encoder
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        // Clear the screen
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
+
+        // Draw sprites
+        sprite_pipeline.draw(&mut encoder, camera, sprite_batches, &view);
+
+        // Submit the command buffer
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Present the frame
+        frame.present();
+
+        Ok(())
+    }
+
     /// Get a reference to the window
     pub fn window(&self) -> &Window {
         &self.window
@@ -156,6 +240,43 @@ impl Renderer<'static> {
     /// Get a reference to the queue
     pub fn queue(&self) -> &Queue {
         &self.queue
+    }
+
+    /// Get adapter information
+    pub fn adapter_info(&self) -> String {
+        self.adapter.get_info().name
+    }
+
+    /// Get surface format
+    pub fn surface_format(&self) -> TextureFormat {
+        self.config.format
+    }
+
+    /// Get surface width
+    pub fn surface_width(&self) -> u32 {
+        self.config.width
+    }
+
+    /// Get surface height
+    pub fn surface_height(&self) -> u32 {
+        self.config.height
+    }
+
+    /// Resize the surface
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
+            self.surface.configure(&self.device, &self.config);
+        }
+    }
+
+    /// Handle surface lost error by recreating the surface
+    pub fn recreate_surface(&mut self) -> Result<(), RendererError> {
+        // Reconfigure the surface
+        self.surface.configure(&self.device, &self.config);
+        log::debug!("Surface recreated after loss");
+        Ok(())
     }
 
     /// Run the renderer with a custom application handler

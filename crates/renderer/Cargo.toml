@@ -9,3 +9,5 @@ log = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = "0.1"

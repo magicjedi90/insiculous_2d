@@ -24,6 +24,10 @@ pub struct EngineApplication {
     pub game_loop: GameLoop,
     /// Flag to track whether the renderer needs to be initialized
     needs_renderer_init: bool,
+    /// Sprite pipeline for 2D rendering
+    pub sprite_pipeline: Option<renderer::sprite::SpritePipeline>,
+    /// Default camera for 2D rendering
+    pub camera_2d: renderer::sprite::Camera2D,
 }
 
 impl EngineApplication {
@@ -37,6 +41,8 @@ impl EngineApplication {
             schedule: SystemRegistry::new(),
             game_loop,
             needs_renderer_init: false,
+            sprite_pipeline: None,
+            camera_2d: renderer::sprite::Camera2D::default(),
         }
     }
 
@@ -50,6 +56,8 @@ impl EngineApplication {
             schedule: SystemRegistry::new(),
             game_loop: GameLoop::new(crate::GameLoopConfig::default()),
             needs_renderer_init: false,
+            sprite_pipeline: None,
+            camera_2d: renderer::sprite::Camera2D::default(),
         }
     }
 
@@ -77,7 +85,21 @@ impl EngineApplication {
         if let Some(window) = &self.window {
             // Initialize the renderer with the window
             let renderer = init(window.clone()).await?;
+
+            // Create sprite pipeline
+            let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device()));
+
+            // Store renderer and sprite pipeline
             self.renderer = Some(renderer);
+            self.sprite_pipeline = sprite_pipeline;
+
+            // Log initialization
+            if let Some(renderer) = &self.renderer {
+                log::debug!("Renderer initialized with adapter: {}", renderer.adapter_info());
+                log::debug!("Surface format: {:?}", renderer.surface_format());
+                log::debug!("Surface size: {}x{}", renderer.surface_width(), renderer.surface_height());
+            }
+
             log::info!("Renderer initialized");
             Ok(())
         } else {
@@ -89,13 +111,58 @@ impl EngineApplication {
     pub fn frame(&mut self, dt: f32) {
         if let Some(active) = self.scenes.last_mut() {
             active.update_with_schedule(&mut self.schedule, dt);
-            if let Some(renderer) = &mut self.renderer {
 
-                // Render the scene
-                // Note: This is a placeholder as the actual rendering implementation
-                // might differ based on the renderer's API
-                renderer.render().unwrap();
-                log::trace!("Rendering scene");
+            // Update camera aspect ratio based on window size
+            if let Some(renderer) = &self.renderer {
+                let width = renderer.surface_width() as f32;
+                let height = renderer.surface_height() as f32;
+                if height > 0.0 {
+                    self.camera_2d.aspect_ratio = width / height;
+                }
+            }
+
+            if let Some(renderer) = &mut self.renderer {
+                // Render the scene with sprites if possible
+                if let Some(sprite_pipeline) = &self.sprite_pipeline {
+                    // Create an empty sprite batch list for now
+                    // In a real implementation, this would come from the scene
+                    let sprite_batches: &[renderer::sprite::SpriteBatch] = &[];
+
+                    match renderer.render_with_sprites(sprite_pipeline, &self.camera_2d, sprite_batches) {
+                        Ok(_) => {
+                            log::trace!("Rendering scene with sprites");
+                        }
+                        Err(renderer::RendererError::SurfaceError(_)) => {
+                            // Try to recreate the surface
+                            if let Err(e) = renderer.recreate_surface() {
+                                log::error!("Failed to recreate surface: {}", e);
+                            } else {
+                                log::debug!("Surface recreated after loss");
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Render error: {}", e);
+                        }
+                    }
+                } else {
+                    // Fallback to basic rendering
+                    match renderer.render() {
+                        Ok(_) => {
+                            log::trace!("Rendering scene");
+                        }
+                        Err(renderer::RendererError::SurfaceError(_)) => {
+                            // Try to recreate the surface
+                            if let Err(e) = renderer.recreate_surface() {
+                                log::error!("Failed to recreate surface: {}", e);
+                            } else {
+                                log::debug!("Surface recreated after loss");
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Render error: {}", e);
+                        }
+                    }
+                }
             }
         }
     }
@@ -129,7 +196,7 @@ impl EngineApplication {
     pub fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<(), renderer::RendererError> {
         match create_window_with_active_loop(&self.window_config, event_loop) {
             Ok(window) => {
-                self.window = Some(Arc::new(window));
+                self.window = Some(window);
                 log::info!("Window created");
                 Ok(())
             }
@@ -156,7 +223,7 @@ impl ApplicationHandler<()> for EngineApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create the window when the application is resumed if it doesn't exist
         if self.window.is_none() {
-            if let Ok(_) = self.create_window(event_loop) {
+            if self.create_window(event_loop).is_ok() {
                 // Set the flag to indicate that the renderer needs to be initialized
                 self.needs_renderer_init = true;
                 log::info!("Window created, renderer initialization needed");
@@ -172,9 +239,16 @@ impl ApplicationHandler<()> for EngineApplication {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: winit::window::WindowId,
+        window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
+        // Only handle events for our window
+        if let Some(window) = &self.window {
+            if window_id != window.id() {
+                return;
+            }
+        }
+
         // Handle window events
         match event {
             winit::event::WindowEvent::CloseRequested => {
@@ -184,6 +258,14 @@ impl ApplicationHandler<()> for EngineApplication {
                 event_loop.exit();
                 log::info!("Requested exit from event loop");
             }
+            winit::event::WindowEvent::Resized(size) => {
+                log::debug!("Window resized to {}x{}", size.width, size.height);
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(size.width, size.height);
+                }
+            }
+            // Note: Minimized and Restored events are not available in winit 0.30
+            // We would handle window state changes here if needed
             _ => {}
         }
     }

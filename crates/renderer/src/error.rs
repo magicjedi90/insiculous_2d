@@ -23,4 +23,13 @@ pub enum RendererError {
 
     #[error("Rendering error: {0}")]
     RenderingError(String),
+
+    #[error("Failed to create runtime: {0}")]
+    RuntimeCreationError(String),
+
+    #[error("Surface error: {0}")]
+    SurfaceError(String),
+
+    #[error("Asset loading error: {0}")]
+    AssetLoadingError(String),
 }

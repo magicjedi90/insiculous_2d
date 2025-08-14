@@ -24,7 +24,7 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            title: "insiculous_2d".to_string(),
+            title: "insiculous_2d v0.1".to_string(),
             width: 800,
             height: 600,
             resizable: true,
@@ -36,7 +36,7 @@ impl Default for WindowConfig {
 pub fn create_window_with_active_loop(
     config: &WindowConfig,
     event_loop: &ActiveEventLoop,
-) -> Result<Window, RendererError> {
+) -> Result<std::sync::Arc<Window>, RendererError> {
     // Create window attributes
     let mut attributes = WindowAttributes::default();
     attributes.title = config.title.clone();
@@ -44,8 +44,10 @@ pub fn create_window_with_active_loop(
     attributes.resizable = config.resizable;
 
     // Create the window using ActiveEventLoop's create_window method
-    let window = event_loop.create_window(attributes)
+    let window = event_loop
+        .create_window(attributes)
         .map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
 
-    Ok(window)
+    // Wrap the window in an Arc to ensure it outlives the event loop callback
+    Ok(std::sync::Arc::new(window))
 }
