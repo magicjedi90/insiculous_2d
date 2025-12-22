@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Represents the state of a keyboard
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct KeyboardState {
     /// Currently pressed keys
     pressed_keys: HashSet<KeyCode>,

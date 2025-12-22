@@ -8,7 +8,9 @@ pub use crate::{
     init,
     keyboard::KeyboardState,
     mouse::{MousePosition, MouseState},
-    InputError, InputHandler,
+    input_mapping::{InputMapping, InputSource, GameAction},
+    thread_safe::{ThreadSafeInputHandler, InputThreadError},
+    InputError, InputHandler, InputEvent,
 };
 pub use winit::event::MouseButton;
 pub use winit::keyboard::KeyCode;

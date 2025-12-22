@@ -35,7 +35,7 @@ pub enum GamepadAxis {
 }
 
 /// Represents the state of a single gamepad
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct GamepadState {
     /// Currently pressed buttons
     pressed_buttons: HashSet<GamepadButton>,
@@ -100,7 +100,7 @@ impl GamepadState {
 }
 
 /// Manages all connected gamepads
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct GamepadManager {
     /// States for all connected gamepads
     gamepad_states: HashMap<u32, GamepadState>,

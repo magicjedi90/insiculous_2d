@@ -19,7 +19,7 @@ impl Default for MousePosition {
 }
 
 /// Represents the state of the mouse
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MouseState {
     /// Current position of the mouse
     position: MousePosition,

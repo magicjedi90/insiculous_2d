@@ -4,16 +4,23 @@
 
 mod gamepad;
 mod input_handler;
+mod input_mapping;
 mod keyboard;
 mod mouse;
+mod thread_safe;
 
 pub mod prelude;
 
 // Re-export for convenience
 pub use gamepad::*;
 pub use input_handler::*;
+pub use input_mapping::*;
 pub use keyboard::*;
 pub use mouse::*;
+pub use thread_safe::*;
+
+// Re-export input events
+pub use input_handler::InputEvent;
 
 /// Initialize the input system
 pub fn init() -> Result<InputHandler, InputError> {

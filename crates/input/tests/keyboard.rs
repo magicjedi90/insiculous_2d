@@ -97,12 +97,17 @@ fn test_key_press_idempotence() {
     // Update to clear the "just pressed" state
     keyboard.update();
 
-    // Press the key again
+    // Press the key again (while it's already pressed)
     keyboard.handle_key_press(KeyCode::KeyA);
 
-    // TODO: Assert that the key is pressed and just pressed again
+    // Key should still be pressed, but NOT just pressed (since it was already pressed)
     assert!(keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(keyboard.is_key_just_pressed(KeyCode::KeyA));
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA)); // Should NOT be just pressed
+    
+    // Release and press again to make it just pressed
+    keyboard.handle_key_release(KeyCode::KeyA);
+    keyboard.handle_key_press(KeyCode::KeyA);
+    assert!(keyboard.is_key_just_pressed(KeyCode::KeyA)); // Now it should be just pressed
 }
 
 #[test]
