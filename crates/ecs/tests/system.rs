@@ -43,7 +43,7 @@ fn test_simple_system() {
 
     // Create a simple system
     let mut system =
-        ecs::SimpleSystem::new("TestSystem", move |_world: &mut World, _delta_time: f32| {
+        SimpleSystem::new("TestSystem", move |_world: &mut World, _delta_time: f32| {
             update_count += 1;
         });
 

@@ -102,14 +102,14 @@ impl SpritePipeline {
         // Create vertex and index buffers for 1000 quads
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Sprite Vertex Buffer"),
-            size: 4 * 1000 * std::mem::size_of::<[f32; 5]>() as u64, // pos[2] + uv[2] + color[1]
+            size: 4 * 1000 * size_of::<[f32; 5]>() as u64, // pos[2] + uv[2] + color[1]
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Sprite Index Buffer"),
-            size: 6 * 1000 * std::mem::size_of::<u16>() as u64, // 2 triangles per quad
+            size: 6 * 1000 * size_of::<u16>() as u64, // 2 triangles per quad
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -128,7 +128,7 @@ impl SpritePipeline {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<[f32; 5]>() as u64,
+                    array_stride: size_of::<[f32; 5]>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
                         // Position
@@ -209,7 +209,7 @@ impl SpritePipeline {
         encoder: &mut wgpu::CommandEncoder,
         _camera: &Camera2D,
         sprite_batches: &[SpriteBatch],
-        target: &wgpu::TextureView,
+        target: &TextureView,
     ) {
         // Begin render pass
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

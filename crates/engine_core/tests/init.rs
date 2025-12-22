@@ -3,7 +3,7 @@ use engine_core::prelude::*;
 #[test]
 fn test_init() {
     // Test initializing the engine core
-    let result = engine_core::init();
+    let result = init();
 
     // TODO: Assert that initialization was successful
     assert!(result.is_ok());

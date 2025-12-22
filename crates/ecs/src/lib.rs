@@ -36,7 +36,7 @@ pub enum EcsError {
     SystemError(String),
 
     #[error("Entity generation error: {0}")]
-    GenerationError(#[from] crate::generation::GenerationError),
+    GenerationError(#[from] GenerationError),
 
     #[error("World not initialized")]
     NotInitialized,

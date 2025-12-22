@@ -104,7 +104,7 @@ fn test_system_management() {
 #[test]
 fn test_world_initialization() {
     // Test initializing the world through the init function
-    let result = ecs::init();
+    let result = init();
 
     // TODO: Assert that the world was initialized successfully
     assert!(result.is_ok());

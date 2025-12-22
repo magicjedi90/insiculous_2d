@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test 2: Entity generation tracking
     log::info!("Test 2: Entity Generation Tracking");
-    let mut world = ecs::init()?;
+    let mut world = init()?;
     world.initialize()?;
     
     // Create entities
@@ -79,14 +79,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test 3: System lifecycle
     log::info!("Test 3: System Lifecycle");
-    let mut world2 = ecs::init()?;
+    let mut world2 = init()?;
     
     // Create a simple counter system
     struct CounterSystem {
         count: std::sync::Arc<std::sync::Mutex<i32>>,
     }
     
-    impl ecs::system::System for CounterSystem {
+    impl System for CounterSystem {
         fn update(&mut self, _world: &mut World, _delta_time: f32) {
             *self.count.lock().unwrap() += 1;
         }
