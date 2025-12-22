@@ -31,10 +31,10 @@ impl Renderer {
     /// 2. Then moving the surface into the renderer with 'static lifetime
     /// 3. The surface is tied to the window's lifetime, which is Arc<Window>
     pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
-        // Create WGPU instance
+        // Create a WGPU instance
         let instance = wgpu::Instance::default();
 
-        // Create surface - this is safe because window is Arc<Window>
+        // Create a surface - this is safe because window is Arc<Window>
         let surface = instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::SurfaceCreationError(e.to_string()))?;
@@ -56,6 +56,7 @@ impl Renderer {
                     label: Some("Primary device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
+                    experimental_features: Default::default(),
                     memory_hints: Default::default(),
                     trace: Default::default(),
                 },
@@ -156,6 +157,7 @@ impl Renderer {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             // In a real implementation, we would draw things here
@@ -223,6 +225,7 @@ impl Renderer {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
         }
 
