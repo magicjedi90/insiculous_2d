@@ -124,4 +124,24 @@ impl ComponentRegistry {
         let type_id = TypeId::of::<T>();
         self.storages.get(&type_id).is_some_and(|s| s.has(entity_id))
     }
+
+    /// Remove all components for an entity
+    pub fn remove_all(&mut self, entity_id: &EntityId) {
+        for storage in self.storages.values_mut() {
+            storage.remove(entity_id);
+        }
+    }
+
+    /// Initialize the component registry
+    pub fn initialize(&mut self) -> Result<(), String> {
+        log::debug!("Initializing component registry with {} component types", self.storages.len());
+        Ok(())
+    }
+
+    /// Shutdown the component registry
+    pub fn shutdown(&mut self) -> Result<(), String> {
+        log::debug!("Shutting down component registry, removing all components");
+        self.storages.clear();
+        Ok(())
+    }
 }

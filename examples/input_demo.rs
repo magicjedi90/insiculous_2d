@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("========================");
 
     // Create a scene with our input demo system
-    let mut scene = Scene::new("Input Demo Scene");
+    let scene = Scene::new("Input Demo Scene");
     
     // Create our demo system
     let input_demo_system = InputDemoSystem::new();
@@ -128,11 +128,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = EngineApplication::with_scene(scene);
 
     // Add a custom update function that demonstrates the input system
-    let custom_update = move |input: &InputHandler, dt: f32| {
+    let _custom_update = move |input: &InputHandler, dt: f32| {
         let mut system = demo_system_clone.lock().unwrap();
         system.update(input, dt);
         
-        let (x, y, color) = system.get_player_info();
+        let (x, y, _color) = system.get_player_info();
         
         // Log interesting input states
         if input.is_key_just_pressed(KeyCode::KeyF) {

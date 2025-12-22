@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a scene
     let mut world = Scene::new("Main Scene");
-    world.initialize();
+    world.initialize()?;
 
     // Initialize ECS
     let _ecs_world = ecs::init().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;

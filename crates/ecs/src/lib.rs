@@ -4,7 +4,8 @@
 
 mod component;
 mod entity;
-mod system;
+pub mod generation;
+pub mod system;
 mod world;
 
 pub mod prelude;
@@ -12,6 +13,7 @@ pub mod prelude;
 // Re-export for convenience
 pub use component::*;
 pub use entity::*;
+pub use generation::*;
 pub use system::*;
 pub use world::*;
 
@@ -32,4 +34,25 @@ pub enum EcsError {
 
     #[error("System error: {0}")]
     SystemError(String),
+
+    #[error("Entity generation error: {0}")]
+    GenerationError(#[from] crate::generation::GenerationError),
+
+    #[error("World not initialized")]
+    NotInitialized,
+
+    #[error("World already initialized")]
+    AlreadyInitialized,
+
+    #[error("World not running")]
+    NotRunning,
+
+    #[error("World already running")]
+    AlreadyRunning,
+}
+
+impl From<String> for EcsError {
+    fn from(error: String) -> Self {
+        EcsError::SystemError(error)
+    }
 }

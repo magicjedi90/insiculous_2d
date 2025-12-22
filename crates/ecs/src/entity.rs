@@ -1,21 +1,58 @@
 //! Entity management for the ECS.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::generation::{EntityGeneration, EntityIdGenerator, EntityReference, GenerationError};
 
-/// A unique identifier for an entity
+/// A unique identifier for an entity with generation tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EntityId(u64);
+pub struct EntityId {
+    /// The raw ID value
+    id: u64,
+    /// The generation for this entity ID
+    generation: u64,
+}
 
 impl EntityId {
-    /// Create a new entity ID
+    /// Create a new entity ID with generation 1
     pub fn new() -> Self {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-        Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+        use std::sync::LazyLock;
+        static GENERATOR: LazyLock<EntityIdGenerator> = LazyLock::new(EntityIdGenerator::new);
+        Self {
+            id: GENERATOR.generate_id(),
+            generation: 1,
+        }
+    }
+
+    /// Create a new entity ID with a specific generation
+    pub fn with_generation(id: u64, generation: u64) -> Self {
+        Self { id, generation }
     }
 
     /// Get the raw ID value
     pub fn value(&self) -> u64 {
-        self.0
+        self.id
+    }
+
+    /// Get the generation
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Create an entity reference for this ID
+    pub fn to_reference(&self) -> EntityReference {
+        EntityReference::new(self.id, self.generation)
+    }
+
+    /// Validate this entity ID against a generation
+    pub fn validate(&self, generation: &EntityGeneration) -> Result<(), GenerationError> {
+        if !generation.is_alive() {
+            return Err(GenerationError::EntityNotAlive(self.id));
+        }
+        
+        if !generation.is_valid(self.generation) {
+            return Err(GenerationError::InvalidGeneration(self.id, self.generation, generation.generation()));
+        }
+        
+        Ok(())
     }
 }
 
@@ -27,11 +64,11 @@ impl Default for EntityId {
 
 impl std::fmt::Display for EntityId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Entity({})", self.0)
+        write!(f, "Entity({}, gen: {})", self.id, self.generation)
     }
 }
 
-/// An entity in the ECS
+/// An entity in the ECS with generation tracking
 #[derive(Debug)]
 pub struct Entity {
     /// The unique identifier for this entity
@@ -49,6 +86,14 @@ impl Entity {
         }
     }
 
+    /// Create a new entity with a specific ID (for entity reuse)
+    pub fn with_id(id: EntityId) -> Self {
+        Self {
+            id,
+            active: true,
+        }
+    }
+
     /// Get the entity's ID
     pub fn id(&self) -> EntityId {
         self.id
@@ -62,6 +107,16 @@ impl Entity {
     /// Set whether the entity is active
     pub fn set_active(&mut self, active: bool) {
         self.active = active;
+    }
+
+    /// Deactivate the entity (mark as not alive)
+    pub fn deactivate(&mut self) {
+        self.active = false;
+    }
+
+    /// Check if this entity matches a reference
+    pub fn matches_reference(&self, reference: &EntityReference) -> bool {
+        self.id.value() == reference.id() && self.id.generation() == reference.generation()
     }
 }
 

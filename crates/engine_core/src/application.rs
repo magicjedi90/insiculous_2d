@@ -113,13 +113,19 @@ impl EngineApplication {
         }
     }
 
-    /// Process a single frame
-    pub fn frame(&mut self, dt: f32) {
+    /// Process a single frame with proper error handling
+    pub fn frame(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
         // Update input state for this frame
         self.input_handler.update();
 
         if let Some(active) = self.scenes.last_mut() {
-            active.update_with_schedule(&mut self.schedule, dt);
+            // Only update if the scene is operational
+            if active.is_operational() {
+                active.update_with_schedule(&mut self.schedule, dt)?;
+            } else {
+                log::warn!("Scene '{}' is not operational (state: {:?}), skipping update", 
+                          active.name(), active.lifecycle_state());
+            }
 
             // Update camera aspect ratio based on window size
             if let Some(renderer) = &self.renderer {
@@ -174,6 +180,8 @@ impl EngineApplication {
                 }
             }
         }
+        
+        Ok(())
     }
 
     /// Get a reference to the game loop
@@ -306,7 +314,11 @@ impl ApplicationHandler<()> for EngineApplication {
 
         // Update the active scene
         let delta_time = self.game_loop.timer().delta_time().as_secs_f32();
-        self.frame(delta_time);
+        if let Err(e) = self.frame(delta_time) {
+            log::error!("Frame processing error: {}", e);
+            // In a production engine, you might want to handle this more gracefully
+            // For now, we'll log the error and continue
+        }
 
         // Request a redraw after each frame update
         if let Some(window) = &self.window {

@@ -6,6 +6,7 @@ mod application;
 mod game_loop;
 mod timing;
 mod scene;
+pub mod lifecycle;
 
 pub mod prelude;
 
@@ -14,6 +15,7 @@ pub use application::*;
 pub use game_loop::*;
 pub use timing::*;
 pub use scene::*;
+pub use lifecycle::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {
