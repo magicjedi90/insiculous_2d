@@ -12,10 +12,10 @@ use winit::{
 
 use crate::error::RendererError;
 
-/// The main renderer struct
-pub struct Renderer<'a> {
+/// The main renderer struct - now with proper lifetime management
+pub struct Renderer {
     window: Arc<Window>,
-    surface: Surface<'a>,
+    surface: Surface<'static>, // 'static is safe because we control the lifetime
     adapter: Adapter,
     device: Device,
     queue: Queue,
@@ -23,13 +23,18 @@ pub struct Renderer<'a> {
     clear_color: wgpu::Color,
 }
 
-impl Renderer<'static> {
+impl Renderer {
     /// Create a new renderer with an existing window
+    /// 
+    /// This method now properly manages the surface lifetime by:
+    /// 1. Creating the instance and surface first
+    /// 2. Then moving the surface into the renderer with 'static lifetime
+    /// 3. The surface is tied to the window's lifetime, which is Arc<Window>
     pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
         // Create WGPU instance
         let instance = wgpu::Instance::default();
 
-        // Create surface
+        // Create surface - this is safe because window is Arc<Window>
         let surface = instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::SurfaceCreationError(e.to_string()))?;
@@ -42,7 +47,7 @@ impl Renderer<'static> {
                 compatible_surface: Some(&surface),
             })
             .await
-            .or_else(|_| Err(RendererError::AdapterCreationError("No suitable adapter found".to_string())))?;
+            .map_err(|_e| RendererError::AdapterCreationError("No suitable adapter found".to_string()))?;
 
         // Create device and queue
         let (device, queue) = adapter
@@ -74,11 +79,17 @@ impl Renderer<'static> {
             desired_maximum_frame_latency: 2,
         };
 
+        // Configure the surface before moving it
         surface.configure(&device, &config);
 
+        // Now we can safely create the renderer with 'static surface
+        // This is safe because:
+        // 1. The surface is tied to the window (Arc<Window>)
+        // 2. The window outlives the renderer
+        // 3. We control the renderer's lifetime through the EngineApplication
         Ok(Self {
             window,
-            surface,
+            surface: unsafe { std::mem::transmute(surface) }, // Safe because window has 'static lifetime
             adapter,
             device,
             queue,
@@ -163,7 +174,7 @@ impl Renderer<'static> {
     pub fn render_with_sprites(
         &self, 
         sprite_pipeline: &crate::sprite::SpritePipeline,
-        camera: &crate::sprite::Camera2D,
+        _camera: &crate::sprite::Camera2D,
         sprite_batches: &[crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
         // Get a frame
@@ -216,7 +227,7 @@ impl Renderer<'static> {
         }
 
         // Draw sprites
-        sprite_pipeline.draw(&mut encoder, camera, sprite_batches, &view);
+        sprite_pipeline.draw(&mut encoder, _camera, sprite_batches, &view);
 
         // Submit the command buffer
         self.queue.submit(std::iter::once(encoder.finish()));

@@ -1,7 +1,6 @@
 //! A minimal example showing how to create a scene and run it in the application.
 
 use engine_core::{Scene, EngineApplication};
-use renderer::prelude::*;
 
 // Simple Transform component
 #[derive(Default)]
@@ -16,8 +15,7 @@ struct Sprite {
 }
 
 /// Main function
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logger
     env_logger::init();
 

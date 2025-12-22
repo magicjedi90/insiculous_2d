@@ -8,6 +8,7 @@ description = "Core functionality for the insiculous_2d game engine"
 log = { workspace = true }
 thiserror = { workspace = true }
 winit = { workspace = true }
-tokio = { workspace = true }
+pollster = "0.3"
 renderer = { path = "../renderer" }
 ecs = { path = "../ecs" }
+input = { path = "../input" }

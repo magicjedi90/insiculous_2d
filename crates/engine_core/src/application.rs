@@ -11,7 +11,7 @@ use ecs::SystemRegistry;
 /// Core application handler for the engine
 pub struct EngineApplication {
     /// Renderer created by the application
-    pub renderer: Option<Renderer<'static>>,
+    pub renderer: Option<Renderer>,
     /// Window created by the application
     pub window: Option<Arc<Window>>,
     /// Window configuration
@@ -28,6 +28,8 @@ pub struct EngineApplication {
     pub sprite_pipeline: Option<renderer::sprite::SpritePipeline>,
     /// Default camera for 2D rendering
     pub camera_2d: renderer::sprite::Camera2D,
+    /// Input handler for managing keyboard, mouse, and gamepad input
+    pub input_handler: input::InputHandler,
 }
 
 impl EngineApplication {
@@ -43,6 +45,7 @@ impl EngineApplication {
             needs_renderer_init: false,
             sprite_pipeline: None,
             camera_2d: renderer::sprite::Camera2D::default(),
+            input_handler: input::InputHandler::new(),
         }
     }
 
@@ -58,6 +61,7 @@ impl EngineApplication {
             needs_renderer_init: false,
             sprite_pipeline: None,
             camera_2d: renderer::sprite::Camera2D::default(),
+            input_handler: input::InputHandler::new(),
         }
     }
 
@@ -78,13 +82,15 @@ impl EngineApplication {
     }
 
     /// Initialize the renderer with the current window
-    /// 
-    /// This function requires tokio runtime to be available as it uses async/await.
-    /// It should be called after the window has been created.
-    pub async fn init_renderer(&mut self) -> Result<(), renderer::RendererError> {
+    pub fn init_renderer(&mut self) -> Result<(), renderer::RendererError> {
         if let Some(window) = &self.window {
-            // Initialize the renderer with the window
-            let renderer = init(window.clone()).await?;
+            // Create a simple async runtime for renderer initialization
+            let window_clone = window.clone();
+            
+            // Use pollster for async execution
+            let renderer = pollster::block_on(async {
+                init(window_clone).await
+            })?;
 
             // Create sprite pipeline
             let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device()));
@@ -109,6 +115,9 @@ impl EngineApplication {
 
     /// Process a single frame
     pub fn frame(&mut self, dt: f32) {
+        // Update input state for this frame
+        self.input_handler.update();
+
         if let Some(active) = self.scenes.last_mut() {
             active.update_with_schedule(&mut self.schedule, dt);
 
@@ -192,6 +201,16 @@ impl EngineApplication {
         self.scenes.last_mut()
     }
 
+    /// Get a reference to the input handler
+    pub fn input(&self) -> &input::InputHandler {
+        &self.input_handler
+    }
+
+    /// Get a mutable reference to the input handler
+    pub fn input_mut(&mut self) -> &mut input::InputHandler {
+        &mut self.input_handler
+    }
+
     /// Create a window using the configured window settings
     pub fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<(), renderer::RendererError> {
         match create_window_with_active_loop(&self.window_config, event_loop) {
@@ -249,8 +268,8 @@ impl ApplicationHandler<()> for EngineApplication {
             }
         }
 
-        // Handle window events
-        match event {
+        // Handle window events and forward input events to input handler
+        match &event {
             winit::event::WindowEvent::CloseRequested => {
                 self.game_loop.stop();
                 log::info!("Game loop stopped");
@@ -264,30 +283,23 @@ impl ApplicationHandler<()> for EngineApplication {
                     renderer.resize(size.width, size.height);
                 }
             }
-            // Note: Minimized and Restored events are not available in winit 0.30
-            // We would handle window state changes here if needed
-            _ => {}
+            _ => {
+                // Forward all other events to input handler
+                self.input_handler.handle_window_event(&event);
+            }
         }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Initialize the renderer if needed
+        // Initialize the renderer if needed - now synchronous
         if self.needs_renderer_init && self.renderer.is_none() && self.window.is_some() {
-            // Use the current tokio runtime handle to run the async init_renderer call
-            match tokio::runtime::Handle::try_current() {
-                Ok(handle) => {
-                    // Use block_in_place to allow blocking within an async context
-                    tokio::task::block_in_place(|| {
-                        if let Err(e) = handle.block_on(self.init_renderer()) {
-                            log::error!("Failed to initialize renderer: {}", e);
-                        } else {
-                            log::info!("Renderer initialized successfully");
-                            self.needs_renderer_init = false;
-                        }
-                    });
-                }
+            match self.init_renderer() {
                 Err(e) => {
-                    log::error!("Failed to get current tokio runtime handle: {}", e);
+                    log::error!("Failed to initialize renderer: {}", e);
+                }
+                Ok(_) => {
+                    log::info!("Renderer initialized successfully");
+                    self.needs_renderer_init = false;
                 }
             }
         }

@@ -78,11 +78,20 @@ impl SystemRegistry {
         self.add(SimpleSystem::new(name, update_fn));
     }
 
-    /// Update all systems
+    /// Update all systems - safe version that doesn't borrow self mutably twice
     pub fn update_all(&mut self, world: &mut World, delta_time: f32) {
-        for system in &mut self.systems {
+        // Create a temporary vector to hold systems during update
+        // This prevents borrowing issues
+        let mut temp_systems = Vec::new();
+        std::mem::swap(&mut self.systems, &mut temp_systems);
+        
+        // Update all systems
+        for system in &mut temp_systems {
             system.update(world, delta_time);
         }
+        
+        // Move systems back
+        self.systems = temp_systems;
     }
 
     /// Get the number of systems

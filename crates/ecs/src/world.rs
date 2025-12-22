@@ -126,11 +126,17 @@ impl World {
         self.systems.add(system);
     }
 
-    /// Update all systems
+    /// Update all systems - safe version without borrowing issues
     pub fn update(&mut self, delta_time: f32) {
-        let mut systems = std::mem::take(&mut self.systems);
-        systems.update_all(self, delta_time);
-        self.systems = systems;
+        // Extract systems into a temporary variable to avoid borrowing conflicts
+        let mut temp_systems = SystemRegistry::new();
+        std::mem::swap(&mut self.systems, &mut temp_systems);
+        
+        // Update systems with the world
+        temp_systems.update_all(self, delta_time);
+        
+        // Move systems back
+        std::mem::swap(&mut self.systems, &mut temp_systems);
     }
 
     /// Get the number of entities

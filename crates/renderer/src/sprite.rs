@@ -1,6 +1,5 @@
 //! 2D sprite rendering module.
 
-use std::sync::Arc;
 use wgpu::{
     BindGroup, BindGroupLayout, Buffer, Device, PipelineLayout, RenderPipeline, Sampler, TextureView,
 };
@@ -208,7 +207,7 @@ impl SpritePipeline {
     pub fn draw(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        camera: &Camera2D,
+        _camera: &Camera2D,
         sprite_batches: &[SpriteBatch],
         target: &wgpu::TextureView,
     ) {

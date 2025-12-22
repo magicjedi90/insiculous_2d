@@ -4,9 +4,9 @@
 //! for ergonomic imports.
 
 pub use crate::{
-    init, run_with_app, init_engine_state, create_tokio_runtime,
+    init, run_with_app,
     window::{create_window_with_active_loop, WindowConfig},
     sprite::{Camera2D, SpriteBatch, SpritePipeline},
-    EngineState, Time,
+    Time,
     Renderer, RendererError,
 };

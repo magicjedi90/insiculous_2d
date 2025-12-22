@@ -4,8 +4,7 @@ use engine_core::{Scene, GameLoop, GameLoopConfig, EngineApplication};
 use renderer::prelude::*;
 
 /// Main function
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logger
     // env_logger::init();
     env_logger::Builder::from_default_env().filter_level(log::LevelFilter::Debug).init();
