@@ -27,7 +27,7 @@ pub struct EngineApplication {
     /// Sprite pipeline for 2D rendering
     pub sprite_pipeline: Option<renderer::sprite::SpritePipeline>,
     /// Default camera for 2D rendering
-    pub camera_2d: renderer::sprite::Camera2D,
+    pub camera_2d: renderer::Camera2D,
     /// Input handler for managing keyboard, mouse, and gamepad input
     pub input_handler: input::InputHandler,
 }
@@ -44,7 +44,7 @@ impl EngineApplication {
             game_loop,
             needs_renderer_init: false,
             sprite_pipeline: None,
-            camera_2d: renderer::sprite::Camera2D::default(),
+            camera_2d: renderer::Camera2D::default(),
             input_handler: input::InputHandler::new(),
         }
     }
@@ -60,7 +60,7 @@ impl EngineApplication {
             game_loop: GameLoop::new(crate::GameLoopConfig::default()),
             needs_renderer_init: false,
             sprite_pipeline: None,
-            camera_2d: renderer::sprite::Camera2D::default(),
+            camera_2d: renderer::Camera2D::default(),
             input_handler: input::InputHandler::new(),
         }
     }
@@ -93,7 +93,7 @@ impl EngineApplication {
             })?;
 
             // Create sprite pipeline
-            let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device()));
+            let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device(), 1000)); // Max 1000 sprites per batch
 
             // Store renderer and sprite pipeline
             self.renderer = Some(renderer);
@@ -127,12 +127,12 @@ impl EngineApplication {
                           active.name(), active.lifecycle_state());
             }
 
-            // Update camera aspect ratio based on window size
+            // Update camera viewport size based on window size
             if let Some(renderer) = &self.renderer {
                 let width = renderer.surface_width() as f32;
                 let height = renderer.surface_height() as f32;
                 if height > 0.0 {
-                    self.camera_2d.aspect_ratio = width / height;
+                    self.camera_2d.viewport_size = glam::Vec2::new(width, height);
                 }
             }
 
@@ -141,9 +141,10 @@ impl EngineApplication {
                 if let Some(sprite_pipeline) = &self.sprite_pipeline {
                     // Create an empty sprite batch list for now
                     // In a real implementation, this would come from the scene
-                    let sprite_batches: &[renderer::sprite::SpriteBatch] = &[];
+                    let sprite_batches: Vec<&renderer::sprite::SpriteBatch> = vec![];
+                    let texture_resources = std::collections::HashMap::new(); // Empty texture resources
 
-                    match renderer.render_with_sprites(sprite_pipeline, &self.camera_2d, sprite_batches) {
+                    match renderer.render_with_sprites(sprite_pipeline, &self.camera_2d, &texture_resources, &sprite_batches) {
                         Ok(_) => {
                             log::trace!("Rendering scene with sprites");
                         }

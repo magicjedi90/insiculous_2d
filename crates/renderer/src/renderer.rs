@@ -176,8 +176,9 @@ impl Renderer {
     pub fn render_with_sprites(
         &self, 
         sprite_pipeline: &crate::sprite::SpritePipeline,
-        _camera: &crate::sprite::Camera2D,
-        sprite_batches: &[crate::sprite::SpriteBatch]
+        camera: &crate::sprite_data::Camera2D,
+        texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
+        sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
         // Get a frame
         let frame = match self.surface.get_current_texture() {
@@ -229,8 +230,9 @@ impl Renderer {
             });
         }
 
-        // Draw sprites
-        sprite_pipeline.draw(&mut encoder, _camera, sprite_batches, &view);
+        // Update camera and draw sprites
+        sprite_pipeline.update_camera(&self.queue, camera);
+        sprite_pipeline.draw(&mut encoder, camera, texture_resources, sprite_batches, &view);
 
         // Submit the command buffer
         self.queue.submit(std::iter::once(encoder.finish()));

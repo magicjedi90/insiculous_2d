@@ -9,6 +9,7 @@ log = { workspace = true }
 thiserror = { workspace = true }
 winit = { workspace = true }
 pollster = "0.4.0"
+glam = "0.29"
 renderer = { path = "../renderer" }
 ecs = { path = "../ecs" }
 input = { path = "../input" }

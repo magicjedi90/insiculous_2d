@@ -7,3 +7,8 @@ description = "Simple entity-component-system for the insiculous_2d game engine"
 [dependencies]
 log = { workspace = true }
 thiserror = { workspace = true }
+glam = "0.29"
+renderer = { path = "../renderer" }
+
+[dev-dependencies]
+pollster = { workspace = true }

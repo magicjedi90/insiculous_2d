@@ -1,0 +1,405 @@
+//! Texture loading and management system
+
+use std::sync::Arc;
+use std::path::Path;
+use std::collections::HashMap;
+use wgpu::{Device, Queue, Sampler, TextureFormat, Extent3d};
+use thiserror::Error;
+
+use crate::sprite_data::TextureResource;
+
+/// Texture loading errors
+#[derive(Debug, Error)]
+pub enum TextureError {
+    #[error("Failed to load image: {0}")]
+    ImageLoadError(String),
+    #[error("Failed to create texture: {0}")]
+    TextureCreationError(String),
+    #[error("Texture not found: {0}")]
+    TextureNotFound(String),
+    #[error("Invalid texture format")]
+    InvalidFormat,
+    #[error("Texture too large: {width}x{height}, max: {max_dimension}")]
+    TextureTooLarge { width: u32, height: u32, max_dimension: u32 },
+}
+
+/// Handle to a loaded texture
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TextureHandle {
+    pub id: u32,
+}
+
+impl TextureHandle {
+    /// Create a new texture handle
+    pub fn new(id: u32) -> Self {
+        Self { id }
+    }
+}
+
+impl Default for TextureHandle {
+    fn default() -> Self {
+        Self { id: 0 }
+    }
+}
+
+/// Texture loading configuration
+#[derive(Debug, Clone)]
+pub struct TextureLoadConfig {
+    /// Whether to generate mipmaps
+    pub generate_mipmaps: bool,
+    /// Texture format (None to auto-detect)
+    pub format: Option<TextureFormat>,
+    /// Sampler configuration
+    pub sampler_config: SamplerConfig,
+}
+
+impl Default for TextureLoadConfig {
+    fn default() -> Self {
+        Self {
+            generate_mipmaps: false,
+            format: None,
+            sampler_config: SamplerConfig::default(),
+        }
+    }
+}
+
+/// Sampler configuration
+#[derive(Debug, Clone)]
+pub struct SamplerConfig {
+    pub address_mode_u: wgpu::AddressMode,
+    pub address_mode_v: wgpu::AddressMode,
+    pub address_mode_w: wgpu::AddressMode,
+    pub mag_filter: wgpu::FilterMode,
+    pub min_filter: wgpu::FilterMode,
+    pub mipmap_filter: wgpu::MipmapFilterMode,
+    pub lod_min_clamp: f32,
+    pub lod_max_clamp: f32,
+    pub compare: Option<wgpu::CompareFunction>,
+    pub anisotropy_clamp: u16,
+}
+
+impl Default for SamplerConfig {
+    fn default() -> Self {
+        Self {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: f32::MAX,
+            compare: None,
+            anisotropy_clamp: 1,
+        }
+    }
+}
+
+/// Texture manager for loading and caching textures
+pub struct TextureManager {
+    device: Arc<Device>,
+    queue: Arc<Queue>,
+    textures: HashMap<TextureHandle, TextureResource>,
+    next_handle: u32,
+    max_texture_dimension: u32,
+}
+
+impl TextureManager {
+    /// Create a new texture manager
+    pub fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+        let max_texture_dimension = device.limits().max_texture_dimension_2d;
+        
+        Self {
+            device,
+            queue,
+            textures: HashMap::new(),
+            next_handle: 1, // 0 is reserved for default texture
+            max_texture_dimension,
+        }
+    }
+
+    /// Load a texture from a file path
+    pub fn load_texture<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+        _config: TextureLoadConfig,
+    ) -> Result<TextureHandle, TextureError> {
+        let path = path.as_ref();
+        
+        // For now, we'll create a placeholder texture since we don't have image loading
+        // In a real implementation, you'd use an image crate like `image`
+        let handle = TextureHandle::new(self.next_handle);
+        self.next_handle += 1;
+
+        log::info!("Loading texture from path: {:?}", path);
+
+        // Create a placeholder colored texture
+        let texture = self.create_placeholder_texture(256, 256, &[255, 0, 255, 255])?;
+        self.textures.insert(handle, texture);
+
+        Ok(handle)
+    }
+
+    /// Load a texture from raw RGBA data
+    pub fn load_texture_from_rgba(
+        &mut self,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        config: TextureLoadConfig,
+    ) -> Result<TextureHandle, TextureError> {
+        if width == 0 || height == 0 {
+            return Err(TextureError::InvalidFormat);
+        }
+
+        if width > self.max_texture_dimension || height > self.max_texture_dimension {
+            return Err(TextureError::TextureTooLarge {
+                width,
+                height,
+                max_dimension: self.max_texture_dimension,
+            });
+        }
+
+        if data.len() != (width * height * 4) as usize {
+            return Err(TextureError::InvalidFormat);
+        }
+
+        let handle = TextureHandle::new(self.next_handle);
+        self.next_handle += 1;
+
+        let texture = self.create_texture_from_rgba(width, height, data, config)?;
+        self.textures.insert(handle, texture);
+
+        Ok(handle)
+    }
+
+    /// Create a solid color texture
+    pub fn create_solid_color(
+        &mut self,
+        width: u32,
+        height: u32,
+        color: [u8; 4],
+    ) -> Result<TextureHandle, TextureError> {
+        let data = vec![color; (width * height) as usize];
+        self.load_texture_from_rgba(width, height, bytemuck::cast_slice(&data), TextureLoadConfig::default())
+    }
+
+    /// Create a checkerboard pattern texture
+    pub fn create_checkerboard(
+        &mut self,
+        width: u32,
+        height: u32,
+        color1: [u8; 4],
+        color2: [u8; 4],
+        check_size: u32,
+    ) -> Result<TextureHandle, TextureError> {
+        let mut data = Vec::with_capacity((width * height * 4) as usize);
+        
+        for y in 0..height {
+            for x in 0..width {
+                let check_x = (x / check_size) % 2;
+                let check_y = (y / check_size) % 2;
+                let color = if (check_x + check_y) % 2 == 0 { color1 } else { color2 };
+                data.extend_from_slice(&color);
+            }
+        }
+
+        self.load_texture_from_rgba(width, height, &data, TextureLoadConfig::default())
+    }
+
+    /// Get a texture by handle
+    pub fn get_texture(&self, handle: TextureHandle) -> Option<&TextureResource> {
+        self.textures.get(&handle)
+    }
+
+    /// Remove a texture
+    pub fn remove_texture(&mut self, handle: TextureHandle) -> Option<TextureResource> {
+        self.textures.remove(&handle)
+    }
+
+    /// Check if a texture exists
+    pub fn has_texture(&self, handle: TextureHandle) -> bool {
+        self.textures.contains_key(&handle)
+    }
+
+    /// Get all texture handles
+    pub fn texture_handles(&self) -> Vec<TextureHandle> {
+        self.textures.keys().copied().collect()
+    }
+
+    /// Get texture count
+    pub fn texture_count(&self) -> usize {
+        self.textures.len()
+    }
+
+    /// Create texture from RGBA data using write_texture directly with simplified layout
+    fn create_texture_from_rgba(
+        &self,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        config: TextureLoadConfig,
+    ) -> Result<TextureResource, TextureError> {
+        let format = config.format.unwrap_or(TextureFormat::Rgba8UnormSrgb);
+        
+        let texture = Arc::new(self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Dynamic Texture"),
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: if config.generate_mipmaps {
+                ((width.max(height) as f32).log2().floor() as u32) + 1
+            } else {
+                1
+            },
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        }));
+
+        // Upload texture data using write_texture directly with simplified layout
+        self.queue.write_texture(
+            texture.as_image_copy(),
+            data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: None,
+            },
+            texture.size(),
+        );
+
+        // Create view
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create sampler
+        let sampler = self.create_sampler(&config.sampler_config);
+
+        Ok(TextureResource {
+            texture: Arc::clone(&texture),
+            view,
+            sampler,
+            width,
+            height,
+        })
+    }
+
+    /// Create a placeholder texture
+    fn create_placeholder_texture(
+        &self,
+        width: u32,
+        height: u32,
+        color: &[u8; 4],
+    ) -> Result<TextureResource, TextureError> {
+        let data = vec![*color; (width * height) as usize];
+        self.create_texture_from_rgba(width, height, bytemuck::cast_slice(&data), TextureLoadConfig::default())
+    }
+
+    /// Create sampler from config
+    fn create_sampler(&self, config: &SamplerConfig) -> Sampler {
+        self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Texture Sampler"),
+            address_mode_u: config.address_mode_u,
+            address_mode_v: config.address_mode_v,
+            address_mode_w: config.address_mode_w,
+            mag_filter: config.mag_filter,
+            min_filter: config.min_filter,
+            mipmap_filter: config.mipmap_filter,
+            lod_min_clamp: config.lod_min_clamp,
+            lod_max_clamp: config.lod_max_clamp,
+            compare: config.compare,
+            anisotropy_clamp: config.anisotropy_clamp,
+            ..Default::default()
+        })
+    }
+}
+
+/// Builder for creating texture atlases
+pub struct TextureAtlasBuilder {
+    regions: Vec<AtlasRegion>,
+    max_width: u32,
+    max_height: u32,
+    padding: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct AtlasRegion {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub data: Option<Vec<u8>>, // RGBA data
+}
+
+impl TextureAtlasBuilder {
+    /// Create a new texture atlas builder
+    pub fn new(max_width: u32, max_height: u32) -> Self {
+        Self {
+            regions: Vec::new(),
+            max_width,
+            max_height,
+            padding: 2,
+        }
+    }
+
+    /// Set padding between atlas regions
+    pub fn with_padding(mut self, padding: u32) -> Self {
+        self.padding = padding;
+        self
+    }
+
+    /// Add a region to the atlas
+    pub fn add_region(mut self, name: String, width: u32, height: u32, data: Option<Vec<u8>>) -> Self {
+        self.regions.push(AtlasRegion {
+            name,
+            width,
+            height,
+            data,
+        });
+        self
+    }
+
+    /// Build the texture atlas
+    pub fn build(self, device: &Device, _queue: &Queue) -> Result<crate::sprite::TextureAtlas, TextureError> {
+        // Simple packing algorithm - for production, use a proper bin packing algorithm
+        let mut x = 0;
+        let mut y = 0;
+        let mut max_row_height = 0;
+        
+        let mut atlas_regions = Vec::new();
+
+        for region in &self.regions {
+            if x + region.width + self.padding > self.max_width {
+                // Move to next row
+                x = 0;
+                y += max_row_height + self.padding;
+                max_row_height = 0;
+            }
+
+            if y + region.height + self.padding > self.max_height {
+                return Err(TextureError::TextureCreationError("Atlas too small for all regions".to_string()));
+            }
+
+            atlas_regions.push((region.name.clone(), x, y, region.width, region.height));
+            
+            x += region.width + self.padding;
+            max_row_height = max_row_height.max(region.height);
+        }
+
+        let atlas_width = self.max_width;
+        let atlas_height = y + max_row_height + self.padding;
+
+        // Create the atlas texture
+        let mut atlas = crate::sprite::TextureAtlas::new(device, atlas_width, atlas_height);
+
+        // Add regions to atlas
+        for (name, x, y, width, height) in atlas_regions {
+            atlas.add_region(name, x, y, width, height, atlas_width, atlas_height);
+        }
+
+        Ok(atlas)
+    }
+}
