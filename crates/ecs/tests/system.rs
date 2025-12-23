@@ -39,12 +39,11 @@ fn test_system_trait() {
 #[test]
 fn test_simple_system() {
     // Test creating a simple system from a closure
-    let mut update_count = 0;
 
     // Create a simple system
     let mut system =
         SimpleSystem::new("TestSystem", move |_world: &mut World, _delta_time: f32| {
-            update_count += 1;
+            // Simple update logic
         });
 
     // Create a world to update the system with
@@ -90,7 +89,7 @@ fn test_system_in_world() {
     assert_eq!(world.system_count(), 1);
 
     // Update the systems
-    world.update(0.016);
+    let _ = world.update(0.016);
 
     // TODO: Assert that the system was updated
     // Note: We can't directly check the system's state since we don't have access to it after it's added
@@ -134,7 +133,7 @@ fn test_multiple_systems() {
     assert_eq!(world.system_count(), 2);
 
     // Update the systems
-    world.update(0.016);
+    let _ = world.update(0.016);
 
     // TODO: Assert that both systems were updated
     // Note: We can't directly check the systems' states since we don't have access to them after they're added

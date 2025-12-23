@@ -193,5 +193,6 @@ fn test_entity_reuse_detection() {
 // Test component for entity operations
 #[derive(Debug)]
 struct TestComponent {
+    #[allow(dead_code)]
     value: i32,
 }

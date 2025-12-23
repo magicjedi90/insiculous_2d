@@ -4,7 +4,7 @@ use winit::event::MouseButton;
 
 #[test]
 fn test_input_mapping_creation() {
-    let mut mapping = InputMapping::new();
+    let mapping = InputMapping::new();
     
     // Should have default bindings
     assert!(mapping.has_binding(&GameAction::MoveUp));
@@ -14,7 +14,7 @@ fn test_input_mapping_creation() {
 
 #[test]
 fn test_default_movement_bindings() {
-    let mut mapping = InputMapping::new();
+    let mapping = InputMapping::new();
     
     // Test W key for MoveUp
     let w_key = InputSource::Keyboard(KeyCode::KeyW);
@@ -162,7 +162,7 @@ fn test_clear_all_bindings() {
 
 #[test]
 fn test_multiple_bindings_per_action() {
-    let mut mapping = InputMapping::new();
+    let mapping = InputMapping::new();
     
     // MoveUp should have multiple bindings by default (W and ArrowUp)
     let bindings = mapping.get_bindings(&GameAction::MoveUp);

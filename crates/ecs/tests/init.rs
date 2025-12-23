@@ -33,6 +33,7 @@ fn test_init_and_use() {
     // Define a simple test component
     #[derive(Debug)]
     struct TestComponent {
+        #[allow(dead_code)]
         value: i32,
     }
 

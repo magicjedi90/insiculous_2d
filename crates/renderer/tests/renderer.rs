@@ -1,40 +1,37 @@
 use renderer::prelude::*;
 
+#[test]
 #[ignore] // Ignore by default as it requires a display and GPU
-async fn test_renderer_creation() {
+fn test_renderer_creation() {
     // Test creating a new renderer
-    // let result = renderer::init().await;
-
-    // TODO: Assert that the renderer was created successfully
     // This test is ignored by default as it requires a display and GPU
     // In a real test environment with the necessary hardware, we would:
+    // let window = create_window_with_active_loop(WindowConfig::default()).unwrap();
+    // let result = pollster::block_on(renderer::init(window));
     // assert!(result.is_ok());
-    // let renderer = result.unwrap();
-    // assert that renderer properties are as expected
 }
 
+#[test]
 #[ignore] // Ignore by default as it requires a display and GPU
-async fn test_renderer_clear_color() {
+fn test_renderer_clear_color() {
     // Test setting the clear color
-    // let result = renderer::init().await;
-
-    // TODO: Assert that we can set the clear color
     // This test is ignored by default as it requires a display and GPU
     // In a real test environment with the necessary hardware, we would:
+    // let window = create_window_with_active_loop(WindowConfig::default()).unwrap();
+    // let result = pollster::block_on(renderer::init(window));
     // assert!(result.is_ok());
     // let mut renderer = result.unwrap();
     // renderer.set_clear_color(1.0, 0.0, 0.0, 1.0);
-    // assert that the clear color was set correctly
 }
 
+#[test]
 #[ignore] // Ignore by default as it requires a display and GPU
-async fn test_renderer_render() {
+fn test_renderer_render() {
     // Test rendering a frame
-    // let result = renderer::init().await;
-
-    // TODO: Assert that we can render a frame
     // This test is ignored by default as it requires a display and GPU
     // In a real test environment with the necessary hardware, we would:
+    // let window = create_window_with_active_loop(WindowConfig::default()).unwrap();
+    // let result = pollster::block_on(renderer::init(window));
     // assert!(result.is_ok());
     // let renderer = result.unwrap();
     // let render_result = renderer.render();
@@ -47,7 +44,7 @@ fn test_window_config() {
     let config = WindowConfig::default();
 
     // TODO: Assert that the config has the expected default values
-    assert_eq!(config.title, "insiculous_2d");
+    assert_eq!(config.title, "insiculous_2d v0.1");
     assert_eq!(config.width, 800);
     assert_eq!(config.height, 600);
     assert!(config.resizable);

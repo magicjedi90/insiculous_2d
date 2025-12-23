@@ -334,6 +334,7 @@ impl TextureResource {
 pub struct DynamicBuffer<T> {
     buffer: Buffer,
     capacity: usize,
+    #[allow(dead_code)]
     usage: wgpu::BufferUsages,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -367,7 +368,7 @@ impl<T: bytemuck::Pod> DynamicBuffer<T> {
     }
 
     /// Get buffer slice
-    pub fn slice(&self) -> wgpu::BufferSlice {
+    pub fn slice(&self) -> wgpu::BufferSlice<'_> {
         self.buffer.slice(..)
     }
 

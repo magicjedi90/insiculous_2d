@@ -6,7 +6,7 @@ fn test_window_config_default() {
     let config = WindowConfig::default();
 
     // TODO: Assert that the default values are as expected
-    assert_eq!(config.title, "insiculous_2d");
+    assert_eq!(config.title, "insiculous_2d v0.1");
     assert_eq!(config.width, 800);
     assert_eq!(config.height, 600);
     assert!(config.resizable);

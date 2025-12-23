@@ -3,23 +3,28 @@
 use std::sync::Arc;
 use renderer::texture::*;
 
-async fn create_test_device() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
+/// Helper function to create a test device - returns None if no GPU available
+fn create_test_device() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
+    // Use pollster to block on async operations
     let instance = wgpu::Instance::default();
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter_result = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::default(),
         force_fallback_adapter: true,
         compatible_surface: None,
-    }).await;
+    }));
     
-    if let Some(adapter) = adapter {
-        let (device, queue) = adapter.request_device(
-            &wgpu::DeviceDescriptor::default(),
-            None,
-        ).await.ok()?;
-        
-        Some((Arc::new(device), Arc::new(queue)))
-    } else {
-        None
+    match adapter_result {
+        Ok(adapter) => {
+            let device_result = pollster::block_on(adapter.request_device(
+                &wgpu::DeviceDescriptor::default()
+            ));
+            
+            match device_result {
+                Ok((device, queue)) => Some((Arc::new(device), Arc::new(queue))),
+                Err(_) => None,
+            }
+        },
+        Err(_) => None,
     }
 }
 
@@ -60,9 +65,9 @@ fn test_sampler_config_default() {
     assert_eq!(config.anisotropy_clamp, 1);
 }
 
-#[tokio::test]
-async fn test_texture_manager_creation() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_manager_creation() {
+    if let Some((device, queue)) = create_test_device() {
         let manager = TextureManager::new(device.clone(), queue.clone());
         
         assert_eq!(manager.texture_count(), 0);
@@ -70,9 +75,9 @@ async fn test_texture_manager_creation() {
     }
 }
 
-#[tokio::test]
-async fn test_create_solid_color_texture() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_create_solid_color_texture() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let handle = manager.create_solid_color(64, 64, [255, 0, 0, 255]).unwrap();
@@ -86,9 +91,9 @@ async fn test_create_solid_color_texture() {
     }
 }
 
-#[tokio::test]
-async fn test_create_checkerboard_texture() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_create_checkerboard_texture() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let handle = manager.create_checkerboard(
@@ -107,9 +112,9 @@ async fn test_create_checkerboard_texture() {
     }
 }
 
-#[tokio::test]
-async fn test_load_texture_from_rgba() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_load_texture_from_rgba() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         // Create a simple 4x4 texture with red color
@@ -133,9 +138,9 @@ async fn test_load_texture_from_rgba() {
     }
 }
 
-#[tokio::test]
-async fn test_texture_error_invalid_size() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_error_invalid_size() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let result = manager.load_texture_from_rgba(
@@ -148,9 +153,9 @@ async fn test_texture_error_invalid_size() {
     }
 }
 
-#[tokio::test]
-async fn test_texture_error_wrong_data_size() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_error_wrong_data_size() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let result = manager.load_texture_from_rgba(
@@ -163,9 +168,9 @@ async fn test_texture_error_wrong_data_size() {
     }
 }
 
-#[tokio::test]
-async fn test_remove_texture() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_remove_texture() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let handle = manager.create_solid_color(64, 64, [255, 0, 0, 255]).unwrap();
@@ -182,9 +187,9 @@ async fn test_remove_texture() {
     }
 }
 
-#[tokio::test]
-async fn test_texture_handles() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_handles() {
+    if let Some((device, queue)) = create_test_device() {
         let mut manager = TextureManager::new(device.clone(), queue.clone());
         
         let handle1 = manager.create_solid_color(32, 32, [255, 0, 0, 255]).unwrap();
@@ -199,9 +204,9 @@ async fn test_texture_handles() {
     }
 }
 
-#[tokio::test]
-async fn test_texture_atlas_builder() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_atlas_builder() {
+    if let Some((device, queue)) = create_test_device() {
         let builder = TextureAtlasBuilder::new(512, 512)
             .with_padding(4);
         
@@ -220,9 +225,9 @@ async fn test_texture_atlas_builder() {
     }
 }
 
-#[tokio::test]
-async fn test_texture_atlas_builder_too_small() {
-    if let Some((device, queue)) = create_test_device().await {
+#[test]
+fn test_texture_atlas_builder_too_small() {
+    if let Some((device, queue)) = create_test_device() {
         let builder = TextureAtlasBuilder::new(10, 10)
             .add_region("large_texture".to_string(), 100, 100, None);
         

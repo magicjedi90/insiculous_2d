@@ -1,7 +1,6 @@
 //! Sprite components for ECS integration
 
 use glam::{Vec2, Vec4};
-use crate::component::Component;
 
 // Re-export types from renderer that we need
 use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};

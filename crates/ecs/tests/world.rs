@@ -38,6 +38,7 @@ fn test_component_management() {
     // Define a simple test component
     #[derive(Debug)]
     struct TestComponent {
+        #[allow(dead_code)]
         value: i32,
     }
 
@@ -95,7 +96,7 @@ fn test_system_management() {
     assert_eq!(world.system_count(), 1);
 
     // Update the systems
-    world.update(0.016);
+    let _ = world.update(0.016);
 
     // TODO: Assert that the system was updated
     // Note: We can't directly check the update_count since we don't have access to the system after it's added

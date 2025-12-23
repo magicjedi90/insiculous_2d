@@ -43,8 +43,8 @@ fn test_entity_active_state() {
 #[test]
 fn test_entity_id_value() {
     // Test getting the raw value of an entity ID
-    let entity = Entity::new();
-    let id = entity.id();
+    let _entity = Entity::new();
+    let id = _entity.id();
 
     // TODO: Assert that the ID value is non-zero
     assert!(id.value() > 0);
@@ -53,8 +53,8 @@ fn test_entity_id_value() {
 #[test]
 fn test_entity_id_display() {
     // Test the Display implementation for EntityId
-    let entity = Entity::new();
-    let id = entity.id();
+    let _entity = Entity::new();
+    let id = _entity.id();
 
     // TODO: Assert that the string representation is as expected
     let id_string = format!("{}", id);

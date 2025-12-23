@@ -92,7 +92,7 @@ fn test_multiple_events_processing_order() {
 
 #[test]
 fn test_window_event_handling() {
-    let mut input_handler = InputHandler::new();
+    let input_handler = InputHandler::new();
     
     // Test that window events are queued (we can't easily create them in tests)
     // but we can test that the handle_window_event method exists and doesn't panic

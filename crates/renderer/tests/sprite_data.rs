@@ -2,6 +2,7 @@
 
 use glam::{Vec2, Vec3, Vec4};
 use renderer::sprite_data::*;
+use renderer::TextureHandle;
 
 #[test]
 fn test_sprite_vertex_creation() {
@@ -73,7 +74,7 @@ fn test_camera2d_view_matrix() {
     
     // Test that a point is transformed correctly
     let world_point = Vec3::new(100.0, 200.0, 0.0);
-    let view_point = view_matrix * world_point;
+    let view_point = view_matrix * Vec4::new(world_point.x, world_point.y, world_point.z, 1.0);
     
     // The camera position should be at the origin in view space
     assert!((view_point.x).abs() < 0.001);
@@ -86,8 +87,8 @@ fn test_camera2d_projection_matrix() {
     let proj_matrix = camera.projection_matrix();
     
     // Test that projection matrix is orthographic
-    let near_point = Vec3::new(0.0, 0.0, -1000.0);
-    let far_point = Vec3::new(0.0, 0.0, 1000.0);
+    let near_point = Vec4::new(0.0, 0.0, -1000.0, 1.0);
+    let far_point = Vec4::new(0.0, 0.0, 1000.0, 1.0);
     
     let near_clip = proj_matrix * near_point;
     let far_clip = proj_matrix * far_point;
@@ -104,7 +105,11 @@ fn test_camera2d_view_projection_matrix() {
     
     // Should be valid matrix
     assert!(!vp_matrix.is_nan());
-    assert!(!vp_matrix.is_infinite());
+    // Check that matrix is finite (no infinite values)
+    assert!(vp_matrix.x_axis.x.is_finite());
+    assert!(vp_matrix.y_axis.y.is_finite());
+    assert!(vp_matrix.z_axis.z.is_finite());
+    assert!(vp_matrix.w_axis.w.is_finite());
 }
 
 #[test]

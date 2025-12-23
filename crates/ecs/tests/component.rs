@@ -5,6 +5,7 @@ fn test_component_trait() {
     // Define a simple test component
     #[derive(Debug)]
     struct TestComponent {
+        #[allow(dead_code)]
         value: i32,
     }
 
@@ -27,6 +28,7 @@ fn test_component_in_world() {
     // Define a simple test component
     #[derive(Debug)]
     struct TestComponent {
+        #[allow(dead_code)]
         value: i32,
     }
 
@@ -42,7 +44,7 @@ fn test_component_in_world() {
     assert!(has_component);
 
     // Get the component (this is a bit tricky since we need to downcast)
-    let component = world.get_component::<TestComponent>(&entity_id).unwrap();
+    let _component = world.get_component::<TestComponent>(&entity_id).unwrap();
 
     // TODO: Assert that the component has the expected value
     // Note: We can't directly access the value since we get a &dyn Component
@@ -58,13 +60,17 @@ fn test_multiple_components() {
     // Define two different test components
     #[derive(Debug)]
     struct PositionComponent {
+        #[allow(dead_code)]
         x: f32,
+        #[allow(dead_code)]
         y: f32,
     }
 
     #[derive(Debug)]
     struct VelocityComponent {
+        #[allow(dead_code)]
         vx: f32,
+        #[allow(dead_code)]
         vy: f32,
     }
 
