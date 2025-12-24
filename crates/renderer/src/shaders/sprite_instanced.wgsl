@@ -20,6 +20,7 @@ var s_diffuse: sampler;
 struct VertexInput {
     @location(0) position: vec3<f32>,  // Local quad vertex position
     @location(1) tex_coords: vec2<f32>, // Base texture coordinates
+    @location(2) color: vec4<f32>,      // Vertex color
 }
 
 // Instance attributes (per-sprite)
@@ -69,7 +70,7 @@ fn vs_main(
     let transform_matrix = rot_matrix * scale_matrix;
     
     // Transform vertex position
-    let local_pos = vec3<f32>(vertex.position.xy * transform_matrix, instance.depth);
+    let local_pos = transform_matrix * vec3<f32>(vertex.position.xy, 0.0);
     let world_pos = vec4<f32>(local_pos.xy + instance.world_position, instance.depth, 1.0);
     
     // Transform by camera view-projection matrix
@@ -82,8 +83,8 @@ fn vs_main(
         instance.tex_region.y + base_uv.y * instance.tex_region.w
     );
     
-    // Pass through color
-    out.color = instance.color;
+    // Combine vertex color with instance color
+    out.color = vertex.color * instance.color;
     
     return out;
 }

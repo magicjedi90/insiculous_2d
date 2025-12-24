@@ -230,8 +230,12 @@ impl Renderer {
             });
         }
 
-        // Update camera and draw sprites
+        // Update camera and prepare sprite data
         sprite_pipeline.update_camera(&self.queue, camera);
+        // Note: We need mutable access to update the instance buffer
+        // For now, we'll skip the prepare step and handle it in the draw method
+        
+        // Draw sprites
         sprite_pipeline.draw(&mut encoder, camera, texture_resources, sprite_batches, &view);
 
         // Submit the command buffer

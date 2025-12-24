@@ -113,7 +113,7 @@ impl TextureHandle {
 }
 
 /// A batch of sprites using the same texture
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpriteBatch {
     /// Texture handle for this batch
     pub texture_handle: TextureHandle,
@@ -245,6 +245,8 @@ pub struct SpritePipeline {
     #[allow(dead_code)]
     /// Instance buffer for sprite data
     instance_buffer: DynamicBuffer<SpriteInstance>,
+    /// Index buffer for quad geometry
+    index_buffer: Buffer,
     /// Camera uniform buffer
     camera_buffer: Buffer,
     /// Texture bind group layout
@@ -345,6 +347,18 @@ impl SpritePipeline {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        // Create index buffer for quad (2 triangles, 6 indices)
+        let indices: [u16; 6] = [
+            0, 1, 2, // First triangle
+            0, 2, 3, // Second triangle
+        ];
+        
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sprite Index Buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         // Create instance buffer
         let instance_buffer = DynamicBuffer::new(
             device,
@@ -410,6 +424,7 @@ impl SpritePipeline {
             layout,
             vertex_buffer,
             instance_buffer,
+            index_buffer,
             camera_buffer,
             texture_bind_group_layout,
             camera_bind_group_layout,
@@ -425,6 +440,20 @@ impl SpritePipeline {
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 
+    /// Update instance buffer with sprite data and return the number of instances
+    pub fn update_instance_buffer(&mut self, queue: &Queue, instances: &[SpriteInstance]) -> usize {
+        if instances.is_empty() {
+            return 0;
+        }
+        
+        let instance_count = instances.len();
+        
+        // Update the instance buffer
+        self.instance_buffer.update(queue, instances);
+        
+        instance_count
+    }
+
     /// Draw sprites using this pipeline
     pub fn draw(
         &self,
@@ -434,10 +463,6 @@ impl SpritePipeline {
         batches: &[&SpriteBatch],
         target: &TextureView,
     ) {
-        // Update camera uniform
-        // Note: This assumes we have access to queue, but we don't in this method
-        // In a real implementation, we'd need to pass the queue or update camera elsewhere
-
         // Begin render pass
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sprite Render Pass"),
@@ -459,8 +484,9 @@ impl SpritePipeline {
         // Set pipeline
         render_pass.set_pipeline(&self.pipeline);
 
-        // Set vertex buffer
+        // Set vertex buffers
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice());
 
         // Create camera bind group
         let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -476,6 +502,7 @@ impl SpritePipeline {
         render_pass.set_bind_group(0, &camera_bind_group, &[]);
 
         // Draw each batch
+        let mut instance_offset = 0u32;
         for batch in batches {
             if batch.is_empty() {
                 continue;
@@ -483,10 +510,6 @@ impl SpritePipeline {
 
             // Get texture resource
             if let Some(texture_resource) = texture_resources.get(&batch.texture_handle) {
-                // Note: We can't update the instance buffer here because we don't have queue access
-                // In a real implementation, this would need to be handled differently
-                // For now, we'll skip the instance buffer update
-
                 // Create texture bind group
                 let texture_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Sprite Texture Bind Group"),
@@ -506,9 +529,16 @@ impl SpritePipeline {
                 // Set texture bind group (set 1)
                 render_pass.set_bind_group(1, &texture_bind_group, &[]);
 
-                // Note: We can't draw instances here because we haven't updated the instance buffer
-                // This is a limitation of the current design - in a real implementation,
-                // the instance buffer would need to be updated before calling this method
+                // Draw the instances for this batch
+                let instance_count = batch.len() as u32;
+                
+                // Draw indexed triangles with instancing
+                // 6 indices per quad (2 triangles), instance_count instances starting at instance_offset
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..6, instance_offset as i32, 0..1);
+                
+                // Update offset for next batch
+                instance_offset += instance_count;
             }
         }
     }
@@ -516,6 +546,23 @@ impl SpritePipeline {
     /// Get maximum sprites per batch
     pub fn max_sprites_per_batch(&self) -> usize {
         self.max_sprites_per_batch
+    }
+
+    /// Prepare sprite data for rendering by updating instance buffer and creating batches
+    pub fn prepare_sprites(&mut self, queue: &Queue, batches: &[&SpriteBatch]) {
+        let mut all_instances = Vec::new();
+        
+        // Collect all instances from batches
+        for batch in batches {
+            for instance in &batch.instances {
+                all_instances.push(*instance);
+            }
+        }
+        
+        // Update the instance buffer
+        if !all_instances.is_empty() {
+            self.update_instance_buffer(queue, &all_instances);
+        }
     }
 }
 

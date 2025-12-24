@@ -8,6 +8,7 @@ use renderer::{Renderer, WindowConfig, create_window_with_active_loop, init};
 use crate::{Scene, GameLoop};
 use ecs::SystemRegistry;
 
+
 /// Core application handler for the engine
 pub struct EngineApplication {
     /// Renderer created by the application
@@ -139,10 +140,9 @@ impl EngineApplication {
             if let Some(renderer) = &mut self.renderer {
                 // Render the scene with sprites if possible
                 if let Some(sprite_pipeline) = &self.sprite_pipeline {
-                    // Create an empty sprite batch list for now
-                    // In a real implementation, this would come from the scene
+                    // For now, use empty sprite data for testing
                     let sprite_batches: Vec<&renderer::sprite::SpriteBatch> = vec![];
-                    let texture_resources = std::collections::HashMap::new(); // Empty texture resources
+                    let texture_resources = std::collections::HashMap::new();
 
                     match renderer.render_with_sprites(sprite_pipeline, &self.camera_2d, &texture_resources, &sprite_batches) {
                         Ok(_) => {
@@ -244,6 +244,15 @@ impl EngineApplication {
             log::info!("Game loop started");
             Ok(())
         }
+    }
+}
+
+impl EngineApplication {
+    /// Extract sprite data from the current scene for rendering
+    /// For now, return empty data since we're testing basic rendering functionality
+    fn extract_sprite_data(&self) -> (Vec<renderer::sprite::SpriteBatch>, std::collections::HashMap<renderer::sprite::TextureHandle, renderer::TextureResource>) {
+        // Return empty data for now - the test example will create its own sprites
+        (Vec::new(), std::collections::HashMap::new())
     }
 }
 
