@@ -1,7 +1,9 @@
 //! Simple entity-component-system for the insiculous_2d game engine.
 //!
-//! This crate provides a minimal ECS implementation.
+//! This crate provides a minimal ECS implementation with archetype-based
+//! component storage for optimal performance.
 
+mod archetype;
 mod component;
 mod entity;
 pub mod generation;
@@ -12,6 +14,7 @@ pub mod sprite_components;
 pub mod prelude;
 
 // Re-export for convenience
+pub use archetype::*;
 pub use component::*;
 pub use entity::*;
 pub use generation::*;

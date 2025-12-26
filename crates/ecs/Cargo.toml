@@ -12,3 +12,8 @@ renderer = { path = "../renderer" }
 
 [dev-dependencies]
 pollster = { workspace = true }
+criterion = "0.5"
+
+[[bench]]
+name = "ecs_benchmark"
+harness = false

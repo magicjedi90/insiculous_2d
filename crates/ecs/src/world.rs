@@ -6,7 +6,30 @@ use crate::component::{Component, ComponentRegistry};
 use crate::entity::{Entity, EntityId};
 use crate::generation::EntityGeneration;
 use crate::system::SystemRegistry;
+use crate::archetype::QueryTypes;
+use crate::ArchetypeStorage;
 use crate::EcsError;
+
+/// Configuration for the ECS world
+#[derive(Debug, Clone)]
+pub struct WorldConfig {
+    /// Whether to use archetype-based component storage for better performance
+    pub use_archetype_storage: bool,
+    /// Initial capacity for entity storage
+    pub entity_capacity: usize,
+    /// Initial capacity for component storage
+    pub component_capacity: usize,
+}
+
+impl Default for WorldConfig {
+    fn default() -> Self {
+        Self {
+            use_archetype_storage: false, // Default to legacy for backward compatibility
+            entity_capacity: 1024,
+            component_capacity: 4096,
+        }
+    }
+}
 
 /// The main world struct for the ECS
 pub struct World {
@@ -18,23 +41,53 @@ pub struct World {
     components: ComponentRegistry,
     /// The system registry
     systems: SystemRegistry,
+    /// Archetype storage for optimized component access
+    archetype_storage: Option<ArchetypeStorage>,
     /// Whether the world is initialized
     initialized: bool,
     /// Whether the world is running
     running: bool,
+    /// World configuration
+    config: WorldConfig,
 }
 
 impl World {
-    /// Create a new world
+    /// Create a new world with default configuration
     pub fn new() -> Self {
+        Self::with_config(WorldConfig::default())
+    }
+
+    /// Create a new world with custom configuration
+    pub fn with_config(config: WorldConfig) -> Self {
+        let components = if config.use_archetype_storage {
+            ComponentRegistry::new_archetype_based()
+        } else {
+            ComponentRegistry::new()
+        };
+
+        let archetype_storage = if config.use_archetype_storage {
+            Some(ArchetypeStorage::new())
+        } else {
+            None
+        };
+
         Self {
-            entities: HashMap::new(),
-            entity_generations: HashMap::new(),
-            components: ComponentRegistry::new(),
+            entities: HashMap::with_capacity(config.entity_capacity),
+            entity_generations: HashMap::with_capacity(config.entity_capacity),
+            components,
             systems: SystemRegistry::new(),
+            archetype_storage,
             initialized: false,
             running: false,
+            config,
         }
+    }
+
+    /// Create a new world with archetype-based storage for optimal performance
+    pub fn new_optimized() -> Self {
+        let mut config = WorldConfig::default();
+        config.use_archetype_storage = true;
+        Self::with_config(config)
     }
 
     /// Initialize the world
@@ -277,10 +330,65 @@ impl World {
             false
         }
     }
+
+    /// Query for entities with specific component types
+    pub fn query<Q: QueryTypes>(&self) -> QueryIterator<Q> {
+        QueryIterator::new(self)
+    }
+
+    /// Get world configuration
+    pub fn config(&self) -> &WorldConfig {
+        &self.config
+    }
+
+    /// Check if using archetype storage
+    pub fn uses_archetype_storage(&self) -> bool {
+        self.config.use_archetype_storage
+    }
 }
 
 impl Default for World {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Iterator for querying entities with specific component types
+pub struct QueryIterator<'w, Q: QueryTypes> {
+    world: &'w World,
+    archetype_ids: Vec<crate::archetype::ArchetypeId>,
+    current_archetype: usize,
+    current_entity: usize,
+    _phantom: std::marker::PhantomData<Q>,
+}
+
+impl<'w, Q: QueryTypes> QueryIterator<'w, Q> {
+    fn new(world: &'w World) -> Self {
+        // For now, this is a simplified implementation
+        // In a full implementation, we'd filter archetypes based on the query types
+        let archetype_ids = if let Some(storage) = &world.archetype_storage {
+            // Get archetype IDs that contain all required component types
+            let required_types = Q::component_types();
+            Vec::new() // Placeholder - would filter archetypes
+        } else {
+            Vec::new()
+        };
+
+        Self {
+            world,
+            archetype_ids,
+            current_archetype: 0,
+            current_entity: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'w, Q: QueryTypes> Iterator for QueryIterator<'w, Q> {
+    type Item = EntityId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Simplified implementation - would iterate through matching archetypes and entities
+        None
     }
 }
