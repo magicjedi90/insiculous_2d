@@ -193,9 +193,9 @@ impl ArchetypeStorage {
         
         // Add component to the appropriate archetype
         if let Some(archetype) = self.archetypes.get_mut(&current_archetype_id) {
-            if let Some(index) = archetype.get_entity_index(&entity_id) {
+            if let Some(_index) = archetype.get_entity_index(&entity_id) {
                 // Entity already exists in this archetype, update component
-                if let Some(column) = archetype.get_column_mut(&type_id) {
+                if let Some(_column) = archetype.get_column_mut(&type_id) {
                     // This is a simplified version - in a full implementation,
                     // we'd need to handle component replacement properly
                     log::trace!("Updating component for entity {:?} in archetype", entity_id);
@@ -212,7 +212,7 @@ impl ArchetypeStorage {
 
     /// Remove a component from an entity
     pub fn remove<T: Component>(&mut self, entity_id: &EntityId) -> Option<Box<dyn Component>> {
-        let type_id = TypeId::of::<T>();
+        let _type_id = TypeId::of::<T>();
         
         if let Some((archetype_id, _index)) = self.entity_locations.get(entity_id).cloned() {
             if let Some(archetype) = self.archetypes.get_mut(&archetype_id) {

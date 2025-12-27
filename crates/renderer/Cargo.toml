@@ -14,3 +14,4 @@ bytemuck = { version = "1.16", features = ["derive"] }
 
 [dev-dependencies]
 pollster = { workspace = true }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

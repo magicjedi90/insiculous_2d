@@ -33,3 +33,84 @@ glam = "0.29"
 wgpu = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }
+bytemuck = { version = "1.16", features = ["derive"] }
+
+# Tokio for diagnostic examples
+tokio = { version = "1.0", features = ["full"], optional = true }
+futures-intrusive = { version = "0.5", optional = true }
+
+[[example]]
+name = "sprite_rendering_test"
+path = "examples/sprite_rendering_test.rs"
+
+[[example]]
+name = "vertex_scale_test"
+path = "examples/vertex_scale_test.rs"
+
+[[example]]
+name = "vertex_scale_test_advanced"
+path = "examples/vertex_scale_test_advanced.rs"
+
+[[example]]
+name = "vertex_scale_diagnostic"
+path = "examples/vertex_scale_diagnostic.rs"
+
+[[example]]
+name = "vertex_scale_definitive"
+path = "examples/vertex_scale_definitive.rs"
+
+[[example]]
+name = "coordinate_catastrophe_test"
+path = "examples/coordinate_catastrophe_test.rs"
+
+[[example]]
+name = "gpu_emergency_diagnostic"
+path = "examples/gpu_emergency_diagnostic.rs"
+required-features = ["tokio"]
+
+[[example]]
+name = "sprite_rendering_diagnostic"
+path = "examples/sprite_rendering_diagnostic.rs"
+required-features = ["tokio"]
+
+[[example]]
+name = "simple_gpu_diagnostic"
+path = "examples/simple_gpu_diagnostic.rs"
+required-features = ["tokio"]
+
+[[example]]
+name = "vulkan_force_test"
+path = "examples/vulkan_force_test.rs"
+
+[[example]]
+name = "vulkan_force_minimal"
+path = "examples/vulkan_force_minimal.rs"
+
+[[example]]
+name = "backend_diagnostic"
+path = "examples/backend_diagnostic.rs"
+
+[[example]]
+name = "sprite_demo"
+path = "examples/sprite_demo.rs"
+
+[[example]]
+name = "reality_check_proper"
+path = "examples/reality_check_proper.rs"
+
+[[example]]
+name = "reality_check"
+path = "examples/reality_check.rs"
+required-features = ["tokio", "futures-intrusive"]
+
+[[example]]
+name = "headless_reality_check"
+path = "examples/headless_reality_check.rs"
+
+[[example]]
+name = "minimal_reality_check"
+path = "examples/minimal_reality_check.rs"
+
+[[example]]
+name = "presentation_mode_test"
+path = "examples/presentation_mode_test.rs"

@@ -233,6 +233,7 @@ impl Archetype {
 
 /// Type-safe query for entities with specific component types
 pub struct Query<T: QueryTypes> {
+    #[allow(dead_code)]
     archetypes: Vec<ArchetypeId>,
     _phantom: PhantomData<T>,
 }

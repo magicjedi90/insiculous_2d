@@ -21,6 +21,8 @@ pub struct Renderer {
     queue: Queue,
     config: SurfaceConfiguration,
     clear_color: wgpu::Color,
+    /// White texture resource for colored sprites (multiply by white instead of transparent black)
+    white_texture: Option<crate::sprite_data::TextureResource>,
 }
 
 impl Renderer {
@@ -88,6 +90,10 @@ impl Renderer {
         // 1. The surface is tied to the window (Arc<Window>)
         // 2. The window outlives the renderer
         // 3. We control the renderer's lifetime through the EngineApplication
+        
+        // Create white texture for colored sprites
+        let white_texture = Self::create_white_texture_resource(&device, &queue);
+        
         Ok(Self {
             window,
             surface: unsafe { std::mem::transmute(surface) }, // Safe because window has 'static lifetime
@@ -101,6 +107,7 @@ impl Renderer {
                 b: 0.929, // (237/255)
                 a: 1.0,
             },
+            white_texture: Some(white_texture),
         })
     }
 
@@ -180,6 +187,26 @@ impl Renderer {
         texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
+        // Create a combined texture resources map that includes the white texture for colored sprites
+        let mut combined_texture_resources = texture_resources.clone();
+        
+        // Add the white texture if it exists, using a special handle for colored sprites
+        if let Some(white_texture) = &self.white_texture {
+            let white_texture_handle = crate::sprite::TextureHandle { id: 0 }; // Use handle 0 for white texture
+            combined_texture_resources.insert(white_texture_handle, white_texture.clone());
+        }
+        
+        self.render_with_sprites_internal(sprite_pipeline, camera, &combined_texture_resources, sprite_batches)
+    }
+    
+    /// Internal method to render sprites with the combined texture resources
+    fn render_with_sprites_internal(
+        &self, 
+        sprite_pipeline: &crate::sprite::SpritePipeline,
+        camera: &crate::sprite_data::Camera2D,
+        texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
+        sprite_batches: &[&crate::sprite::SpriteBatch]
+    ) -> Result<(), RendererError> {
         // Get a frame
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
@@ -210,33 +237,11 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
-        // Clear the screen
-        {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Clear Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-        }
-
-        // Update camera and prepare sprite data
+        // Update camera - do this before rendering
         sprite_pipeline.update_camera(&self.queue, camera);
-        // Note: We need mutable access to update the instance buffer
-        // For now, we'll skip the prepare step and handle it in the draw method
         
-        // Draw sprites
-        sprite_pipeline.draw(&mut encoder, camera, texture_resources, sprite_batches, &view);
+        // Draw sprites directly - this will handle clearing and drawing in one render pass
+        sprite_pipeline.draw(&mut encoder, camera, texture_resources, sprite_batches, &view, self.clear_color);
 
         // Submit the command buffer
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -282,6 +287,11 @@ impl Renderer {
         self.config.height
     }
 
+    /// Get a reference to the surface (for diagnostic purposes)
+    pub fn surface(&self) -> &Surface {
+        &self.surface
+    }
+
     /// Resize the surface
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
@@ -297,6 +307,58 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
         log::debug!("Surface recreated after loss");
         Ok(())
+    }
+
+    /// Create a white texture resource for colored sprites
+    fn create_white_texture_resource(device: &Device, queue: &Queue) -> crate::sprite_data::TextureResource {
+        use crate::sprite_data::TextureResource;
+        use std::sync::Arc;
+        
+        log::info!("Creating white texture resource for colored sprites");
+        
+        // Create a 1x1 white texture
+        let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("White Texture"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        }));
+
+        // Create white pixel data (1, 1, 1, 1) - RGBA all 255 for white
+        let white_pixel: [u8; 4] = [255, 255, 255, 255];
+        
+        // Write the white pixel data to the texture using the queue
+        queue.write_texture(
+            texture.as_image_copy(),
+            &white_pixel,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        log::info!("White texture created successfully with pixel data (255,255,255,255)");
+
+        TextureResource::new(device, texture)
+    }
+
+    /// Get the white texture resource for colored sprites
+    pub fn white_texture(&self) -> Option<&crate::sprite_data::TextureResource> {
+        self.white_texture.as_ref()
     }
 
     /// Run the renderer with a custom application handler

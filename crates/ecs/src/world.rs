@@ -332,7 +332,7 @@ impl World {
     }
 
     /// Query for entities with specific component types
-    pub fn query<Q: QueryTypes>(&self) -> QueryIterator<Q> {
+    pub fn query<Q: QueryTypes>(&self) -> QueryIterator<'_, Q> {
         QueryIterator::new(self)
     }
 
@@ -355,9 +355,13 @@ impl Default for World {
 
 /// Iterator for querying entities with specific component types
 pub struct QueryIterator<'w, Q: QueryTypes> {
+    #[allow(dead_code)]
     world: &'w World,
+    #[allow(dead_code)]
     archetype_ids: Vec<crate::archetype::ArchetypeId>,
+    #[allow(dead_code)]
     current_archetype: usize,
+    #[allow(dead_code)]
     current_entity: usize,
     _phantom: std::marker::PhantomData<Q>,
 }
@@ -366,9 +370,9 @@ impl<'w, Q: QueryTypes> QueryIterator<'w, Q> {
     fn new(world: &'w World) -> Self {
         // For now, this is a simplified implementation
         // In a full implementation, we'd filter archetypes based on the query types
-        let archetype_ids = if let Some(storage) = &world.archetype_storage {
+        let archetype_ids = if let Some(_storage) = &world.archetype_storage {
             // Get archetype IDs that contain all required component types
-            let required_types = Q::component_types();
+            let _required_types = Q::component_types();
             Vec::new() // Placeholder - would filter archetypes
         } else {
             Vec::new()
