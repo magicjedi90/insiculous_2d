@@ -4,6 +4,9 @@
 //! for ergonomic imports.
 
 pub use crate::{
+    // Simple game API (recommended)
+    game::{Game, GameConfig, GameContext, RenderContext, run_game},
+    // Advanced API
     application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},
     init,
@@ -11,3 +14,9 @@ pub use crate::{
     scene::Scene,
     EngineError,
 };
+
+// Re-export commonly used types from dependencies
+pub use glam::{Vec2, Vec4};
+pub use winit::keyboard::KeyCode;
+pub use ecs::{EntityId, World};
+pub use ecs::sprite_components::{Sprite, Transform2D};

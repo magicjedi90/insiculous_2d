@@ -4,11 +4,12 @@
 Insiculous 2D is a lightweight, modular game engine designed for creating 2D games with Rust. It aims to provide a simple yet powerful API that allows developers to focus on game logic rather than boilerplate code. The engine prioritizes performance, cross-platform compatibility, and a clean, intuitive interface. The architecture follows a component-based design with clear separation of concerns between systems.
 
 ## Directory Map
-- **crates/engine_core/** - Core functionality including game loop, timing, and scene state management
+- **crates/engine_core/** - Core functionality including Game API, game loop, timing, and scene state management
+  - `game.rs` - **Simple Game API** - `Game` trait, `GameConfig`, `run_game()` function
   - `game_loop.rs` - Main game loop implementation with configurable FPS and timestep
   - `timing.rs` - Utilities for time measurement and frame timing
   - `scene.rs` - Game scene state management
-  - `application.rs` - Launcher and dependency coordinator
+  - `application.rs` - Advanced launcher and dependency coordinator
 
 - **crates/renderer/** - WGPU-based rendering system
   - `renderer.rs` - Core rendering functionality using WGPU
@@ -28,7 +29,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `gamepad.rs` - Gamepad detection and state management
 
 - **examples/** - Example projects demonstrating engine usage
-  - `hello_world.rs` - Minimal example showing basic engine setup
+  - `hello_world.rs` - Demonstrates the simple Game API with ECS entities and input
 
 ## Coding Guidelines
 
@@ -55,6 +56,38 @@ Use descriptive names that clearly communicate purpose:
 - Use strong typing over stringly-typed code
 
 ## Patterns Reference
+
+### Simple Game API Pattern
+The primary way to create games. Implement the `Game` trait and call `run_game()`:
+
+```rust
+use engine_core::prelude::*;
+
+struct MyGame { player: Option<EntityId> }
+
+impl Game for MyGame {
+    fn init(&mut self, ctx: &mut GameContext) {
+        let player = ctx.world.create_entity();
+        ctx.world.add_component(&player, Transform2D::new(Vec2::ZERO)).ok();
+        ctx.world.add_component(&player, Sprite::new(0)).ok();
+        self.player = Some(player);
+    }
+
+    fn update(&mut self, ctx: &mut GameContext) {
+        if let Some(player) = self.player {
+            if let Some(t) = ctx.world.get_mut::<Transform2D>(player) {
+                if ctx.input.is_key_pressed(KeyCode::KeyD) {
+                    t.position.x += 200.0 * ctx.delta_time;
+                }
+            }
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_game(MyGame { player: None }, GameConfig::new("My Game"))
+}
+```
 
 ### Component Pattern
 Used in the ECS system to compose game objects from reusable components. See `crates/ecs/component.rs` for implementation.

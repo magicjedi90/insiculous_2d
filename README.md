@@ -7,144 +7,180 @@ A lightweight, modular 2D game engine for Rust. Focus on game logic, not boilerp
 ```bash
 git clone https://github.com/yourusername/insiculous_2d.git
 cd insiculous_2d
-
-# Run the example (2 sprites - move with WASD, ESC to exit)
 cargo run --example hello_world
 ```
 
-**Requirements:** Rust stable, Cargo, Git
+## Create Your First Game
+
+```rust
+use engine_core::prelude::*;
+
+struct MyGame {
+    player: Option<EntityId>,
+}
+
+impl Game for MyGame {
+    fn init(&mut self, ctx: &mut GameContext) {
+        // Create a player entity with position and sprite
+        let player = ctx.world.create_entity();
+        ctx.world.add_component(&player, Transform2D::new(Vec2::new(0.0, 0.0))).ok();
+        ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
+        self.player = Some(player);
+    }
+
+    fn update(&mut self, ctx: &mut GameContext) {
+        // Move player with WASD
+        if let Some(player) = self.player {
+            if let Some(transform) = ctx.world.get_mut::<Transform2D>(player) {
+                let speed = 200.0 * ctx.delta_time;
+                if ctx.input.is_key_pressed(KeyCode::KeyW) { transform.position.y += speed; }
+                if ctx.input.is_key_pressed(KeyCode::KeyS) { transform.position.y -= speed; }
+                if ctx.input.is_key_pressed(KeyCode::KeyA) { transform.position.x -= speed; }
+                if ctx.input.is_key_pressed(KeyCode::KeyD) { transform.position.x += speed; }
+            }
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_game(MyGame { player: None }, GameConfig::new("My Game"))
+}
+```
+
+That's it! The engine handles window creation, event loops, rendering, and input automatically.
+
+## Game API Reference
+
+| Type | Purpose |
+|------|---------|
+| `Game` | Trait to implement - `init()`, `update()`, optionally `render()` |
+| `GameConfig` | Window settings: title, size, clear color, FPS |
+| `GameContext` | Access `input`, `world` (ECS), `delta_time`, `window_size` |
+| `run_game()` | Single function to start everything |
+
+### GameConfig Options
+
+```rust
+let config = GameConfig::new("My Game")
+    .with_size(1280, 720)           // Window dimensions
+    .with_clear_color(0.1, 0.1, 0.2, 1.0)  // Background color
+    .with_fps(60);                   // Target frame rate
+```
+
+### Game Trait Methods
+
+```rust
+impl Game for MyGame {
+    // Required: called every frame
+    fn update(&mut self, ctx: &mut GameContext) { }
+
+    // Optional: called once at startup
+    fn init(&mut self, ctx: &mut GameContext) { }
+
+    // Optional: custom sprite rendering (default extracts from ECS)
+    fn render(&mut self, ctx: &mut RenderContext) { }
+
+    // Optional: key event callbacks
+    fn on_key_pressed(&mut self, key: KeyCode, ctx: &mut GameContext) { }
+    fn on_key_released(&mut self, key: KeyCode, ctx: &mut GameContext) { }
+
+    // Optional: window events
+    fn on_resize(&mut self, width: u32, height: u32) { }
+    fn on_exit(&mut self) { }
+}
+```
 
 ## Architecture
 
 ```
 insiculous_2d/
 ├── crates/
-│   ├── engine_core/    # Application lifecycle, scenes, game loop
+│   ├── engine_core/    # Game trait, application lifecycle, scenes
 │   ├── renderer/       # WGPU 28.0.0 sprite rendering
 │   ├── ecs/            # Archetype-based Entity Component System
 │   └── input/          # Keyboard, mouse, gamepad handling
 └── examples/           # Demo applications
 ```
 
-**Data Flow:**
-1. Input events captured by `InputHandler`
-2. `EngineApplication` manages scene stack
-3. Each `Scene` contains an ECS `World`
-4. Systems update game state via `SystemRegistry`
-5. `Renderer` draws sprites with WGPU
+## Advanced Usage
 
-## Technical Implementation
+For more control, you can use the lower-level APIs directly.
 
-### Renderer Crate
-
-**WGPU 28.0.0 Sprite Rendering Pipeline:**
-- Instanced rendering with automatic texture batching
-- Orthographic 2D camera with view/projection matrices
-- Built-in 1x1 white texture for colored sprites
-- `TexelCopyBufferLayout` for texture uploads
+### Direct ECS Access
 
 ```rust
-// Create pipeline and batcher
-let sprite_pipeline = SpritePipeline::new(renderer.device(), 1000);
-let mut batcher = SpriteBatcher::new(1000);
-
-// Add sprites
-batcher.add_sprite(&Sprite::new(texture_handle)
-    .with_position(Vec2::new(100.0, 200.0))
-    .with_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
-    .with_scale(Vec2::new(64.0, 64.0)));
-
-// Render
-let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
-renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_refs)?;
-```
-
-**Key Types:**
-- `Renderer` - Surface management, device/queue
-- `SpritePipeline` - Vertex/instance/index buffers, shaders
-- `SpriteBatcher` - Groups sprites by texture handle
-- `Camera2D` - Viewport, position, zoom, rotation
-
-### ECS Crate
-
-**Archetype-Based Component Storage:**
-- Entities with same component types stored in dense arrays
-- Cache-friendly iteration patterns
-- Type-safe queries: `Single<T>`, `Pair<A,B>`, `Triple<A,B,C>`
-
-```rust
-// Legacy storage
-let world = World::new();
-
-// Optimized archetype storage
-let world = World::new_optimized();
-
-// Entity operations
+// Create entities with components
 let entity = world.create_entity();
-world.add_component(entity, Position { x: 0.0, y: 0.0 })?;
-world.add_component(entity, Velocity { dx: 1.0, dy: 0.0 })?;
+world.add_component(&entity, Transform2D::new(Vec2::new(100.0, 200.0)))?;
+world.add_component(&entity, Sprite::new(0).with_color(Vec4::ONE))?;
 
-// Type-safe queries
-for (entity, (pos, vel)) in world.query::<Pair<Position, Velocity>>() {
-    // Process entities with both Position and Velocity
+// Query components
+if let Some(transform) = world.get_mut::<Transform2D>(entity) {
+    transform.position.x += 10.0;
+}
+
+// Iterate all entities
+for entity_id in world.entities() {
+    if let Some(sprite) = world.get::<Sprite>(entity_id) {
+        // Process sprite...
+    }
 }
 ```
 
-**60 tests passing** - archetype storage, component queries, entity lifecycle
+### Custom Rendering
 
-### Input Crate
-
-**Unified Input Handling:**
-- Event queue buffers inputs between frames
-- Action mapping binds keys/buttons to game actions
-- Thread-safe wrapper for concurrent access
+Override `render()` to control sprite rendering:
 
 ```rust
-let input = InputHandler::new();
+fn render(&mut self, ctx: &mut RenderContext) {
+    // Add sprites manually
+    let sprite = renderer::Sprite::new(TextureHandle { id: 0 })
+        .with_position(Vec2::new(100.0, 100.0))
+        .with_scale(Vec2::new(64.0, 64.0))
+        .with_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
 
-// Process events from winit
-input.handle_window_event(&event);
+    ctx.sprites.add_sprite(&sprite);
 
-// Query state
-if input.is_action_active(&GameAction::MoveLeft) {
-    player.position.x -= speed;
+    // Or extract from specific entities
+    if let Some(transform) = ctx.world.get::<Transform2D>(self.player) {
+        // Custom sprite logic...
+    }
 }
-if input.is_key_just_pressed(KeyCode::Space) {
-    player.jump();
-}
-
-// Frame boundary
-input.update(); // Clears "just pressed" states
 ```
 
-**Default Bindings:** WASD movement, mouse, gamepad support
-
-**56 tests passing** - key states, action mapping, event queue
-
-### Engine Core Crate
-
-**Application Lifecycle:**
-- Scene stack with push/pop for game states
-- Fixed timestep game loop with accumulator
-- Proper initialization/shutdown phases
+### Input System
 
 ```rust
+// In update()
+if ctx.input.is_key_pressed(KeyCode::Space) {
+    // Key is held down
+}
+if ctx.input.is_key_just_pressed(KeyCode::Enter) {
+    // Key was just pressed this frame
+}
+
+// Mouse position
+let mouse_pos = ctx.input.mouse_position();
+
+// Action-based input (with default WASD bindings)
+if ctx.input.is_action_active(&GameAction::MoveLeft) {
+    // Move left
+}
+```
+
+### Manual Application Control
+
+For full control over the event loop:
+
+```rust
+use winit::event_loop::EventLoop;
+use engine_core::EngineApplication;
+
+let event_loop = EventLoop::new()?;
 let scene = Scene::new("main");
-let game_loop = GameLoop::new(GameLoopConfig::default());
-let app = EngineApplication::new(scene, game_loop);
-
-// Scene management
-app.push_scene(pause_menu);
-app.pop_scene();
-
-// System registration
-app.schedule.register(PhysicsSystem);
-app.schedule.register(RenderSystem);
+let mut app = EngineApplication::with_scene(scene);
+event_loop.run_app(&mut app)?;
 ```
-
-**Lifecycle States:** `Uninitialized → Initialized → Started → Running → Stopped → Shutdown`
-
-**29 tests passing** - lifecycle transitions, scene management, error recovery
 
 ## Test Summary
 
@@ -152,32 +188,16 @@ app.schedule.register(RenderSystem);
 |-------|-------|----------|
 | ECS | 60 | Archetype storage, queries, entity lifecycle |
 | Input | 56 | Key states, action mapping, events |
-| Engine Core | 29 | Lifecycle, scenes, error recovery |
+| Engine Core | 29 | Lifecycle, scenes, game API |
 | Renderer | 0 | Visual testing via examples |
 
 Run all tests: `cargo test --workspace`
 
-## Contributing
+## Requirements
 
-### Standards
-- Single Responsibility Principle (SRP)
-- Don't Repeat Yourself (DRY)
-- Descriptive names for all identifiers
-- Document public APIs
-
-### Commits
-```
-<type>(<scope>): <description>
-```
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-Example: `feat(renderer): add sprite batching system`
-
-### Pull Requests
-- [ ] Code follows project standards
-- [ ] Tests added/updated
-- [ ] Documentation updated
-- [ ] Tested on multiple platforms
+- Rust stable (1.70+)
+- Cargo
+- GPU with Vulkan, Metal, or DX12 support
 
 ## License
 

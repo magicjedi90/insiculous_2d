@@ -9,7 +9,14 @@
 | ECS | Working | 60 |
 | Sprite Rendering | Working | 0 (visual) |
 
-**Verification:** `cargo run --example hello_world` - Uses ECS for game state, WASD to move player.
+**Verification:** `cargo run --example hello_world` - Uses simplified Game API, ECS for game state, WASD to move player.
+
+### Simple Game API - NEW
+The engine now provides a `Game` trait that handles all winit/window boilerplate internally:
+- `run_game(game, config)` - One function to start your game
+- `GameConfig` - Configure window title, size, clear color
+- `GameContext` - Access input, ECS world, delta time in update()
+- Default sprite rendering from ECS entities
 
 ### ECS Integration - FIXED
 

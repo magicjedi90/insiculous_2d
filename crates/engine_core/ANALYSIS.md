@@ -1,9 +1,43 @@
 # Engine Core Analysis
 
 ## Current State (Updated: January 2026)
-The engine_core crate provides lifecycle management, scene management, and timing for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
+The engine_core crate provides lifecycle management, scene management, timing, and a simplified Game API for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
 
-**Test Count: 6 tests** (all passing)
+**Test Count: 29 tests** (all passing)
+
+## Simple Game API
+
+The engine now provides a `Game` trait that hides all winit/window complexity:
+
+```rust
+use engine_core::prelude::*;
+
+struct MyGame;
+
+impl Game for MyGame {
+    fn init(&mut self, ctx: &mut GameContext) {
+        // Create entities, load assets
+    }
+
+    fn update(&mut self, ctx: &mut GameContext) {
+        // Game logic - access input, ECS world, delta time
+    }
+
+    // render() has a default implementation that extracts sprites from ECS
+}
+
+fn main() {
+    run_game(MyGame, GameConfig::default()).unwrap();
+}
+```
+
+**Key Features:**
+- `GameConfig` for window settings (title, size, clear color, FPS)
+- `GameContext` provides access to input, ECS world, delta time
+- `RenderContext` for custom sprite rendering
+- Default `render()` implementation extracts sprites from ECS
+- ESC key automatically exits the game
+- Scene lifecycle managed internally
 
 ## ✅ Issues That Have Been Resolved
 
