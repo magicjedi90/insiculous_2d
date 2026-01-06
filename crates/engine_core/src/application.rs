@@ -139,7 +139,7 @@ impl EngineApplication {
 
             if let Some(renderer) = &mut self.renderer {
                 // Render the scene with sprites if possible
-                if let Some(sprite_pipeline) = &self.sprite_pipeline {
+                if let Some(sprite_pipeline) = &mut self.sprite_pipeline {
                     // For now, use empty sprite data for testing
                     let sprite_batches: Vec<&renderer::sprite::SpriteBatch> = vec![];
                     let texture_resources = std::collections::HashMap::new();

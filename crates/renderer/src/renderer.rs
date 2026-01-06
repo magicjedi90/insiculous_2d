@@ -181,28 +181,31 @@ impl Renderer {
 
     /// Render a frame with a sprite pipeline
     pub fn render_with_sprites(
-        &self, 
-        sprite_pipeline: &crate::sprite::SpritePipeline,
+        &self,
+        sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera2D,
         texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
         // Create a combined texture resources map that includes the white texture for colored sprites
         let mut combined_texture_resources = texture_resources.clone();
-        
+
         // Add the white texture if it exists, using a special handle for colored sprites
         if let Some(white_texture) = &self.white_texture {
             let white_texture_handle = crate::sprite::TextureHandle { id: 0 }; // Use handle 0 for white texture
             combined_texture_resources.insert(white_texture_handle, white_texture.clone());
         }
-        
+
+        // Prepare sprites - update instance buffer with sprite data
+        sprite_pipeline.prepare_sprites(&self.queue, sprite_batches);
+
         self.render_with_sprites_internal(sprite_pipeline, camera, &combined_texture_resources, sprite_batches)
     }
-    
+
     /// Internal method to render sprites with the combined texture resources
     fn render_with_sprites_internal(
-        &self, 
-        sprite_pipeline: &crate::sprite::SpritePipeline,
+        &self,
+        sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera2D,
         texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]

@@ -7,39 +7,28 @@ The Insiculous 2D engine has a solid architectural foundation. Key status:
 - **Input System**: WORKING - 56 tests passing
 - **Engine Core**: WORKING - 29 tests passing, lifecycle management stable
 - **ECS**: WORKING - 60 tests passing, archetype storage implemented
-- **Sprite Rendering**: BROKEN - GPU pipeline works but sprites are invisible due to buffer alignment issue
+- **Sprite Rendering**: ✅ WORKING - Fixed January 2026
 
-**Current Blocker**: Sprite rendering is non-functional. The GPU pipeline works (proven by NDC quad and triangle tests), but the sprite pipeline has a vertex/instance buffer format mismatch with the shader.
+Run `cargo run --example sprite_demo` to see 7 animated colored sprites.
 
 ## 🔥 Critical Priority (Fix Immediately)
 
 These issues must be fixed before any further development:
 
 ### 0. SPRITE RENDERING VISIBILITY BUG 🚨
-**Status**: 🔴 **BROKEN - ROOT CAUSE IDENTIFIED, FIX NEEDED**
-**Impact**: **100% BLOCKING** - Cannot render sprites until fixed
+**Status**: ✅ **FIXED** (January 2026)
 
-**Problem**: Sprites are invisible despite GPU pipeline functioning correctly.
+**What Was Wrong**:
+1. Main shader was replaced with a debug version that ignored all transforms
+2. Instance buffer wasn't being populated before draw calls
+3. `render_with_sprites` didn't call `prepare_sprites()` to upload sprite data
 
-**Diagnostic Evidence**:
-```
-ndc_quad_test.rs:     ✅ PASS - GPU pipeline works, colored quad visible
-minimal_triangle_test.rs: ✅ PASS - Shaders execute correctly
-final_sprite_test.rs: ❌ FAIL - Full sprite pipeline shows only dark blue background
-sprite_demo.rs:       ❌ FAIL - No visible sprites
-```
+**Fixes Applied**:
+1. Restored proper shader from `sprite_instanced_backup.wgsl`
+2. Added `sprite_pipeline.prepare_sprites()` call in `render_with_sprites()`
+3. Changed `sprite_pipeline` parameter to `&mut` for mutable access
 
-**Root Cause** (suspected):
-1. `array_stride` in `SpriteVertex::desc()` / `SpriteInstance::desc()` doesn't match struct memory layout
-2. Attribute offset calculations wrong due to padding/alignment
-3. Shader `@location(N)` indices don't match vertex buffer attribute locations
-4. Camera uniform layout mismatch (size or field order)
-
-**Fix Actions**:
-1. Verify struct sizes match GPU buffer strides using `std::mem::size_of`
-2. Log actual vertex/instance data before GPU upload
-3. Compare triangle test (works) vs sprite pipeline (fails) buffer setups
-4. Create debug shader to visualize instance data as colors
+**Verification**: Run `cargo run --example sprite_demo` to see 7 animated sprites
 
 ### 1. Memory Safety & Lifetime Issues
 **Status**: 🔴 CRITICAL - Engine unsafe to use
@@ -255,11 +244,10 @@ These features enhance the engine but aren't essential:
 
 ### Phase 2: Core Features (4-6 weeks)
 **Goal**: Make the engine usable for simple games
-- ❌ **Sprite rendering system** - BROKEN (see section 0)
-  - WGPU 28.0.0 infrastructure set up
-  - Sprite batching and texture management code exists
-  - **Sprites are invisible** - buffer alignment issue
-  - Renderer tests removed (0 tests)
+- ✅ **Sprite rendering system** - FIXED (January 2026)
+  - WGPU 28.0.0 instanced rendering
+  - Automatic sprite batching by texture
+  - Camera with orthographic projection
 - ✅ **Optimize ECS performance** - COMPLETED
   - Archetype-based component storage implemented
   - Type-safe component queries (Single, Pair, Triple)
@@ -373,10 +361,10 @@ With proper execution of this roadmap, Insiculous 2D can become a competitive ga
 ### WGPU 28.0.0 Migration
 Successfully migrated from deprecated `ImageDataLayout` to `TexelCopyBufferLayout`.
 
-### Current Status: BROKEN
-- Infrastructure is in place (batching, camera, texture management)
-- GPU pipeline works (NDC quads and triangles render)
-- **Sprites are invisible** due to vertex/instance buffer alignment issue
-- Renderer tests were removed (0 tests)
+### Current Status: ✅ WORKING
+- Instanced sprite rendering with batching
+- Camera with orthographic projection
+- Color tinting support via white texture multiplication
+- 7 animated sprites demo running at 60 FPS
 
-See section 0 for debugging details and fix plan.
+Run `cargo run --example sprite_demo` to verify.

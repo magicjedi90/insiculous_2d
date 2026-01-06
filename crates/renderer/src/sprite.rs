@@ -625,16 +625,17 @@ impl SpritePipeline {
     /// Prepare sprite data for rendering by updating instance buffer and creating batches
     pub fn prepare_sprites(&mut self, queue: &Queue, batches: &[&SpriteBatch]) {
         let mut all_instances = Vec::new();
-        
+
         // Collect all instances from batches
         for batch in batches {
             for instance in &batch.instances {
                 all_instances.push(*instance);
             }
         }
-        
+
         // Update the instance buffer
         if !all_instances.is_empty() {
+            log::debug!("Preparing {} sprite instances for GPU upload", all_instances.len());
             self.update_instance_buffer(queue, &all_instances);
         }
     }

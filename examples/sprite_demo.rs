@@ -1,13 +1,7 @@
 //! Sprite Demo - Demonstrates the sprite rendering API
 //!
-//! **STATUS: BROKEN** - Sprites are currently invisible due to a vertex/instance buffer
-//! alignment issue. The GPU pipeline works (see hello_world.rs for working clear color),
-//! but sprite-specific rendering fails.
-//!
-//! This example shows the intended sprite API usage. Once the buffer alignment issue
-//! is fixed, this demo should show 7 animated colored sprites.
-//!
-//! See `crates/renderer/ANALYSIS.md` for debugging details.
+//! This example shows 7 animated colored sprites with smooth motion.
+//! Controls: WASD to move camera, ESC to exit
 
 use std::sync::Arc;
 use winit::{
@@ -168,15 +162,14 @@ impl SpriteDemo {
 
 impl ApplicationHandler<()> for SpriteDemo {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        println!("Sprite Demo - BROKEN (sprites currently invisible)");
-        println!("===================================================");
-        println!("This demo shows the sprite API, but sprites don't render.");
-        println!("See crates/renderer/ANALYSIS.md for debugging details.");
+        println!("Sprite Demo");
+        println!("===========");
+        println!("7 animated colored sprites with smooth motion");
         println!("Controls: WASD to move camera, ESC to exit");
-        println!("===================================================");
+        println!("===========");
 
         let window_attributes = WindowAttributes::default()
-            .with_title("Sprite Demo (BROKEN - sprites invisible)")
+            .with_title("Sprite Demo - Insiculous 2D")
             .with_inner_size(winit::dpi::LogicalSize::new(1024, 768));
             
         let window = match event_loop.create_window(window_attributes) {
@@ -209,7 +202,7 @@ impl ApplicationHandler<()> for SpriteDemo {
                 self.create_sprites();
                 self.setup_background();
 
-                println!("Created {} sprites (will be invisible due to bug)", self.sprites.len());
+                println!("Created {} animated sprites", self.sprites.len());
             }
             Err(e) => {
                 println!("❌ Failed to initialize renderer: {}", e);
@@ -290,7 +283,7 @@ impl ApplicationHandler<()> for SpriteDemo {
         
         // Status update every 5 seconds
         if self.frame_count % 300 == 0 {
-            println!("Frame {} - {} sprites (invisible)", self.frame_count / 60, self.sprites.len());
+            println!("Frame {} - {} sprites rendering", self.frame_count / 60, self.sprites.len());
         }
     }
 }
@@ -340,7 +333,7 @@ impl SpriteDemo {
         }
     }
     
-    /// Render the scene (sprites will be invisible due to bug)
+    /// Render the scene
     fn render_frame(&mut self) {
         let mut batcher = SpriteBatcher::new(1000);
         for sprite in &self.sprites {
@@ -351,11 +344,11 @@ impl SpriteDemo {
         let texture_resources = std::collections::HashMap::new();
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
 
-        if let (Some(renderer), Some(sprite_pipeline)) = (&mut self.renderer, &self.sprite_pipeline) {
+        if let (Some(renderer), Some(sprite_pipeline)) = (&mut self.renderer, &mut self.sprite_pipeline) {
             match renderer.render_with_sprites(sprite_pipeline, &self.camera, &texture_resources, &batch_refs) {
                 Ok(_) => {
                     if self.frame_count == 1 {
-                        println!("Rendering started (sprites invisible - only dark background visible)");
+                        println!("Rendering started - you should see 7 colored sprites!");
                     }
                 }
                 Err(e) => {
@@ -373,21 +366,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_level(log::LevelFilter::Warn)
         .init();
 
-    println!("Sprite Demo");
-    println!("===========");
-    println!("STATUS: BROKEN - sprites are invisible");
-    println!("This example shows the sprite rendering API.");
-    println!("See crates/renderer/ANALYSIS.md for fix details.");
-    println!("");
-    println!("Controls: WASD to move camera, ESC to exit");
-    println!("===========");
-
     let event_loop = EventLoop::new()?;
     let mut app = SpriteDemo::new();
 
     event_loop.run_app(&mut app)?;
 
-    println!("Demo finished.");
+    println!("Sprite demo finished.");
 
     Ok(())
 }
