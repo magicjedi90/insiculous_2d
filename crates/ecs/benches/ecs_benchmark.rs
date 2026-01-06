@@ -10,12 +10,14 @@ struct Position {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Velocity {
     dx: f32,
     dy: f32,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Health {
     current: i32,
     max: i32,
@@ -27,23 +29,22 @@ fn benchmark_legacy_ecs(c: &mut Criterion) {
     world.initialize().unwrap();
     world.start().unwrap();
 
-    // Create entities with components
-    for i in 0..1000 {
+    // Create entities with components and store their IDs
+    let entities: Vec<EntityId> = (0..1000).map(|i| {
         let entity = world.create_entity();
         world.add_component(&entity, Position { x: i as f32, y: i as f32 }).unwrap();
         world.add_component(&entity, Velocity { dx: 1.0, dy: 1.0 }).unwrap();
         if i % 3 == 0 {
             world.add_component(&entity, Health { current: 100, max: 100 }).unwrap();
         }
-    }
+        entity
+    }).collect();
 
     c.bench_function("legacy_ecs_component_access", |b| {
         b.iter(|| {
-            // Simulate component access pattern
-            for entity_id in 0..1000 {
-                let entity = EntityId::new(entity_id);
-                if let Ok(pos) = world.get_component::<Position>(&entity) {
-                    let pos = pos as &Position;
+            // Access components using typed getter
+            for entity in &entities {
+                if let Some(pos) = world.get::<Position>(*entity) {
                     black_box(pos.x + pos.y);
                 }
             }
@@ -52,11 +53,10 @@ fn benchmark_legacy_ecs(c: &mut Criterion) {
 
     c.bench_function("legacy_ecs_entity_iteration", |b| {
         b.iter(|| {
-            // Simulate entity iteration
-            for entity_id in 0..1000 {
-                let entity = EntityId::new(entity_id);
-                if world.has_component::<Position>(&entity).unwrap() && 
-                   world.has_component::<Velocity>(&entity).unwrap() {
+            // Iterate using entities() method
+            for entity_id in world.entities() {
+                if world.get::<Position>(entity_id).is_some() &&
+                   world.get::<Velocity>(entity_id).is_some() {
                     black_box(entity_id);
                 }
             }
@@ -70,23 +70,22 @@ fn benchmark_archetype_ecs(c: &mut Criterion) {
     world.initialize().unwrap();
     world.start().unwrap();
 
-    // Create entities with components
-    for i in 0..1000 {
+    // Create entities with components and store their IDs
+    let entities: Vec<EntityId> = (0..1000).map(|i| {
         let entity = world.create_entity();
         world.add_component(&entity, Position { x: i as f32, y: i as f32 }).unwrap();
         world.add_component(&entity, Velocity { dx: 1.0, dy: 1.0 }).unwrap();
         if i % 3 == 0 {
             world.add_component(&entity, Health { current: 100, max: 100 }).unwrap();
         }
-    }
+        entity
+    }).collect();
 
     c.bench_function("archetype_ecs_component_access", |b| {
         b.iter(|| {
-            // Simulate component access pattern
-            for entity_id in 0..1000 {
-                let entity = EntityId::new(entity_id);
-                if let Ok(pos) = world.get_component::<Position>(&entity) {
-                    let pos = pos as &Position;
+            // Access components using typed getter
+            for entity in &entities {
+                if let Some(pos) = world.get::<Position>(*entity) {
                     black_box(pos.x + pos.y);
                 }
             }
@@ -95,11 +94,10 @@ fn benchmark_archetype_ecs(c: &mut Criterion) {
 
     c.bench_function("archetype_ecs_entity_iteration", |b| {
         b.iter(|| {
-            // Simulate entity iteration
-            for entity_id in 0..1000 {
-                let entity = EntityId::new(entity_id);
-                if world.has_component::<Position>(&entity).unwrap() && 
-                   world.has_component::<Velocity>(&entity).unwrap() {
+            // Iterate using entities() method
+            for entity_id in world.entities() {
+                if world.get::<Position>(entity_id).is_some() &&
+                   world.get::<Velocity>(entity_id).is_some() {
                     black_box(entity_id);
                 }
             }
@@ -115,7 +113,7 @@ fn benchmark_entity_creation(c: &mut Criterion) {
         b.iter(|| {
             let mut world = World::new();
             world.initialize().unwrap();
-            
+
             for i in 0..100 {
                 let entity = world.create_entity();
                 world.add_component(&entity, Position { x: i as f32, y: i as f32 }).unwrap();
@@ -129,7 +127,7 @@ fn benchmark_entity_creation(c: &mut Criterion) {
         b.iter(|| {
             let mut world = World::new_optimized();
             world.initialize().unwrap();
-            
+
             for i in 0..100 {
                 let entity = world.create_entity();
                 world.add_component(&entity, Position { x: i as f32, y: i as f32 }).unwrap();
@@ -167,7 +165,7 @@ fn benchmark_component_operations(c: &mut Criterion) {
     group.bench_function("legacy_add_component", |b| {
         b.iter(|| {
             for entity in &legacy_entities {
-                legacy_world.add_component(&entity, Velocity { dx: 1.0, dy: 1.0 }).unwrap();
+                let _ = legacy_world.add_component(entity, Velocity { dx: 1.0, dy: 1.0 });
             }
         });
     });
@@ -175,7 +173,7 @@ fn benchmark_component_operations(c: &mut Criterion) {
     group.bench_function("archetype_add_component", |b| {
         b.iter(|| {
             for entity in &archetype_entities {
-                archetype_world.add_component(&entity, Velocity { dx: 1.0, dy: 1.0 }).unwrap();
+                let _ = archetype_world.add_component(entity, Velocity { dx: 1.0, dy: 1.0 });
             }
         });
     });
@@ -183,8 +181,7 @@ fn benchmark_component_operations(c: &mut Criterion) {
     group.bench_function("legacy_get_component", |b| {
         b.iter(|| {
             for entity in &legacy_entities {
-                if let Ok(pos) = legacy_world.get_component::<Position>(&entity) {
-                    let pos = pos as &Position;
+                if let Some(pos) = legacy_world.get::<Position>(*entity) {
                     black_box(pos.x + pos.y);
                 }
             }
@@ -194,8 +191,7 @@ fn benchmark_component_operations(c: &mut Criterion) {
     group.bench_function("archetype_get_component", |b| {
         b.iter(|| {
             for entity in &archetype_entities {
-                if let Ok(pos) = archetype_world.get_component::<Position>(&entity) {
-                    let pos = pos as &Position;
+                if let Some(pos) = archetype_world.get::<Position>(*entity) {
                     black_box(pos.x + pos.y);
                 }
             }
