@@ -1,7 +1,13 @@
-//! 🎨 **PERFECT Sprite Demo** - Production-ready sprite rendering showcase
-//! 
-//! This is the **ONE TRUE** sprite rendering demo that proves our OpenGL ES backend works.
-//! Features beautiful, impossible-to-miss visuals with smooth animations and perfect presentation.
+//! Sprite Demo - Demonstrates the sprite rendering API
+//!
+//! **STATUS: BROKEN** - Sprites are currently invisible due to a vertex/instance buffer
+//! alignment issue. The GPU pipeline works (see hello_world.rs for working clear color),
+//! but sprite-specific rendering fails.
+//!
+//! This example shows the intended sprite API usage. Once the buffer alignment issue
+//! is fixed, this demo should show 7 animated colored sprites.
+//!
+//! See `crates/renderer/ANALYSIS.md` for debugging details.
 
 use std::sync::Arc;
 use winit::{
@@ -15,8 +21,8 @@ use renderer::prelude::*;
 use input::prelude::*;
 use glam::{Vec2, Vec4};
 
-/// 🎮 **Perfect Sprite Demo** - The ultimate sprite rendering showcase
-struct PerfectSpriteDemo {
+/// Sprite rendering demo (currently broken - sprites are invisible)
+struct SpriteDemo {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     sprite_pipeline: Option<SpritePipeline>,
@@ -28,7 +34,7 @@ struct PerfectSpriteDemo {
     animation_speed: f32,
 }
 
-impl PerfectSpriteDemo {
+impl SpriteDemo {
     fn new() -> Self {
         Self {
             window: None,
@@ -43,8 +49,8 @@ impl PerfectSpriteDemo {
         }
     }
     
-    /// 🎨 Create **BEAUTIFUL** sprites that are impossible to miss
-    fn create_beautiful_sprites(&mut self) {
+    /// Create sprites for the demo
+    fn create_sprites(&mut self) {
         self.sprites.clear();
         
         // Use white texture (handle 0) for colored sprites
@@ -151,8 +157,8 @@ impl PerfectSpriteDemo {
         }
     }
     
-    /// 🎯 **PERFECT BACKGROUND** - Dark gradient that makes sprites pop
-    fn setup_beautiful_background(&mut self) {
+    /// Set up the background color
+    fn setup_background(&mut self) {
         if let Some(renderer) = &mut self.renderer {
             // Deep space gradient: Dark blue to black
             renderer.set_clear_color(0.05, 0.08, 0.15, 1.0); // Deep space blue
@@ -160,19 +166,17 @@ impl PerfectSpriteDemo {
     }
 }
 
-impl ApplicationHandler<()> for PerfectSpriteDemo {
+impl ApplicationHandler<()> for SpriteDemo {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        println!("🎨 PERFECT Sprite Demo - Production Ready!");
-        println!("===========================================");
-        println!("✨ 7 Beautiful animated sprites");
-        println!("🎯 Dark space background for maximum visibility");
-        println!("🎮 Controls: ↑↓←→ or WASD to move camera");
-        println!("⚡ +/- to change animation speed");
-        println!("🚪 ESC to exit");
-        println!("===========================================");
-        
+        println!("Sprite Demo - BROKEN (sprites currently invisible)");
+        println!("===================================================");
+        println!("This demo shows the sprite API, but sprites don't render.");
+        println!("See crates/renderer/ANALYSIS.md for debugging details.");
+        println!("Controls: WASD to move camera, ESC to exit");
+        println!("===================================================");
+
         let window_attributes = WindowAttributes::default()
-            .with_title("🎨 PERFECT Sprite Demo - Working OpenGL ES Backend!")
+            .with_title("Sprite Demo (BROKEN - sprites invisible)")
             .with_inner_size(winit::dpi::LogicalSize::new(1024, 768));
             
         let window = match event_loop.create_window(window_attributes) {
@@ -191,26 +195,21 @@ impl ApplicationHandler<()> for PerfectSpriteDemo {
         
         match pollster::block_on(renderer::init(window)) {
             Ok(renderer) => {
-                println!("✅ Renderer initialized with OpenGL ES backend");
-                println!("✅ Adapter: {}", renderer.adapter_info());
-                println!("✅ Surface format: {:?}", renderer.surface_format());
-                
+                println!("Renderer: {}", renderer.adapter_info());
+
                 let sprite_pipeline = SpritePipeline::new(renderer.device(), 1000);
-                
-                // Setup beautiful camera and background
+
                 self.camera.viewport_size = Vec2::new(1024.0, 768.0);
                 self.camera.position = Vec2::new(0.0, 0.0);
                 self.camera.zoom = 1.0;
-                
+
                 self.renderer = Some(renderer);
                 self.sprite_pipeline = Some(sprite_pipeline);
-                
-                // Create beautiful sprites and background
-                self.create_beautiful_sprites();
-                self.setup_beautiful_background();
-                
-                println!("✅ Created {} beautiful animated sprites", self.sprites.len());
-                println!("🎯 Looking for colorful sprites on dark background...");
+
+                self.create_sprites();
+                self.setup_background();
+
+                println!("Created {} sprites (will be invisible due to bug)", self.sprites.len());
             }
             Err(e) => {
                 println!("❌ Failed to initialize renderer: {}", e);
@@ -289,15 +288,14 @@ impl ApplicationHandler<()> for PerfectSpriteDemo {
         
         self.frame_count += 1;
         
-        // Status update every 3 seconds
-        if self.frame_count % 180 == 0 {
-            println!("🎨 Frame {} - {} sprites dancing beautifully!", 
-                self.frame_count / 60, self.sprites.len());
+        // Status update every 5 seconds
+        if self.frame_count % 300 == 0 {
+            println!("Frame {} - {} sprites (invisible)", self.frame_count / 60, self.sprites.len());
         }
     }
 }
 
-impl PerfectSpriteDemo {
+impl SpriteDemo {
     /// 📷 Update camera based on input
     fn update_camera(&mut self) {
         let input = self.input_handler.lock().unwrap();
@@ -342,30 +340,27 @@ impl PerfectSpriteDemo {
         }
     }
     
-    /// 🎨 Render the beautiful scene
+    /// Render the scene (sprites will be invisible due to bug)
     fn render_frame(&mut self) {
         let mut batcher = SpriteBatcher::new(1000);
         for sprite in &self.sprites {
             batcher.add_sprite(sprite);
         }
-        
+
         let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
         let texture_resources = std::collections::HashMap::new();
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
-        
+
         if let (Some(renderer), Some(sprite_pipeline)) = (&mut self.renderer, &self.sprite_pipeline) {
             match renderer.render_with_sprites(sprite_pipeline, &self.camera, &texture_resources, &batch_refs) {
                 Ok(_) => {
                     if self.frame_count == 1 {
-                        println!("🎉 FIRST FRAME RENDERED! Look for colorful sprites!");
-                        println!("🌟 White center star, 🔴 Red orb, 💙 Blue gem, 💚 Green crystal");
-                        println!("💜 Purple jewel, 🧡 Orange float, 💛 Yellow sparkle");
-                        println!("🎯 Dark space background for maximum visibility!");
+                        println!("Rendering started (sprites invisible - only dark background visible)");
                     }
                 }
                 Err(e) => {
                     if self.frame_count < 3 {
-                        println!("⚠️  Render error: {}", e);
+                        println!("Render error: {}", e);
                     }
                 }
             }
@@ -374,30 +369,25 @@ impl PerfectSpriteDemo {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Minimal logging - only show warnings and errors
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Warn)
         .init();
 
-    println!("🎨 PERFECT Sprite Demo - Production Ready!");
-    println!("==========================================");
-    println!("🚀 OpenGL ES backend validated and working");
-    println!("🎯 7 Beautiful animated sprites with smooth motion");
-    println!("🌌 Dark space background for maximum visibility");
-    println!("📷 Camera controls: WASD or Arrow keys");
-    println!("⚡ Animation speed: +/- keys");
-    println!("🚪 Exit: ESC key");
-    println!("==========================================");
+    println!("Sprite Demo");
+    println!("===========");
+    println!("STATUS: BROKEN - sprites are invisible");
+    println!("This example shows the sprite rendering API.");
+    println!("See crates/renderer/ANALYSIS.md for fix details.");
+    println!("");
+    println!("Controls: WASD to move camera, ESC to exit");
+    println!("===========");
 
     let event_loop = EventLoop::new()?;
-    let mut app = PerfectSpriteDemo::new();
-    
-    println!("🎮 Starting perfect sprite demo...");
-    
+    let mut app = SpriteDemo::new();
+
     event_loop.run_app(&mut app)?;
-    
-    println!("✅ Perfect demo completed successfully!");
-    println!("🎨 Sprites were beautiful and impossible to miss!");
-    
+
+    println!("Demo finished.");
+
     Ok(())
 }

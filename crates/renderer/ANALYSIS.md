@@ -1,17 +1,33 @@
 # Renderer Analysis
 
-## Current State (Updated: December 2025)
-The renderer crate has undergone **tremendous progress** from the problematic state described in the original ANALYSIS.md. While many critical issues have been resolved and major architectural improvements implemented, there are still some important gaps that need to be addressed for full production readiness.
+## Current State (Updated: January 2026)
+The renderer crate provides WGPU-based 2D rendering infrastructure. **However, sprite rendering is currently broken** - the GPU pipeline is set up correctly but sprites are not visible on screen due to a vertex/instance buffer alignment issue.
+
+**Test Count: 0 tests** (test files were removed in commit 68587e0)
+
+## ❌ CRITICAL ISSUE: Sprite Rendering Not Working
+
+**Status**: BROKEN - Sprites are invisible despite GPU pipeline being functional
+
+**Diagnostic Evidence** (from examples):
+- `ndc_quad_test.rs`: PASS - Colored quad renders in NDC space (GPU works)
+- `minimal_triangle_test.rs`: PASS - Triangle renders (shaders execute)
+- `final_sprite_test.rs`: FAIL - Full sprite pipeline shows only dark blue background
+
+**Root Cause** (suspected):
+1. `array_stride` in `SpriteVertex::desc()` / `SpriteInstance::desc()` doesn't match struct memory layout
+2. Attribute offset calculations wrong due to padding/alignment
+3. Shader `@location(N)` indices don't match vertex buffer attribute locations
+4. Camera uniform layout mismatch (size or field order)
 
 ## ✅ Issues That Have Been Resolved
 
 ### Critical Issues - FIXED
 
-1. **Sprite Batching System** ✅ **COMPLETED**
-   - **ANALYSIS.md Issue**: "No actual batching system. Sprites are drawn one by one"
-   - **Resolution**: `SpriteBatcher` automatically groups sprites by texture handle
-   - **Implementation**: `SpriteBatch` efficiently manages instances per texture with depth sorting
-   - **Performance**: Configurable maximum sprites per batch, automatic texture-based grouping
+1. **Sprite Batching System** ⚠️ **IMPLEMENTED BUT NOT RENDERING**
+   - `SpriteBatcher` groups sprites by texture handle
+   - `SpriteBatch` manages instances per texture with depth sorting
+   - **Issue**: Batching code exists but sprites don't appear on screen
 
 2. **Camera System** ✅ **COMPLETED**
    - **ANALYSIS.md Issue**: "Camera2D struct is extremely basic with just position, zoom, and aspect ratio"
@@ -36,11 +52,10 @@ The renderer crate has undergone **tremendous progress** from the problematic st
    - **Status**: ✅ Fixed in `texture.rs` using `TexelCopyBufferLayout` instead of deprecated `ImageDataLayout`
    - **Remaining**: Some placeholder implementations due to API changes
 
-6. **Sprite Data Submission** ✅ **COMPLETED**
-   - **ANALYSIS.md Issue**: "Sprite pipeline exists but can't actually render sprites"
-   - **Resolution**: Complete sprite rendering pipeline with instanced rendering
-   - **Implementation**: `SpriteInstance` data structure for GPU upload
-   - **Integration**: Proper vertex and instance buffer layouts
+6. **Sprite Data Submission** ⚠️ **IMPLEMENTED BUT BROKEN**
+   - `SpriteInstance` data structure for GPU upload exists
+   - Vertex and instance buffer layouts defined
+   - **Issue**: Buffer alignment/offset mismatch causes invisible sprites
 
 ## ✅ New Features Implemented
 
@@ -51,11 +66,10 @@ The renderer crate has undergone **tremendous progress** from the problematic st
 - **Color Tinting**: Per-sprite color modification support
 - **UV Region Mapping**: Texture region support for sprite sheets
 
-### Comprehensive Test Suite
-- **58 Tests Passing**: Full test coverage across all renderer components
-- **Integration Tests**: End-to-end testing of rendering pipeline
-- **Performance Tests**: Buffer management and batching efficiency tests
-- **Cross-Platform**: Tests validate WGPU 28.0.0 compatibility
+### Test Suite Status
+- **0 Tests**: Test files were removed in commit 68587e0
+- Testing is done via examples (ndc_quad_test, minimal_triangle_test, etc.)
+- Visual validation required - no automated rendering tests
 
 ### ECS Integration
 - **Sprite Components**: Entity-based sprite rendering
@@ -138,13 +152,13 @@ ECS World
 
 ## 📊 Test Results
 ```
-Renderer Tests: 58/58 passed ✅ (100% success rate)
-├── Sprite Data Tests: 12/12 ✅
-├── Sprite Batching Tests: 12/12 ✅
-├── Texture System Tests: 13/13 ✅
-├── Simple Sprite Tests: 8/8 ✅
-├── Error/Window Tests: 3/3 ✅
-└── Integration Tests: 10/10 ✅ (ignored - require GPU)
+Renderer Tests: 0 (test files removed)
+
+Visual Testing via Examples:
+├── ndc_quad_test.rs: PASS (GPU pipeline works)
+├── minimal_triangle_test.rs: PASS (shaders execute)
+├── final_sprite_test.rs: FAIL (sprites invisible)
+└── sprite_demo.rs: FAIL (sprites invisible)
 ```
 
 ## 🎯 Detailed Issue Analysis
@@ -206,49 +220,42 @@ The most critical issue is that while all the infrastructure exists, the final r
 
 ## 🏆 Production Readiness Assessment
 
-### Current Status: **75% Production Ready**
+### Current Status: **NOT PRODUCTION READY**
 
-### ✅ What's Working (Strengths)
-- **Architecture**: Solid, well-designed rendering pipeline architecture
-- **WGPU Integration**: Modern WGPU 28.0.0 compatibility
-- **Test Coverage**: Comprehensive test suite (58 tests, 100% pass rate)
-- **ECS Integration**: Seamless integration with entity component system
-- **Resource Management**: Handle-based texture management system
-- **Performance Foundation**: Instanced rendering and batching infrastructure
+### ✅ What's Working
+- **GPU Pipeline**: WGPU device/queue/surface initialization
+- **Basic Rendering**: NDC quads and triangles render correctly
+- **Texture Loading**: Textures can be loaded and bound
+- **Architecture**: Well-designed modular structure
 
-### ⚠️ What's Missing (Blockers)
-- **Core Rendering**: Sprites not actually being drawn to screen
-- **Resource Cleanup**: No proper GPU resource destruction
-- **Platform Compatibility**: Surface format issues on some platforms
-- **Async Operations**: Synchronous texture loading blocks main thread
+### ❌ What's Broken (Blockers)
+- **Sprite Rendering**: Sprites are invisible (critical blocker)
+- **Buffer Alignment**: Vertex/instance buffer layout mismatch with shader
+- **No Tests**: Test files were removed, no automated validation
 
-### 🔧 Architecture Quality
-- **Clean Design**: Well-separated concerns and modular architecture
-- **Type Safety**: Strong typing with proper error handling
-- **Extensibility**: Easy to add new rendering features
-- **Performance Potential**: Infrastructure exists for high performance
+### ⚠️ What's Missing
+- Resource cleanup (potential memory leaks)
+- Async texture loading
+- Platform-specific surface format handling
 
 ## 🚀 Conclusion
 
-The renderer crate represents a **remarkable achievement** in transformation:
+The renderer has good infrastructure but **sprite rendering is broken**. The GPU pipeline works (proven by NDC quad and triangle tests), but sprites are invisible.
 
-### Key Successes:
-1. **WGPU 28.0.0 Compatibility**: Successfully migrated to latest API
-2. **Comprehensive Architecture**: Solid foundation for 2D rendering
-3. **ECS Integration**: Seamless entity-based rendering system
-4. **Test Coverage**: 58 comprehensive tests ensuring reliability
-5. **Modern Features**: Instancing, batching, texture atlases
+### What Works
+- WGPU 28.0.0 device/queue/surface setup
+- Basic geometry rendering (triangles, quads in NDC space)
+- Texture loading and binding
+- Sprite batching and sorting logic (untested due to rendering issue)
 
-### Critical Gap:
-The **final rendering step** needs to be completed. All the infrastructure is in place - sprite batching, texture management, camera system, instanced rendering setup - but the actual GPU draw calls are not being made.
+### What's Broken
+- **Sprite rendering** - likely vertex/instance buffer alignment issue
+- No automated tests (removed in commit 68587e0)
 
-### Current Status:
-- **Foundation**: ✅ **Excellent** - Modern, well-architected, tested
-- **Features**: ✅ **Comprehensive** - All major 2D rendering features
-- **Integration**: ✅ **Seamless** - Perfect ECS integration
-- **Rendering**: ❌ **Incomplete** - Core functionality needs completion
+### Next Steps
+1. Debug buffer alignment in `SpriteVertex::desc()` and `SpriteInstance::desc()`
+2. Verify shader `@location` indices match buffer attribute layout
+3. Check camera uniform buffer size and field ordering
+4. Add tests back once rendering is fixed
 
-### Next Priority:
-**Complete the rendering implementation** - once the `SpritePipeline::draw()` method is properly implemented to make actual GPU draw calls, the renderer will be **production-ready** for 2D game development.
-
-The renderer has **75% production readiness** with a **solid architectural foundation**. The remaining 25% is primarily the final rendering implementation, which is a **solvable engineering task** rather than a fundamental architectural challenge.
+The architecture is sound but the engine cannot render sprites until this alignment issue is resolved.

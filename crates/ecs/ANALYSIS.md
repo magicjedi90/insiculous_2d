@@ -1,7 +1,9 @@
 # ECS (Entity Component System) Analysis
 
-## Current State (Updated: December 2025)
-The ECS crate has undergone significant transformation and now provides a robust, production-ready Entity Component System for the Insiculous 2D game engine. It includes comprehensive entity management, component storage, system execution, and advanced features like entity generation tracking and lifecycle management.
+## Current State (Updated: January 2026)
+The ECS crate provides a robust Entity Component System with archetype-based storage for the Insiculous 2D game engine. It includes entity management, component storage, system execution, and advanced features like entity generation tracking and lifecycle management.
+
+**Test Count: 60 tests** (58 integration tests + 2 unit tests)
 
 ## ✅ Issues That Have Been Resolved
 
@@ -28,10 +30,11 @@ The ECS crate has undergone significant transformation and now provides a robust
    - `EntityReference` provides safe entity access with generation validation
    - Automatic detection of stale entity references
 
-5. **Component Storage**: ✅ PARTIALLY RESOLVED
-   - `ComponentStorage` and `ComponentRegistry` provide efficient management
-   - Type-safe component access and storage
-   - **Still needs**: Archetype-based storage for cache efficiency
+5. **Component Storage**: ✅ RESOLVED
+   - Archetype-based storage implemented with dense column storage
+   - `ArchetypeStorage` with type-safe component queries (Single, Pair, Triple)
+   - Comprehensive benchmarks showing significant performance improvements
+   - Backward compatibility maintained with legacy HashMap storage
 
 6. **System Lifecycle**: ✅ RESOLVED
    - Comprehensive lifecycle management (initialize/start/update/stop/shutdown)
@@ -57,12 +60,12 @@ The ECS crate has undergone significant transformation and now provides a robust
 ### Developer Experience
 - **Builder Patterns**: Fluent APIs for component creation
 - **Comprehensive Error Handling**: Detailed error types with `thiserror`
-- **Extensive Testing**: 37 tests covering all ECS functionality
+- **Extensive Testing**: 60 tests covering all ECS functionality
 - **Documentation**: Inline documentation for public APIs
 
 ## ⚠️ Critical Issues That Still Exist
 
-### System Architecture Mismatch - CRITICAL
+### System Architecture Mismatch - BLOCKING COMPILATION ERROR
 ```rust
 // Current System trait expects:
 fn update(&mut self, world: &mut World, delta_time: f32)
@@ -70,17 +73,17 @@ fn update(&mut self, world: &mut World, delta_time: f32)
 // But sprite_system.rs tries to use:
 fn update(&mut self, ctx: &mut SystemContext, world: &mut World) -> Result<(), String>
 ```
-**Impact**: Sprite systems are incompatible with current ECS architecture due to missing `SystemContext`.
+**Impact**: `SystemContext` type is referenced in `sprite_system.rs` but **never defined anywhere**. This will cause compilation failure when sprite systems are used. The import on line 5 of `sprite_system.rs` attempts to import `SystemContext` from crate root, but the type doesn't exist.
 
 ### Test Failures - MODERATE
 - **Sprite Animation Test**: `test_sprite_animation_update` fails with frame indexing issues
 - **Transform Matrix Test**: `test_transform2d_matrix` fails with incorrect transformation math
 - **Mathematical Accuracy**: Transform and animation calculations need verification
 
-### Performance Optimization - MEDIUM
-- **Archetype-Based Storage**: Current HashMap storage is inefficient for large entity counts
-- **Query System**: No efficient way to query entities with specific component combinations
-- **Cache Efficiency**: Component storage needs optimization for iteration performance
+### Performance Optimization - RESOLVED
+- **Archetype-Based Storage**: Implemented with dense column storage for cache efficiency
+- **Query System**: Type-safe queries (Single, Pair, Triple) with efficient iteration
+- **Benchmarks**: Performance validated with 1000+ entities at 60+ FPS
 
 ## 🏗️ Current Architecture
 
@@ -90,7 +93,10 @@ World
 ├── Entities: HashMap<EntityId, Entity>
 ├── Entity Generations: HashMap<EntityId, EntityGeneration>
 ├── Component Registry: ComponentRegistry
-│   └── Component Storages: HashMap<TypeId, ComponentStorage>
+│   └── ArchetypeStorage (dense column storage)
+│       ├── Archetypes: HashMap<ArchetypeId, Archetype>
+│       ├── Component Columns: Dense vectors for each type
+│       └── Queries: Single<T>, Pair<T, U>, Triple<T, U, V>
 └── System Registry: SystemRegistry
     └── Systems: Vec<Box<dyn System>>
 ```
@@ -112,10 +118,16 @@ EngineApplication
 
 ## 📊 Test Results
 ```
-ECS Tests: 35/37 passed (94.6% success rate)
-- Core ECS: 35/35 passed ✅
-- Sprite Components: 19/21 passed ⚠️
-- System Integration: 0/0 tested ❌ (architecture mismatch)
+ECS Tests: 60 total tests
+- archetype.rs: 2 unit tests
+- system_lifecycle.rs: 7 tests
+- entity_generation.rs: 11 tests
+- sprite_components.rs: 21 tests (2 failing)
+- entity.rs: 5 tests
+- world.rs: 5 tests
+- system.rs: 4 tests
+- component.rs: 3 tests
+- init.rs: 2 tests
 ```
 
 ## 🎯 Recommended Next Steps
@@ -126,9 +138,9 @@ ECS Tests: 35/37 passed (94.6% success rate)
 3. **Standardize System Interface**: Ensure all systems conform to the same trait signature
 
 ### High Priority
-4. **Implement Archetype-Based Storage**: Replace HashMap storage for better cache efficiency
-5. **Add Query System**: Efficient entity-component querying with type safety
-6. **Optimize Component Access**: Standardize component access patterns
+4. ~~**Implement Archetype-Based Storage**~~: DONE - See `archetype.rs`
+5. ~~**Add Query System**~~: DONE - Single, Pair, Triple queries implemented
+6. **Standardize Component Access**: Ensure all systems use archetype queries consistently
 
 ### Medium Priority
 7. **Add System Scheduling**: Implement proper system execution ordering
@@ -150,17 +162,16 @@ ECS Tests: 35/37 passed (94.6% success rate)
 - **Basic Functionality**: Core ECS operations work correctly
 
 ### ⚠️ Needs Work
-- **System Integration**: Sprite systems need architectural alignment
-- **Mathematical Correctness**: Transform and animation calculations need verification
-- **Performance**: Not optimized for large entity counts (thousands+)
-- **Advanced Features**: Missing query system and system dependencies
+- **System Integration**: Sprite systems need architectural alignment (SystemContext undefined)
+- **Mathematical Correctness**: Transform and animation calculations need verification (2 failing tests)
+- **Advanced Features**: System dependencies and scheduling
 
 ## 🚀 Conclusion
 
-The ECS crate has been **successfully stabilized** with a solid architectural foundation. All critical Phase 1 issues have been resolved, and the system provides a robust, memory-safe foundation for 2D game development. The main remaining work is:
+The ECS crate provides a solid foundation with archetype-based storage and comprehensive entity management. Key blockers remaining:
 
-1. **Architectural alignment** of sprite systems
-2. **Mathematical correctness** verification
-3. **Performance optimization** for scalability
+1. **SystemContext undefined** - Sprite systems won't compile (blocking)
+2. **2 failing tests** - Transform matrix and animation timing bugs
+3. **Sprite rendering pipeline** - Broken at renderer level (see renderer ANALYSIS.md)
 
-The foundation is production-ready for basic to moderate ECS workloads, with a clear path to high-performance, large-scale entity management.
+Core ECS functionality (entities, components, archetype storage, queries) is production-ready. Sprite integration requires fixes before use.
