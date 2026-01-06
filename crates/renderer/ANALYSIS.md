@@ -93,4 +93,4 @@ The renderer provides functional 2D sprite rendering with:
 - Camera with orthographic projection
 - Color tinting support
 
-Run `cargo run --example sprite_demo` to see 7 animated colored sprites.
+Run `cargo run --example hello_world` to see 2 sprites with WASD movement.

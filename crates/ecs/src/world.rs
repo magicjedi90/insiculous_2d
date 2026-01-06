@@ -233,7 +233,7 @@ impl World {
         Ok(())
     }
 
-    /// Get a reference to a component for an entity
+    /// Get a reference to a component for an entity (returns trait object)
     pub fn get_component<T: Component>(
         &self,
         entity_id: &EntityId,
@@ -247,7 +247,7 @@ impl World {
             .ok_or(EcsError::ComponentNotFound(*entity_id))
     }
 
-    /// Get a mutable reference to a component for an entity
+    /// Get a mutable reference to a component for an entity (returns trait object)
     pub fn get_component_mut<T: Component>(
         &mut self,
         entity_id: &EntityId,
@@ -259,6 +259,22 @@ impl World {
         self.components
             .get_mut::<T>(entity_id)
             .ok_or(EcsError::ComponentNotFound(*entity_id))
+    }
+
+    /// Get a typed reference to a component for an entity
+    pub fn get<T: Component>(&self, entity_id: EntityId) -> Option<&T> {
+        if !self.entities.contains_key(&entity_id) {
+            return None;
+        }
+        self.components.get_typed::<T>(&entity_id)
+    }
+
+    /// Get a typed mutable reference to a component for an entity
+    pub fn get_mut<T: Component>(&mut self, entity_id: EntityId) -> Option<&mut T> {
+        if !self.entities.contains_key(&entity_id) {
+            return None;
+        }
+        self.components.get_typed_mut::<T>(&entity_id)
     }
 
     /// Check if an entity has a component
@@ -300,6 +316,11 @@ impl World {
     /// Get the number of entities
     pub fn entity_count(&self) -> usize {
         self.entities.len()
+    }
+
+    /// Get an iterator over all entity IDs
+    pub fn entities(&self) -> Vec<EntityId> {
+        self.entities.keys().copied().collect()
     }
 
     /// Get the number of systems

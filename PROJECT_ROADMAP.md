@@ -1,370 +1,173 @@
-# Insiculous 2D - Project Roadmap & Priority List
+# Insiculous 2D - Project Roadmap
 
-## Executive Summary (Updated: January 2026)
+## Current Status (January 2026)
 
-The Insiculous 2D engine has a solid architectural foundation. Key status:
+| System | Status | Tests |
+|--------|--------|-------|
+| Input System | Working | 56 |
+| Engine Core | Working | 29 |
+| ECS | Working | 60 |
+| Sprite Rendering | Working | 0 (visual) |
 
-- **Input System**: WORKING - 56 tests passing
-- **Engine Core**: WORKING - 29 tests passing, lifecycle management stable
-- **ECS**: WORKING - 60 tests passing, archetype storage implemented
-- **Sprite Rendering**: ✅ WORKING - Fixed January 2026
+**Verification:** `cargo run --example hello_world` - Uses ECS for game state, WASD to move player.
 
-Run `cargo run --example sprite_demo` to see 7 animated colored sprites.
+### ECS Integration - FIXED
 
-## 🔥 Critical Priority (Fix Immediately)
+All major ECS API issues have been resolved:
 
-These issues must be fixed before any further development:
+| Issue | Status |
+|-------|--------|
+| Typed component access | ✅ `world.get::<T>()` and `world.get_mut::<T>()` |
+| Component trait downcasting | ✅ `as_any()` and `as_any_mut()` methods |
+| Entity iteration | ✅ `world.entities()` returns `Vec<EntityId>` |
+| Sprite systems | ✅ `sprite_system.rs` compiled and exported |
 
-### 0. SPRITE RENDERING VISIBILITY BUG 🚨
-**Status**: ✅ **FIXED** (January 2026)
+**Note:** All ECS tests pass. Previous math bugs in transform/animation have been fixed.
 
-**What Was Wrong**:
-1. Main shader was replaced with a debug version that ignored all transforms
-2. Instance buffer wasn't being populated before draw calls
-3. `render_with_sprites` didn't call `prepare_sprites()` to upload sprite data
+---
 
-**Fixes Applied**:
-1. Restored proper shader from `sprite_instanced_backup.wgsl`
-2. Added `sprite_pipeline.prepare_sprites()` call in `render_with_sprites()`
-3. Changed `sprite_pipeline` parameter to `&mut` for mutable access
+## Phase 1: Stabilization - COMPLETE
 
-**Verification**: Run `cargo run --example sprite_demo` to see 7 animated sprites
+**Goal:** Make the engine safe and functional.
 
-### 1. Memory Safety & Lifetime Issues
-**Status**: 🔴 CRITICAL - Engine unsafe to use
-**Effort**: High (1-2 weeks)
-**Files**: `crates/engine_core/src/application.rs`, `crates/renderer/src/renderer.rs`
+| Item | Status |
+|------|--------|
+| Memory Safety & Lifetime Issues | Done |
+| Input System Integration | Done |
+| Core System Initialization | Done |
 
-- Fix `'static` lifetime requirements in renderer
-- Resolve async runtime confusion (remove tokio from core)
-- Implement proper resource cleanup
-- Add thread safety to input system
-
-### 2. Input System Integration
-**Status**: ✅ COMPLETED - 100% Complete, All tests passing
-**Effort**: Medium (3-5 days) - 5 days completed
-**Files**: `crates/input/src/input_handler.rs`, `crates/engine_core/src/application.rs`
-
-- ✅ Connect InputHandler to winit event loop - COMPLETED
-- ✅ Implement event queue for input events - COMPLETED
-- ✅ Fix input state update cycle - COMPLETED
-- ✅ Add basic input mapping system - COMPLETED
-- ✅ Fix remaining test failures in input mapping system - COMPLETED
-- ✅ Complete integration testing with examples - COMPLETED
-- ✅ Add comprehensive documentation - COMPLETED
-
-**Technical Implementation**:
-- Event queue system buffers input events between frames
-- Input mapping system binds inputs to game actions
-- Thread-safe wrapper for concurrent access
-- 56 tests passing
-- Default bindings for WASD, mouse, and gamepad controls
-
-### 3. Core System Initialization
-**Status**: ✅ COMPLETED - 100% Complete, All tests passing
-**Effort**: Medium (3-5 days) - 6 days completed
-**Files**: `crates/engine_core/src/scene.rs`, `crates/engine_core/src/lifecycle.rs`, `crates/ecs/src/world.rs`, `crates/ecs/src/system.rs`, `crates/ecs/src/generation.rs`
-
-- ✅ Fix scene initialization race conditions - COMPLETED
-- ✅ Add proper system lifecycle management - COMPLETED
-- ✅ Implement entity generation tracking - COMPLETED
-- ✅ Fix system registry memory safety - COMPLETED
-- ✅ Add comprehensive test coverage - COMPLETED
-- ✅ Integrate with existing systems - COMPLETED
-
-**Technical Implementation**:
-- Thread-safe lifecycle management with proper state transitions
-- Entity generation tracking for detecting stale references
-- System lifecycle with initialization/start/stop/shutdown phases
+**Achievements:**
+- Fixed `'static` lifetime requirements in renderer
+- Implemented thread-safe input handling with event queue
+- Added entity generation tracking for stale reference detection
+- Proper lifecycle management with state transitions
 - Panic-safe system registry with error recovery
-- Engine Core: 29 tests, ECS: 60 tests
 
-## 🟡 High Priority (Fix Soon)
+---
 
-These features are essential for a minimally functional engine:
+## Phase 2: Core Features - IN PROGRESS
 
-### 4. Sprite Rendering System
-**Status**: 🔴 **BROKEN** - See section 0 above
-**Files**: `crates/renderer/src/sprite.rs`, `crates/renderer/src/sprite_data.rs`, `crates/renderer/src/shaders/sprite_instanced.wgsl`
+**Goal:** Make the engine usable for simple 2D games.
 
-Sprites are invisible. GPU pipeline works (NDC quads render), but sprite-specific rendering fails. See section 0 for root cause analysis and fix plan.
+### Sprite Rendering System - DONE
+- WGPU 28.0.0 instanced rendering
+- Automatic sprite batching by texture
+- Camera with orthographic projection
+- Color tinting via white texture multiplication
 
-### 5. ECS Optimization
-**Status**: ✅ COMPLETED - Major Performance Improvements Achieved
-**Effort**: High (1-2 weeks) - 1 week completed
-**Files**: `crates/ecs/src/world.rs`, `crates/ecs/src/component.rs`, `crates/ecs/src/archetype.rs`
+### ECS Optimization - DONE
+- Archetype-based component storage
+- Dense arrays for cache locality
+- Type-safe queries (Single, Pair, Triple)
+- `World::new_optimized()` for archetype mode
+- Typed component access via `get::<T>()` / `get_mut::<T>()`
+- Entity iteration via `entities()`
+- Sprite systems (SpriteAnimationSystem, SpriteRenderSystem)
 
-- ✅ **Implemented archetype-based component storage** - Dense arrays for optimal cache locality
-- ✅ **Added type-safe component queries** - QueryTypes trait with Single, Pair, Triple query support
-- ✅ **Created comprehensive benchmarks** - Performance comparison between legacy and optimized ECS
-- ✅ **Built working demonstration** - Shows 1000+ entities at 60+ FPS with archetype storage
-- ✅ **Backward compatibility maintained** - Legacy HashMap storage still available
-- ✅ **All core tests passing** - 100% success rate for ECS functionality
+### Resource Management - TODO
+**Priority:** High
 
-**Technical Implementation**:
-- **Archetype Storage**: Entities with same component types stored together in dense arrays
-- **Component Columns**: Efficient memory layout with minimal allocations
-- **Query System**: Type-safe queries for entities with specific component combinations
-- **Performance Optimized**: Better cache locality, reduced memory fragmentation
-- **Dual Storage Modes**: `World::new()` for legacy, `World::new_optimized()` for archetype storage
+- Asset loading system with async support
+- Texture caching and reference counting
+- Configuration file parsing
+- Proper GPU resource cleanup
 
-**Performance Benefits**:
-- **Cache Locality**: Components stored contiguously in memory
-- **Reduced Allocations**: Dense arrays minimize heap allocations
-- **Faster Iteration**: Linear memory access patterns
-- **Memory Efficiency**: Components packed tightly without HashMap overhead
-- **Scalability**: Handles 1000+ entities efficiently
+### 2D Physics Integration - TODO
+**Priority:** Medium
 
-**Note**: System scheduling improvements still needed - SystemContext architecture mismatch remains
+- Integrate rapier2d or similar
+- Physics components for ECS
+- Collision detection and response
+- Debug visualization
 
-### 6. Resource Management
-**Status**: 🟡 High Priority - Essential for any real game
-**Effort**: Medium (1 week)
-**Files**: New crate `crates/asset_manager/`
+---
 
-- Create asset loading system
-- Implement texture caching
-- Add configuration file support
-- Implement resource cleanup
+## Phase 3: Usability - PLANNED
 
-## 🟢 Medium Priority (Plan For)
+**Goal:** Make the engine productive for developers.
 
-These features make the engine usable for game development:
+### Scene Graph System
+- Parent-child entity relationships
+- Transform hierarchy propagation
+- Spatial queries and frustum culling
+- Scene serialization/deserialization
 
-### 7. Scene Graph System
-**Status**: 🟢 Medium Priority - Architecture enhancement
-**Effort**: High (1-2 weeks)
-**Files**: `crates/engine_core/src/scene.rs` (rewrite)
+### Audio System
+- Sound effect playback
+- Background music streaming
+- 2D positional audio
+- Audio resource management
 
-- Implement proper scene graph with parent-child relationships
-- Add transform hierarchy and propagation
-- Implement spatial queries and culling
-- Add scene serialization support
+### UI Framework
+- Immediate mode UI rendering
+- Common widgets (button, text, slider)
+- Layout system
+- Input integration
 
-### 8. 2D Physics Integration
-**Status**: 🟢 Medium Priority - Gameplay essential
-**Effort**: High (2-3 weeks)
-**Files**: New crate `crates/physics/`
+---
 
-- Integrate 2D physics engine (rapier2d or similar)
-- Add physics components to ECS
-- Implement collision detection and response
-- Add physics debug rendering
+## Phase 4: Polish - PLANNED
 
-### 9. Audio System
-**Status**: 🟢 Medium Priority - Gameplay essential
-**Effort**: Medium (1 week)
-**Files**: New crate `crates/audio/`
+**Goal:** Make the engine competitive.
 
-- Implement audio playback system
-- Add 2D positional audio
-- Implement audio streaming
-- Add sound effect management
+### Advanced Rendering
+- 2D lighting system
+- Post-processing pipeline
+- Particle system
+- Normal mapping support
 
-### 10. UI Framework
-**Status**: 🟢 Medium Priority - User experience
-**Effort**: High (2-3 weeks)
-**Files**: New crate `crates/ui/`
+### Editor Tools
+- Scene editor
+- Property inspector
+- Asset browser
+- Hot reloading
 
-- Create immediate mode UI system
-- Implement common UI widgets
-- Add UI layout system
-- Integrate with input system
+### Platform Support
+- Mobile (iOS/Android)
+- Web (WASM)
+- Consoles
+- Platform-specific optimizations
 
-## 🔵 Low Priority (Nice To Have)
+---
 
-These features enhance the engine but aren't essential:
+## Technical Debt
 
-### 11. Advanced Rendering Features
-**Status**: 🔵 Low Priority - Visual enhancement
-**Effort**: High (2-4 weeks)
-**Files**: `crates/renderer/src/`, new modules
+### Immediate
+- [ ] Add structured logging (replace basic `log::` calls)
+- [ ] Increase test coverage for renderer
+- [ ] Profile and optimize hot paths
 
-- Implement 2D lighting system
-- Add post-processing pipeline
-- Implement particle system
-- Add normal mapping support
+### Architecture
+- [ ] Plugin system for extensibility
+- [ ] Centralized event bus
+- [ ] Configuration management system
+- [ ] Reduce coupling between systems
 
-### 12. Editor Tools
-**Status**: 🔵 Low Priority - Development tools
-**Effort**: Very High (1-2 months)
-**Files**: New crate `crates/editor/`
-
-- Create scene editor
-- Implement property inspector
-- Add asset browser
-- Implement visual scripting
-
-### 13. Platform Support
-**Status**: 🔵 Low Priority - Market reach
-**Effort**: Medium (1-2 weeks)
-**Files**: Various platform-specific files
-
-- Add mobile platform support
-- Implement web export (WASM)
-- Add console platform support
-- Implement platform-specific optimizations
-
-### 14. Advanced Features
-**Status**: 🔵 Low Priority - Specialized use cases
-**Effort**: Variable
-**Files**: Various new crates
-
-- Implement networking/multiplayer
-- Add save/load system
-- Implement modding support
-- Add advanced profiling tools
-
-## Technical Debt & Code Quality
-
-### Immediate Refactoring Needed
-1. **Error Handling**: Replace `unwrap()` calls with proper error handling - COMPLETED for input, core, and renderer systems
-2. **Logging**: Add structured logging instead of basic `log::` calls
-3. **Documentation**: Add comprehensive documentation to public APIs - COMPLETED for input, core, and renderer systems
-4. **Testing**: Increase test coverage (currently ~95% for input and core systems, 100% for renderer core functionality)
-
-### Architecture Improvements
-1. **Plugin System**: Implement proper plugin architecture for extensibility
-2. **Event Bus**: Create centralized event system for decoupled communication
-3. **Configuration System**: Implement proper configuration management
-4. **Dependency Injection**: Reduce tight coupling between systems
-
-## Development Phases
-
-### Phase 1: Stabilization (2-3 weeks)
-**Goal**: Make the engine safe and functional
-- ✅ Fix critical memory safety issues - COMPLETED (100%)
-- ✅ Implement basic input system - COMPLETED (100%)
-- ✅ Fix initialization race conditions - COMPLETED (100%)
-- ✅ Add basic error handling - COMPLETED (100%)
-
-**Status**: ✅ **PHASE 1 COMPLETE**
-**Test Results**: Input: 56 tests, Engine Core: 29 tests, ECS: 60 tests (all passing)
-**Key Achievements**: Memory safety, thread-safe systems, proper lifecycle management
-
-### Phase 2: Core Features (4-6 weeks)
-**Goal**: Make the engine usable for simple games
-- ✅ **Sprite rendering system** - FIXED (January 2026)
-  - WGPU 28.0.0 instanced rendering
-  - Automatic sprite batching by texture
-  - Camera with orthographic projection
-- ✅ **Optimize ECS performance** - COMPLETED
-  - Archetype-based component storage implemented
-  - Type-safe component queries (Single, Pair, Triple)
-  - 60 tests passing
-- Add resource management
-- Create basic physics integration
-
-### Phase 3: Usability (6-8 weeks)
-**Goal**: Make the engine productive for developers
-- Implement scene graph system
-- Add audio system
-- Create UI framework
-- Add configuration system
-
-### Phase 4: Polish (8-12 weeks)
-**Goal**: Make the engine competitive
-- Add advanced rendering features
-- Implement editor tools
-- Add platform support
-- Performance optimization
-
-## Risk Assessment
-
-### High Risk Issues
-1. **Memory Safety**: Current code has potential use-after-free and race conditions
-2. **Performance**: ECS implementation is inefficient for large numbers of entities
-3. **Scalability**: Fixed buffer sizes and lack of resource management limit scalability
-4. **Maintainability**: Tight coupling makes changes difficult and error-prone
-
-### Mitigation Strategies
-1. **Incremental Refactoring**: Fix issues incrementally rather than rewriting everything
-2. **Comprehensive Testing**: Add tests for each fix to prevent regressions
-3. **Code Reviews**: Implement thorough code review process for all changes
-4. **Documentation**: Document all architectural decisions and patterns
-
-## Resource Requirements
-
-### Development Effort
-- **Critical Issues**: 3-4 weeks (1 developer)
-- **High Priority**: 6-8 weeks (1 developer)
-- **Medium Priority**: 8-12 weeks (1 developer)
-- **Low Priority**: 12-20 weeks (1 developer)
-
-### Skills Required
-- **Systems Programming**: Memory management, concurrency, performance
-- **Graphics Programming**: WGPU, shader development, rendering techniques
-- **Game Development**: ECS, game loops, input handling, physics
-- **Software Architecture**: Design patterns, API design, modularity
+---
 
 ## Success Metrics
 
-### Phase 1 Success Criteria
-- No memory safety issues (verified with Valgrind/AddressSanitizer)
-- All examples run without crashes
-- Basic input functionality works
-- Error handling is consistent
+| Phase | Criteria |
+|-------|----------|
+| Phase 2 | 1000+ sprites at 60 FPS, 10,000+ entities in ECS |
+| Phase 3 | Complex scene hierarchies, spatial audio, functional UI |
+| Phase 4 | Visual effects, productive editor, cross-platform builds |
 
-### Phase 2 Success Criteria
-- Can render 1000+ sprites at 60 FPS
-- ECS can handle 10,000+ entities
-- Resource loading is reliable
-- Basic physics simulation works
+---
 
-### Phase 3 Success Criteria
-- Scene graph supports complex hierarchies
-- Audio system supports multiple simultaneous sounds
-- UI system provides common widgets
-- Configuration system is flexible
+## Risk Mitigation
 
-### Phase 4 Success Criteria
-- Rendering supports advanced visual effects
-- Editor tools improve development productivity
-- Platform support is stable
-- Performance is competitive with other Rust game engines
+1. **Incremental Refactoring** - Fix issues without large rewrites
+2. **Comprehensive Testing** - Tests for every fix
+3. **Code Reviews** - Thorough review for all changes
+4. **Documentation** - Document architectural decisions
 
-## Recommendations
+---
 
-### Immediate Actions (Next 2 weeks)
-1. **Stop Feature Development**: Focus exclusively on fixing critical issues
-2. **Add Memory Safety Tests**: Use tools like AddressSanitizer and Valgrind
-3. **Implement Basic Input**: Get input system working with event loop integration
-4. **Document Current State**: Clearly mark what's working and what's not
+## Next Steps
 
-### Short Term (Next 2 months)
-1. **Refactor Core Systems**: Fix architectural issues in engine_core and renderer
-2. **Implement Missing Features**: Focus on sprite rendering and ECS optimization
-3. **Add Comprehensive Tests**: Achieve > 80% test coverage
-4. **Create Documentation**: Write user guides and API documentation
-
-### Long Term (3-6 months)
-1. **Build Community**: Create Discord server, write blog posts, give talks
-2. **Add Advanced Features**: Implement physics, audio, and UI systems
-3. **Create Examples**: Build sample games demonstrating engine capabilities
-4. **Optimize Performance**: Profile and optimize critical paths
-
-## Conclusion
-
-The Insiculous 2D engine has good architectural foundations but needs significant work to become production-ready. The critical issues around memory safety and system integration must be addressed immediately before any further development. With focused effort on stabilization and core features, the engine could become a viable option for 2D game development in Rust within 3-6 months.
-
-The key to success is:
-1. **Fix critical issues first** - Don't add features until the foundation is solid
-2. **Test thoroughly** - Every fix needs comprehensive tests
-3. **Document everything** - Good documentation is essential for adoption
-4. **Build incrementally** - Small, tested changes are better than large rewrites
-5. **Focus on usability** - Make the engine easy to use for developers
-
-With proper execution of this roadmap, Insiculous 2D can become a competitive game engine in the Rust ecosystem.
-
-## 🎯 Sprite Rendering System - Status Update
-
-### WGPU 28.0.0 Migration
-Successfully migrated from deprecated `ImageDataLayout` to `TexelCopyBufferLayout`.
-
-### Current Status: ✅ WORKING
-- Instanced sprite rendering with batching
-- Camera with orthographic projection
-- Color tinting support via white texture multiplication
-- 7 animated sprites demo running at 60 FPS
-
-Run `cargo run --example sprite_demo` to verify.
+1. **Fix ECS Component API** - Return `&T` instead of `&dyn Component` (blocking)
+2. **Add entity iteration** - Public `entities()` method on World (blocking)
+3. **Include sprite_system.rs** - Fix System trait and add to module tree
+4. Implement resource management (asset loading, texture caching)
+5. Add physics integration with rapier2d

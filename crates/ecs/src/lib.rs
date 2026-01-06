@@ -10,6 +10,7 @@ pub mod generation;
 pub mod system;
 mod world;
 pub mod sprite_components;
+pub mod sprite_system;
 
 pub mod prelude;
 
@@ -21,6 +22,7 @@ pub use generation::*;
 pub use system::*;
 pub use world::*;
 pub use sprite_components::*;
+pub use sprite_system::*;
 
 /// Initialize the ECS
 pub fn init() -> Result<World, EcsError> {

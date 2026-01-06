@@ -65,17 +65,20 @@ fn test_transform2d_matrix() {
         .with_scale(Vec2::new(2.0, 3.0));
 
     let matrix = transform.matrix();
-    
+
     // Test that matrix is not identity
     assert_ne!(matrix, glam::Mat3::IDENTITY);
-    
+
     // Test transforming a point
+    // transform_point applies full T*R*S matrix:
+    // 1. Scale (2,3): (1,0) -> (2,0)
+    // 2. Rotate 90°: (2,0) -> (0,2)
+    // 3. Translate (10,20): (0,2) -> (10,22)
     let point = Vec2::new(1.0, 0.0);
     let transformed = transform.transform_point(point);
-    
-    // After 90-degree rotation and scaling, (1, 0) should become approximately (0, 2)
-    assert!((transformed.x).abs() < 0.001);
-    assert!((transformed.y - 2.0).abs() < 0.001);
+
+    assert!((transformed.x - 10.0).abs() < 0.001);
+    assert!((transformed.y - 22.0).abs() < 0.001);
 }
 
 #[test]
@@ -233,21 +236,21 @@ fn test_sprite_animation_update() {
         [0.0, 0.0, 0.5, 0.5],
         [0.5, 0.0, 0.5, 0.5],
     ]);
-    
+
     // First frame
     assert_eq!(animation.current_frame, 0);
     assert_eq!(animation.current_frame_region(), [0.0, 0.0, 0.5, 0.5]);
-    
-    // Update with enough time to advance one frame (0.1 seconds at 10 fps)
-    animation.update(0.15);
-    
+
+    // Update with exactly one frame duration (0.1 seconds at 10 fps)
+    animation.update(0.10);
+
     // Should be on second frame
     assert_eq!(animation.current_frame, 1);
     assert_eq!(animation.current_frame_region(), [0.5, 0.0, 0.5, 0.5]);
-    
-    // Update with enough time to loop back
-    animation.update(0.15);
-    
+
+    // Update with exactly one frame duration to loop back
+    animation.update(0.10);
+
     // Should be back on first frame (looping)
     assert_eq!(animation.current_frame, 0);
     assert_eq!(animation.current_frame_region(), [0.0, 0.0, 0.5, 0.5]);

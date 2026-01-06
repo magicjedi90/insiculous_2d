@@ -291,7 +291,7 @@ impl Renderer {
     }
 
     /// Get a reference to the surface (for diagnostic purposes)
-    pub fn surface(&self) -> &Surface {
+    pub fn surface(&self) -> &Surface<'_> {
         &self.surface
     }
 

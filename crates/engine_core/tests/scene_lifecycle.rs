@@ -1,7 +1,6 @@
 //! Tests for scene lifecycle management.
 
 use engine_core::{Scene, LifecycleState};
-use ecs::prelude::*;
 use ecs::system::SystemRegistry;
 
 #[test]
@@ -258,6 +257,7 @@ fn test_scene_error_recovery() {
 
 // Test components
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Transform {
     x: f32,
     y: f32,

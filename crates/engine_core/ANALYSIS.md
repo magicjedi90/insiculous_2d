@@ -3,7 +3,7 @@
 ## Current State (Updated: January 2026)
 The engine_core crate provides lifecycle management, scene management, and timing for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
 
-**Test Count: 29 tests** (all passing)
+**Test Count: 6 tests** (all passing)
 
 ## ✅ Issues That Have Been Resolved
 
@@ -100,12 +100,8 @@ EngineApplication
 
 ## 📊 Test Results
 ```
-Engine Core Tests: 29/29 passed (100%)
-├── game_loop.rs: 4 tests
-├── init.rs: 2 tests
-├── lifecycle.rs: 9 tests
-├── scene_lifecycle.rs: 8 tests
-├── scene_runs.rs: 1 test
+Engine Core Tests: 6/6 passed (100%)
+├── init.rs: 1 test
 └── timing.rs: 5 tests
 ```
 
@@ -159,7 +155,7 @@ Engine Core Tests: 29/29 passed (100%)
 - **Thread Safety**: Proper synchronization throughout
 - **Error Handling**: Comprehensive error management with recovery
 - **Lifecycle Management**: Robust state management with validation
-- **Test Coverage**: 29 tests covering core functionality
+- **Test Coverage**: 6 tests covering core functionality
 
 ### ⚠️ Caveats
 - Sprite rendering integration is broken (renderer issue, not engine_core)

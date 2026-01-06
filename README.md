@@ -1,141 +1,184 @@
 # Insiculous 2D
 
-## Project Vision
-Insiculous 2D is a lightweight, modular game engine designed for creating 2D games with Rust. It aims to provide a simple yet powerful API that allows developers to focus on game logic rather than boilerplate code. The engine prioritizes performance, cross-platform compatibility, and a clean, intuitive interface.
+A lightweight, modular 2D game engine for Rust. Focus on game logic, not boilerplate.
 
-## Architecture Overview
-The engine is built with a modular architecture, consisting of several core components:
+## Quick Start
+
+```bash
+git clone https://github.com/yourusername/insiculous_2d.git
+cd insiculous_2d
+
+# Run the example (2 sprites - move with WASD, ESC to exit)
+cargo run --example hello_world
+```
+
+**Requirements:** Rust stable, Cargo, Git
+
+## Architecture
 
 ```
 insiculous_2d/
 ├── crates/
-│   ├── engine_core/    # Core functionality and game loop
-│   ├── renderer/       # WGPU-based rendering system
-│   ├── ecs/            # Entity Component System
-│   └── input/          # Input handling abstraction
-└── examples/           # Example projects
+│   ├── engine_core/    # Application lifecycle, scenes, game loop
+│   ├── renderer/       # WGPU 28.0.0 sprite rendering
+│   ├── ecs/            # Archetype-based Entity Component System
+│   └── input/          # Keyboard, mouse, gamepad handling
+└── examples/           # Demo applications
 ```
 
-Data flow:
-1. Input events are captured by the input system
-2. The Application manages one or more Scenes
-3. Each Scene encapsulates its own ECS World and Scene Graph
-4. Game state is updated in the Scene's ECS World
-5. Rendering is handled by the WGPU renderer
-6. The engine core coordinates all systems
+**Data Flow:**
+1. Input events captured by `InputHandler`
+2. `EngineApplication` manages scene stack
+3. Each `Scene` contains an ECS `World`
+4. Systems update game state via `SystemRegistry`
+5. `Renderer` draws sprites with WGPU
 
-## Quick Start
+## Technical Implementation
 
-### Prerequisites
-- Rust (latest stable version)
-- Cargo
-- Git
+### Renderer Crate
 
-### Installation
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/insiculous_2d.git
-cd insiculous_2d
+**WGPU 28.0.0 Sprite Rendering Pipeline:**
+- Instanced rendering with automatic texture batching
+- Orthographic 2D camera with view/projection matrices
+- Built-in 1x1 white texture for colored sprites
+- `TexelCopyBufferLayout` for texture uploads
 
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup update stable
+```rust
+// Create pipeline and batcher
+let sprite_pipeline = SpritePipeline::new(renderer.device(), 1000);
+let mut batcher = SpriteBatcher::new(1000);
 
-# Run the hello world example
-cargo run --example hello_world
+// Add sprites
+batcher.add_sprite(&Sprite::new(texture_handle)
+    .with_position(Vec2::new(100.0, 200.0))
+    .with_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
+    .with_scale(Vec2::new(64.0, 64.0)));
+
+// Render
+let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
+renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_refs)?;
 ```
+
+**Key Types:**
+- `Renderer` - Surface management, device/queue
+- `SpritePipeline` - Vertex/instance/index buffers, shaders
+- `SpriteBatcher` - Groups sprites by texture handle
+- `Camera2D` - Viewport, position, zoom, rotation
+
+### ECS Crate
+
+**Archetype-Based Component Storage:**
+- Entities with same component types stored in dense arrays
+- Cache-friendly iteration patterns
+- Type-safe queries: `Single<T>`, `Pair<A,B>`, `Triple<A,B,C>`
+
+```rust
+// Legacy storage
+let world = World::new();
+
+// Optimized archetype storage
+let world = World::new_optimized();
+
+// Entity operations
+let entity = world.create_entity();
+world.add_component(entity, Position { x: 0.0, y: 0.0 })?;
+world.add_component(entity, Velocity { dx: 1.0, dy: 0.0 })?;
+
+// Type-safe queries
+for (entity, (pos, vel)) in world.query::<Pair<Position, Velocity>>() {
+    // Process entities with both Position and Velocity
+}
+```
+
+**60 tests passing** - archetype storage, component queries, entity lifecycle
+
+### Input Crate
+
+**Unified Input Handling:**
+- Event queue buffers inputs between frames
+- Action mapping binds keys/buttons to game actions
+- Thread-safe wrapper for concurrent access
+
+```rust
+let input = InputHandler::new();
+
+// Process events from winit
+input.handle_window_event(&event);
+
+// Query state
+if input.is_action_active(&GameAction::MoveLeft) {
+    player.position.x -= speed;
+}
+if input.is_key_just_pressed(KeyCode::Space) {
+    player.jump();
+}
+
+// Frame boundary
+input.update(); // Clears "just pressed" states
+```
+
+**Default Bindings:** WASD movement, mouse, gamepad support
+
+**56 tests passing** - key states, action mapping, event queue
+
+### Engine Core Crate
+
+**Application Lifecycle:**
+- Scene stack with push/pop for game states
+- Fixed timestep game loop with accumulator
+- Proper initialization/shutdown phases
+
+```rust
+let scene = Scene::new("main");
+let game_loop = GameLoop::new(GameLoopConfig::default());
+let app = EngineApplication::new(scene, game_loop);
+
+// Scene management
+app.push_scene(pause_menu);
+app.pop_scene();
+
+// System registration
+app.schedule.register(PhysicsSystem);
+app.schedule.register(RenderSystem);
+```
+
+**Lifecycle States:** `Uninitialized → Initialized → Started → Running → Stopped → Shutdown`
+
+**29 tests passing** - lifecycle transitions, scene management, error recovery
+
+## Test Summary
+
+| Crate | Tests | Coverage |
+|-------|-------|----------|
+| ECS | 60 | Archetype storage, queries, entity lifecycle |
+| Input | 56 | Key states, action mapping, events |
+| Engine Core | 29 | Lifecycle, scenes, error recovery |
+| Renderer | 0 | Visual testing via examples |
+
+Run all tests: `cargo test --workspace`
 
 ## Contributing
-We welcome contributions to Insiculous 2D! Here are some guidelines to follow:
 
-### Coding Standards
-- **Single Responsibility Principle (SRP)**: Each module, class, and function should have a single responsibility.
-- **Don't Repeat Yourself (DRY)**: Avoid code duplication by abstracting common functionality.
-- **Descriptive Names**: Use clear, descriptive names for variables, functions, and modules.
-- **Documentation**: Document public APIs with comments that explain purpose and usage.
+### Standards
+- Single Responsibility Principle (SRP)
+- Don't Repeat Yourself (DRY)
+- Descriptive names for all identifiers
+- Document public APIs
 
-### Commit Message Style
-Follow the conventional commits specification:
+### Commits
 ```
 <type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
 ```
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
-Types: feat, fix, docs, style, refactor, test, chore
 Example: `feat(renderer): add sprite batching system`
 
-### Pull Request Checklist
-- [ ] Code follows the project's coding standards
-- [ ] Tests have been added or updated for changes
-- [ ] Documentation has been updated
-- [ ] Commit messages follow the convention
-- [ ] Changes have been tested on multiple platforms (if applicable)
+### Pull Requests
+- [ ] Code follows project standards
+- [ ] Tests added/updated
+- [ ] Documentation updated
+- [ ] Tested on multiple platforms
 
-## Development Progress
+## License
 
-### ✅ Phase 1: Stabilization - COMPLETED (100%)
-The foundation is now solid with comprehensive error handling, memory safety, and proper lifecycle management.
-
-**Completed Steps:**
-- ✅ **Step 1: Memory Safety & Lifetime Issues** - Fixed critical safety issues, removed unsafe lifetime requirements
-- ✅ **Step 2: Input System Integration** - Implemented event queuing, input mapping, and thread-safe input handling  
-- ✅ **Step 3: Core System Initialization** - Added lifecycle management, entity generation tracking, and panic recovery
-
-**Key Achievements:**
-- **66 Tests Passing**: 100% test success rate across all core systems
-- **Memory Safety**: Eliminated race conditions and undefined behavior
-- **Thread Safety**: All core systems support concurrent access safely
-- **Error Recovery**: Engine can gracefully handle and recover from errors
-- **Production Ready**: Comprehensive test coverage and proper error handling
-
-### 🚧 Phase 2: Core Features - IN PROGRESS
-Building essential game engine functionality for 2D game development.
-
-**Current Step:**
-- 🔄 **Step 4: Sprite Rendering System** - Implementing sprite batching, texture loading, and rendering optimizations
-
-**Upcoming Steps:**
-- [ ] Step 5: ECS Optimization - Archetype-based component storage and performance improvements
-- [ ] Step 6: Resource Management - Asset loading, caching, and management systems
-- [ ] Step 7: 2D Physics Integration - Physics engine integration for realistic gameplay
-
-### 📋 Phase 3: Usability - PLANNED
-Making the engine productive for game developers with tools and frameworks.
-
-**Planned Steps:**
-- [ ] Step 8: Scene Graph System - Hierarchical scene management and spatial queries
-- [ ] Step 9: Audio System - 2D audio playback and spatial audio support
-- [ ] Step 10: UI Framework - Immediate mode UI system for game interfaces
-
-### 🚀 Phase 4: Polish - PLANNED  
-Advanced features and optimization for production-ready games.
-
-**Planned Steps:**
-- [ ] Step 11: Advanced Rendering - 2D lighting, post-processing, and visual effects
-- [ ] Step 12: Editor Tools - Visual editor for level design and game development
-- [ ] Step 13: Platform Support - Mobile platforms, web export, and console support
-
-## Roadmap
-Here are our detailed technical milestones for upcoming development:
-
-- [x] Input mapping system for configurable controls ✅ COMPLETED
-- [x] Event queue system for frame-synchronized input ✅ COMPLETED  
-- [x] Thread-safe input handling with concurrent access ✅ COMPLETED
-- [x] Entity generation tracking for memory safety ✅ COMPLETED
-- [x] System lifecycle management with panic recovery ✅ COMPLETED
-- [x] Scene lifecycle with proper state management ✅ COMPLETED
-- [ ] Sprite batching for improved rendering performance
-- [ ] Texture loading and management system
-- [ ] Dynamic buffer management for rendering
-- [ ] Camera matrix calculations and transformations
-- [ ] Physics system integration (rapier2d or similar)
-- [ ] Audio system implementation with spatial audio
-- [ ] Asset management pipeline with hot reloading
-- [ ] Scene graph system with hierarchical transforms
-- [ ] UI framework for game interfaces
-- [ ] Particle system for visual effects
-- [ ] Serialization/deserialization for game state
-- [ ] Editor tools for level design and debugging
+See LICENSE file for details.

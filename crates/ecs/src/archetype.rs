@@ -287,6 +287,7 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
+    #[allow(dead_code)]
     struct OtherComponent {
         name: String,
     }

@@ -13,11 +13,25 @@ use crate::archetype::{Archetype, ArchetypeId};
 pub trait Component: Any + Send + Sync {
     /// Get the type name of the component
     fn type_name(&self) -> &'static str;
+
+    /// Get self as Any for downcasting
+    fn as_any(&self) -> &dyn Any;
+
+    /// Get self as mutable Any for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<T: Any + Send + Sync> Component for T {
     fn type_name(&self) -> &'static str {
         std::any::type_name::<T>()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -62,7 +76,7 @@ impl ComponentStorage {
         }
     }
 
-    /// Get a reference to a component for an entity
+    /// Get a reference to a component for an entity (returns trait object)
     pub fn get<T: Component>(&self, entity_id: &EntityId) -> Option<&dyn Component> {
         match self {
             Self::Legacy(storage) => storage.get::<T>(entity_id),
@@ -70,12 +84,22 @@ impl ComponentStorage {
         }
     }
 
-    /// Get a mutable reference to a component for an entity
+    /// Get a mutable reference to a component for an entity (returns trait object)
     pub fn get_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut dyn Component> {
         match self {
             Self::Legacy(storage) => storage.get_mut::<T>(entity_id),
             Self::Archetype(storage) => storage.get_mut::<T>(entity_id),
         }
+    }
+
+    /// Get a typed reference to a component for an entity
+    pub fn get_typed<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
+        self.get::<T>(entity_id)?.as_any().downcast_ref::<T>()
+    }
+
+    /// Get a typed mutable reference to a component for an entity
+    pub fn get_typed_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut T> {
+        self.get_mut::<T>(entity_id)?.as_any_mut().downcast_mut::<T>()
     }
 
     /// Check if an entity has a component
@@ -368,16 +392,28 @@ impl ComponentRegistry {
         self.storages.get_mut(&type_id)?.remove::<T>(entity_id)
     }
 
-    /// Get a reference to a component for an entity
+    /// Get a reference to a component for an entity (returns trait object)
     pub fn get<T: Component>(&self, entity_id: &EntityId) -> Option<&dyn Component> {
         let type_id = TypeId::of::<T>();
         self.storages.get(&type_id)?.get::<T>(entity_id)
     }
 
-    /// Get a mutable reference to a component for an entity
+    /// Get a mutable reference to a component for an entity (returns trait object)
     pub fn get_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut dyn Component> {
         let type_id = TypeId::of::<T>();
         self.storages.get_mut(&type_id)?.get_mut::<T>(entity_id)
+    }
+
+    /// Get a typed reference to a component for an entity
+    pub fn get_typed<T: Component>(&self, entity_id: &EntityId) -> Option<&T> {
+        let type_id = TypeId::of::<T>();
+        self.storages.get(&type_id)?.get_typed::<T>(entity_id)
+    }
+
+    /// Get a typed mutable reference to a component for an entity
+    pub fn get_typed_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut T> {
+        let type_id = TypeId::of::<T>();
+        self.storages.get_mut(&type_id)?.get_typed_mut::<T>(entity_id)
     }
 
     /// Check if an entity has a component
