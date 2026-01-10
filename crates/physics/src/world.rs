@@ -463,6 +463,23 @@ impl PhysicsWorld {
         }
     }
 
+    /// Set the next kinematic position (for kinematic bodies)
+    ///
+    /// This is the proper way to move kinematic_position_based bodies.
+    /// The body will move to this position during the next physics step,
+    /// properly interacting with other bodies along the way.
+    pub fn set_kinematic_target(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
+        let ppm = self.config.pixels_per_meter;
+        let pos = position / ppm;
+
+        if let Some(&handle) = self.entity_to_body.get(&entity) {
+            if let Some(body) = self.rigid_body_set.get_mut(handle) {
+                body.set_next_kinematic_translation(vector![pos.x, pos.y]);
+                body.set_next_kinematic_rotation(nalgebra::UnitComplex::new(rotation));
+            }
+        }
+    }
+
     /// Set the velocity of a rigid body
     pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
         let ppm = self.config.pixels_per_meter;

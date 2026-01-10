@@ -218,17 +218,35 @@ pub enum BehaviorData {
         /// Cooldown between jumps in seconds
         #[serde(default = "default_jump_cooldown")]
         jump_cooldown: f32,
+        /// Tag to identify this entity for targeting
+        #[serde(default = "default_player_tag")]
+        tag: String,
     },
     /// Player-controlled top-down movement (WASD in all directions)
     PlayerTopDown {
         /// Movement speed in pixels per second
         #[serde(default = "default_move_speed")]
         move_speed: f32,
+        /// Tag to identify this entity for targeting
+        #[serde(default = "default_player_tag")]
+        tag: String,
     },
     /// Follow another entity by name
     FollowEntity {
         /// Name of the target entity to follow
         target_name: String,
+        /// Minimum distance to maintain from target
+        #[serde(default = "default_follow_distance")]
+        follow_distance: f32,
+        /// Movement speed when following
+        #[serde(default = "default_follow_speed")]
+        follow_speed: f32,
+    },
+    /// Follow the nearest entity with a specific tag
+    FollowTagged {
+        /// Tag of entities to follow
+        #[serde(default = "default_player_tag")]
+        target_tag: String,
         /// Minimum distance to maintain from target
         #[serde(default = "default_follow_distance")]
         follow_distance: f32,
@@ -249,7 +267,7 @@ pub enum BehaviorData {
         #[serde(default = "default_wait_time")]
         wait_time: f32,
     },
-    /// Collectible item
+    /// Collectible item that can be picked up by entities with a specific tag
     Collectible {
         /// Score value when collected
         #[serde(default = "default_score")]
@@ -257,9 +275,15 @@ pub enum BehaviorData {
         /// Whether to despawn when collected
         #[serde(default = "default_true")]
         despawn_on_collect: bool,
+        /// Tag of entities that can collect this item
+        #[serde(default = "default_player_tag")]
+        collector_tag: String,
     },
-    /// AI that chases the player when in range
-    ChasePlayer {
+    /// AI that chases entities with a specific tag when in range
+    ChaseTagged {
+        /// Tag of entities to chase
+        #[serde(default = "default_player_tag")]
+        target_tag: String,
         /// Distance at which the entity starts chasing
         #[serde(default = "default_detection_range")]
         detection_range: f32,
@@ -342,6 +366,9 @@ fn default_chase_speed() -> f32 {
 }
 fn default_lose_range() -> f32 {
     300.0
+}
+fn default_player_tag() -> String {
+    "player".to_string()
 }
 
 /// Rigid body type for serialization

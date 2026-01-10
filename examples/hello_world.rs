@@ -107,6 +107,7 @@ impl Game for HelloWorld {
                     move_speed: 120.0,
                     jump_impulse: 420.0,
                     jump_cooldown: 0.3,
+                    tag: "player".to_string(),
                 }).ok();
 
                 // Create ground

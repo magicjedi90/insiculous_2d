@@ -22,23 +22,26 @@ use crate::scene_data::{
 impl From<&BehaviorData> for ecs::behavior::Behavior {
     fn from(data: &BehaviorData) -> Self {
         match data {
-            BehaviorData::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown } => {
-                Self::PlayerPlatformer { move_speed: *move_speed, jump_impulse: *jump_impulse, jump_cooldown: *jump_cooldown }
+            BehaviorData::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown, tag } => {
+                Self::PlayerPlatformer { move_speed: *move_speed, jump_impulse: *jump_impulse, jump_cooldown: *jump_cooldown, tag: tag.clone() }
             }
-            BehaviorData::PlayerTopDown { move_speed } => {
-                Self::PlayerTopDown { move_speed: *move_speed }
+            BehaviorData::PlayerTopDown { move_speed, tag } => {
+                Self::PlayerTopDown { move_speed: *move_speed, tag: tag.clone() }
             }
             BehaviorData::FollowEntity { target_name, follow_distance, follow_speed } => {
                 Self::FollowEntity { target_name: target_name.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
             }
+            BehaviorData::FollowTagged { target_tag, follow_distance, follow_speed } => {
+                Self::FollowTagged { target_tag: target_tag.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
             BehaviorData::Patrol { point_a, point_b, speed, wait_time } => {
                 Self::Patrol { point_a: *point_a, point_b: *point_b, speed: *speed, wait_time: *wait_time }
             }
-            BehaviorData::Collectible { score_value, despawn_on_collect } => {
-                Self::Collectible { score_value: *score_value, despawn_on_collect: *despawn_on_collect }
+            BehaviorData::Collectible { score_value, despawn_on_collect, collector_tag } => {
+                Self::Collectible { score_value: *score_value, despawn_on_collect: *despawn_on_collect, collector_tag: collector_tag.clone() }
             }
-            BehaviorData::ChasePlayer { detection_range, chase_speed, lose_interest_range } => {
-                Self::ChasePlayer { detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
+            BehaviorData::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
+                Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
             }
         }
     }
