@@ -20,7 +20,7 @@ SceneData(
 
     // Prefab definitions - reusable entity templates
     prefabs: {
-        // Player prefab - blue dynamic body with platformer physics
+        // Player prefab - blue dynamic body with platformer physics and behavior
         "Player": PrefabData(
             components: [
                 Transform2D(position: (0.0, 0.0), scale: (1.0, 1.0)),
@@ -38,6 +38,12 @@ SceneData(
                     shape: Box(half_extents: (40.0, 40.0)),
                     friction: 0.8,
                 ),
+                // Player behavior - WASD movement + SPACE to jump
+                Behavior(PlayerPlatformer(
+                    move_speed: 120.0,
+                    jump_impulse: 420.0,
+                    jump_cooldown: 0.3,
+                )),
             ],
         ),
 

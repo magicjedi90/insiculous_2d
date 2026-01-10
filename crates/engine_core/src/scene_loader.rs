@@ -14,9 +14,35 @@ use renderer::TextureHandle;
 
 use crate::assets::AssetManager;
 use crate::scene_data::{
-    ColliderShapeData, ComponentData, EntityData, PhysicsSettings, PrefabData,
+    BehaviorData, ColliderShapeData, ComponentData, EntityData, PhysicsSettings, PrefabData,
     RigidBodyTypeData, SceneData, SceneLoadError,
 };
+
+/// Convert scene serialization data to ECS component
+impl From<&BehaviorData> for ecs::behavior::Behavior {
+    fn from(data: &BehaviorData) -> Self {
+        match data {
+            BehaviorData::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown } => {
+                Self::PlayerPlatformer { move_speed: *move_speed, jump_impulse: *jump_impulse, jump_cooldown: *jump_cooldown }
+            }
+            BehaviorData::PlayerTopDown { move_speed } => {
+                Self::PlayerTopDown { move_speed: *move_speed }
+            }
+            BehaviorData::FollowEntity { target_name, follow_distance, follow_speed } => {
+                Self::FollowEntity { target_name: target_name.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
+            BehaviorData::Patrol { point_a, point_b, speed, wait_time } => {
+                Self::Patrol { point_a: *point_a, point_b: *point_b, speed: *speed, wait_time: *wait_time }
+            }
+            BehaviorData::Collectible { score_value, despawn_on_collect } => {
+                Self::Collectible { score_value: *score_value, despawn_on_collect: *despawn_on_collect }
+            }
+            BehaviorData::ChasePlayer { detection_range, chase_speed, lose_interest_range } => {
+                Self::ChasePlayer { detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
+            }
+        }
+    }
+}
 
 /// Result of loading a scene
 #[derive(Debug)]
@@ -244,6 +270,7 @@ impl SceneLoader {
             ComponentData::SpriteAnimation { .. } => "SpriteAnimation",
             ComponentData::RigidBody { .. } => "RigidBody",
             ComponentData::Collider { .. } => "Collider",
+            ComponentData::Behavior(_) => "Behavior",
         }
     }
 
@@ -417,6 +444,11 @@ impl SceneLoader {
                     // Suppress unused variable warnings
                     let _ = (shape, offset, is_sensor, friction, restitution);
                 }
+            }
+
+            ComponentData::Behavior(behavior_data) => {
+                let behavior: ecs::behavior::Behavior = behavior_data.into();
+                let _ = world.add_component(&entity_id, behavior);
             }
         }
 

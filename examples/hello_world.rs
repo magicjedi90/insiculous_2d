@@ -20,13 +20,11 @@ use engine_core::prelude::*;
 use ecs::hierarchy_system::TransformHierarchySystem;
 use std::path::Path;
 
-/// Our game state - just the data we need
+/// Our game state - simplified with BehaviorRunner handling player movement
 struct HelloWorld {
-    player: Option<EntityId>,
     physics: Option<PhysicsSystem>,
-    jump_cooldown: f32,
-    /// Movement configuration
-    movement: MovementConfig,
+    /// Behavior runner - processes all entity behaviors (player movement, AI, etc.)
+    behaviors: BehaviorRunner,
     /// Scene instance with named entity lookups
     scene_instance: Option<SceneInstance>,
     /// Transform hierarchy system for parent-child relationships
@@ -36,17 +34,19 @@ struct HelloWorld {
 impl HelloWorld {
     fn new() -> Self {
         Self {
-            player: None,
             physics: None,
-            jump_cooldown: 0.0,
-            movement: MovementConfig::platformer(),
+            behaviors: BehaviorRunner::new(),
             scene_instance: None,
             transform_hierarchy: TransformHierarchySystem::new(),
         }
     }
 
     fn reset_player(&mut self, ctx: &mut GameContext) {
-        if let Some(player) = self.player {
+        // Get player entity from scene instance
+        let player = self.scene_instance.as_ref()
+            .and_then(|scene| scene.get_entity("player"));
+
+        if let Some(player) = player {
             // Reset player position
             if let Some(transform) = ctx.world.get_mut::<Transform2D>(player) {
                 transform.position = Vec2::new(-200.0, 100.0);
@@ -77,11 +77,8 @@ impl Game for HelloWorld {
             Ok(instance) => {
                 println!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
 
-                // Get player entity by name for movement control
-                if let Some(player_id) = instance.get_entity("player") {
-                    self.player = Some(player_id);
-                    println!("Found player entity");
-                }
+                // Set named entities on behavior runner (for FollowEntity and other reference-based behaviors)
+                self.behaviors.set_named_entities(instance.named_entities.clone());
 
                 // Create physics system from scene settings
                 let physics_config = if let Some(settings) = &instance.physics {
@@ -98,13 +95,19 @@ impl Game for HelloWorld {
                 println!("Failed to load scene: {}", e);
                 println!("Creating entities programmatically as fallback...");
 
-                // Fallback: create entities manually
+                // Fallback: create entities manually with Behavior component
+                use ecs::behavior::Behavior;
                 let player = ctx.world.create_entity();
                 ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
                 ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
                 ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
                 ctx.world.add_component(&player, Collider::player_box()).ok();
-                self.player = Some(player);
+                // Add behavior for player-controlled platformer movement
+                ctx.world.add_component(&player, Behavior::PlayerPlatformer {
+                    move_speed: 120.0,
+                    jump_impulse: 420.0,
+                    jump_cooldown: 0.3,
+                }).ok();
 
                 // Create ground
                 let ground = ctx.world.create_entity();
@@ -148,53 +151,18 @@ impl Game for HelloWorld {
 
     /// Called every frame - update game logic
     fn update(&mut self, ctx: &mut GameContext) {
-        // Update jump cooldown
-        if self.jump_cooldown > 0.0 {
-            self.jump_cooldown -= ctx.delta_time;
-        }
+        // Process all entity behaviors (player movement, AI, etc.)
+        // This single call replaces 40+ lines of hardcoded movement logic!
+        self.behaviors.update(
+            &mut ctx.world,
+            ctx.input,
+            ctx.delta_time,
+            self.physics.as_mut(),
+        );
 
-        // Move player based on input (velocity-based for precise control)
-        if let Some(player) = self.player {
-            // Use movement config
-            let move_speed = self.movement.move_speed;
-            let jump_impulse = self.movement.jump_impulse;
-
-            // Get current velocity
-            let current_vel = if let Some(physics) = &self.physics {
-                physics.physics_world().get_body_velocity(player)
-                    .map(|(v, _)| v)
-                    .unwrap_or(Vec2::ZERO)
-            } else {
-                Vec2::ZERO
-            };
-
-            // Horizontal movement - set target velocity directly
-            let mut target_vel_x = 0.0;
-            if ctx.input.is_key_pressed(KeyCode::KeyA) {
-                target_vel_x = -move_speed;
-            }
-            if ctx.input.is_key_pressed(KeyCode::KeyD) {
-                target_vel_x = move_speed;
-            }
-
-            // Apply velocity change (preserve vertical velocity from gravity/jumping)
-            if let Some(physics) = &mut self.physics {
-                let new_vel = Vec2::new(target_vel_x, current_vel.y);
-                physics.physics_world_mut().set_body_velocity(player, new_vel, 0.0);
-            }
-
-            // Jump (apply impulse when space is pressed)
-            if ctx.input.is_key_pressed(KeyCode::Space) && self.jump_cooldown <= 0.0 {
-                if let Some(physics) = &mut self.physics {
-                    physics.apply_impulse(player, Vec2::new(0.0, jump_impulse));
-                    self.jump_cooldown = 0.3; // 300ms cooldown
-                }
-            }
-
-            // Reset player position
-            if ctx.input.is_key_pressed(KeyCode::KeyR) {
-                self.reset_player(ctx);
-            }
+        // Reset player position (manual action, not a behavior)
+        if ctx.input.is_key_pressed(KeyCode::KeyR) {
+            self.reset_player(ctx);
         }
 
         // Step physics simulation

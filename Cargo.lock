@@ -661,6 +661,7 @@ dependencies = [
  "log",
  "pollster",
  "renderer",
+ "ron",
  "serde",
  "thiserror 2.0.12",
 ]

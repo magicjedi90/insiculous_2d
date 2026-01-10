@@ -4,6 +4,7 @@
 //! component storage for optimal performance.
 
 mod archetype;
+pub mod behavior;
 mod component;
 mod entity;
 pub mod generation;
@@ -18,6 +19,7 @@ pub mod prelude;
 
 // Re-export for convenience
 pub use archetype::*;
+pub use behavior::*;
 pub use component::*;
 pub use entity::*;
 pub use generation::*;

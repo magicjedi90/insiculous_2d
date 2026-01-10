@@ -9,8 +9,10 @@ pub use crate::{
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
     // Scene serialization
-    scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, SceneLoadError},
+    scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, BehaviorData, SceneLoadError},
     scene_loader::{SceneLoader, SceneInstance},
+    // Behavior system
+    behavior::BehaviorRunner,
     // Advanced API
     application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},

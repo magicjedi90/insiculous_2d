@@ -23,6 +23,7 @@
 //! ```
 
 mod application;
+pub mod behavior;
 mod game;
 mod game_loop;
 mod timing;
@@ -36,6 +37,7 @@ pub mod prelude;
 
 // Re-export for convenience
 pub use application::*;
+pub use behavior::*;
 pub use game::*;
 pub use game_loop::*;
 pub use timing::*;
