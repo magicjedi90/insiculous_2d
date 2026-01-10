@@ -17,6 +17,9 @@ mod window;
 
 pub mod prelude;
 
+// Re-export wgpu for use by dependent crates
+pub use wgpu;
+
 // Re-export for convenience
 pub use error::*;
 pub use renderer::*;
@@ -24,6 +27,7 @@ pub use sprite_data::*;
 pub use window::*;
 
 // Selective re-exports to avoid conflicts
+// TextureHandle is the canonical definition in texture.rs
 pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline, TextureAtlas};
 pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle, TextureAtlasBuilder};
 

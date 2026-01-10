@@ -7,6 +7,7 @@ use wgpu::{Device, Queue, RenderPipeline, PipelineLayout, BindGroupLayout, Buffe
 use wgpu::util::DeviceExt;
 
 use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera2D, CameraUniform, TextureResource, DynamicBuffer};
+use crate::texture::TextureHandle;
 
 /// A single sprite to be rendered
 #[derive(Debug, Clone)]
@@ -96,19 +97,6 @@ impl Sprite {
             self.color,
             self.depth,
         )
-    }
-}
-
-/// Handle to a texture resource
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct TextureHandle {
-    pub id: u32,
-}
-
-impl TextureHandle {
-    /// Create a new texture handle
-    pub fn new(id: u32) -> Self {
-        Self { id }
     }
 }
 

@@ -17,8 +17,8 @@ pub struct Renderer {
     window: Arc<Window>,
     surface: Surface<'static>, // 'static is safe because we control the lifetime
     adapter: Adapter,
-    device: Device,
-    queue: Queue,
+    device: Arc<Device>,
+    queue: Arc<Queue>,
     config: SurfaceConfiguration,
     clear_color: wgpu::Color,
     /// White texture resource for colored sprites (multiply by white instead of transparent black)
@@ -91,9 +91,13 @@ impl Renderer {
         // 2. The window outlives the renderer
         // 3. We control the renderer's lifetime through the EngineApplication
         
+        // Wrap device and queue in Arc for sharing
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
+
         // Create white texture for colored sprites
         let white_texture = Self::create_white_texture_resource(&device, &queue);
-        
+
         Ok(Self {
             window,
             surface: unsafe { std::mem::transmute(surface) }, // Safe because window has 'static lifetime
@@ -184,7 +188,7 @@ impl Renderer {
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera2D,
-        texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
+        texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
         // Create a combined texture resources map that includes the white texture for colored sprites
@@ -192,7 +196,7 @@ impl Renderer {
 
         // Add the white texture if it exists, using a special handle for colored sprites
         if let Some(white_texture) = &self.white_texture {
-            let white_texture_handle = crate::sprite::TextureHandle { id: 0 }; // Use handle 0 for white texture
+            let white_texture_handle = crate::texture::TextureHandle { id: 0 }; // Use handle 0 for white texture
             combined_texture_resources.insert(white_texture_handle, white_texture.clone());
         }
 
@@ -207,7 +211,7 @@ impl Renderer {
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera2D,
-        texture_resources: &std::collections::HashMap<crate::sprite::TextureHandle, crate::sprite_data::TextureResource>,
+        texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
         // Get a frame
@@ -261,12 +265,22 @@ impl Renderer {
     }
 
     /// Get a reference to the device
-    pub fn device(&self) -> &Device {
-        &self.device
+    pub fn device(&self) -> Arc<Device> {
+        Arc::clone(&self.device)
     }
 
     /// Get a reference to the queue
-    pub fn queue(&self) -> &Queue {
+    pub fn queue(&self) -> Arc<Queue> {
+        Arc::clone(&self.queue)
+    }
+
+    /// Get a reference to the device (borrowed)
+    pub fn device_ref(&self) -> &Device {
+        &self.device
+    }
+
+    /// Get a reference to the queue (borrowed)
+    pub fn queue_ref(&self) -> &Queue {
         &self.queue
     }
 

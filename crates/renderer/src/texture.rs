@@ -1,10 +1,14 @@
 //! Texture loading and management system
+//!
+//! Provides comprehensive texture loading, caching, and management for the renderer.
+//! Supports loading from files (PNG, JPEG, BMP, GIF) and raw RGBA data.
 
 use std::sync::Arc;
 use std::path::Path;
 use std::collections::HashMap;
 use wgpu::{Device, Queue, Sampler, TextureFormat, Extent3d};
 use thiserror::Error;
+use image::GenericImageView;
 
 use crate::sprite_data::TextureResource;
 
@@ -119,23 +123,88 @@ impl TextureManager {
     }
 
     /// Load a texture from a file path
+    ///
+    /// Supports PNG, JPEG, BMP, and GIF formats. The image is automatically
+    /// converted to RGBA format for GPU upload.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let handle = texture_manager.load_texture("assets/player.png", TextureLoadConfig::default())?;
+    /// ```
     pub fn load_texture<P: AsRef<Path>>(
         &mut self,
         path: P,
-        _config: TextureLoadConfig,
+        config: TextureLoadConfig,
     ) -> Result<TextureHandle, TextureError> {
         let path = path.as_ref();
-        
-        // For now, we'll create a placeholder texture since we don't have image loading
-        // In a real implementation, you'd use an image crate like `image`
-        let handle = TextureHandle::new(self.next_handle);
-        self.next_handle += 1;
 
         log::info!("Loading texture from path: {:?}", path);
 
-        // Create a placeholder colored texture
-        let texture = self.create_placeholder_texture(256, 256, &[255, 0, 255, 255])?;
+        // Load the image from file
+        let img = image::open(path).map_err(|e| {
+            TextureError::ImageLoadError(format!("Failed to load {:?}: {}", path, e))
+        })?;
+
+        // Get image dimensions
+        let (width, height) = img.dimensions();
+
+        // Validate dimensions
+        if width > self.max_texture_dimension || height > self.max_texture_dimension {
+            return Err(TextureError::TextureTooLarge {
+                width,
+                height,
+                max_dimension: self.max_texture_dimension,
+            });
+        }
+
+        // Convert to RGBA8
+        let rgba = img.to_rgba8();
+        let data = rgba.as_raw();
+
+        // Create handle and texture
+        let handle = TextureHandle::new(self.next_handle);
+        self.next_handle += 1;
+
+        let texture = self.create_texture_from_rgba(width, height, data, config)?;
         self.textures.insert(handle, texture);
+
+        log::info!("Loaded texture {:?}: {}x{} (handle {})", path, width, height, handle.id);
+
+        Ok(handle)
+    }
+
+    /// Load a texture from raw bytes (file contents)
+    ///
+    /// Useful for loading textures from embedded assets or network resources.
+    pub fn load_texture_from_bytes(
+        &mut self,
+        bytes: &[u8],
+        config: TextureLoadConfig,
+    ) -> Result<TextureHandle, TextureError> {
+        let img = image::load_from_memory(bytes).map_err(|e| {
+            TextureError::ImageLoadError(format!("Failed to decode image: {}", e))
+        })?;
+
+        let (width, height) = img.dimensions();
+
+        if width > self.max_texture_dimension || height > self.max_texture_dimension {
+            return Err(TextureError::TextureTooLarge {
+                width,
+                height,
+                max_dimension: self.max_texture_dimension,
+            });
+        }
+
+        let rgba = img.to_rgba8();
+        let data = rgba.as_raw();
+
+        let handle = TextureHandle::new(self.next_handle);
+        self.next_handle += 1;
+
+        let texture = self.create_texture_from_rgba(width, height, data, config)?;
+        self.textures.insert(handle, texture);
+
+        log::info!("Loaded texture from bytes: {}x{} (handle {})", width, height, handle.id);
 
         Ok(handle)
     }
@@ -230,6 +299,20 @@ impl TextureManager {
     /// Get texture count
     pub fn texture_count(&self) -> usize {
         self.textures.len()
+    }
+
+    /// Get all textures as a reference to the internal HashMap
+    ///
+    /// Useful for passing texture resources to the renderer for sprite rendering.
+    pub fn textures(&self) -> &HashMap<TextureHandle, TextureResource> {
+        &self.textures
+    }
+
+    /// Get a cloned HashMap of all textures
+    ///
+    /// Returns a new HashMap with cloned TextureResource values.
+    pub fn textures_cloned(&self) -> HashMap<TextureHandle, TextureResource> {
+        self.textures.clone()
     }
 
     /// Create texture from RGBA data using write_texture directly with simplified layout

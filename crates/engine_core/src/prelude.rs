@@ -6,6 +6,8 @@
 pub use crate::{
     // Simple game API (recommended)
     game::{Game, GameConfig, GameContext, RenderContext, run_game},
+    // Asset management
+    assets::{AssetManager, AssetConfig, AssetError},
     // Advanced API
     application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},
@@ -20,3 +22,4 @@ pub use glam::{Vec2, Vec4};
 pub use winit::keyboard::KeyCode;
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::{Sprite, Transform2D};
+pub use renderer::{TextureHandle, TextureLoadConfig};

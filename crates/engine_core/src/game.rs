@@ -25,7 +25,6 @@
 //! }
 //! ```
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use glam::Vec2;
@@ -39,10 +38,12 @@ use winit::{
 
 use input::InputHandler;
 use renderer::{
-    sprite::{SpriteBatch, SpriteBatcher, SpritePipeline, TextureHandle},
-    Camera2D, Renderer, TextureResource,
+    sprite::{SpriteBatch, SpriteBatcher, SpritePipeline},
+    texture::TextureHandle,
+    Camera2D, Renderer,
 };
 
+use crate::assets::AssetManager;
 use crate::Scene;
 use ecs::World;
 use ecs::sprite_components::{Sprite as EcsSprite, Transform2D};
@@ -112,6 +113,8 @@ pub struct GameContext<'a> {
     pub input: &'a InputHandler,
     /// The ECS world for entity/component management
     pub world: &'a mut World,
+    /// Asset manager for loading textures and other resources
+    pub assets: &'a mut AssetManager,
     /// Delta time since last frame in seconds
     pub delta_time: f32,
     /// Current window size
@@ -146,14 +149,14 @@ pub trait Game: Sized + 'static {
     /// Default implementation extracts sprites from ECS entities with Transform2D and Sprite components.
     fn render(&mut self, ctx: &mut RenderContext) {
         // Default: extract sprites from ECS
-        let white_texture = TextureHandle { id: 0 };
-
         for entity_id in ctx.world.entities() {
             let transform = ctx.world.get::<Transform2D>(entity_id);
             let sprite = ctx.world.get::<EcsSprite>(entity_id);
 
             if let (Some(transform), Some(ecs_sprite)) = (transform, sprite) {
-                let renderer_sprite = renderer::Sprite::new(white_texture)
+                // Use the texture handle from the ECS sprite component
+                let texture = TextureHandle { id: ecs_sprite.texture_handle };
+                let renderer_sprite = renderer::Sprite::new(texture)
                     .with_position(transform.position)
                     .with_rotation(transform.rotation)
                     .with_scale(transform.scale * ecs_sprite.scale * 80.0)
@@ -211,6 +214,7 @@ struct GameRunner<G: Game> {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     sprite_pipeline: Option<SpritePipeline>,
+    asset_manager: Option<AssetManager>,
     camera: Camera2D,
     input: InputHandler,
     scene: Scene,
@@ -226,6 +230,7 @@ impl<G: Game> GameRunner<G> {
             window: None,
             renderer: None,
             sprite_pipeline: None,
+            asset_manager: None,
             camera: Camera2D::default(),
             input: InputHandler::new(),
             scene: Scene::new("main"),
@@ -247,11 +252,17 @@ impl<G: Game> GameRunner<G> {
             self.config.clear_color[3] as f64,
         );
 
-        let sprite_pipeline = SpritePipeline::new(renderer.device(), 1000);
+        let sprite_pipeline = SpritePipeline::new(renderer.device_ref(), 1000);
+
+        // Create asset manager with renderer's device and queue
+        let asset_manager = AssetManager::new(renderer.device(), renderer.queue());
 
         self.camera.viewport_size = Vec2::new(self.config.width as f32, self.config.height as f32);
         self.renderer = Some(renderer);
         self.sprite_pipeline = Some(sprite_pipeline);
+        self.asset_manager = Some(asset_manager);
+
+        log::info!("Asset manager initialized");
 
         Ok(())
     }
@@ -264,11 +275,17 @@ impl<G: Game> GameRunner<G> {
 
         let window_size = Vec2::new(self.config.width as f32, self.config.height as f32);
 
+        // Get asset manager or return early
+        let Some(asset_manager) = &mut self.asset_manager else {
+            return;
+        };
+
         // Initialize game if not yet done
         if !self.initialized {
             let mut ctx = GameContext {
                 input: &self.input,
                 world: &mut self.scene.world,
+                assets: asset_manager,
                 delta_time,
                 window_size,
             };
@@ -278,9 +295,13 @@ impl<G: Game> GameRunner<G> {
 
         // Update
         {
+            let Some(asset_manager) = &mut self.asset_manager else {
+                return;
+            };
             let mut ctx = GameContext {
                 input: &self.input,
                 world: &mut self.scene.world,
+                assets: asset_manager,
                 delta_time,
                 window_size,
             };
@@ -291,7 +312,8 @@ impl<G: Game> GameRunner<G> {
         self.input.update();
 
         // Render
-        let (Some(renderer), Some(pipeline)) = (&mut self.renderer, &mut self.sprite_pipeline) else {
+        let (Some(renderer), Some(pipeline), Some(asset_manager)) =
+            (&mut self.renderer, &mut self.sprite_pipeline, &self.asset_manager) else {
             return;
         };
 
@@ -307,10 +329,10 @@ impl<G: Game> GameRunner<G> {
             self.game.render(&mut ctx);
         }
 
-        // Collect batches and render
+        // Collect batches and render with asset manager's textures
         let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
-        let textures: HashMap<TextureHandle, TextureResource> = HashMap::new();
+        let textures = asset_manager.textures_cloned();
 
         if let Err(e) = renderer.render_with_sprites(pipeline, &self.camera, &textures, &batch_refs) {
             log::error!("Render error: {}", e);
@@ -389,28 +411,33 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    let window_size = Vec2::new(self.config.width as f32, self.config.height as f32);
-                    let mut ctx = GameContext {
-                        input: &self.input,
-                        world: &mut self.scene.world,
-                        delta_time: 0.0,
-                        window_size,
-                    };
+                    // Handle escape to exit early (before we need asset_manager)
+                    if key == KeyCode::Escape && event.state == ElementState::Pressed {
+                        self.game.on_exit();
+                        let _ = self.scene.stop();
+                        let _ = self.scene.shutdown();
+                        event_loop.exit();
+                        return;
+                    }
 
-                    match event.state {
-                        ElementState::Pressed => {
-                            // Handle escape to exit
-                            if key == KeyCode::Escape {
-                                self.game.on_exit();
-                                let _ = self.scene.stop();
-                                let _ = self.scene.shutdown();
-                                event_loop.exit();
-                                return;
+                    // For other keys, create context and call handlers
+                    if let Some(asset_manager) = &mut self.asset_manager {
+                        let window_size = Vec2::new(self.config.width as f32, self.config.height as f32);
+                        let mut ctx = GameContext {
+                            input: &self.input,
+                            world: &mut self.scene.world,
+                            assets: asset_manager,
+                            delta_time: 0.0,
+                            window_size,
+                        };
+
+                        match event.state {
+                            ElementState::Pressed => {
+                                self.game.on_key_pressed(key, &mut ctx);
                             }
-                            self.game.on_key_pressed(key, &mut ctx);
-                        }
-                        ElementState::Released => {
-                            self.game.on_key_released(key, &mut ctx);
+                            ElementState::Released => {
+                                self.game.on_key_released(key, &mut ctx);
+                            }
                         }
                     }
                 }

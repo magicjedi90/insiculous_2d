@@ -4,7 +4,7 @@ use glam::{Vec2, Vec3, Vec4};
 use ecs::sprite_components::*;
 use ecs::Component;
 use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
-use renderer::sprite::TextureHandle;
+use renderer::TextureHandle;
 
 #[test]
 fn test_sprite_creation() {

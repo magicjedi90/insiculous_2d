@@ -72,7 +72,7 @@ impl SpriteRenderSystem {
         let world_scale = entity_transform.scale * sprite.scale;
 
         // Create renderer sprite using builder pattern
-        RendererSprite::new(renderer::sprite::TextureHandle { id: sprite.texture_handle })
+        RendererSprite::new(renderer::TextureHandle { id: sprite.texture_handle })
             .with_position(world_position)
             .with_rotation(world_rotation)
             .with_scale(world_scale * 80.0) // Default size

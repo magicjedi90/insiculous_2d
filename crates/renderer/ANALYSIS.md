@@ -14,6 +14,17 @@ The renderer crate provides WGPU-based 2D sprite rendering with instancing, batc
 2. Added `prepare_sprites()` call to upload instance data to GPU before drawing
 3. Fixed mutability of sprite_pipeline parameter in render methods
 
+## ✅ Texture Loading: WORKING (NEW)
+
+**Status**: IMPLEMENTED (January 2026)
+
+**New Features:**
+1. **Real File Loading**: `TextureManager::load_texture()` now loads PNG, JPEG, BMP, GIF files using the `image` crate
+2. **Bytes Loading**: `load_texture_from_bytes()` for embedded assets or network resources
+3. **Solid Color Textures**: `create_solid_color()` for programmatic texture generation
+4. **Checkerboard Patterns**: `create_checkerboard()` for debug/placeholder textures
+5. **Arc-based Device/Queue**: Renderer now uses `Arc<Device>` and `Arc<Queue>` for sharing with TextureManager
+
 ## Features
 
 ### Rendering Pipeline
@@ -25,6 +36,8 @@ The renderer crate provides WGPU-based 2D sprite rendering with instancing, batc
 
 ### Texture Management
 - Handle-based texture access
+- **File Loading**: PNG, JPEG, BMP, GIF format support via `image` crate
+- **Programmatic Textures**: Solid colors and checkerboard patterns
 - Texture atlas support
 - WGPU 28.0.0 compatible using `TexelCopyBufferLayout`
 
@@ -71,6 +84,25 @@ let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
 // Render (instance buffer is updated internally)
 renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_refs)?;
 ```
+
+## ✅ ECS Texture Handle Integration: FIXED (January 2026)
+
+**Status**: RESOLVED
+
+**Issue**: The default `Game::render()` method in engine_core was hardcoded to always use `TextureHandle { id: 0 }` (white texture) for all sprites, ignoring the actual `texture_handle` field stored in ECS Sprite components.
+
+**Fix Applied**: Modified `crates/engine_core/src/game.rs` to use `ecs_sprite.texture_handle` instead of hardcoded white texture:
+```rust
+// Before (broken):
+let white_texture = TextureHandle { id: 0 };
+let renderer_sprite = renderer::Sprite::new(white_texture)
+
+// After (fixed):
+let texture = TextureHandle { id: ecs_sprite.texture_handle };
+let renderer_sprite = renderer::Sprite::new(texture)
+```
+
+**Result**: Loaded textures (PNG, JPEG, etc.) now render correctly on sprites. Verified with `hello_world` example showing wood texture on platform.
 
 ## Known Issues
 

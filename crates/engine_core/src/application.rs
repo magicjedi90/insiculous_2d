@@ -94,7 +94,7 @@ impl EngineApplication {
             })?;
 
             // Create sprite pipeline
-            let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device(), 1000)); // Max 1000 sprites per batch
+            let sprite_pipeline = Some(renderer::sprite::SpritePipeline::new(renderer.device_ref(), 1000)); // Max 1000 sprites per batch
 
             // Store renderer and sprite pipeline
             self.renderer = Some(renderer);
@@ -251,7 +251,7 @@ impl EngineApplication {
     /// Extract sprite data from the current scene for rendering
     /// For now, return empty data since we're testing basic rendering functionality
     #[allow(dead_code)]
-    fn extract_sprite_data(&self) -> (Vec<renderer::sprite::SpriteBatch>, std::collections::HashMap<renderer::sprite::TextureHandle, renderer::TextureResource>) {
+    fn extract_sprite_data(&self) -> (Vec<renderer::sprite::SpriteBatch>, std::collections::HashMap<renderer::TextureHandle, renderer::TextureResource>) {
         // Return empty data for now - the test example will create its own sprites
         (Vec::new(), std::collections::HashMap::new())
     }

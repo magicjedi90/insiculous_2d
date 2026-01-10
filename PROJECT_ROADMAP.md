@@ -9,7 +9,7 @@
 | ECS | Working | 60 |
 | Sprite Rendering | Working | 0 (visual) |
 
-**Verification:** `cargo run --example hello_world` - Uses simplified Game API, ECS for game state, WASD to move player.
+**Verification:** `cargo run --example hello_world` - Uses simplified Game API, ECS for game state, WASD to move player, wood texture on platform.
 
 ### Simple Game API - NEW
 The engine now provides a `Game` trait that handles all winit/window boilerplate internally:
@@ -71,13 +71,16 @@ All major ECS API issues have been resolved:
 - Entity iteration via `entities()`
 - Sprite systems (SpriteAnimationSystem, SpriteRenderSystem)
 
-### Resource Management - TODO
+### Resource Management - DONE
 **Priority:** High
 
-- Asset loading system with async support
-- Texture caching and reference counting
-- Configuration file parsing
-- Proper GPU resource cleanup
+- ✅ Asset loading system (AssetManager in GameContext)
+- ✅ Texture loading from files (PNG, JPEG, BMP, GIF)
+- ✅ Programmatic texture creation (solid colors, checkerboard)
+- ✅ Texture caching via TextureHandle system
+- ✅ ECS texture handle integration (sprites use their assigned textures)
+- Configuration file parsing (future)
+- Proper GPU resource cleanup (future)
 
 ### 2D Physics Integration - TODO
 **Priority:** Medium
@@ -173,8 +176,10 @@ All major ECS API issues have been resolved:
 
 ## Next Steps
 
-1. **Fix ECS Component API** - Return `&T` instead of `&dyn Component` (blocking)
-2. **Add entity iteration** - Public `entities()` method on World (blocking)
-3. **Include sprite_system.rs** - Fix System trait and add to module tree
-4. Implement resource management (asset loading, texture caching)
-5. Add physics integration with rapier2d
+1. ~~**Fix ECS Component API**~~ - ✅ DONE - Returns `&T` via `get::<T>()`
+2. ~~**Add entity iteration**~~ - ✅ DONE - `entities()` method on World
+3. ~~**Include sprite_system.rs**~~ - ✅ DONE - System trait fixed
+4. ~~**Implement resource management**~~ - ✅ DONE - AssetManager with texture loading
+5. **Add physics integration with rapier2d** - Next priority
+6. **Add configuration file parsing** - TOML/JSON config support
+7. **Scene graph system** - Parent-child entity relationships
