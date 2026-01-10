@@ -8,8 +8,9 @@
 | Engine Core | Working | 29 |
 | ECS | Working | 60 |
 | Sprite Rendering | Working | 0 (visual) |
+| Physics | Working | 22 |
 
-**Verification:** `cargo run --example hello_world` - Uses simplified Game API, ECS for game state, WASD to move player, wood texture on platform.
+**Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, push red boxes around. ESC to exit.
 
 ### Simple Game API - NEW
 The engine now provides a `Game` trait that handles all winit/window boilerplate internally:
@@ -82,13 +83,23 @@ All major ECS API issues have been resolved:
 - Configuration file parsing (future)
 - Proper GPU resource cleanup (future)
 
-### 2D Physics Integration - TODO
+### 2D Physics Integration - DONE
 **Priority:** Medium
 
-- Integrate rapier2d or similar
-- Physics components for ECS
-- Collision detection and response
-- Debug visualization
+- ✅ Integrated rapier2d 0.23 for 2D physics simulation
+- ✅ Physics components for ECS (RigidBody, Collider)
+- ✅ Collision detection and response with proper collider sizing
+- ✅ Fixed timestep physics simulation (1/60s default)
+- ✅ Continuous Collision Detection (CCD) for fast-moving objects
+- ✅ Raycasting support
+- ✅ Velocity-based movement for precise platformer controls
+- ✅ Force/impulse-based movement for physics-driven gameplay
+- ✅ **Physics presets** for common game types:
+  - `PhysicsConfig::platformer()` / `top_down()` / `low_gravity()` / `space()`
+  - `RigidBody::player_platformer()` / `player_top_down()` / `pushable()`
+  - `Collider::player_box()` / `platform()` / `pushable_box()` / `bouncy()` / `slippery()`
+  - `MovementConfig::platformer()` / `top_down()` / `floaty()`
+- Debug visualization (future)
 
 ---
 
@@ -180,6 +191,7 @@ All major ECS API issues have been resolved:
 2. ~~**Add entity iteration**~~ - ✅ DONE - `entities()` method on World
 3. ~~**Include sprite_system.rs**~~ - ✅ DONE - System trait fixed
 4. ~~**Implement resource management**~~ - ✅ DONE - AssetManager with texture loading
-5. **Add physics integration with rapier2d** - Next priority
+5. ~~**Add physics integration with rapier2d**~~ - ✅ DONE - Full 2D physics with collisions
 6. **Add configuration file parsing** - TOML/JSON config support
 7. **Scene graph system** - Parent-child entity relationships
+8. **Audio system** - Sound effects and background music

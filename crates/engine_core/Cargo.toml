@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Core functionality for the insiculous_2d game engine"
 
+[features]
+default = ["physics"]
+physics = ["dep:physics"]
+
 [dependencies]
 log = { workspace = true }
 thiserror = { workspace = true }
@@ -13,3 +17,4 @@ glam = "0.29"
 renderer = { path = "../renderer" }
 ecs = { path = "../ecs" }
 input = { path = "../input" }
+physics = { path = "../physics", optional = true }

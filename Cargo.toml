@@ -10,6 +10,7 @@ members = [
     "crates/renderer",
     "crates/ecs",
     "crates/input",
+    "crates/physics",
 ]
 
 [workspace.dependencies]
@@ -27,6 +28,7 @@ engine_core = { path = "crates/engine_core" }
 renderer = { path = "crates/renderer" }
 ecs = { path = "crates/ecs" }
 input = { path = "crates/input" }
+physics = { path = "crates/physics" }
 log = { workspace = true }
 env_logger = { workspace = true }
 glam = "0.29"

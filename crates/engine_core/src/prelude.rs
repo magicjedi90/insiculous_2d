@@ -23,3 +23,10 @@ pub use winit::keyboard::KeyCode;
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::{Sprite, Transform2D};
 pub use renderer::{TextureHandle, TextureLoadConfig};
+
+// Re-export physics types when the physics feature is enabled
+#[cfg(feature = "physics")]
+pub use physics::{
+    Collider, ColliderShape, CollisionData, CollisionEvent, ContactPoint,
+    MovementConfig, PhysicsConfig, PhysicsSystem, RigidBody, RigidBodyType,
+};
