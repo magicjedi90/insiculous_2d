@@ -6,12 +6,12 @@
 |--------|--------|-------|
 | ECS | Working | 82 |
 | Input System | Working | 60 |
-| Engine Core | Working | 33 |
+| Engine Core | Working | 42 |
 | Physics | Working | 22 |
 | Sprite Rendering | Working | 62 |
 | Scene Graph | Working | 12 |
 
-**Total Tests**: 259 (all passing)
+**Total Tests**: 268 (all passing)
 
 **Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, push red boxes around. ESC to exit.
 
@@ -166,7 +166,10 @@ All major ECS API issues have been resolved:
 
 ### Critical (Must Fix)
 - [x] ~~**Add renderer test suite**~~ - 62 tests added (COMPLETED Jan 2026)
-- [ ] **Fix SRP violations** in GameRunner and EngineApplication
+- [x] ~~**Fix SRP violations** in GameRunner and EngineApplication~~ - FIXED (Jan 2026)
+  - Created `RenderManager` - encapsulates renderer, sprite pipeline, camera
+  - Created `WindowManager` - encapsulates window creation and size tracking
+  - Refactored both `GameRunner` and `EngineApplication` to use managers
 - [x] ~~**Replace println!()** with log::info!() in behavior.rs:243~~ - FIXED (Jan 2026)
 
 ### High Priority
@@ -240,6 +243,6 @@ All major ECS API issues have been resolved:
 6. ~~**Add scene serialization**~~ - DONE - RON-based scene files with prefabs
 7. ~~**Scene graph system**~~ - DONE - Parent-child relationships with transform propagation
 8. ~~**Add renderer test suite**~~ - DONE - 62 tests added
-9. **Fix SRP violations** - Refactor GameRunner and EngineApplication
+9. ~~**Fix SRP violations**~~ - DONE - Created RenderManager and WindowManager, refactored GameRunner and EngineApplication
 10. **Audio system** - Sound effects and background music
 11. **UI Framework** - Immediate mode UI rendering with common widgets

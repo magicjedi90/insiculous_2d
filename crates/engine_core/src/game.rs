@@ -25,8 +25,6 @@
 //! }
 //! ```
 
-use std::sync::Arc;
-
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use winit::{
@@ -34,17 +32,18 @@ use winit::{
     event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Window, WindowAttributes, WindowId},
+    window::WindowId,
 };
 
 use input::InputHandler;
 use renderer::{
-    sprite::{SpriteBatch, SpriteBatcher, SpritePipeline},
+    sprite::{SpriteBatch, SpriteBatcher},
     texture::TextureHandle,
-    Camera2D, Renderer,
 };
 
 use crate::assets::AssetManager;
+use crate::render_manager::RenderManager;
+use crate::window_manager::{WindowConfig, WindowManager};
 use crate::Scene;
 use ecs::World;
 use ecs::sprite_components::{Sprite as EcsSprite, Transform2D};
@@ -129,7 +128,7 @@ pub struct RenderContext<'a> {
     /// Sprite batcher for adding sprites to render
     pub sprites: &'a mut SpriteBatcher,
     /// The 2D camera
-    pub camera: &'a mut Camera2D,
+    pub camera: &'a mut renderer::Camera2D,
     /// Current window size
     pub window_size: Vec2,
 }
@@ -218,30 +217,46 @@ pub fn run_game<G: Game>(game: G, config: GameConfig) -> Result<(), Box<dyn std:
 }
 
 /// Internal game runner that implements ApplicationHandler.
+///
+/// This struct orchestrates the game loop, delegating specific responsibilities
+/// to focused managers:
+/// - `WindowManager`: Window creation and size tracking
+/// - `RenderManager`: Renderer lifecycle and sprite rendering
+/// - `AssetManager`: Texture and asset loading
 struct GameRunner<G: Game> {
+    /// The user's game implementation
     game: G,
+    /// Game configuration (title, size, etc.)
     config: GameConfig,
-    window: Option<Arc<Window>>,
-    renderer: Option<Renderer>,
-    sprite_pipeline: Option<SpritePipeline>,
+    /// Window management
+    window_manager: WindowManager,
+    /// Rendering management
+    render_manager: RenderManager,
+    /// Asset loading and management
     asset_manager: Option<AssetManager>,
-    camera: Camera2D,
+    /// Input handling
     input: InputHandler,
+    /// Main game scene containing ECS world
     scene: Scene,
+    /// Whether the game's init() has been called
     initialized: bool,
+    /// Time of last frame for delta calculation
     last_frame_time: std::time::Instant,
 }
 
 impl<G: Game> GameRunner<G> {
     fn new(game: G, config: GameConfig) -> Self {
+        // Create window manager from game config
+        let window_config = WindowConfig::new(&config.title)
+            .with_size(config.width, config.height)
+            .with_resizable(config.resizable);
+
         Self {
             game,
             config,
-            window: None,
-            renderer: None,
-            sprite_pipeline: None,
+            window_manager: WindowManager::new(window_config),
+            render_manager: RenderManager::new(),
             asset_manager: None,
-            camera: Camera2D::default(),
             input: InputHandler::new(),
             scene: Scene::new("main"),
             initialized: false,
@@ -249,37 +264,32 @@ impl<G: Game> GameRunner<G> {
         }
     }
 
+    /// Initialize the render manager with the current window.
     fn init_renderer(&mut self) -> Result<(), renderer::RendererError> {
-        let window = self.window.as_ref().ok_or_else(|| {
+        let window = self.window_manager.window_clone().ok_or_else(|| {
             renderer::RendererError::WindowCreationError("No window".to_string())
         })?;
 
-        let mut renderer = pollster::block_on(renderer::init(window.clone()))?;
-        renderer.set_clear_color(
-            self.config.clear_color[0] as f64,
-            self.config.clear_color[1] as f64,
-            self.config.clear_color[2] as f64,
-            self.config.clear_color[3] as f64,
+        // Initialize render manager
+        self.render_manager.init(window, self.config.clear_color)?;
+        self.render_manager.set_viewport_size(
+            self.config.width as f32,
+            self.config.height as f32,
         );
 
-        let sprite_pipeline = SpritePipeline::new(renderer.device_ref(), 1000);
-
         // Create asset manager with renderer's device and queue
-        let asset_manager = AssetManager::new(renderer.device(), renderer.queue());
-
-        self.camera.viewport_size = Vec2::new(self.config.width as f32, self.config.height as f32);
-        self.renderer = Some(renderer);
-        self.sprite_pipeline = Some(sprite_pipeline);
-        self.asset_manager = Some(asset_manager);
-
-        log::info!("Asset manager initialized");
+        if let (Some(device), Some(queue)) = (self.render_manager.device(), self.render_manager.queue()) {
+            self.asset_manager = Some(AssetManager::new(device, queue));
+            log::info!("Asset manager initialized");
+        }
 
         Ok(())
     }
 
-    /// Helper to get window size from config
+    /// Helper to get window size from window manager.
     fn window_size(&self) -> Vec2 {
-        Vec2::new(self.config.width as f32, self.config.height as f32)
+        let (w, h) = self.window_manager.size();
+        Vec2::new(w as f32, h as f32)
     }
 
     fn update_and_render(&mut self) {
@@ -288,7 +298,7 @@ impl<G: Game> GameRunner<G> {
         let delta_time = (now - self.last_frame_time).as_secs_f32();
         self.last_frame_time = now;
 
-        // Get window size before borrowing asset_manager
+        // Get window size
         let window_size = self.window_size();
 
         // Get asset manager or return early (single check for entire frame)
@@ -326,19 +336,19 @@ impl<G: Game> GameRunner<G> {
         // Clear "just pressed/released" flags for next frame
         self.input.end_frame();
 
-        // Render
-        let (Some(renderer), Some(pipeline), Some(asset_manager)) =
-            (&mut self.renderer, &mut self.sprite_pipeline, &self.asset_manager) else {
+        // Skip rendering if render manager isn't ready
+        if !self.render_manager.is_initialized() {
             return;
-        };
+        }
 
+        // Build sprite batches
         let mut batcher = SpriteBatcher::new(1000);
 
         {
             let mut ctx = RenderContext {
                 world: &self.scene.world,
                 sprites: &mut batcher,
-                camera: &mut self.camera,
+                camera: self.render_manager.camera_mut(),
                 window_size,
             };
             self.game.render(&mut ctx);
@@ -347,39 +357,30 @@ impl<G: Game> GameRunner<G> {
         // Collect batches and render with asset manager's textures
         let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
-        let textures = asset_manager.textures_cloned();
 
-        if let Err(e) = renderer.render_with_sprites(pipeline, &self.camera, &textures, &batch_refs) {
-            log::error!("Render error: {}", e);
+        // Get textures from asset manager (need to reborrow after RenderContext)
+        if let Some(asset_manager) = &self.asset_manager {
+            let textures = asset_manager.textures_cloned();
+            if let Err(e) = self.render_manager.render(&batch_refs, &textures) {
+                log::error!("Render error: {}", e);
+            }
         }
     }
 }
 
 impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
+        // Only create window once
+        if self.window_manager.is_created() {
             return;
         }
 
-        // Create window
-        let window_attributes = WindowAttributes::default()
-            .with_title(&self.config.title)
-            .with_inner_size(winit::dpi::LogicalSize::new(
-                self.config.width,
-                self.config.height,
-            ))
-            .with_resizable(self.config.resizable);
-
-        let window = match event_loop.create_window(window_attributes) {
-            Ok(w) => Arc::new(w),
-            Err(e) => {
-                log::error!("Failed to create window: {}", e);
-                event_loop.exit();
-                return;
-            }
-        };
-
-        self.window = Some(window);
+        // Create window using window manager
+        if let Err(e) = self.window_manager.create(event_loop) {
+            log::error!("Failed to create window: {}", e);
+            event_loop.exit();
+            return;
+        }
 
         // Initialize renderer
         if let Err(e) = self.init_renderer() {
@@ -402,9 +403,14 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
+        window_id: WindowId,
         event: WindowEvent,
     ) {
+        // Only handle events for our window
+        if !self.window_manager.is_our_window(window_id) {
+            return;
+        }
+
         // Forward to input handler
         self.input.handle_window_event(&event);
 
@@ -416,12 +422,11 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
-                if let Some(renderer) = &mut self.renderer {
-                    renderer.resize(size.width, size.height);
-                }
-                self.config.width = size.width;
-                self.config.height = size.height;
-                self.camera.viewport_size = Vec2::new(size.width as f32, size.height as f32);
+                // Update window manager's tracked size
+                self.window_manager.resize(size.width, size.height);
+                // Update render manager
+                self.render_manager.resize(size.width, size.height);
+                // Notify game
                 self.game.on_resize(size.width, size.height);
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -466,10 +471,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         self.update_and_render();
-
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        self.window_manager.request_redraw();
     }
 }
 

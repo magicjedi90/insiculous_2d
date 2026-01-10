@@ -32,6 +32,8 @@ pub mod lifecycle;
 pub mod assets;
 pub mod scene_data;
 pub mod scene_loader;
+pub mod render_manager;
+pub mod window_manager;
 
 pub mod prelude;
 
@@ -46,6 +48,8 @@ pub use lifecycle::*;
 pub use assets::*;
 pub use scene_data::*;
 pub use scene_loader::*;
+pub use render_manager::*;
+pub use window_manager::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {
