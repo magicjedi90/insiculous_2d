@@ -240,7 +240,7 @@ impl BehaviorRunner {
 
                 Behavior::Collectible { score_value, despawn_on_collect, collector_tag } => {
                     if Self::check_tagged_overlap(world, entity, collector_tag, 40.0) {
-                        println!("Collected! +{} points", score_value);
+                        log::info!("Collected! +{} points", score_value);
                         if *despawn_on_collect {
                             to_despawn.push(entity);
                         }

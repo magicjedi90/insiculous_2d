@@ -247,16 +247,6 @@ impl EngineApplication {
     }
 }
 
-impl EngineApplication {
-    /// Extract sprite data from the current scene for rendering
-    /// For now, return empty data since we're testing basic rendering functionality
-    #[allow(dead_code)]
-    fn extract_sprite_data(&self) -> (Vec<renderer::sprite::SpriteBatch>, std::collections::HashMap<renderer::TextureHandle, renderer::TextureResource>) {
-        // Return empty data for now - the test example will create its own sprites
-        (Vec::new(), std::collections::HashMap::new())
-    }
-}
-
 impl ApplicationHandler<()> for EngineApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create the window when the application is resumed if it doesn't exist

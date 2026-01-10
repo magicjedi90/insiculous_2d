@@ -167,10 +167,6 @@ impl Default for EntityTag {
     }
 }
 
-/// Deprecated: Use EntityTag instead
-#[deprecated(since = "0.2.0", note = "Use EntityTag instead for flexible targeting")]
-pub type PlayerTag = EntityTag;
-
 #[cfg(test)]
 mod tests {
     use super::*;

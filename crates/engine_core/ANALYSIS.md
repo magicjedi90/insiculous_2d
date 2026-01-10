@@ -3,11 +3,125 @@
 ## Current State (Updated: January 2026)
 The engine_core crate provides lifecycle management, scene management, timing, and a simplified Game API for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
 
-**Test Count: 29 tests** (all passing)
+**Test Count: 33 tests** (all passing)
+
+---
+
+## Critical Issues Identified
+
+### High Severity
+
+#### 1. SRP Violation: GameRunner (game.rs)
+**Location**: `src/game.rs` lines 221-469
+**Issue**: GameRunner struct handles 7+ distinct responsibilities:
+- Window creation and management
+- Renderer initialization
+- Input handling
+- Asset management
+- Game loop control
+- Scene lifecycle management
+- Event dispatching
+
+**Impact**: High coupling makes testing difficult and modifications risky. Changes to one concern may break others.
+
+**Recommended Fix**: Extract responsibilities into separate structs:
+- `WindowManager` for window operations
+- `RenderManager` for renderer lifecycle
+- `AssetLoader` for asset management
+- Keep `GameRunner` focused on orchestration only
+
+#### 2. SRP Violation: EngineApplication (application.rs)
+**Location**: `src/application.rs` lines 13-346
+**Issue**: Over 300 lines mixing unrelated concerns:
+- Scene stack management (push/pop)
+- Renderer initialization
+- Window creation
+- Game loop timing
+- Input handling
+- Scene updates and rendering
+
+**Impact**: Difficult to reason about, test, or modify safely.
+
+**Recommended Fix**: Apply Facade pattern - EngineApplication should delegate to specialized managers.
+
+#### 3. ~~Debug println!() in Production Code~~ - FIXED (January 2026)
+**Location**: `src/behavior.rs` line 243
+**Status**: RESOLVED - Replaced with `log::info!()`
+
+#### 4. Excessive .clone() in Behavior Update Loop
+**Location**: `src/behavior.rs` lines 96-102
+**Issue**: Heavy cloning in update loop before processing:
+```rust
+world.get::<Behavior>(entity).cloned()
+world.get::<Transform2D>(entity).cloned()
+world.get::<BehaviorState>(entity).cloned()
+```
+**Count**: 40+ clone operations per frame in behavior system.
+
+**Impact**: Unnecessary memory allocations every frame, potential performance bottleneck.
+
+**Recommended Fix**: Use references where possible, only clone when mutation is needed.
+
+### Medium Severity
+
+#### 5. ~~Redundant GameContext Creation~~ - FIXED (January 2026)
+**Location**: `src/game.rs`
+**Status**: RESOLVED - Added `window_size()` helper method, removed duplicate code
+
+#### 6. ~~Double-Check Pattern in Asset Manager Access~~ - FIXED (January 2026)
+**Location**: `src/game.rs`
+**Status**: RESOLVED - Single check for entire frame
+
+---
+
+## Dead Code Identified
+
+### ~~Confirmed Dead Code~~ - FIXED (January 2026)
+
+| Location | Code | Status |
+|----------|------|--------|
+| ~~`application.rs:253`~~ | ~~`extract_sprite_data()` method~~ | REMOVED |
+| `behavior.rs` | Multiple #[allow(dead_code)] | Several helper functions marked but not used |
+
+**Note**: The `extract_sprite_data()` method has been removed from `application.rs`.
+
+---
+
+## Test Coverage Analysis
+
+**Total Tests**: 33 (all passing)
+
+### Test File Breakdown
+```
+tests/
+├── init.rs:           2 tests
+├── timing.rs:         5 tests
+├── game_loop.rs:      4 tests
+├── lifecycle.rs:      9 tests
+├── scene_lifecycle.rs: 8 tests
+└── scene_runs.rs:     1 test
+
+src/ (inline tests)
+├── scene_loader.rs:   5 tests
+├── scene_data.rs:     3 tests
+├── behavior.rs:       2 tests
+├── assets.rs:         2 tests
+└── game.rs:           2 tests
+```
+
+### Test Quality Issues
+
+Several tests contain TODO comments instead of full assertions:
+- `game_loop.rs`: Multiple TODO comments
+- `timing.rs`: Multiple TODO comments
+
+**Recommendation**: Replace TODO comments with actual assertion logic.
+
+---
 
 ## Simple Game API
 
-The engine now provides a `Game` trait that hides all winit/window complexity:
+The engine provides a `Game` trait that hides all winit/window complexity:
 
 ```rust
 use engine_core::prelude::*;
@@ -39,107 +153,54 @@ fn main() {
 - ESC key automatically exits the game
 - Scene lifecycle managed internally
 
-## ✅ Issues That Have Been Resolved
+---
+
+## Previously Resolved Issues
 
 ### Critical Issues - FIXED
 
-1. **Memory Safety in Application Handler**: ✅ RESOLVED
-   - **Issue**: `'static` lifetime requirements in `Renderer<'static>` caused use-after-free risks
-   - **Solution**: Removed tokio from core engine, replaced with `pollster::block_on` for synchronous async execution
-   - **Evidence**: Clean async execution without unsafe lifetime requirements
-
-2. **Async Runtime Confusion**: ✅ RESOLVED
-   - **Issue**: Mixed `tokio::main` with `block_in_place` and manual runtime handling
-   - **Solution**: Eliminated tokio dependency from core engine, simplified async handling
-   - **Result**: Predictable, single-threaded async execution model
-
-3. **Scene Initialization Race Conditions**: ✅ RESOLVED
-   - **Issue**: No guarantee `Scene::initialize()` was called before use
-   - **Solution**: Comprehensive lifecycle management with state validation
-   - **Implementation**: 7-state lifecycle with proper initialization checks
+1. **Memory Safety in Application Handler**: Removed tokio, replaced with `pollster::block_on`
+2. **Async Runtime Confusion**: Eliminated tokio dependency, simplified async handling
+3. **Scene Initialization Race Conditions**: Comprehensive lifecycle management with state validation
 
 ### Serious Design Flaws - FIXED
 
-4. **Tight Coupling Between Renderer and Application**: ✅ RESOLVED
-   - **Issue**: `EngineApplication` directly managed sprite pipelines and camera state
-   - **Solution**: Extracted rendering logic to dedicated systems
-   - **Result**: Clean separation of concerns following SRP
+4. **Tight Coupling Between Renderer and Application**: Extracted rendering logic to dedicated systems
+5. **No Separation of Concerns**: Clear architectural boundaries between systems
+6. **Hardcoded Dependencies**: Abstracted interfaces and dependency injection
 
-5. **No Separation of Concerns**: ✅ RESOLVED
-   - **Issue**: Application handler mixed window management, rendering, and game logic
-   - **Solution**: Clear architectural boundaries between systems
-   - **Implementation**: Each system has single, well-defined responsibility
+---
 
-6. **Hardcoded Dependencies**: ✅ RESOLVED
-   - **Issue**: Direct dependencies on specific renderer types
-   - **Solution**: Abstracted interfaces and dependency injection
-   - **Result**: Swappable rendering backends possible
+## New Features Implemented
 
-## ✅ New Features Implemented
-
-### Asset Management System (NEW - January 2026)
-The engine now provides a unified `AssetManager` accessible via `GameContext`:
-
+### Asset Management System (January 2026)
 ```rust
 impl Game for MyGame {
     fn init(&mut self, ctx: &mut GameContext) {
-        // Load textures from files
         let player_tex = ctx.assets.load_texture("player.png").unwrap();
-
-        // Create solid color textures
         let red_tex = ctx.assets.create_solid_color(32, 32, [255, 0, 0, 255]).unwrap();
-
-        // Create checkerboard patterns
         let debug_tex = ctx.assets.create_checkerboard(64, 64,
             [100, 100, 100, 255], [150, 150, 150, 255], 8).unwrap();
     }
 }
 ```
 
-**Key Features:**
-- `load_texture()` - Load PNG, JPEG, BMP, GIF files
-- `load_texture_from_bytes()` - Load from embedded data
-- `create_solid_color()` - Programmatic solid textures
-- `create_checkerboard()` - Debug/placeholder patterns
-- `textures()` - Get all loaded textures for rendering
-- Automatic texture caching and handle management
-- Configurable base path for assets
+### Scene Serialization (RON Format)
+- `SceneData` - Root structure with physics settings, prefabs, entities
+- `PrefabData` - Reusable entity templates
+- `SceneLoader::load_and_instantiate()` - Load scenes into ECS world
+- Texture references: `#white`, `#solid:RRGGBB`, or file paths
 
 ### Comprehensive Lifecycle Management
-- **7-State Lifecycle**: Created → Initializing → Initialized → Running → ShuttingDown → ShutDown → Error
-- **State Validation**: All transitions validated to prevent invalid operations
-- **Thread-Safe Operations**: `RwLock` and `Mutex` protection for all state changes
-- **Error Recovery**: Systems can recover from error states and reinitialize
-- **Concurrent Safety**: Initialization and shutdown locks prevent race conditions
+- **7-State Lifecycle**: Created -> Initializing -> Initialized -> Running -> ShuttingDown -> ShutDown -> Error
+- **State Validation**: All transitions validated
+- **Thread-Safe Operations**: RwLock and Mutex protection
+- **Error Recovery**: Systems can recover from error states
 
-### Advanced Scene Management
-- **Scene Stack**: Support for multiple scenes with push/pop operations
-- **ECS Integration**: Each scene contains its own `World` instance
-- **Operational State Checking**: Scenes only update when in valid operational states
-- **Schedule Integration**: Scenes can be updated with system schedules
-- **Lifecycle Coordination**: Proper initialization/shutdown ordering
+---
 
-### Robust Timing System
-- **Delta Time Tracking**: Precise frame timing with `Timer` struct
-- **Configurable Game Loop**: Target FPS and fixed timestep support
-- **Performance Metrics**: Elapsed time and delta time in multiple formats
-- **Frame Rate Independence**: Consistent behavior across different frame rates
+## Current Architecture
 
-### Comprehensive Error Handling
-- **Centralized Error Types**: `EngineError` enum with `thiserror` integration
-- **Result-Based APIs**: All fallible operations return `Result<T, E>`
-- **Error Context Preservation**: Detailed error messages with context
-- **Structured Logging**: Comprehensive logging throughout the engine
-
-### Input System Integration
-- **Event Queue System**: Buffered input events between frames
-- **Input Mapping**: Action-based input system with configurable bindings
-- **Thread Safety**: `Arc<Mutex<InputHandler>>` wrapper for concurrent access
-- **Winit Integration**: Proper event forwarding from window events to input handler
-
-## 🏗️ Current Architecture
-
-### Core Architecture
 ```
 EngineApplication
 ├── Renderer (WGPU 28.0.0 compatible)
@@ -153,87 +214,46 @@ EngineApplication
 └── Camera2D (2D rendering configuration)
 ```
 
-### Key Components
-- **LifecycleManager**: Thread-safe state management with validation
-- **Scene**: Encapsulated ECS world with proper lifecycle integration
-- **GameLoop**: Configurable timing with target FPS support
-- **Timer**: Precise delta time tracking and performance metrics
-- **EngineError**: Comprehensive error handling with context
+---
 
-## 📊 Test Results
-```
-Engine Core Tests: 6/6 passed (100%)
-├── init.rs: 1 test
-└── timing.rs: 5 tests
-```
+## Recommended Fixes (Priority Order)
 
-## ⚠️ Outstanding Issues (Phase 2+ Priorities)
+### Immediate (High Priority)
+1. Replace `println!()` with `log::info!()` in behavior.rs:243
+2. Remove `extract_sprite_data()` function (dead code)
+3. Extract helper method for GameContext creation
 
-### High Priority (Phase 2: Core Features)
-1. ~~**Resource Management System**~~: ✅ **IMPLEMENTED** - AssetManager with texture loading
-2. **Configuration Framework**: Window and engine settings are hardcoded
-3. **Scene Graph System**: Basic scene stack without parent-child relationships
-4. **Plugin Architecture**: No extensibility mechanism for third-party systems
+### Short-term (Medium Priority)
+4. Reduce clone() calls in behavior update loop
+5. Fix double-check pattern in asset_manager access
+6. Complete TODO comments in test files
 
-### Medium Priority (Phase 3: Advanced Features)
-5. **Event Bus System**: No centralized event system for game events
-6. **State Management**: No game state machine (menu, playing, paused, etc.)
-7. **Serialization**: No save/load functionality for game state
-8. **Hot Reloading**: No support for development-time asset/code reloading
+### Long-term (Architecture)
+7. Refactor GameRunner to follow SRP (extract managers)
+8. Apply Facade pattern to EngineApplication
+9. Add missing integration tests
 
-### Low Priority (Future Enhancements)
-9. **Profiling Integration**: No built-in performance monitoring
-10. **Multi-threading**: Single-threaded architecture could be parallelized
-11. **Advanced Debugging**: Limited debugging and profiling tools
-12. **Platform-Specific Features**: Basic cross-platform support only
+---
 
-## 🎯 Recommended Next Steps
+## Production Readiness Assessment
 
-### Immediate Actions (Completed - Phase 1 Done)
-✅ **All critical issues resolved** - Foundation is production-ready
+### Stable
+- Memory Safety: Race conditions and lifetime issues resolved
+- Thread Safety: Proper synchronization throughout
+- Error Handling: Comprehensive error management with recovery
+- Lifecycle Management: Robust state management with validation
+- Test Coverage: 33 tests covering core functionality
+- Asset Management: Full texture loading from files and programmatic creation
 
-### High Priority (Phase 2: Core Features)
-1. **Implement Resource Manager**: Centralized asset loading with caching
-2. **Create Configuration System**: TOML/JSON based configuration files
-3. **Build Scene Graph**: Hierarchical scene relationships with transform propagation
-4. **Add Plugin System**: Extensible architecture for third-party integration
+### Needs Work
+- SRP violations in GameRunner and EngineApplication
+- Performance optimization in behavior system (excessive cloning)
+- Some tests have incomplete assertions
 
-### Medium Priority (Phase 3: Advanced Features)
-5. **Event Bus Implementation**: Decoupled communication system
-6. **State Machine**: Game state management (menu, gameplay, pause)
-7. **Serialization System**: Save/load game state and configurations
-8. **Hot Reload System**: Development-time asset and code reloading
+---
 
-### Long-term (Future Phases)
-9. **Performance Profiling**: Built-in performance monitoring and analysis
-10. **Parallel Execution**: Multi-threaded system execution where safe
-11. **Advanced Debugging**: Visual debugging tools and profiling integration
-12. **Platform Optimization**: Platform-specific optimizations and features
+## Conclusion
 
-## 🏆 Production Readiness Assessment
+The engine_core crate is functional and provides the foundational systems for 2D game development. However, there are significant code quality issues (SRP violations, dead code, excessive cloning) that should be addressed to improve maintainability and performance.
 
-### ✅ Stable
-- **Memory Safety**: Race conditions and lifetime issues resolved
-- **Thread Safety**: Proper synchronization throughout
-- **Error Handling**: Comprehensive error management with recovery
-- **Lifecycle Management**: Robust state management with validation
-- **Test Coverage**: 6 tests covering core functionality
-- **Sprite Rendering**: Default render() correctly uses ECS sprite texture handles
-- **Asset Management**: Full texture loading from files and programmatic creation
-
-### ⚠️ Caveats
-- Configuration is currently hardcoded
-
-## 🚀 Conclusion
-
-The engine_core crate is stable and provides the foundational systems needed for 2D game development:
-
-- Lifecycle management with proper state transitions
-- Scene stack with ECS integration
-- Timing system with configurable FPS
-- Input system integration
-- Error handling with recovery
-- Asset management with texture loading
-- Default sprite rendering from ECS components
-
-**Status**: Production-ready. Run `cargo run --example hello_world` to see the complete rendering pipeline in action.
+**Status**: Functional with code quality debt. Run `cargo run --example hello_world` to see the complete rendering pipeline in action.

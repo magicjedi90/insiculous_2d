@@ -277,15 +277,21 @@ impl<G: Game> GameRunner<G> {
         Ok(())
     }
 
+    /// Helper to get window size from config
+    fn window_size(&self) -> Vec2 {
+        Vec2::new(self.config.width as f32, self.config.height as f32)
+    }
+
     fn update_and_render(&mut self) {
         // Calculate delta time
         let now = std::time::Instant::now();
         let delta_time = (now - self.last_frame_time).as_secs_f32();
         self.last_frame_time = now;
 
-        let window_size = Vec2::new(self.config.width as f32, self.config.height as f32);
+        // Get window size before borrowing asset_manager
+        let window_size = self.window_size();
 
-        // Get asset manager or return early
+        // Get asset manager or return early (single check for entire frame)
         let Some(asset_manager) = &mut self.asset_manager else {
             return;
         };
@@ -303,20 +309,15 @@ impl<G: Game> GameRunner<G> {
             self.initialized = true;
         }
 
-        // Update
-        {
-            let Some(asset_manager) = &mut self.asset_manager else {
-                return;
-            };
-            let mut ctx = GameContext {
-                input: &self.input,
-                world: &mut self.scene.world,
-                assets: asset_manager,
-                delta_time,
-                window_size,
-            };
-            self.game.update(&mut ctx);
-        }
+        // Update game logic
+        let mut ctx = GameContext {
+            input: &self.input,
+            world: &mut self.scene.world,
+            assets: asset_manager,
+            delta_time,
+            window_size,
+        };
+        self.game.update(&mut ctx);
 
         // Update input state (clear "just pressed" flags)
         self.input.update();
@@ -431,8 +432,8 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                     }
 
                     // For other keys, create context and call handlers
+                    let window_size = self.window_size();
                     if let Some(asset_manager) = &mut self.asset_manager {
-                        let window_size = Vec2::new(self.config.width as f32, self.config.height as f32);
                         let mut ctx = GameContext {
                             input: &self.input,
                             world: &mut self.scene.world,

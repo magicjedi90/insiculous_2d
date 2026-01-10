@@ -55,7 +55,7 @@ That's it! The engine handles window creation, event loops, rendering, and input
 |------|---------|
 | `Game` | Trait to implement - `init()`, `update()`, optionally `render()` |
 | `GameConfig` | Window settings: title, size, clear color, FPS |
-| `GameContext` | Access `input`, `world` (ECS), `delta_time`, `window_size` |
+| `GameContext` | Access `input`, `world` (ECS), `assets`, `delta_time`, `window_size` |
 | `run_game()` | Single function to start everything |
 
 ### GameConfig Options
@@ -98,7 +98,8 @@ insiculous_2d/
 │   ├── engine_core/    # Game trait, application lifecycle, scenes
 │   ├── renderer/       # WGPU 28.0.0 sprite rendering
 │   ├── ecs/            # Archetype-based Entity Component System
-│   └── input/          # Keyboard, mouse, gamepad handling
+│   ├── input/          # Keyboard, mouse, gamepad handling
+│   └── physics/        # rapier2d 2D physics integration
 └── examples/           # Demo applications
 ```
 
@@ -125,6 +126,21 @@ for entity_id in world.entities() {
         // Process sprite...
     }
 }
+```
+
+### Physics Integration
+
+```rust
+use engine_core::prelude::*;
+
+// Create physics entity
+let player = world.create_entity();
+world.add_component(&player, Transform2D::new(Vec2::ZERO))?;
+world.add_component(&player, RigidBody::player_platformer())?;
+world.add_component(&player, Collider::player_box())?;
+world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0)))?;
+
+// Physics system handles movement, gravity, collisions
 ```
 
 ### Custom Rendering
@@ -186,12 +202,21 @@ event_loop.run_app(&mut app)?;
 
 | Crate | Tests | Coverage |
 |-------|-------|----------|
-| ECS | 60 | Archetype storage, queries, entity lifecycle |
-| Input | 56 | Key states, action mapping, events |
-| Engine Core | 29 | Lifecycle, scenes, game API |
-| Renderer | 0 | Visual testing via examples |
+| ECS | 82 | Archetype storage, queries, entity lifecycle, hierarchy |
+| Input | 60 | Key states, action mapping, events, thread safety |
+| Engine Core | 33 | Lifecycle, scenes, game API, assets |
+| Physics | 22 | Body types, colliders, simulation, presets |
+| Renderer | 0 | Visual testing via examples (needs tests) |
+| **Total** | **197** | All passing |
 
 Run all tests: `cargo test --workspace`
+
+## Known Issues
+
+- **Renderer has no unit tests** - Validation is visual only (critical gap)
+- Some test files contain TODO comments instead of full assertions
+
+See [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) for detailed technical debt tracking.
 
 ## Requirements
 

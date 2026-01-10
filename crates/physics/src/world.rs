@@ -157,26 +157,23 @@ impl PhysicsWorld {
         self.config.gravity = gravity;
     }
 
-    /// Convert pixels to meters
-    fn pixels_to_meters(&self, pixels: Vec2) -> Vec2 {
+    /// Convert pixels to meters (vector)
+    pub fn pixels_to_meters(&self, pixels: Vec2) -> Vec2 {
         pixels / self.config.pixels_per_meter
     }
 
     /// Convert a scalar from pixels to meters
-    #[allow(dead_code)]
-    fn pixels_to_meters_scalar(&self, pixels: f32) -> f32 {
+    pub fn pixels_to_meters_scalar(&self, pixels: f32) -> f32 {
         pixels / self.config.pixels_per_meter
     }
 
-    /// Convert meters to pixels
-    #[allow(dead_code)]
-    fn meters_to_pixels(&self, meters: Vec2) -> Vec2 {
+    /// Convert meters to pixels (vector)
+    pub fn meters_to_pixels(&self, meters: Vec2) -> Vec2 {
         meters * self.config.pixels_per_meter
     }
 
     /// Convert a scalar from meters to pixels
-    #[allow(dead_code)]
-    fn meters_to_pixels_scalar(&self, meters: f32) -> f32 {
+    pub fn meters_to_pixels_scalar(&self, meters: f32) -> f32 {
         meters * self.config.pixels_per_meter
     }
 
