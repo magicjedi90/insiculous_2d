@@ -86,12 +86,21 @@ pub struct EntityData {
     /// Optional prefab to instantiate
     #[serde(default)]
     pub prefab: Option<String>,
+    /// Optional parent entity name (for hierarchy)
+    ///
+    /// The parent must be defined earlier in the entities list so it exists
+    /// when this entity is created. Use the parent entity's `name` field.
+    #[serde(default)]
+    pub parent: Option<String>,
     /// Component overrides (applied on top of prefab)
     #[serde(default)]
     pub overrides: Vec<ComponentData>,
     /// Inline components (if no prefab is used)
     #[serde(default)]
     pub components: Vec<ComponentData>,
+    /// Child entities (alternative to using parent field - creates hierarchy inline)
+    #[serde(default)]
+    pub children: Vec<EntityData>,
 }
 
 impl Default for EntityData {
@@ -99,8 +108,10 @@ impl Default for EntityData {
         Self {
             name: None,
             prefab: None,
+            parent: None,
             overrides: Vec::new(),
             components: Vec::new(),
+            children: Vec::new(),
         }
     }
 }
@@ -286,6 +297,7 @@ mod tests {
             entities: vec![EntityData {
                 name: Some("player".to_string()),
                 prefab: None,
+                parent: None,
                 overrides: Vec::new(),
                 components: vec![
                     ComponentData::Transform2D {
@@ -302,6 +314,7 @@ mod tests {
                         depth: 0.0,
                     },
                 ],
+                children: Vec::new(),
             }],
         };
 
@@ -345,12 +358,14 @@ mod tests {
             entities: vec![EntityData {
                 name: Some("enemy1".to_string()),
                 prefab: Some("Enemy".to_string()),
+                parent: None,
                 overrides: vec![ComponentData::Transform2D {
                     position: (500.0, 100.0),
                     rotation: 0.0,
                     scale: (1.0, 1.0),
                 }],
                 components: Vec::new(),
+                children: Vec::new(),
             }],
         };
 
@@ -366,6 +381,7 @@ mod tests {
         let entity = EntityData {
             name: Some("physics_entity".to_string()),
             prefab: None,
+            parent: None,
             overrides: Vec::new(),
             components: vec![
                 ComponentData::RigidBody {
@@ -388,6 +404,7 @@ mod tests {
                     restitution: 0.0,
                 },
             ],
+            children: Vec::new(),
         };
 
         let ron_str = ron::ser::to_string_pretty(&entity, ron::ser::PrettyConfig::default())

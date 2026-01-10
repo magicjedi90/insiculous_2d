@@ -366,6 +366,167 @@ impl World {
     pub fn uses_archetype_storage(&self) -> bool {
         self.config.use_archetype_storage
     }
+
+    // ============= Hierarchy Management =============
+
+    /// Set an entity's parent, establishing a parent-child relationship
+    ///
+    /// This will:
+    /// 1. Add a Parent component to the child entity
+    /// 2. Add/update a Children component on the parent entity
+    /// 3. Remove the child from any previous parent's Children component
+    ///
+    /// # Errors
+    /// Returns an error if either entity doesn't exist
+    pub fn set_parent(&mut self, child: EntityId, parent: EntityId) -> Result<(), EcsError> {
+        // Validate both entities exist
+        if !self.entities.contains_key(&child) {
+            return Err(EcsError::EntityNotFound(child));
+        }
+        if !self.entities.contains_key(&parent) {
+            return Err(EcsError::EntityNotFound(parent));
+        }
+
+        // Prevent self-parenting
+        if child == parent {
+            return Err(EcsError::SystemError("Cannot set entity as its own parent".to_string()));
+        }
+
+        // Remove from previous parent if any
+        if let Some(old_parent) = self.get::<crate::hierarchy::Parent>(child) {
+            let old_parent_id = old_parent.entity();
+            if old_parent_id != parent {
+                // Remove child from old parent's Children component
+                if let Some(old_children) = self.get_mut::<crate::hierarchy::Children>(old_parent_id) {
+                    old_children.remove(&child);
+                }
+            }
+        }
+
+        // Set the Parent component on the child
+        self.components.add(child, crate::hierarchy::Parent::new(parent));
+
+        // Add/update Children component on parent
+        if let Some(children) = self.get_mut::<crate::hierarchy::Children>(parent) {
+            children.add(child);
+        } else {
+            // Parent doesn't have Children component yet, add it
+            self.components.add(parent, crate::hierarchy::Children::with_children(vec![child]));
+        }
+
+        log::trace!("Set parent of entity {} to {}", child.value(), parent.value());
+        Ok(())
+    }
+
+    /// Remove an entity's parent, making it a root entity
+    ///
+    /// This will:
+    /// 1. Remove the Parent component from the entity
+    /// 2. Remove the entity from its parent's Children component
+    ///
+    /// # Errors
+    /// Returns an error if the entity doesn't exist
+    pub fn remove_parent(&mut self, entity: EntityId) -> Result<(), EcsError> {
+        if !self.entities.contains_key(&entity) {
+            return Err(EcsError::EntityNotFound(entity));
+        }
+
+        // Get and remove the parent reference
+        if let Some(parent) = self.get::<crate::hierarchy::Parent>(entity) {
+            let parent_id = parent.entity();
+
+            // Remove from parent's Children component
+            if let Some(children) = self.get_mut::<crate::hierarchy::Children>(parent_id) {
+                children.remove(&entity);
+            }
+        }
+
+        // Remove the Parent component
+        let _ = self.components.remove::<crate::hierarchy::Parent>(&entity);
+
+        log::trace!("Removed parent from entity {}", entity.value());
+        Ok(())
+    }
+
+    /// Get an entity's parent
+    pub fn get_parent(&self, entity: EntityId) -> Option<EntityId> {
+        self.get::<crate::hierarchy::Parent>(entity).map(|p| p.entity())
+    }
+
+    /// Get an entity's children
+    pub fn get_children(&self, entity: EntityId) -> Option<&[EntityId]> {
+        self.get::<crate::hierarchy::Children>(entity).map(|c| c.entities())
+    }
+
+    /// Get all root entities (entities without a parent)
+    pub fn get_root_entities(&self) -> Vec<EntityId> {
+        self.entities
+            .keys()
+            .filter(|id| !self.components.has::<crate::hierarchy::Parent>(id))
+            .copied()
+            .collect()
+    }
+
+    /// Recursively get all descendants of an entity
+    pub fn get_descendants(&self, entity: EntityId) -> Vec<EntityId> {
+        let mut descendants = Vec::new();
+        self.collect_descendants(entity, &mut descendants);
+        descendants
+    }
+
+    /// Helper function to recursively collect descendants
+    fn collect_descendants(&self, entity: EntityId, descendants: &mut Vec<EntityId>) {
+        if let Some(children) = self.get_children(entity) {
+            for &child in children {
+                descendants.push(child);
+                self.collect_descendants(child, descendants);
+            }
+        }
+    }
+
+    /// Get all ancestors of an entity (parent, grandparent, etc.)
+    pub fn get_ancestors(&self, entity: EntityId) -> Vec<EntityId> {
+        let mut ancestors = Vec::new();
+        let mut current = entity;
+
+        while let Some(parent) = self.get_parent(current) {
+            ancestors.push(parent);
+            current = parent;
+        }
+
+        ancestors
+    }
+
+    /// Check if an entity is an ancestor of another entity
+    pub fn is_ancestor_of(&self, potential_ancestor: EntityId, entity: EntityId) -> bool {
+        self.get_ancestors(entity).contains(&potential_ancestor)
+    }
+
+    /// Check if an entity is a descendant of another entity
+    pub fn is_descendant_of(&self, potential_descendant: EntityId, entity: EntityId) -> bool {
+        self.get_descendants(entity).contains(&potential_descendant)
+    }
+
+    /// Remove an entity and all its descendants from the hierarchy
+    ///
+    /// This recursively removes all children and their children, etc.
+    pub fn remove_entity_hierarchy(&mut self, entity: &EntityId) -> Result<(), EcsError> {
+        // First, collect all descendants (we need to do this before we start removing)
+        let descendants = self.get_descendants(*entity);
+
+        // Remove descendants in reverse order (deepest first)
+        for descendant in descendants.into_iter().rev() {
+            self.remove_entity(&descendant)?;
+        }
+
+        // Remove the parent relationship
+        self.remove_parent(*entity)?;
+
+        // Remove the entity itself
+        self.remove_entity(entity)?;
+
+        Ok(())
+    }
 }
 
 impl Default for World {

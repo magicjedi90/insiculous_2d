@@ -3,7 +3,41 @@
 ## Current State (Updated: January 2026)
 The ECS crate provides a robust Entity Component System with archetype-based storage for the Insiculous 2D game engine. It includes entity management, component storage, system execution, and advanced features like entity generation tracking and lifecycle management.
 
-**Test Count: 60 tests** (all passing)
+**Test Count: 72+ tests** (all passing)
+
+## 🎉 **NEW: Scene Graph System - COMPLETE!**
+
+**Date**: January 10, 2026
+
+### **Scene Graph Features:**
+- ✅ **Parent-Child Relationships**: `Parent` and `Children` components for entity hierarchy
+- ✅ **Hierarchy Management**: `set_parent()`, `remove_parent()`, `get_children()`, `get_parent()`, `get_root_entities()`
+- ✅ **Transform Propagation**: `TransformHierarchySystem` propagates transforms through the hierarchy
+- ✅ **GlobalTransform2D**: World-space transform computed from hierarchy
+- ✅ **Ancestor/Descendant Queries**: `get_ancestors()`, `get_descendants()`, `is_ancestor_of()`, `is_descendant_of()`
+- ✅ **Serialization Support**: Full RON serialization with `parent` field and inline `children`
+
+### **API Usage:**
+```rust
+// Create parent-child relationship
+let parent = world.create_entity();
+let child = world.create_entity();
+world.set_parent(child, parent)?;
+
+// Query hierarchy
+if let Some(children) = world.get_children(parent) {
+    for &child_id in children {
+        // Process children...
+    }
+}
+
+// Get all entities without parents
+let roots = world.get_root_entities();
+
+// Transform propagation
+let mut transform_system = TransformHierarchySystem::new();
+transform_system.update(&mut world, delta_time);
+```
 
 ## ✅ Issues That Have Been Resolved
 

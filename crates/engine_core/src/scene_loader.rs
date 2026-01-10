@@ -58,7 +58,8 @@ impl SceneLoader {
     /// Instantiate a scene in the given world
     ///
     /// This creates all entities defined in the scene, resolving prefabs
-    /// and applying overrides as specified.
+    /// and applying overrides as specified. Parent-child relationships are
+    /// established based on the `parent` field or inline `children`.
     pub fn instantiate(
         data: &SceneData,
         world: &mut World,
@@ -67,12 +68,38 @@ impl SceneLoader {
         let mut named_entities = HashMap::new();
         let mut entities = Vec::new();
 
+        // First pass: create all entities and collect their IDs
         for entity_data in &data.entities {
-            let entity_id = Self::create_entity(entity_data, &data.prefabs, world, assets)?;
-            entities.push(entity_id);
+            Self::create_entity_recursive(
+                entity_data,
+                &data.prefabs,
+                world,
+                assets,
+                &mut named_entities,
+                &mut entities,
+                None, // No parent for top-level entities initially
+            )?;
+        }
 
-            if let Some(name) = &entity_data.name {
-                named_entities.insert(name.clone(), entity_id);
+        // Second pass: establish parent relationships for entities using `parent` field
+        for entity_data in &data.entities {
+            if let Some(parent_name) = &entity_data.parent {
+                if let Some(entity_name) = &entity_data.name {
+                    if let (Some(&entity_id), Some(&parent_id)) = (
+                        named_entities.get(entity_name),
+                        named_entities.get(parent_name),
+                    ) {
+                        world.set_parent(entity_id, parent_id).ok();
+
+                        // Add GlobalTransform2D component if the entity has Transform2D
+                        if world.get::<Transform2D>(entity_id).is_some() {
+                            let _ = world.add_component(
+                                &entity_id,
+                                ecs::hierarchy::GlobalTransform2D::default(),
+                            );
+                        }
+                    }
+                }
             }
         }
 
@@ -85,6 +112,49 @@ impl SceneLoader {
             entities,
             entity_count,
         })
+    }
+
+    /// Recursively create an entity and its inline children
+    fn create_entity_recursive(
+        entity_data: &EntityData,
+        prefabs: &HashMap<String, PrefabData>,
+        world: &mut World,
+        assets: &mut AssetManager,
+        named_entities: &mut HashMap<String, EntityId>,
+        entities: &mut Vec<EntityId>,
+        parent_id: Option<EntityId>,
+    ) -> Result<EntityId, SceneLoadError> {
+        let entity_id = Self::create_entity(entity_data, prefabs, world, assets)?;
+        entities.push(entity_id);
+
+        if let Some(name) = &entity_data.name {
+            named_entities.insert(name.clone(), entity_id);
+        }
+
+        // Set up parent relationship if specified
+        if let Some(parent) = parent_id {
+            world.set_parent(entity_id, parent).ok();
+
+            // Add GlobalTransform2D component for hierarchical entities
+            if world.get::<Transform2D>(entity_id).is_some() {
+                let _ = world.add_component(&entity_id, ecs::hierarchy::GlobalTransform2D::default());
+            }
+        }
+
+        // Create inline children recursively
+        for child_data in &entity_data.children {
+            Self::create_entity_recursive(
+                child_data,
+                prefabs,
+                world,
+                assets,
+                named_entities,
+                entities,
+                Some(entity_id),
+            )?;
+        }
+
+        Ok(entity_id)
     }
 
     /// Load a scene from file and instantiate it

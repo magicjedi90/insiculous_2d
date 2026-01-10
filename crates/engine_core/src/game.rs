@@ -151,16 +151,25 @@ pub trait Game: Sized + 'static {
     fn render(&mut self, ctx: &mut RenderContext) {
         // Default: extract sprites from ECS
         for entity_id in ctx.world.entities() {
-            let transform = ctx.world.get::<Transform2D>(entity_id);
             let sprite = ctx.world.get::<EcsSprite>(entity_id);
 
-            if let (Some(transform), Some(ecs_sprite)) = (transform, sprite) {
+            if let Some(ecs_sprite) = sprite {
+                // Use GlobalTransform2D if available (for hierarchical entities),
+                // otherwise fall back to local Transform2D
+                let (position, rotation, scale) = if let Some(global) = ctx.world.get::<ecs::hierarchy::GlobalTransform2D>(entity_id) {
+                    (global.position, global.rotation, global.scale)
+                } else if let Some(transform) = ctx.world.get::<Transform2D>(entity_id) {
+                    (transform.position, transform.rotation, transform.scale)
+                } else {
+                    continue; // No transform, skip this entity
+                };
+
                 // Use the texture handle from the ECS sprite component
                 let texture = TextureHandle { id: ecs_sprite.texture_handle };
                 let renderer_sprite = renderer::Sprite::new(texture)
-                    .with_position(transform.position)
-                    .with_rotation(transform.rotation)
-                    .with_scale(transform.scale * ecs_sprite.scale * 80.0)
+                    .with_position(position)
+                    .with_rotation(rotation)
+                    .with_scale(scale * ecs_sprite.scale * 80.0)
                     .with_color(ecs_sprite.color)
                     .with_depth(ecs_sprite.depth);
 

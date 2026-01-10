@@ -6,9 +6,10 @@
 |--------|--------|-------|
 | Input System | Working | 56 |
 | Engine Core | Working | 37 |
-| ECS | Working | 60 |
+| ECS | Working | 72 |
 | Sprite Rendering | Working | 0 (visual) |
 | Physics | Working | 22 |
+| Scene Graph | Working | 12 |
 
 **Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, push red boxes around. ESC to exit.
 
@@ -110,15 +111,16 @@ All major ECS API issues have been resolved:
 
 ---
 
-## Phase 3: Usability - PLANNED
+## Phase 3: Usability - IN PROGRESS
 
 **Goal:** Make the engine productive for developers.
 
-### Scene Graph System
-- Parent-child entity relationships
-- Transform hierarchy propagation
-- Spatial queries and frustum culling
-- Scene serialization/deserialization
+### Scene Graph System - DONE
+- ✅ Parent-child entity relationships (`Parent`, `Children` components)
+- ✅ Transform hierarchy propagation (`TransformHierarchySystem`, `GlobalTransform2D`)
+- ✅ Hierarchy queries (`get_children()`, `get_parent()`, `get_root_entities()`, `get_descendants()`, `get_ancestors()`)
+- ✅ Scene serialization with hierarchy (`parent` field and inline `children` in RON)
+- Spatial queries and frustum culling (future)
 
 ### Audio System
 - Sound effect playback
@@ -200,5 +202,6 @@ All major ECS API issues have been resolved:
 4. ~~**Implement resource management**~~ - ✅ DONE - AssetManager with texture loading
 5. ~~**Add physics integration with rapier2d**~~ - ✅ DONE - Full 2D physics with collisions
 6. ~~**Add scene serialization**~~ - ✅ DONE - RON-based scene files with prefabs (replaces TOML config)
-7. **Scene graph system** - Parent-child entity relationships
+7. ~~**Scene graph system**~~ - ✅ DONE - Parent-child relationships with transform propagation
 8. **Audio system** - Sound effects and background music
+9. **UI Framework** - Immediate mode UI rendering with common widgets

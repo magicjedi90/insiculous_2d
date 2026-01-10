@@ -1,4 +1,4 @@
-//! Hello World - Demonstrates the simplified Game API with Physics
+//! Hello World - Demonstrates the simplified Game API with Physics and Scene Graph
 //!
 //! This example shows how easy it is to create a game with the Insiculous 2D engine.
 //! All the window, event loop, and rendering boilerplate is handled internally.
@@ -10,12 +10,14 @@
 //! - Asset Manager for loading/creating textures
 //! - Input handling with keyboard
 //! - 2D Physics with rapier2d integration
+//! - **Scene Graph Hierarchy** - parent-child entity relationships with transform propagation
 //!
 //! Controls: WASD to move player, SPACE to jump, R to reset, ESC to exit
 //!
 //! Scene file: examples/assets/scenes/hello_world.scene.ron
 
 use engine_core::prelude::*;
+use ecs::hierarchy_system::TransformHierarchySystem;
 use std::path::Path;
 
 /// Our game state - just the data we need
@@ -27,6 +29,8 @@ struct HelloWorld {
     movement: MovementConfig,
     /// Scene instance with named entity lookups
     scene_instance: Option<SceneInstance>,
+    /// Transform hierarchy system for parent-child relationships
+    transform_hierarchy: TransformHierarchySystem,
 }
 
 impl HelloWorld {
@@ -37,6 +41,7 @@ impl HelloWorld {
             jump_cooldown: 0.0,
             movement: MovementConfig::platformer(),
             scene_instance: None,
+            transform_hierarchy: TransformHierarchySystem::new(),
         }
     }
 
@@ -123,9 +128,22 @@ impl Game for HelloWorld {
             physics.initialize(&mut ctx.world).ok();
         }
 
-        println!("Game initialized with {} entities", ctx.world.entity_count());
+        // Initialize the transform hierarchy system
+        use ecs::System;
+        self.transform_hierarchy.initialize(&mut ctx.world).ok();
+
+        // Count entities with hierarchy relationships
+        let root_count = ctx.world.get_root_entities().len();
+        let total_count = ctx.world.entity_count();
+        let child_count = total_count - root_count;
+
+        println!("Game initialized with {} entities ({} root, {} children)",
+                 total_count, root_count, child_count);
         println!("Controls: WASD to move, SPACE to jump, R to reset, ESC to exit");
-        println!("Physics enabled - push the red boxes around!");
+        println!("Physics enabled - push the wood boxes around!");
+        if child_count > 0 {
+            println!("Scene Graph: {} child entities will follow their parents!", child_count);
+        }
     }
 
     /// Called every frame - update game logic
@@ -183,6 +201,13 @@ impl Game for HelloWorld {
         if let Some(physics) = &mut self.physics {
             use ecs::System;
             physics.update(&mut ctx.world, ctx.delta_time);
+        }
+
+        // Update transform hierarchy - propagates transforms from parents to children
+        // This must run after physics so child entities follow their parents
+        {
+            use ecs::System;
+            self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
         }
     }
 

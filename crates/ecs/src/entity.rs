@@ -1,9 +1,10 @@
 //! Entity management for the ECS.
 
 use crate::generation::{EntityGeneration, EntityIdGenerator, EntityReference, GenerationError};
+use serde::{Deserialize, Serialize};
 
 /// A unique identifier for an entity with generation tracking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EntityId {
     /// The raw ID value
     id: u64,

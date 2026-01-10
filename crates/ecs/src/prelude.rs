@@ -6,6 +6,8 @@
 pub use crate::{
     component::Component,
     entity::{Entity, EntityId},
+    hierarchy::{Children, GlobalTransform2D, Parent},
+    hierarchy_system::TransformHierarchySystem,
     init,
     system::{SimpleSystem, System},
     world::World,
