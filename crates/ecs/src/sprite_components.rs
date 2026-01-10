@@ -1,12 +1,13 @@
 //! Sprite components for ECS integration
 
 use glam::{Vec2, Vec4};
+use serde::{Deserialize, Serialize};
 
 // Re-export types from renderer that we need
 use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
 
 /// Sprite component that defines visual appearance
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sprite {
     /// Position offset from entity position
     pub offset: Vec2,
@@ -87,7 +88,7 @@ impl Sprite {
 
 
 /// Transform component for entity position, rotation, and scale
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transform2D {
     /// Position in world space
     pub position: Vec2,
@@ -169,7 +170,7 @@ impl Transform2D {
 
 
 /// Camera component for 2D rendering
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Camera2D {
     /// Camera position in world space
     pub position: Vec2,
@@ -263,7 +264,7 @@ impl Camera2D {
 
 
 /// Sprite animation component
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpriteAnimation {
     /// Current frame index
     pub current_frame: usize,

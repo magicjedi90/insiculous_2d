@@ -7,6 +7,7 @@ use std::num::NonZeroUsize;
 
 use glam::Vec2;
 use rapier2d::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use ecs::EntityId;
 
@@ -16,7 +17,7 @@ use crate::components::{
 };
 
 /// Configuration for the physics world
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhysicsConfig {
     /// Gravity vector in units per second squared
     pub gravity: Vec2,

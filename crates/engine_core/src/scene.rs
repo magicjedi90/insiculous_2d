@@ -2,8 +2,13 @@
 //!
 //! This module provides functionality for managing the game scene graph, similar to Godot's scene system.
 
+use std::path::Path;
+
 use ecs::World;
+use crate::assets::AssetManager;
 use crate::lifecycle::{LifecycleManager, LifecycleState};
+use crate::scene_data::SceneLoadError;
+use crate::scene_loader::{SceneInstance, SceneLoader};
 
 /// A simple scene graph container
 pub struct Scene {
@@ -85,6 +90,30 @@ impl Scene {
     /// Get the name of the scene
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Load entities from a RON scene file into this scene
+    ///
+    /// This loads the scene file, instantiates all entities, and returns
+    /// a SceneInstance with named entity lookups.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let instance = scene.load_from_file("assets/scenes/level1.scene.ron", &mut assets)?;
+    /// let player = instance.get_entity("player").unwrap();
+    /// ```
+    pub fn load_from_file(
+        &mut self,
+        path: impl AsRef<Path>,
+        assets: &mut AssetManager,
+    ) -> Result<SceneInstance, SceneLoadError> {
+        let instance = SceneLoader::load_and_instantiate(path, &mut self.world, assets)?;
+        log::info!(
+            "Loaded scene '{}' with {} entities",
+            instance.name,
+            instance.entity_count
+        );
+        Ok(instance)
     }
 
     /// Update the scene graph (only if running)

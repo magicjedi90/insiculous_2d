@@ -28,6 +28,7 @@
 use std::sync::Arc;
 
 use glam::Vec2;
+use serde::{Deserialize, Serialize};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, WindowEvent},
@@ -49,7 +50,7 @@ use ecs::World;
 use ecs::sprite_components::{Sprite as EcsSprite, Transform2D};
 
 /// Configuration for the game window and engine.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
     /// Window title
     pub title: String,
@@ -455,5 +456,34 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
         if let Some(window) = &self.window {
             window.request_redraw();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_game_config_default() {
+        let config = GameConfig::default();
+        assert_eq!(config.title, "Insiculous 2D Game");
+        assert_eq!(config.width, 800);
+        assert_eq!(config.height, 600);
+        assert_eq!(config.target_fps, 60);
+        assert!(config.resizable);
+    }
+
+    #[test]
+    fn test_game_config_builder() {
+        let config = GameConfig::new("Test Game")
+            .with_size(1024, 768)
+            .with_fps(120)
+            .with_clear_color(0.5, 0.5, 0.5, 1.0);
+
+        assert_eq!(config.title, "Test Game");
+        assert_eq!(config.width, 1024);
+        assert_eq!(config.height, 768);
+        assert_eq!(config.target_fps, 120);
+        assert_eq!(config.clear_color, [0.5, 0.5, 0.5, 1.0]);
     }
 }

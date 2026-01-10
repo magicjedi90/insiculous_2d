@@ -3,9 +3,10 @@
 //! These components wrap rapier2d concepts and can be attached to ECS entities.
 
 use glam::Vec2;
+use serde::{Deserialize, Serialize};
 
 /// Body type for physics simulation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RigidBodyType {
     /// A dynamic body affected by forces and collisions
     Dynamic,
@@ -22,7 +23,7 @@ impl Default for RigidBodyType {
 }
 
 /// Rigid body component for physics simulation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RigidBody {
     /// Type of rigid body
     pub body_type: RigidBodyType,
@@ -41,6 +42,7 @@ pub struct RigidBody {
     /// Enable Continuous Collision Detection (prevents tunneling through thin objects)
     pub ccd_enabled: bool,
     /// Handle to the rapier rigid body (set by PhysicsWorld)
+    #[serde(skip)]
     pub(crate) handle: Option<rapier2d::dynamics::RigidBodyHandle>,
 }
 
@@ -146,7 +148,7 @@ impl RigidBody {
 }
 
 /// Collider shape types
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ColliderShape {
     /// A box with half-extents (width/2, height/2)
     Box { half_extents: Vec2 },
@@ -197,7 +199,7 @@ impl ColliderShape {
 }
 
 /// Collider component for collision detection
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Collider {
     /// Shape of the collider
     pub shape: ColliderShape,
@@ -214,6 +216,7 @@ pub struct Collider {
     /// Collision filter (which groups this collider can collide with)
     pub collision_filter: u32,
     /// Handle to the rapier collider (set by PhysicsWorld)
+    #[serde(skip)]
     pub(crate) handle: Option<rapier2d::geometry::ColliderHandle>,
 }
 

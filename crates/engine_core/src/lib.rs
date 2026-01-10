@@ -29,6 +29,8 @@ mod timing;
 mod scene;
 pub mod lifecycle;
 pub mod assets;
+pub mod scene_data;
+pub mod scene_loader;
 
 pub mod prelude;
 
@@ -40,6 +42,8 @@ pub use timing::*;
 pub use scene::*;
 pub use lifecycle::*;
 pub use assets::*;
+pub use scene_data::*;
+pub use scene_loader::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

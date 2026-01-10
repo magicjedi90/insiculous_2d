@@ -5,37 +5,38 @@
 //!
 //! Features demonstrated:
 //! - Simple Game API (Game trait, GameConfig, run_game)
+//! - RON scene file loading for entity/component definition
 //! - ECS for entity/component management
 //! - Asset Manager for loading/creating textures
 //! - Input handling with keyboard
 //! - 2D Physics with rapier2d integration
 //!
 //! Controls: WASD to move player, SPACE to jump, R to reset, ESC to exit
+//!
+//! Scene file: examples/assets/scenes/hello_world.scene.ron
 
 use engine_core::prelude::*;
+use std::path::Path;
 
 /// Our game state - just the data we need
 struct HelloWorld {
     player: Option<EntityId>,
-    ground: Option<EntityId>,
-    obstacles: Vec<EntityId>,
     physics: Option<PhysicsSystem>,
-    player_texture: Option<TextureHandle>,
-    ground_texture: Option<TextureHandle>,
     jump_cooldown: f32,
+    /// Movement configuration
+    movement: MovementConfig,
+    /// Scene instance with named entity lookups
+    scene_instance: Option<SceneInstance>,
 }
 
 impl HelloWorld {
     fn new() -> Self {
         Self {
             player: None,
-            ground: None,
-            obstacles: Vec::new(),
-            // Use the platformer preset for standard 2D platformer physics
-            physics: Some(PhysicsSystem::with_config(PhysicsConfig::platformer())),
-            player_texture: None,
-            ground_texture: None,
+            physics: None,
             jump_cooldown: 0.0,
+            movement: MovementConfig::platformer(),
+            scene_instance: None,
         }
     }
 
@@ -59,80 +60,61 @@ impl HelloWorld {
 }
 
 impl Game for HelloWorld {
-    /// Called once at startup - create our entities and load assets
+    /// Called once at startup - load scene from file
     fn init(&mut self, ctx: &mut GameContext) {
         // Set asset base path to examples directory
         ctx.assets.set_base_path("examples");
 
-        // Create textures for entities
-        self.player_texture = ctx.assets
-            .create_solid_color(32, 32, [50, 100, 255, 255])
-            .ok();
+        // Try to load the scene from RON file
+        let scene_path = Path::new("examples/assets/scenes/hello_world.scene.ron");
 
-        self.ground_texture = ctx.assets
-            .create_solid_color(32, 32, [80, 80, 80, 255])
-            .ok();
+        match SceneLoader::load_and_instantiate(scene_path, &mut ctx.world, ctx.assets) {
+            Ok(instance) => {
+                println!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
 
-        let _obstacle_texture = ctx.assets
-            .create_checkerboard(32, 32, [100, 50, 50, 255], [150, 75, 75, 255], 8)
-            .ok();
+                // Get player entity by name for movement control
+                if let Some(player_id) = instance.get_entity("player") {
+                    self.player = Some(player_id);
+                    println!("Found player entity");
+                }
 
-        println!("Loaded {} textures", ctx.assets.texture_count());
+                // Create physics system from scene settings
+                let physics_config = if let Some(settings) = &instance.physics {
+                    PhysicsConfig::new(Vec2::new(settings.gravity.0, settings.gravity.1))
+                        .with_scale(settings.pixels_per_meter)
+                } else {
+                    PhysicsConfig::platformer()
+                };
 
-        // Create player entity (blue, dynamic physics body)
-        // Default sprite scale (1.0) renders at 80x80 pixels, so collider should match
-        let player = ctx.world.create_entity();
-        ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
-        ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
-        // Use preset rigid body and collider for platformer player
-        ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
-        ctx.world.add_component(&player, Collider::player_box()).ok();
-        self.player = Some(player);
+                self.physics = Some(PhysicsSystem::with_config(physics_config));
+                self.scene_instance = Some(instance);
+            }
+            Err(e) => {
+                println!("Failed to load scene: {}", e);
+                println!("Creating entities programmatically as fallback...");
 
-        // Create ground entity (gray, static physics body)
-        let ground = ctx.world.create_entity();
-        ctx.world.add_component(&ground,
-            Transform2D::new(Vec2::new(0.0, -250.0))
-                .with_scale(Vec2::new(10.0, 0.5))
-        ).ok();
-        ctx.world.add_component(&ground,
-            Sprite::new(0)
-                .with_color(Vec4::new(0.3, 0.3, 0.3, 1.0))
-            // Don't set sprite scale - transform.scale already handles sizing
-        ).ok();
-        ctx.world.add_component(&ground, RigidBody::new_static()).ok();
-        ctx.world.add_component(&ground, Collider::platform(800.0, 40.0)).ok();
-        self.ground = Some(ground);
+                // Fallback: create entities manually
+                let player = ctx.world.create_entity();
+                ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
+                ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
+                ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
+                ctx.world.add_component(&player, Collider::player_box()).ok();
+                self.player = Some(player);
 
-        // Create floating platform (thicker for better collision)
-        let platform = ctx.world.create_entity();
-        ctx.world.add_component(&platform,
-            Transform2D::new(Vec2::new(100.0, -50.0))
-                .with_scale(Vec2::new(3.0, 0.5))
-        ).ok();
-        ctx.world.add_component(&platform,
-            Sprite::new(0)
-                .with_color(Vec4::new(0.4, 0.4, 0.4, 1.0))
-            // Don't set sprite scale - transform.scale already handles sizing
-        ).ok();
-        ctx.world.add_component(&platform, RigidBody::new_static()).ok();
-        ctx.world.add_component(&platform, Collider::platform(240.0, 40.0)).ok();
+                // Create ground
+                let ground = ctx.world.create_entity();
+                ctx.world.add_component(&ground,
+                    Transform2D::new(Vec2::new(0.0, -250.0))
+                        .with_scale(Vec2::new(10.0, 0.5))
+                ).ok();
+                ctx.world.add_component(&ground,
+                    Sprite::new(0).with_color(Vec4::new(0.3, 0.3, 0.3, 1.0))
+                ).ok();
+                ctx.world.add_component(&ground, RigidBody::new_static()).ok();
+                ctx.world.add_component(&ground, Collider::platform(800.0, 40.0)).ok();
 
-        // Create some obstacle boxes that can be pushed around
-        // Space them out horizontally so they don't stack on spawn
-        for i in 0..3 {
-            let obstacle = ctx.world.create_entity();
-            let x = -100.0 + (i as f32) * 120.0;  // More spacing between boxes
-            let y = 0.0;  // All on the ground level
-            ctx.world.add_component(&obstacle, Transform2D::new(Vec2::new(x, y))).ok();
-            ctx.world.add_component(&obstacle,
-                Sprite::new(0)
-                    .with_color(Vec4::new(0.6, 0.3, 0.3, 1.0))
-            ).ok();
-            // Use preset for pushable objects
-            ctx.world.add_component(&obstacle, RigidBody::pushable()).ok();
-            ctx.world.add_component(&obstacle, Collider::pushable_box(80.0, 80.0)).ok();
-            self.obstacles.push(obstacle);
+                self.physics = Some(PhysicsSystem::with_config(PhysicsConfig::platformer()));
+            }
         }
 
         // Initialize the physics system
@@ -155,10 +137,9 @@ impl Game for HelloWorld {
 
         // Move player based on input (velocity-based for precise control)
         if let Some(player) = self.player {
-            // Use the platformer movement preset for tested, good-feeling values
-            let movement = MovementConfig::platformer();
-            let move_speed = movement.move_speed;
-            let jump_impulse = movement.jump_impulse;
+            // Use movement config
+            let move_speed = self.movement.move_speed;
+            let jump_impulse = self.movement.jump_impulse;
 
             // Get current velocity
             let current_vel = if let Some(physics) = &self.physics {
@@ -209,11 +190,12 @@ impl Game for HelloWorld {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure the game
-    let config = GameConfig::new("Hello World - Insiculous 2D Physics Demo")
+    // Create game configuration
+    let game_config = GameConfig::new("Hello World - Insiculous 2D Physics Demo")
         .with_size(800, 600)
         .with_clear_color(0.1, 0.1, 0.15, 1.0);
 
-    // Run the game - that's it!
-    run_game(HelloWorld::new(), config)
+    // Create and run the game
+    let game = HelloWorld::new();
+    run_game(game, game_config)
 }

@@ -7,6 +7,8 @@ description = "2D physics system for the insiculous_2d game engine using rapier2
 [dependencies]
 log = { workspace = true }
 thiserror = { workspace = true }
-glam = "0.29"
+glam = { version = "0.29", features = ["serde"] }
+serde = { workspace = true }
+toml = { workspace = true }
 rapier2d = "0.23"
 ecs = { path = "../ecs" }

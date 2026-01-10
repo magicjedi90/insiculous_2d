@@ -5,7 +5,7 @@
 | System | Status | Tests |
 |--------|--------|-------|
 | Input System | Working | 56 |
-| Engine Core | Working | 29 |
+| Engine Core | Working | 37 |
 | ECS | Working | 60 |
 | Sprite Rendering | Working | 0 (visual) |
 | Physics | Working | 22 |
@@ -80,7 +80,14 @@ All major ECS API issues have been resolved:
 - ✅ Programmatic texture creation (solid colors, checkerboard)
 - ✅ Texture caching via TextureHandle system
 - ✅ ECS texture handle integration (sprites use their assigned textures)
-- Configuration file parsing (future)
+- ✅ **Scene Serialization (RON format)** - Unity/Godot-style scene files
+  - `SceneData` - Root structure with physics settings, prefabs, and entities
+  - `PrefabData` - Reusable entity templates with components
+  - `EntityData` - Entity instances with prefab references and overrides
+  - `SceneLoader::load_and_instantiate()` - Load scenes into ECS world
+  - `Scene::load_from_file()` - Convenience method on Scene struct
+  - Texture references: `#white`, `#solid:RRGGBB`, or file paths
+  - Example scene file: `examples/assets/scenes/hello_world.scene.ron`
 - Proper GPU resource cleanup (future)
 
 ### 2D Physics Integration - DONE
@@ -192,6 +199,6 @@ All major ECS API issues have been resolved:
 3. ~~**Include sprite_system.rs**~~ - ✅ DONE - System trait fixed
 4. ~~**Implement resource management**~~ - ✅ DONE - AssetManager with texture loading
 5. ~~**Add physics integration with rapier2d**~~ - ✅ DONE - Full 2D physics with collisions
-6. **Add configuration file parsing** - TOML/JSON config support
+6. ~~**Add scene serialization**~~ - ✅ DONE - RON-based scene files with prefabs (replaces TOML config)
 7. **Scene graph system** - Parent-child entity relationships
 8. **Audio system** - Sound effects and background music

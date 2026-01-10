@@ -1,6 +1,60 @@
 # Insiculous 2D - Agent Development Notes
 
-## 🎉 **MAJOR UPDATE: 2D Physics Integration - COMPLETE!**
+## 🎉 **MAJOR UPDATE: Scene Serialization System - COMPLETE!**
+
+**Date**: January 10, 2026
+**Status**: ✅ **SCENE LOADING WORKING** - RON-based scene files like Unity/Godot!
+
+### **Scene System Summary:**
+- ✅ **RON Format**: Rust Object Notation for scene files
+- ✅ **Prefabs**: Reusable entity templates with component overrides
+- ✅ **SceneData**: Root structure with physics settings and entities
+- ✅ **SceneLoader**: Load and instantiate scenes into ECS world
+- ✅ **Named Entities**: Look up entities by name after loading
+- ✅ **6 New Tests**: Scene parsing, prefabs, component merging
+
+### **Scene System Features:**
+- Load from file: `SceneLoader::load_and_instantiate(path, &mut world, &mut assets)`
+- Convenience method: `scene.load_from_file(path, &mut assets)`
+- Named entity lookup: `instance.get_entity("player")`
+- Prefab system with override support
+- Texture references: `#white`, `#solid:RRGGBB`, or file paths
+
+### **Example Scene File:**
+Scene files live in `examples/assets/scenes/`:
+```ron
+// examples/assets/scenes/hello_world.scene.ron
+SceneData(
+    name: "Hello World",
+    physics: Some(PhysicsSettings(
+        gravity: (0.0, -980.0),
+        pixels_per_meter: 100.0,
+    )),
+    prefabs: {
+        "Player": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0)),
+                Sprite(texture: "#white", color: (0.2, 0.4, 1.0, 1.0)),
+                RigidBody(body_type: Dynamic, linear_damping: 5.0, can_rotate: false),
+                Collider(shape: Box(half_extents: (40.0, 40.0)), friction: 0.8),
+            ],
+        ),
+    },
+    entities: [
+        EntityData(
+            name: Some("player"),
+            prefab: Some("Player"),
+            overrides: [Transform2D(position: (-200.0, 100.0))],
+        ),
+    ],
+)
+```
+
+**Demo:** `cargo run --example hello_world` - Loads scene from RON file!
+
+---
+
+## 🎉 **PREVIOUS UPDATE: 2D Physics Integration - COMPLETE!**
 
 **Date**: January 10, 2026
 **Status**: ✅ **PHYSICS WORKING** - Full 2D physics simulation with rapier2d!

@@ -4,11 +4,12 @@
 //! so developers don't have to guess at values.
 
 use glam::Vec2;
+use serde::{Deserialize, Serialize};
 use crate::components::{Collider, RigidBody};
 use crate::world::PhysicsConfig;
 
 /// Movement configuration for character controllers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MovementConfig {
     /// Horizontal movement speed in pixels/second
     pub move_speed: f32,

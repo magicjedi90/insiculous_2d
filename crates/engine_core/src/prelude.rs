@@ -8,6 +8,9 @@ pub use crate::{
     game::{Game, GameConfig, GameContext, RenderContext, run_game},
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
+    // Scene serialization
+    scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, SceneLoadError},
+    scene_loader::{SceneLoader, SceneInstance},
     // Advanced API
     application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},
