@@ -85,6 +85,9 @@ impl BehaviorRunner {
         // Collect velocity commands to apply after iteration (avoids borrow conflicts)
         let mut velocity_commands: Vec<(EntityId, Vec2)> = Vec::new();
 
+        // Collect impulse commands to apply AFTER velocity commands
+        let mut impulse_commands: Vec<(EntityId, Vec2)> = Vec::new();
+
         // Collect tag assignments to apply after iteration
         let mut tag_assignments: Vec<(EntityId, String)> = Vec::new();
 
@@ -112,28 +115,26 @@ impl BehaviorRunner {
                         state.timer -= delta_time;
                     }
 
-                    // Calculate target velocity
-                    let mut vel = Vec2::ZERO;
-                    if input.is_action_active(&GameAction::MoveLeft) { vel.x = -move_speed; }
-                    if input.is_action_active(&GameAction::MoveRight) { vel.x = *move_speed; }
+                    // Calculate horizontal velocity only - let physics handle Y (gravity + jumps)
+                    let mut vel_x = 0.0;
+                    if input.is_action_active(&GameAction::MoveLeft) { vel_x = -move_speed; }
+                    if input.is_action_active(&GameAction::MoveRight) { vel_x = *move_speed; }
 
-                    // Get current Y velocity (for gravity)
+                    // For platformers, only set X velocity - preserve Y for physics
                     if let Some(ref physics) = physics {
-                        let current_y = physics.physics_world()
+                        let current_vel = physics.physics_world()
                             .get_body_velocity(entity)
-                            .map(|(v, _)| v.y)
-                            .unwrap_or(0.0);
-                        vel.y = current_y;
+                            .map(|(v, _)| v)
+                            .unwrap_or(Vec2::ZERO);
+                        // Set X to input, keep Y from physics (gravity/jumps)
+                        let vel = Vec2::new(vel_x, current_vel.y);
+                        velocity_commands.push((entity, vel));
                     }
 
-                    velocity_commands.push((entity, vel));
-
-                    // Jump
-                    if input.is_action_active(&GameAction::Action1) && state.timer <= 0.0 {
-                        if let Some(ref mut physics) = physics {
-                            physics.apply_impulse(entity, Vec2::new(0.0, *jump_impulse));
-                            state.timer = *jump_cooldown;
-                        }
+                    // Jump - collect impulse to apply AFTER velocity commands
+                    if input.is_key_just_pressed(winit::keyboard::KeyCode::Space) && state.timer <= 0.0 {
+                        impulse_commands.push((entity, Vec2::new(0.0, *jump_impulse)));
+                        state.timer = *jump_cooldown;
                     }
 
                     tag_assignments.push((entity, tag.clone()));
@@ -280,6 +281,13 @@ impl BehaviorRunner {
                 if let Some(transform) = world.get_mut::<Transform2D>(entity) {
                     transform.position += vel * delta_time;
                 }
+            }
+        }
+
+        // Apply impulses AFTER velocity commands (so jumps aren't overwritten)
+        if let Some(ref mut physics) = physics {
+            for (entity, impulse) in impulse_commands {
+                physics.apply_impulse(entity, impulse);
             }
         }
 

@@ -12,7 +12,7 @@ pub use crate::{
     scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, BehaviorData, SceneLoadError},
     scene_loader::{SceneLoader, SceneInstance},
     // Behavior system
-    behavior::BehaviorRunner,
+    behavior_runner::BehaviorRunner,
     // Advanced API
     application::EngineApplication,
     game_loop::{GameLoop, GameLoopConfig},

@@ -10,6 +10,6 @@ pub use crate::components::{
     RigidBodyType,
 };
 pub use crate::presets::MovementConfig;
-pub use crate::system::PhysicsSystem;
-pub use crate::world::{PhysicsConfig, PhysicsWorld};
+pub use crate::physics_system::PhysicsSystem;
+pub use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 pub use crate::PhysicsError;

@@ -30,8 +30,8 @@
 
 pub mod components;
 pub mod presets;
-pub mod system;
-pub mod world;
+pub mod physics_system;
+pub mod physics_world;
 
 pub mod prelude;
 
@@ -41,8 +41,8 @@ pub use components::{
     RigidBodyType,
 };
 pub use presets::MovementConfig;
-pub use system::PhysicsSystem;
-pub use world::{PhysicsConfig, PhysicsWorld};
+pub use physics_system::PhysicsSystem;
+pub use physics_world::{PhysicsConfig, PhysicsWorld};
 
 /// Physics error types
 #[derive(Debug, thiserror::Error)]

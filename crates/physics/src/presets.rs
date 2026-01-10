@@ -6,7 +6,7 @@
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use crate::components::{Collider, RigidBody};
-use crate::world::PhysicsConfig;
+use crate::physics_world::PhysicsConfig;
 
 /// Movement configuration for character controllers
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -8,7 +8,7 @@ use ecs::{EntityId, System, World};
 use ecs::sprite_components::Transform2D;
 
 use crate::components::{Collider, RigidBody, CollisionData};
-use crate::world::{PhysicsConfig, PhysicsWorld};
+use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 
 /// Physics system that steps the simulation and syncs transforms
 pub struct PhysicsSystem {

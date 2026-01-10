@@ -309,6 +309,10 @@ impl<G: Game> GameRunner<G> {
             self.initialized = true;
         }
 
+        // Process queued input events before game logic runs
+        // This ensures keyboard/mouse state reflects this frame's events
+        self.input.process_queued_events();
+
         // Update game logic
         let mut ctx = GameContext {
             input: &self.input,
@@ -319,8 +323,8 @@ impl<G: Game> GameRunner<G> {
         };
         self.game.update(&mut ctx);
 
-        // Update input state (clear "just pressed" flags)
-        self.input.update();
+        // Clear "just pressed/released" flags for next frame
+        self.input.end_frame();
 
         // Render
         let (Some(renderer), Some(pipeline), Some(asset_manager)) =

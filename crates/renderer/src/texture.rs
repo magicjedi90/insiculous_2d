@@ -487,3 +487,213 @@ impl TextureAtlasBuilder {
         Ok(atlas)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== TextureHandle Tests ====================
+
+    #[test]
+    fn test_texture_handle_new() {
+        let handle = TextureHandle::new(42);
+        assert_eq!(handle.id, 42);
+    }
+
+    #[test]
+    fn test_texture_handle_default() {
+        let handle = TextureHandle::default();
+        assert_eq!(handle.id, 0);
+    }
+
+    #[test]
+    fn test_texture_handle_equality() {
+        let handle1 = TextureHandle::new(5);
+        let handle2 = TextureHandle::new(5);
+        let handle3 = TextureHandle::new(10);
+
+        assert_eq!(handle1, handle2);
+        assert_ne!(handle1, handle3);
+    }
+
+    #[test]
+    fn test_texture_handle_hash() {
+        use std::collections::HashMap;
+
+        let mut map: HashMap<TextureHandle, &str> = HashMap::new();
+        map.insert(TextureHandle::new(1), "texture1");
+        map.insert(TextureHandle::new(2), "texture2");
+
+        assert_eq!(map.get(&TextureHandle::new(1)), Some(&"texture1"));
+        assert_eq!(map.get(&TextureHandle::new(2)), Some(&"texture2"));
+        assert_eq!(map.get(&TextureHandle::new(3)), None);
+    }
+
+    #[test]
+    fn test_texture_handle_copy() {
+        let handle1 = TextureHandle::new(7);
+        let handle2 = handle1; // Copy
+        assert_eq!(handle1.id, handle2.id);
+    }
+
+    // ==================== TextureLoadConfig Tests ====================
+
+    #[test]
+    fn test_texture_load_config_default() {
+        let config = TextureLoadConfig::default();
+        assert!(!config.generate_mipmaps);
+        assert!(config.format.is_none());
+    }
+
+    #[test]
+    fn test_texture_load_config_with_mipmaps() {
+        let config = TextureLoadConfig {
+            generate_mipmaps: true,
+            ..Default::default()
+        };
+        assert!(config.generate_mipmaps);
+    }
+
+    #[test]
+    fn test_texture_load_config_with_format() {
+        let config = TextureLoadConfig {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        };
+        assert_eq!(config.format, Some(wgpu::TextureFormat::Rgba8Unorm));
+    }
+
+    // ==================== SamplerConfig Tests ====================
+
+    #[test]
+    fn test_sampler_config_default() {
+        let config = SamplerConfig::default();
+        assert_eq!(config.address_mode_u, wgpu::AddressMode::ClampToEdge);
+        assert_eq!(config.address_mode_v, wgpu::AddressMode::ClampToEdge);
+        assert_eq!(config.address_mode_w, wgpu::AddressMode::ClampToEdge);
+        assert_eq!(config.mag_filter, wgpu::FilterMode::Linear);
+        assert_eq!(config.min_filter, wgpu::FilterMode::Linear);
+        assert_eq!(config.mipmap_filter, wgpu::MipmapFilterMode::Linear);
+        assert_eq!(config.lod_min_clamp, 0.0);
+        assert_eq!(config.lod_max_clamp, f32::MAX);
+        assert!(config.compare.is_none());
+        assert_eq!(config.anisotropy_clamp, 1);
+    }
+
+    #[test]
+    fn test_sampler_config_custom() {
+        let config = SamplerConfig {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::MirrorRepeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            anisotropy_clamp: 4,
+            ..Default::default()
+        };
+
+        assert_eq!(config.address_mode_u, wgpu::AddressMode::Repeat);
+        assert_eq!(config.address_mode_v, wgpu::AddressMode::MirrorRepeat);
+        assert_eq!(config.mag_filter, wgpu::FilterMode::Nearest);
+        assert_eq!(config.min_filter, wgpu::FilterMode::Nearest);
+        assert_eq!(config.anisotropy_clamp, 4);
+    }
+
+    // ==================== TextureError Tests ====================
+
+    #[test]
+    fn test_texture_error_display() {
+        let error = TextureError::ImageLoadError("file not found".to_string());
+        assert!(error.to_string().contains("file not found"));
+
+        let error = TextureError::TextureNotFound("missing.png".to_string());
+        assert!(error.to_string().contains("missing.png"));
+
+        let error = TextureError::InvalidFormat;
+        assert!(error.to_string().contains("Invalid"));
+
+        let error = TextureError::TextureTooLarge {
+            width: 10000,
+            height: 10000,
+            max_dimension: 8192,
+        };
+        let msg = error.to_string();
+        assert!(msg.contains("10000"));
+        assert!(msg.contains("8192"));
+    }
+
+    // ==================== AtlasRegion Tests ====================
+
+    #[test]
+    fn test_atlas_region_creation() {
+        let region = AtlasRegion {
+            name: "sprite1".to_string(),
+            width: 64,
+            height: 64,
+            data: None,
+        };
+
+        assert_eq!(region.name, "sprite1");
+        assert_eq!(region.width, 64);
+        assert_eq!(region.height, 64);
+        assert!(region.data.is_none());
+    }
+
+    #[test]
+    fn test_atlas_region_with_data() {
+        let data = vec![255u8; 64 * 64 * 4]; // RGBA data for 64x64 texture
+        let region = AtlasRegion {
+            name: "sprite2".to_string(),
+            width: 64,
+            height: 64,
+            data: Some(data.clone()),
+        };
+
+        assert!(region.data.is_some());
+        assert_eq!(region.data.unwrap().len(), 64 * 64 * 4);
+    }
+
+    // ==================== TextureAtlasBuilder Tests ====================
+
+    #[test]
+    fn test_texture_atlas_builder_new() {
+        let builder = TextureAtlasBuilder::new(1024, 1024);
+        assert_eq!(builder.max_width, 1024);
+        assert_eq!(builder.max_height, 1024);
+        assert_eq!(builder.padding, 2); // default padding
+        assert!(builder.regions.is_empty());
+    }
+
+    #[test]
+    fn test_texture_atlas_builder_with_padding() {
+        let builder = TextureAtlasBuilder::new(1024, 1024).with_padding(4);
+        assert_eq!(builder.padding, 4);
+    }
+
+    #[test]
+    fn test_texture_atlas_builder_add_region() {
+        let builder = TextureAtlasBuilder::new(1024, 1024)
+            .add_region("sprite1".to_string(), 64, 64, None)
+            .add_region("sprite2".to_string(), 128, 128, None);
+
+        assert_eq!(builder.regions.len(), 2);
+        assert_eq!(builder.regions[0].name, "sprite1");
+        assert_eq!(builder.regions[0].width, 64);
+        assert_eq!(builder.regions[1].name, "sprite2");
+        assert_eq!(builder.regions[1].width, 128);
+    }
+
+    #[test]
+    fn test_texture_atlas_builder_chaining() {
+        let builder = TextureAtlasBuilder::new(512, 512)
+            .with_padding(1)
+            .add_region("a".to_string(), 32, 32, None)
+            .add_region("b".to_string(), 32, 32, None)
+            .add_region("c".to_string(), 32, 32, None);
+
+        assert_eq!(builder.padding, 1);
+        assert_eq!(builder.regions.len(), 3);
+    }
+
+    // Note: TextureManager and TextureAtlasBuilder.build() require GPU device,
+    // so those are tested in integration tests or with mocked devices
+}

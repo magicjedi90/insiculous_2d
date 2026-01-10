@@ -239,8 +239,19 @@ impl InputHandler {
     pub fn update(&mut self) {
         // Process any queued input events first
         self.process_queued_events();
-        
+
         // Then update all input states (clears just pressed/released states)
+        self.keyboard.update();
+        self.mouse.update();
+        self.gamepads.update();
+    }
+
+    /// End the frame by clearing just pressed/released states
+    ///
+    /// Call this at the end of each frame after game logic has run.
+    /// This clears the "just pressed" and "just released" flags without processing events.
+    /// Use this when you've already called `process_queued_events()` earlier in the frame.
+    pub fn end_frame(&mut self) {
         self.keyboard.update();
         self.mouse.update();
         self.gamepads.update();

@@ -706,3 +706,336 @@ impl TextureAtlas {
         &self.texture
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glam::{Vec2, Vec4};
+
+    // ==================== Sprite Tests ====================
+
+    #[test]
+    fn test_sprite_default() {
+        let sprite = Sprite::default();
+        assert_eq!(sprite.position, Vec2::ZERO);
+        assert_eq!(sprite.rotation, 0.0);
+        assert_eq!(sprite.scale, Vec2::ONE);
+        assert_eq!(sprite.tex_region, [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(sprite.color, Vec4::ONE);
+        assert_eq!(sprite.depth, 0.0);
+        assert_eq!(sprite.texture_handle.id, 0);
+    }
+
+    #[test]
+    fn test_sprite_new_with_texture() {
+        let handle = TextureHandle::new(42);
+        let sprite = Sprite::new(handle);
+        assert_eq!(sprite.texture_handle.id, 42);
+        // Other fields should be default
+        assert_eq!(sprite.position, Vec2::ZERO);
+        assert_eq!(sprite.scale, Vec2::ONE);
+    }
+
+    #[test]
+    fn test_sprite_builder_position() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_position(Vec2::new(100.0, 200.0));
+        assert_eq!(sprite.position, Vec2::new(100.0, 200.0));
+    }
+
+    #[test]
+    fn test_sprite_builder_rotation() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_rotation(std::f32::consts::PI);
+        assert!((sprite.rotation - std::f32::consts::PI).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_sprite_builder_scale() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_scale(Vec2::new(2.0, 3.0));
+        assert_eq!(sprite.scale, Vec2::new(2.0, 3.0));
+    }
+
+    #[test]
+    fn test_sprite_builder_tex_region() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_tex_region(0.25, 0.5, 0.5, 0.25);
+        assert_eq!(sprite.tex_region, [0.25, 0.5, 0.5, 0.25]);
+    }
+
+    #[test]
+    fn test_sprite_builder_color() {
+        let color = Vec4::new(1.0, 0.0, 0.0, 0.5);
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_color(color);
+        assert_eq!(sprite.color, color);
+    }
+
+    #[test]
+    fn test_sprite_builder_depth() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_depth(5.0);
+        assert_eq!(sprite.depth, 5.0);
+    }
+
+    #[test]
+    fn test_sprite_builder_chaining() {
+        let sprite = Sprite::new(TextureHandle::new(1))
+            .with_position(Vec2::new(10.0, 20.0))
+            .with_rotation(1.5)
+            .with_scale(Vec2::new(2.0, 2.0))
+            .with_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
+            .with_depth(10.0);
+
+        assert_eq!(sprite.texture_handle.id, 1);
+        assert_eq!(sprite.position, Vec2::new(10.0, 20.0));
+        assert!((sprite.rotation - 1.5).abs() < 0.0001);
+        assert_eq!(sprite.scale, Vec2::new(2.0, 2.0));
+        assert_eq!(sprite.color, Vec4::new(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(sprite.depth, 10.0);
+    }
+
+    #[test]
+    fn test_sprite_to_instance() {
+        let sprite = Sprite::new(TextureHandle::default())
+            .with_position(Vec2::new(100.0, 200.0))
+            .with_rotation(0.5)
+            .with_scale(Vec2::new(2.0, 3.0))
+            .with_color(Vec4::new(1.0, 0.5, 0.25, 1.0))
+            .with_depth(5.0);
+
+        let instance = sprite.to_instance();
+        assert_eq!(instance.position, [100.0, 200.0]);
+        assert!((instance.rotation - 0.5).abs() < 0.0001);
+        assert_eq!(instance.scale, [2.0, 3.0]);
+        assert_eq!(instance.color, [1.0, 0.5, 0.25, 1.0]);
+        assert_eq!(instance.depth, 5.0);
+    }
+
+    // ==================== SpriteBatch Tests ====================
+
+    #[test]
+    fn test_sprite_batch_new() {
+        let handle = TextureHandle::new(5);
+        let batch = SpriteBatch::new(handle);
+        assert_eq!(batch.texture_handle.id, 5);
+        assert!(batch.instances.is_empty());
+        assert!(!batch.sorted);
+    }
+
+    #[test]
+    fn test_sprite_batch_add_instance() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        let instance = SpriteInstance::new(
+            Vec2::new(10.0, 20.0),
+            0.0,
+            Vec2::ONE,
+            [0.0, 0.0, 1.0, 1.0],
+            Vec4::ONE,
+            0.0,
+        );
+        batch.add_instance(instance);
+        assert_eq!(batch.len(), 1);
+        assert!(!batch.sorted);
+    }
+
+    #[test]
+    fn test_sprite_batch_add_instances() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        let instances = vec![
+            SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 0.0),
+            SpriteInstance::new(Vec2::ONE, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 1.0),
+            SpriteInstance::new(Vec2::new(2.0, 2.0), 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 2.0),
+        ];
+        batch.add_instances(&instances);
+        assert_eq!(batch.len(), 3);
+    }
+
+    #[test]
+    fn test_sprite_batch_sort_by_depth() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 3.0));
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 1.0));
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 2.0));
+
+        assert!(!batch.sorted);
+        batch.sort_by_depth();
+        assert!(batch.sorted);
+
+        // Verify sorted order (ascending)
+        assert_eq!(batch.instances[0].depth, 1.0);
+        assert_eq!(batch.instances[1].depth, 2.0);
+        assert_eq!(batch.instances[2].depth, 3.0);
+    }
+
+    #[test]
+    fn test_sprite_batch_sort_idempotent() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 2.0));
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 1.0));
+
+        batch.sort_by_depth();
+        assert!(batch.sorted);
+
+        // Sorting again should be a no-op since already sorted
+        batch.sort_by_depth();
+        assert!(batch.sorted);
+        assert_eq!(batch.instances[0].depth, 1.0);
+        assert_eq!(batch.instances[1].depth, 2.0);
+    }
+
+    #[test]
+    fn test_sprite_batch_len_and_is_empty() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 0.0));
+        assert!(!batch.is_empty());
+        assert_eq!(batch.len(), 1);
+    }
+
+    #[test]
+    fn test_sprite_batch_clear() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 0.0));
+        batch.add_instance(SpriteInstance::new(Vec2::ONE, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 1.0));
+        batch.sort_by_depth();
+
+        assert_eq!(batch.len(), 2);
+        assert!(batch.sorted);
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert!(!batch.sorted);
+    }
+
+    #[test]
+    fn test_sprite_batch_sorted_flag_reset_on_add() {
+        let mut batch = SpriteBatch::new(TextureHandle::default());
+        batch.add_instance(SpriteInstance::new(Vec2::ZERO, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 0.0));
+        batch.sort_by_depth();
+        assert!(batch.sorted);
+
+        // Adding should reset sorted flag
+        batch.add_instance(SpriteInstance::new(Vec2::ONE, 0.0, Vec2::ONE, [0.0, 0.0, 1.0, 1.0], Vec4::ONE, 1.0));
+        assert!(!batch.sorted);
+    }
+
+    // ==================== SpriteBatcher Tests ====================
+
+    #[test]
+    fn test_sprite_batcher_new() {
+        let batcher = SpriteBatcher::new(1000);
+        assert_eq!(batcher.sprite_count(), 0);
+        assert!(batcher.batches().is_empty());
+    }
+
+    #[test]
+    fn test_sprite_batcher_add_sprite() {
+        let mut batcher = SpriteBatcher::new(1000);
+        let sprite = Sprite::new(TextureHandle::new(1));
+        batcher.add_sprite(&sprite);
+        assert_eq!(batcher.sprite_count(), 1);
+    }
+
+    #[test]
+    fn test_sprite_batcher_add_sprites() {
+        let mut batcher = SpriteBatcher::new(1000);
+        let sprites = vec![
+            Sprite::new(TextureHandle::new(1)),
+            Sprite::new(TextureHandle::new(1)),
+            Sprite::new(TextureHandle::new(2)),
+        ];
+        batcher.add_sprites(&sprites);
+        assert_eq!(batcher.sprite_count(), 3);
+    }
+
+    #[test]
+    fn test_sprite_batcher_groups_by_texture() {
+        let mut batcher = SpriteBatcher::new(1000);
+
+        // Add sprites with different textures
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(3)));
+
+        let batches = batcher.batches();
+        assert_eq!(batches.len(), 3); // 3 different textures
+
+        assert_eq!(batches.get(&TextureHandle::new(1)).unwrap().len(), 2);
+        assert_eq!(batches.get(&TextureHandle::new(2)).unwrap().len(), 2);
+        assert_eq!(batches.get(&TextureHandle::new(3)).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_sprite_batcher_sprite_count() {
+        let mut batcher = SpriteBatcher::new(1000);
+        assert_eq!(batcher.sprite_count(), 0);
+
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+        assert_eq!(batcher.sprite_count(), 1);
+
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)));
+        assert_eq!(batcher.sprite_count(), 2);
+
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+        assert_eq!(batcher.sprite_count(), 3);
+    }
+
+    #[test]
+    fn test_sprite_batcher_sort_all_batches() {
+        let mut batcher = SpriteBatcher::new(1000);
+
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)).with_depth(3.0));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)).with_depth(1.0));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)).with_depth(5.0));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)).with_depth(2.0));
+
+        batcher.sort_all_batches();
+
+        let batch1 = batcher.batches().get(&TextureHandle::new(1)).unwrap();
+        assert!(batch1.sorted);
+        assert_eq!(batch1.instances[0].depth, 1.0);
+        assert_eq!(batch1.instances[1].depth, 3.0);
+
+        let batch2 = batcher.batches().get(&TextureHandle::new(2)).unwrap();
+        assert!(batch2.sorted);
+        assert_eq!(batch2.instances[0].depth, 2.0);
+        assert_eq!(batch2.instances[1].depth, 5.0);
+    }
+
+    #[test]
+    fn test_sprite_batcher_clear() {
+        let mut batcher = SpriteBatcher::new(1000);
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(2)));
+        assert_eq!(batcher.sprite_count(), 2);
+
+        batcher.clear();
+        assert_eq!(batcher.sprite_count(), 0);
+
+        // Batches still exist but are empty
+        assert!(!batcher.batches().is_empty());
+        for batch in batcher.batches().values() {
+            assert!(batch.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_sprite_batcher_batches_mutable() {
+        let mut batcher = SpriteBatcher::new(1000);
+        batcher.add_sprite(&Sprite::new(TextureHandle::new(1)));
+
+        // Verify we can get mutable access
+        let batches = batcher.batches_mut();
+        if let Some(batch) = batches.get_mut(&TextureHandle::new(1)) {
+            batch.clear();
+        }
+
+        assert_eq!(batcher.sprite_count(), 0);
+    }
+}

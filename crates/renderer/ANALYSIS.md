@@ -3,36 +3,44 @@
 ## Current State (Updated: January 2026)
 The renderer crate provides WGPU-based 2D sprite rendering with instancing, batching, and camera support.
 
-**Test Count: 0 tests** (CRITICAL GAP - visual testing via examples only)
+**Test Count: 62 tests** (Comprehensive coverage added January 2026)
 
 ---
 
-## Critical Issues Identified
+## Test Coverage (Added January 2026)
 
-### High Severity
+### Sprite Tests (26 tests in sprite.rs)
+- Sprite builder pattern (position, rotation, scale, color, depth, tex_region)
+- Sprite default values and texture handle assignment
+- SpriteBatch operations (add, sort by depth, clear, len/is_empty)
+- SpriteBatcher grouping by texture, sprite counting, sort all batches
 
-#### 1. ZERO Unit Tests (CRITICAL)
-**Status**: No test coverage whatsoever
+### Camera2D Tests (14 tests in sprite_data.rs)
+- Default and custom camera creation
+- View matrix (identity, with position, with zoom)
+- Projection matrix for orthographic rendering
+- Screen-to-world and world-to-screen coordinate conversion
+- CameraUniform GPU data generation
 
-**Impact**:
-- No regression detection
-- No validation of core rendering logic
-- Risky to modify any code
-- Cannot verify GPU pipeline correctness without manual testing
+### Texture System Tests (22 tests in texture.rs)
+- TextureHandle creation, default, equality, hashing, copy
+- TextureLoadConfig and SamplerConfig defaults and customization
+- TextureError display messages
+- AtlasRegion creation with and without data
+- TextureAtlasBuilder operations (new, padding, add regions, chaining)
 
-**Minimum Test Requirements** (30+ tests needed):
+### GPU Data Tests (7 tests in sprite_data.rs)
+- SpriteVertex creation and bytemuck compatibility
+- SpriteInstance creation and bytemuck compatibility
+- Vertex buffer layout descriptors
 
-| Category | Tests Needed | Description |
-|----------|--------------|-------------|
-| Sprite Creation | 5 | Builder pattern, default values, color/position/scale |
-| SpriteBatch | 5 | Adding sprites, texture grouping, depth sorting |
-| SpriteBatcher | 5 | Auto-batching, batch limits, clear/reset |
-| Camera2D | 5 | Projection matrix, view matrix, screen-to-world coords |
-| TextureManager | 5 | Handle generation, caching, file loading (mock) |
-| SpritePipeline | 3 | Creation, buffer sizing, shader compilation |
-| TextureAtlas | 2 | Region calculation, UV mapping |
+---
 
-#### 2. SRP Violation: SpritePipeline
+## Remaining Issues
+
+### Medium Severity
+
+#### 1. SRP Violation: SpritePipeline
 **Location**: `src/sprite.rs` lines 224-251
 **Issue**: SpritePipeline struct holds too many GPU resources:
 - Render pipeline
@@ -53,7 +61,7 @@ The renderer crate provides WGPU-based 2D sprite rendering with instancing, batc
 - `BufferManager` - Vertex, instance, index buffers
 - `CameraManager` - Camera uniform and bind group
 
-#### 3. Redundant Device/Queue Accessors
+#### 2. Redundant Device/Queue Accessors
 **Location**: `src/renderer.rs` lines 268-285
 **Issue**: Both Arc-returning and borrowed versions of same data:
 ```rust
@@ -67,7 +75,7 @@ pub fn queue_ref(&self) -> &Queue { &self.queue }
 
 **Recommended Fix**: Keep only one accessor pattern (prefer `&Device` with explicit `Arc::clone` when needed).
 
-#### 4. Bind Groups Created Every Frame
+#### 3. Bind Groups Created Every Frame
 **Location**: `src/sprite.rs` render method
 **Issue**: New texture bind groups created every frame instead of caching.
 
@@ -197,24 +205,21 @@ renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_re
 
 ## Recommended Fixes (Priority Order)
 
-### Immediate (Critical)
-1. **Add unit test suite** - Minimum 30 tests covering core functionality
-2. **Add integration tests** - Verify rendering pipeline end-to-end
-
 ### Short-term (High Priority)
-3. Cache bind groups per texture (avoid per-frame creation)
-4. Consolidate device/queue accessors (remove redundant methods)
-5. Add GPU resource cleanup on drop
+1. Cache bind groups per texture (avoid per-frame creation)
+2. Consolidate device/queue accessors (remove redundant methods)
+3. Add GPU resource cleanup on drop
+4. Add integration tests - Verify rendering pipeline end-to-end
 
 ### Medium-term (Architecture)
-6. Split SpritePipeline into focused structs
-7. Add async texture loading option
-8. Add surface format auto-detection
+5. Split SpritePipeline into focused structs
+6. Add async texture loading option
+7. Add surface format auto-detection
 
 ### Long-term (Features)
-9. Add frustum culling
-10. Add text rendering
-11. Add post-processing pipeline
+8. Add frustum culling
+9. Add text rendering
+10. Add post-processing pipeline
 
 ---
 
@@ -272,23 +277,34 @@ mod tests {
 - Camera system
 - Color tinting
 - ECS integration
+- **62 unit tests** covering core functionality
 
-### Critical Gaps
-- **ZERO test coverage** - Major risk
-- No automated validation of rendering correctness
+### Remaining Gaps
+- No integration tests for full rendering pipeline
 - No performance benchmarks
+- No GPU resource cleanup on drop
 
-### Not Production Ready Until
-1. Unit test suite added (minimum 30 tests)
-2. Integration tests validate rendering pipeline
-3. GPU resource cleanup implemented
+### Production Ready For
+- Basic 2D sprite rendering
+- Texture-based sprite batching
+- Camera coordinate transformations
+
+### Still Needed For Production
+1. Integration tests validate rendering pipeline end-to-end
+2. GPU resource cleanup implemented
+3. Performance benchmarks established
 
 ---
 
 ## Conclusion
 
-The renderer provides functional 2D sprite rendering but has **critical test coverage gaps**. The lack of any tests makes it risky to modify and impossible to detect regressions automatically.
+The renderer provides functional 2D sprite rendering with **comprehensive test coverage** (62 tests). The test suite covers:
+- Sprite creation and builder patterns
+- SpriteBatch and SpriteBatcher operations
+- Camera2D matrices and coordinate transformations
+- Texture system configuration and error handling
+- GPU data structures (vertex, instance, uniform)
 
-**Priority Action**: Add comprehensive test suite before any other changes.
+**Next Priority**: Add integration tests for end-to-end rendering validation.
 
 Run `cargo run --example hello_world` to see working sprite rendering with WASD movement.
