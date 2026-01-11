@@ -4,22 +4,23 @@
 
 | System | Status | Tests |
 |--------|--------|-------|
-| ECS | Working | 82 |
+| ECS | Working | 89 |
 | Input System | Working | 60 |
 | Engine Core | Working | 42 |
 | Physics | Working | 22 |
 | Sprite Rendering | Working | 62 |
 | Scene Graph | Working | 12 |
+| Audio | Working | 10 |
 
-**Total Tests**: 268 (all passing)
+**Total Tests**: 280 (all passing)
 
-**Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, push red boxes around. ESC to exit.
+**Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, M to toggle music, +/- for volume. ESC to exit.
 
 ### Simple Game API - NEW
 The engine now provides a `Game` trait that handles all winit/window boilerplate internally:
 - `run_game(game, config)` - One function to start your game
 - `GameConfig` - Configure window title, size, clear color
-- `GameContext` - Access input, ECS world, delta time in update()
+- `GameContext` - Access input, ECS world, audio, assets, delta time in update()
 - Default sprite rendering from ECS entities
 
 ### ECS Integration - FIXED
@@ -124,11 +125,13 @@ All major ECS API issues have been resolved:
 - Scene serialization with hierarchy (`parent` field and inline `children` in RON)
 - Spatial queries and frustum culling (future)
 
-### Audio System
-- Sound effect playback
-- Background music streaming
-- 2D positional audio
-- Audio resource management
+### Audio System - DONE
+- Sound effect playback via `AudioManager`
+- Background music with pause/resume
+- Volume control (master, SFX, music)
+- ECS components (`AudioSource`, `AudioListener`, `PlaySoundEffect`)
+- Spatial audio attenuation (distance-based volume falloff)
+- Format support: WAV, MP3, OGG, FLAC, AAC
 
 ### UI Framework
 - Immediate mode UI rendering
@@ -244,5 +247,5 @@ All major ECS API issues have been resolved:
 7. ~~**Scene graph system**~~ - DONE - Parent-child relationships with transform propagation
 8. ~~**Add renderer test suite**~~ - DONE - 62 tests added
 9. ~~**Fix SRP violations**~~ - DONE - Created RenderManager and WindowManager, refactored GameRunner and EngineApplication
-10. **Audio system** - Sound effects and background music
+10. ~~**Audio system**~~ - DONE - Sound effects, background music, volume control, ECS integration
 11. **UI Framework** - Immediate mode UI rendering with common widgets

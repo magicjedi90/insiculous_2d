@@ -1,0 +1,13 @@
+[package]
+name = "audio"
+version = "0.1.0"
+edition = "2021"
+description = "Audio system for insiculous_2d game engine"
+
+[dependencies]
+rodio = { version = "0.20", default-features = false, features = ["symphonia-all"] }
+log = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }

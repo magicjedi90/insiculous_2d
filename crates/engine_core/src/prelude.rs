@@ -27,7 +27,9 @@ pub use glam::{Vec2, Vec4};
 pub use winit::keyboard::KeyCode;
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::{Sprite, Transform2D};
+pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use renderer::{TextureHandle, TextureLoadConfig};
+pub use audio::{AudioManager, SoundHandle, SoundSettings, PlaybackState};
 
 // Re-export physics types when the physics feature is enabled
 #[cfg(feature = "physics")]

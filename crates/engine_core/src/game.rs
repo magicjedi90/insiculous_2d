@@ -35,6 +35,7 @@ use winit::{
     window::WindowId,
 };
 
+use audio::AudioManager;
 use input::InputHandler;
 use renderer::{
     sprite::{SpriteBatch, SpriteBatcher},
@@ -115,6 +116,8 @@ pub struct GameContext<'a> {
     pub world: &'a mut World,
     /// Asset manager for loading textures and other resources
     pub assets: &'a mut AssetManager,
+    /// Audio manager for sound playback
+    pub audio: &'a mut AudioManager,
     /// Delta time since last frame in seconds
     pub delta_time: f32,
     /// Current window size
@@ -223,6 +226,7 @@ pub fn run_game<G: Game>(game: G, config: GameConfig) -> Result<(), Box<dyn std:
 /// - `WindowManager`: Window creation and size tracking
 /// - `RenderManager`: Renderer lifecycle and sprite rendering
 /// - `AssetManager`: Texture and asset loading
+/// - `AudioManager`: Sound playback
 struct GameRunner<G: Game> {
     /// The user's game implementation
     game: G,
@@ -234,6 +238,8 @@ struct GameRunner<G: Game> {
     render_manager: RenderManager,
     /// Asset loading and management
     asset_manager: Option<AssetManager>,
+    /// Audio playback management
+    audio_manager: Option<AudioManager>,
     /// Input handling
     input: InputHandler,
     /// Main game scene containing ECS world
@@ -251,12 +257,22 @@ impl<G: Game> GameRunner<G> {
             .with_size(config.width, config.height)
             .with_resizable(config.resizable);
 
+        // Try to initialize audio (non-fatal if it fails)
+        let audio_manager = match AudioManager::new() {
+            Ok(audio) => Some(audio),
+            Err(e) => {
+                log::warn!("Failed to initialize audio: {}. Audio will be disabled.", e);
+                None
+            }
+        };
+
         Self {
             game,
             config,
             window_manager: WindowManager::new(window_config),
             render_manager: RenderManager::new(),
             asset_manager: None,
+            audio_manager,
             input: InputHandler::new(),
             scene: Scene::new("main"),
             initialized: false,
@@ -306,12 +322,21 @@ impl<G: Game> GameRunner<G> {
             return;
         };
 
+        // Get audio manager or return early
+        let Some(audio_manager) = &mut self.audio_manager else {
+            return;
+        };
+
+        // Update audio manager (cleans up finished sounds)
+        audio_manager.update();
+
         // Initialize game if not yet done
         if !self.initialized {
             let mut ctx = GameContext {
                 input: &self.input,
                 world: &mut self.scene.world,
                 assets: asset_manager,
+                audio: audio_manager,
                 delta_time,
                 window_size,
             };
@@ -328,6 +353,7 @@ impl<G: Game> GameRunner<G> {
             input: &self.input,
             world: &mut self.scene.world,
             assets: asset_manager,
+            audio: audio_manager,
             delta_time,
             window_size,
         };
@@ -431,7 +457,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    // Handle escape to exit early (before we need asset_manager)
+                    // Handle escape to exit early (before we need managers)
                     if key == KeyCode::Escape && event.state == ElementState::Pressed {
                         self.game.on_exit();
                         let _ = self.scene.stop();
@@ -442,11 +468,14 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
 
                     // For other keys, create context and call handlers
                     let window_size = self.window_size();
-                    if let Some(asset_manager) = &mut self.asset_manager {
+                    if let (Some(asset_manager), Some(audio_manager)) =
+                        (&mut self.asset_manager, &mut self.audio_manager)
+                    {
                         let mut ctx = GameContext {
                             input: &self.input,
                             world: &mut self.scene.world,
                             assets: asset_manager,
+                            audio: audio_manager,
                             delta_time: 0.0,
                             window_size,
                         };

@@ -1,6 +1,53 @@
 # Insiculous 2D - Agent Development Notes
 
-## 🎉 **MAJOR UPDATE: Scene Serialization System - COMPLETE!**
+## 🎉 **MAJOR UPDATE: Audio System - COMPLETE!**
+
+**Date**: January 10, 2026
+**Status**: ✅ **AUDIO WORKING** - Sound effects and background music via rodio!
+
+### **Audio System Summary:**
+- ✅ **AudioManager**: Load and play sounds, background music
+- ✅ **Volume Control**: Master, SFX, and music volume levels
+- ✅ **ECS Components**: AudioSource, AudioListener, PlaySoundEffect
+- ✅ **Spatial Audio**: Distance-based attenuation calculation
+- ✅ **Format Support**: WAV, MP3, OGG, FLAC, AAC
+- ✅ **10 Tests**: Audio manager and ECS component tests
+
+### **Audio System Features:**
+- Load sounds: `ctx.audio.load_sound("path/to/sound.wav")`
+- Play sounds: `ctx.audio.play(&sound_handle)` or `play_with_settings()`
+- Background music: `ctx.audio.play_music("path/to/music.ogg")`
+- Music controls: `pause_music()`, `resume_music()`, `stop_music()`
+- Volume control: `set_master_volume()`, `set_sfx_volume()`, `set_music_volume()`
+
+### **Example Usage:**
+```rust
+// In Game::init()
+let jump_sound = ctx.audio.load_sound("assets/sounds/jump.wav")?;
+
+// In Game::update()
+if ctx.input.is_key_just_pressed(KeyCode::Space) {
+    let settings = SoundSettings::new()
+        .with_volume(0.8)
+        .with_speed(1.0);
+    ctx.audio.play_with_settings(&jump_sound, settings)?;
+}
+
+// Toggle music
+if ctx.input.is_key_just_pressed(KeyCode::KeyM) {
+    if self.music_playing {
+        ctx.audio.pause_music();
+    } else {
+        ctx.audio.resume_music();
+    }
+}
+```
+
+**Demo:** `cargo run --example hello_world` - SPACE to jump (plays sound if available), M to toggle music, +/- for volume!
+
+---
+
+## 🎉 **PREVIOUS UPDATE: Scene Serialization System - COMPLETE!**
 
 **Date**: January 10, 2026
 **Status**: ✅ **SCENE LOADING WORKING** - RON-based scene files like Unity/Godot!

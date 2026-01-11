@@ -21,3 +21,4 @@ renderer = { path = "../renderer" }
 ecs = { path = "../ecs" }
 input = { path = "../input" }
 physics = { path = "../physics", optional = true }
+audio = { path = "../audio" }

@@ -4,6 +4,7 @@
 //! component storage for optimal performance.
 
 mod archetype;
+pub mod audio_components;
 pub mod behavior;
 mod component;
 mod entity;
@@ -19,6 +20,7 @@ pub mod prelude;
 
 // Re-export for convenience
 pub use archetype::*;
+pub use audio_components::*;
 pub use behavior::*;
 pub use component::*;
 pub use entity::*;
