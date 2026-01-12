@@ -110,7 +110,7 @@ The UI system integrates with engine_core through:
 
 3. **Clipping** - No scissor rect support for scrollable containers.
 
-4. **Glyph Textures** - Glyphs currently render as solid rectangles (correct shape, correct position). Full bitmap rendering requires dynamic texture creation.
+4. **Glyph Textures** - ✅ FIXED: Glyphs now render with proper grayscale bitmap data for anti-aliased text rendering.
 
 ## Test Coverage
 

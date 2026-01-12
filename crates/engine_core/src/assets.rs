@@ -182,28 +182,29 @@ impl AssetManager {
 
     /// Create a glyph texture from grayscale bitmap data
     ///
-    /// Converts a grayscale alpha bitmap (one byte per pixel) to an RGBA texture
-    /// where RGB are set to the provided color and A is the grayscale value.
-    /// This is used for rendering text glyphs.
+    /// Converts a grayscale bitmap to an RGBA texture where all channels (RGBA) 
+    /// contain the grayscale value. This allows the shader to multiply by text color.
+    /// The `color` parameter is kept for API compatibility but not used in the texture.
     pub fn create_glyph_texture(
         &mut self,
         width: u32,
         height: u32,
         grayscale: &[u8],
-        color: [u8; 3],
+        _color: [u8; 3],
     ) -> Result<TextureHandle, AssetError> {
         if width == 0 || height == 0 {
             // Return the white texture for empty glyphs (like spaces)
             return Ok(TextureHandle { id: 0 });
         }
 
-        // Convert grayscale to RGBA where RGB = color and A = grayscale alpha
+        // Convert grayscale to RGBA where RGBA all = grayscale value
+        // This allows the shader to multiply by text color while preserving shape
         let mut rgba = Vec::with_capacity((width * height * 4) as usize);
-        for &alpha in grayscale {
-            rgba.push(color[0]); // R
-            rgba.push(color[1]); // G
-            rgba.push(color[2]); // B
-            rgba.push(alpha);    // A from grayscale
+        for &gray in grayscale {
+            rgba.push(gray); // R = grayscale
+            rgba.push(gray); // G = grayscale
+            rgba.push(gray); // B = grayscale
+            rgba.push(gray); // A = grayscale
         }
 
         let handle = self.texture_manager.load_texture_from_rgba(
