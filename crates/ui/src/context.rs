@@ -210,29 +210,40 @@ impl UIContext {
     pub fn label_styled(&mut self, text: &str, position: Vec2, color: Color, font_size: f32) {
         // Try to render with font if available
         if let Some(font_handle) = self.font_manager.default_font() {
-            if let Ok(layout) = self.font_manager.layout_text(font_handle, text, font_size) {
-                let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
-                    GlyphDrawData {
-                        bitmap: g.info.rasterized.bitmap.clone(),
-                        width: g.info.rasterized.width,
-                        height: g.info.rasterized.height,
-                        x: g.x,
-                        y: g.y,
-                        character: g.character,
-                    }
-                }).collect();
+            match self.font_manager.layout_text(font_handle, text, font_size) {
+                Ok(layout) => {
+                    let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
+                        GlyphDrawData {
+                            bitmap: g.info.rasterized.bitmap.clone(),
+                            width: g.info.rasterized.width,
+                            height: g.info.rasterized.height,
+                            x: g.x,
+                            y: g.y,
+                            character: g.character,
+                        }
+                    }).collect();
 
-                let text_data = TextDrawData {
-                    text: text.to_string(),
-                    position,
-                    color,
-                    font_size,
-                    width: layout.width,
-                    height: layout.height,
-                    glyphs,
-                };
-                self.draw_list.text(text_data);
-                return;
+                    let text_data = TextDrawData {
+                        text: text.to_string(),
+                        position,
+                        color,
+                        font_size,
+                        width: layout.width,
+                        height: layout.height,
+                        glyphs,
+                    };
+                    self.draw_list.text(text_data);
+                    return;
+                }
+                Err(e) => {
+                    println!("[FONT DEBUG] layout_text failed: {}", e);
+                }
+            }
+        } else {
+            // Only print once
+            static PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if !PRINTED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                println!("[FONT DEBUG] No default font loaded");
             }
         }
 

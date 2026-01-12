@@ -244,6 +244,7 @@ fn render_ui_commands(
                         }
 
                         // Calculate glyph position in world coordinates
+                        // glyph.x and glyph.y are offsets from the text origin
                         let glyph_x = data.position.x + glyph.x + glyph.width as f32 / 2.0 - window_size.x / 2.0;
                         let glyph_y = window_size.y / 2.0 - (data.position.y + glyph.y + glyph.height as f32 / 2.0);
 
@@ -261,14 +262,20 @@ fn render_ui_commands(
                             .unwrap_or(white_texture);
 
                         // Render glyph with its texture (white color since texture has baked color)
+                        // Use minimum size of 16x16 to ensure visibility (for testing)
+                        let render_width = (glyph.width as f32).max(16.0);
+                        let render_height = (glyph.height as f32).max(16.0);
+
                         let sprite = renderer::Sprite::new(texture)
                             .with_position(Vec2::new(glyph_x, glyph_y))
-                            .with_scale(Vec2::new(glyph.width as f32, glyph.height as f32))
+                            .with_scale(Vec2::new(render_width, render_height))
                             .with_color(glam::Vec4::new(1.0, 1.0, 1.0, data.color.a))
                             .with_depth(*depth);
 
                         sprites.add_sprite(&sprite);
                     }
+
+                    // Debug output removed - font rendering is working
                 }
             }
             DrawCommand::TextPlaceholder { text, position, color, font_size, depth } => {

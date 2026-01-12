@@ -147,9 +147,15 @@ impl PhysicsSystem {
         let entities: Vec<EntityId> = world.entities();
 
         for entity in entities {
-            // Only sync dynamic bodies back to ECS
-            if let Some(body) = world.get::<RigidBody>(entity) {
-                if body.body_type == crate::components::RigidBodyType::Dynamic {
+            // Get body type first to avoid borrow conflicts
+            let body_type = world.get::<RigidBody>(entity).map(|b| b.body_type);
+
+            if let Some(body_type) = body_type {
+                // Sync both Dynamic and Kinematic bodies back to ECS
+                // Static bodies don't move, so no need to sync them
+                if body_type == crate::components::RigidBodyType::Dynamic
+                    || body_type == crate::components::RigidBodyType::Kinematic
+                {
                     // Get physics transform
                     if let Some((position, rotation)) = self.physics_world.get_body_transform(entity) {
                         // Update ECS transform
@@ -159,11 +165,13 @@ impl PhysicsSystem {
                         }
                     }
 
-                    // Update velocity in component
-                    if let Some((linear_vel, angular_vel)) = self.physics_world.get_body_velocity(entity) {
-                        if let Some(rigid_body) = world.get_mut::<RigidBody>(entity) {
-                            rigid_body.velocity = linear_vel;
-                            rigid_body.angular_velocity = angular_vel;
+                    // Update velocity in component (for dynamic bodies)
+                    if body_type == crate::components::RigidBodyType::Dynamic {
+                        if let Some((linear_vel, angular_vel)) = self.physics_world.get_body_velocity(entity) {
+                            if let Some(rigid_body) = world.get_mut::<RigidBody>(entity) {
+                                rigid_body.velocity = linear_vel;
+                                rigid_body.angular_velocity = angular_vel;
+                            }
                         }
                     }
                 }
