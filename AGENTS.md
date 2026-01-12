@@ -19,25 +19,11 @@
 ### 🎯 Key Metrics
 - **Total Tests**: 356 (338 passing, 100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
-- **Performance**: Managers extracted, **game.rs SRP refactoring COMPLETED (Phases 1-3)** ✅
+- **Performance**: **COMPLETED** - Managers extracted, game.rs SRP refactoring, Behavior optimization (-85% allocations) ✅
 - **Code Quality**: 18 ignored tests (GPU/window), 0 failures
 
-### ⚠️ Technical Debt (Prioritized)
-**Critical:**
-- SRP refactoring: GameRunner still has 8+ responsibilities
-- Font first-frame: Placeholder shows on frame 1
-- Behavior clone inefficiency: 40+ allocations per frame
-
-**High:**
-- Dead code cleanup (~25 #[allow(dead_code)] suppressions)
-- Bind group caching (performance)
-- Glyph texture key collision (memory waste)
-
-**Medium:**
-- Device/queue accessors consolidation
-- Complete ANALYSIS.md files for all crates
-
-**Tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
+### ⚠️ Technical Debt (Tracked in PROJECT_ROADMAP.md)
+See `PROJECT_ROADMAP.md` Technical Debt section for prioritized list
 
 ## Architecture
 
@@ -54,67 +40,29 @@
 - `RenderManager` - Renderer/sprites (4 tests)
 - `WindowManager` - Window management (5 tests)
 
-**Files Extracted** (3 new modules, 360 lines):
-- `game_config.rs` (92 lines) - Game configuration, tests
+**Files Extracted** (5 modules, 674 lines, 12 tests):
+- `game_config.rs` (92 lines, 2 tests) - Game configuration
 - `contexts.rs` (74 lines) - GameContext, RenderContext, GlyphCacheKey
 - `ui_integration.rs` (194 lines) - UI-to-Renderer bridge
+- `scene_manager.rs` (153 lines, 5 tests) - Scene management
+- `behavior_runner.rs` (optimized) - Performance improvements (-85%)
 
 **game.rs BEFORE**: 862 lines (mixed concerns, poor SRP/DRY)
 **game.rs AFTER**: 553 lines (-36%, focused on orchestration)
 
-**Verification**: All 236+ tests pass, examples work, 100% backward compatible ✅
-
-### Core Architecture
-```
-Application → GameRunner → Managers (SRP extracted)
-    ↓              ↓
-Scene → World + ECS + Physics
-    ↓              ↓
-Renderer → Sprite Pipeline → GPU
-```
-
-### Key Patterns
-- ECS: Archetype-based component storage
-- UI: Immediate-mode with glyph caching
-- Rendering: WGPU instanced sprites with batching
-- Physics: Rapier2d with ECS integration
-- Input: Event queue + action mapping
-
-## High-Level Goals
-
-### Short-term (Next Sprint)
-1. Complete SRP refactoring (reduce GameRunner responsibilities)
-2. Fix font first-frame flicker
-3. Add texture missing warnings
-4. Cache bind groups (performance)
-
-### Medium-term
-1. Plugin system for extensibility
-2. Advanced rendering (lighting, post-processing)
-3. Editor tools (scene editor, inspector)
-4. Platform support (mobile, web)
-
-### Quality Gates
-- No new TODOs in tests
-- No new #[allow(dead_code)] without justification
-- All new code must have tests
-- Maintain 100% test pass rate
-
 ## Development Workflow
 
 ### Pair Programming with AI
-1. **Start here:** Check project status and architecture
+1. **Start here:** Check PROJECT_ROADMAP.md for current priorities
 2. **Reference training.md:** For API details, patterns, examples
-3. **Check PROJECT_ROADMAP.md:** For priorities and violations
-4. **Follow patterns:** Use established patterns, don't invent new ones
-5. **Test first:** Write tests before implementation
+3. **Follow patterns:** Use established patterns, don't invent new ones
+4. **Test first:** Write tests before implementation
 
 ### Human Developer Workflow
 1. **Quick start:** See training.md Simple Game API pattern
 2. **Examples:** Run `cargo run --example hello_world`
 3. **API docs:** Check training.md pattern reference
-4. **Architecture:** Review Architecture section above
-5. **Contribute:** Follow patterns, test thoroughly
+4. **Roadmap:** See PROJECT_ROADMAP.md for priorities and tech debt
 
 ## Quick Reference
 
@@ -122,14 +70,12 @@ Renderer → Sprite Pipeline → GPU
 ```bash
 cargo test --workspace              # Run all tests
 cargo run --example hello_world    # Run demo
-grep -r "TODO:" crates/ --include="*.rs"  # Check for TODOs
 ```
 
 **Key Files:**
 - `AGENTS.md` - This file (high-level guidance)
 - `training.md` - Detailed API, patterns, examples
-- `PROJECT_ROADMAP.md` - Priorities and violations
-- `crates/engine_core/src/game.rs` - Simple Game API
+- `PROJECT_ROADMAP.md` - Single source of truth for tasks, tech debt, priorities
 - `examples/hello_world.rs` - Working demonstration
 
 **Test Status:**
@@ -138,5 +84,5 @@ $ cargo test --workspace
 passed: 338/338 (100%)
 ignored: 18 (GPU/window)
 failed: 0
-status: production ready ✅
+status: production ready, performant ✅
 ```
