@@ -44,6 +44,7 @@ use renderer::{
     texture::TextureHandle,
 };
 use ui::{UIContext, DrawCommand, Color as UIColor};
+use crate::{GameLoopManager, UIManager};
 
 /// Key for caching glyph textures
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -438,6 +439,8 @@ pub fn run_game<G: Game>(game: G, config: GameConfig) -> Result<(), Box<dyn std:
 /// - `RenderManager`: Renderer lifecycle and sprite rendering
 /// - `AssetManager`: Texture and asset loading
 /// - `AudioManager`: Sound playback
+/// - `GameLoopManager`: Frame timing and delta calculation
+/// - `UIManager`: UI lifecycle and draw command collection
 struct GameRunner<G: Game> {
     /// The user's game implementation
     game: G,
@@ -453,16 +456,16 @@ struct GameRunner<G: Game> {
     audio_manager: Option<AudioManager>,
     /// Input handling
     input: InputHandler,
-    /// UI context for immediate-mode UI
-    ui_context: UIContext,
+    /// UI management
+    ui_manager: UIManager,
+    /// Game loop timing and frame management
+    game_loop_manager: GameLoopManager,
     /// Cached glyph textures for text rendering
     glyph_textures: HashMap<GlyphCacheKey, TextureHandle>,
     /// Main game scene containing ECS world
     scene: Scene,
     /// Whether the game's init() has been called
     initialized: bool,
-    /// Time of last frame for delta calculation
-    last_frame_time: std::time::Instant,
 }
 
 impl<G: Game> GameRunner<G> {
@@ -489,11 +492,11 @@ impl<G: Game> GameRunner<G> {
             asset_manager: None,
             audio_manager,
             input: InputHandler::new(),
-            ui_context: UIContext::new(),
+            ui_manager: UIManager::new(),
+            game_loop_manager: GameLoopManager::new(),
             glyph_textures: HashMap::new(),
             scene: Scene::new("main"),
             initialized: false,
-            last_frame_time: std::time::Instant::now(),
         }
     }
 
@@ -581,12 +584,8 @@ impl<G: Game> GameRunner<G> {
     }
 
     fn update_and_render(&mut self) {
-        // Calculate delta time
-        let now = std::time::Instant::now();
-        let delta_time = (now - self.last_frame_time).as_secs_f32();
-        self.last_frame_time = now;
-
-        // Get window size
+        // Update game loop timing
+        let delta_time = self.game_loop_manager.update();
         let window_size = self.window_size();
 
         // Check if managers are available (audio is optional)
@@ -600,8 +599,8 @@ impl<G: Game> GameRunner<G> {
             audio_manager.update();
         }
 
-        // Begin UI frame
-        self.ui_context.begin_frame(&self.input, window_size);
+        // Update UI and collect draw commands
+        self.ui_manager.begin_frame(&self.input, window_size);
 
         // Initialize game if not yet done
         if !self.initialized {
@@ -619,7 +618,7 @@ impl<G: Game> GameRunner<G> {
                     world: &mut self.scene.world,
                     assets: asset_manager,
                     audio,
-                    ui: &mut self.ui_context,
+                    ui: &mut self.ui_manager.ui_context(),
                     delta_time,
                     window_size,
                 };
@@ -646,7 +645,7 @@ impl<G: Game> GameRunner<G> {
                     world: &mut self.scene.world,
                     assets: asset_manager,
                     audio,
-                    ui: &mut self.ui_context,
+                    ui: &mut self.ui_manager.ui_context(),
                     delta_time,
                     window_size,
                 };
@@ -654,8 +653,8 @@ impl<G: Game> GameRunner<G> {
             }
         }
 
-        // End UI frame
-        self.ui_context.end_frame();
+        // End UI frame and collect draw commands
+        let ui_commands = self.ui_manager.end_frame();
 
         // Clear "just pressed/released" flags for next frame
         self.input.end_frame();
@@ -664,9 +663,6 @@ impl<G: Game> GameRunner<G> {
         if !self.render_manager.is_initialized() {
             return;
         }
-
-        // Get UI draw commands for rendering
-        let ui_commands: Vec<DrawCommand> = self.ui_context.draw_list().commands().to_vec();
 
         // Prepare glyph textures for text rendering
         self.prepare_glyph_textures(&ui_commands);
@@ -782,7 +778,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             world: &mut self.scene.world,
                             assets: asset_manager,
                             audio: audio_manager,
-                            ui: &mut self.ui_context,
+                            ui: &mut self.ui_manager.ui_context(),
                             delta_time: 0.0,
                             window_size,
                         };

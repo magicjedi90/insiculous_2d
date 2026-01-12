@@ -34,6 +34,8 @@ pub mod scene_data;
 pub mod scene_loader;
 pub mod render_manager;
 pub mod window_manager;
+pub mod game_loop_manager;
+pub mod ui_manager;
 
 pub mod prelude;
 
@@ -50,6 +52,8 @@ pub use scene_data::*;
 pub use scene_loader::*;
 pub use render_manager::*;
 pub use window_manager::*;
+pub use game_loop_manager::*;
+pub use ui_manager::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {
