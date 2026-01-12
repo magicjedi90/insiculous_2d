@@ -11,10 +11,11 @@
 | Sprite Rendering | Working | 62 |
 | Scene Graph | Working | 12 |
 | Audio | Working | 10 |
+| UI Framework | Working | 43 |
 
-**Total Tests**: 280 (all passing)
+**Total Tests**: 323 (all passing)
 
-**Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, M to toggle music, +/- for volume. ESC to exit.
+**Verification:** `cargo run --example hello_world` - Physics platformer demo with WASD movement (velocity-based, 120 px/s), SPACE to jump, R to reset, M to toggle music, H to toggle UI panel, +/- for volume. ESC to exit.
 
 ### Simple Game API - NEW
 The engine now provides a `Game` trait that handles all winit/window boilerplate internally:
@@ -133,11 +134,22 @@ All major ECS API issues have been resolved:
 - Spatial audio attenuation (distance-based volume falloff)
 - Format support: WAV, MP3, OGG, FLAC, AAC
 
-### UI Framework
-- Immediate mode UI rendering
-- Common widgets (button, text, slider)
-- Layout system
-- Input integration
+### UI Framework - DONE
+- **Immediate-mode UI system** - describe UI every frame, no retained state management
+- **UIContext** - main entry point for creating UI elements
+- **Common widgets**:
+  - `button()` - clickable button with hover/pressed states
+  - `label()` - text labels (placeholder rectangles until font rendering)
+  - `slider()` - horizontal slider with draggable thumb
+  - `checkbox()` / `checkbox_labeled()` - toggle checkboxes
+  - `progress_bar()` - horizontal progress indicator
+  - `panel()` - semi-transparent container backgrounds
+  - `rect()` / `rect_rounded()` / `circle()` / `line()` - primitive drawing
+- **Theming** - dark and light themes with customizable colors
+- **Mouse interaction** - hover, click, and drag detection
+- **GameContext integration** - `ctx.ui` available in `update()` method
+- **Auto-rendering** - UI draw commands converted to sprites automatically
+- Text rendering (future - requires font library integration)
 
 ---
 
@@ -248,4 +260,6 @@ All major ECS API issues have been resolved:
 8. ~~**Add renderer test suite**~~ - DONE - 62 tests added
 9. ~~**Fix SRP violations**~~ - DONE - Created RenderManager and WindowManager, refactored GameRunner and EngineApplication
 10. ~~**Audio system**~~ - DONE - Sound effects, background music, volume control, ECS integration
-11. **UI Framework** - Immediate mode UI rendering with common widgets
+11. ~~**UI Framework**~~ - DONE - Immediate-mode UI with buttons, sliders, panels, and mouse interaction
+12. **Text Rendering** - Add font library (fontdue or cosmic-text) for proper text display
+13. **Advanced Rendering** - 2D lighting, post-processing, particle system

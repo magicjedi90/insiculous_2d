@@ -677,6 +677,7 @@ impl TextureAtlas {
     }
 
     /// Add a region to the atlas
+    #[allow(clippy::too_many_arguments)]
     pub fn add_region(&mut self, name: String, x: u32, y: u32, width: u32, height: u32, atlas_width: u32, atlas_height: u32) {
         let u0 = x as f32 / atlas_width as f32;
         let v0 = y as f32 / atlas_height as f32;

@@ -230,12 +230,10 @@ impl EngineApplication {
 impl ApplicationHandler<()> for EngineApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create the window when the application is resumed if it doesn't exist
-        if self.window.is_none() {
-            if self.create_window(event_loop).is_ok() {
-                // Set the flag to indicate that the renderer needs to be initialized
-                self.needs_renderer_init = true;
-                log::info!("Window created, renderer initialization needed");
-            }
+        if self.window.is_none() && self.create_window(event_loop).is_ok() {
+            // Set the flag to indicate that the renderer needs to be initialized
+            self.needs_renderer_init = true;
+            log::info!("Window created, renderer initialization needed");
         }
 
         // Start the game loop if it's not already running

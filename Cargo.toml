@@ -6,41 +6,49 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
+    "crates/common",
     "crates/engine_core",
     "crates/renderer",
     "crates/ecs",
     "crates/input",
     "crates/physics",
     "crates/audio",
+    "crates/ui",
 ]
 
 [workspace.dependencies]
+# Internal crates
+common = { path = "crates/common" }
+
 # Common dependencies
 log = "0.4"
-env_logger = "0.11.8"
-wgpu = "28.0.0"
+env_logger = "0.11"
+wgpu = "28.0"
 winit = "0.30"
 thiserror = "2.0"
-pollster = "0.4.0"
+pollster = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
-ron = "0.8"
+ron = "0.9"
+glam = { version = "0.29", features = ["serde"] }
+bytemuck = { version = "1.21", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
 
 [dependencies]
-# Removed tokio from main dependencies - engine core no longer needs it
 engine_core = { path = "crates/engine_core" }
 renderer = { path = "crates/renderer" }
 ecs = { path = "crates/ecs" }
 input = { path = "crates/input" }
 physics = { path = "crates/physics" }
 audio = { path = "crates/audio" }
+ui = { path = "crates/ui" }
 log = { workspace = true }
 env_logger = { workspace = true }
-glam = "0.29"
+glam = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }
-bytemuck = { version = "1.16", features = ["derive"] }
+bytemuck = { workspace = true }
 
 # Examples
 [[example]]

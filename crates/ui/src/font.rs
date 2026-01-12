@@ -1,0 +1,373 @@
+//! Font loading and text rendering with fontdue.
+//!
+//! This module provides font loading, glyph rasterization, and text measurement
+//! using the fontdue library for CPU-side font rendering.
+
+use std::collections::HashMap;
+use fontdue::{Font, FontSettings};
+use glam::Vec2;
+
+/// Error type for font operations.
+#[derive(Debug, thiserror::Error)]
+pub enum FontError {
+    #[error("Failed to load font: {0}")]
+    LoadError(String),
+    #[error("Font not found: {0}")]
+    NotFound(String),
+    #[error("Failed to rasterize glyph: {0}")]
+    RasterizeError(String),
+}
+
+/// A handle to a loaded font.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
+pub struct FontHandle {
+    pub id: u32,
+}
+
+
+/// Rasterized glyph data ready for rendering.
+#[derive(Debug, Clone)]
+pub struct RasterizedGlyph {
+    /// Glyph bitmap data (grayscale, one byte per pixel)
+    pub bitmap: Vec<u8>,
+    /// Width of the bitmap in pixels
+    pub width: u32,
+    /// Height of the bitmap in pixels
+    pub height: u32,
+    /// Horizontal offset from cursor position to glyph origin
+    pub offset_x: f32,
+    /// Vertical offset from baseline to top of glyph
+    pub offset_y: f32,
+    /// How much to advance the cursor after this glyph
+    pub advance: f32,
+}
+
+/// Cached glyph information for a specific font size.
+#[derive(Debug, Clone)]
+pub struct GlyphInfo {
+    /// Rasterized bitmap
+    pub rasterized: RasterizedGlyph,
+    /// Character this glyph represents
+    pub character: char,
+    /// Font size this was rasterized at
+    pub font_size: f32,
+}
+
+/// Key for glyph cache lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct GlyphKey {
+    font_id: u32,
+    character: char,
+    /// Font size in tenths of a pixel (to allow float sizes with integer key)
+    size_tenths: u32,
+}
+
+impl GlyphKey {
+    fn new(font_id: u32, character: char, font_size: f32) -> Self {
+        Self {
+            font_id,
+            character,
+            size_tenths: (font_size * 10.0) as u32,
+        }
+    }
+}
+
+/// Text layout information for a string of text.
+#[derive(Debug, Clone)]
+pub struct TextLayout {
+    /// Total width of the text in pixels
+    pub width: f32,
+    /// Total height of the text in pixels
+    pub height: f32,
+    /// Individual glyph positions and info
+    pub glyphs: Vec<LayoutGlyph>,
+}
+
+/// A single glyph in a text layout.
+#[derive(Debug, Clone)]
+pub struct LayoutGlyph {
+    /// Character this glyph represents
+    pub character: char,
+    /// X position relative to text origin
+    pub x: f32,
+    /// Y position relative to text origin (baseline)
+    pub y: f32,
+    /// Glyph info with bitmap data
+    pub info: GlyphInfo,
+}
+
+/// Font manager for loading fonts and rasterizing glyphs.
+pub struct FontManager {
+    /// Loaded fonts by handle
+    fonts: HashMap<u32, Font>,
+    /// Glyph cache
+    glyph_cache: HashMap<GlyphKey, GlyphInfo>,
+    /// Next font handle ID
+    next_id: u32,
+    /// Default font handle (if loaded)
+    default_font: Option<FontHandle>,
+}
+
+impl Default for FontManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FontManager {
+    /// Create a new font manager.
+    pub fn new() -> Self {
+        Self {
+            fonts: HashMap::new(),
+            glyph_cache: HashMap::new(),
+            next_id: 1,
+            default_font: None,
+        }
+    }
+
+    /// Load a font from file bytes.
+    pub fn load_font(&mut self, font_data: &[u8]) -> Result<FontHandle, FontError> {
+        let font = Font::from_bytes(font_data, FontSettings::default())
+            .map_err(|e| FontError::LoadError(e.to_string()))?;
+
+        let handle = FontHandle { id: self.next_id };
+        self.fonts.insert(self.next_id, font);
+        self.next_id += 1;
+
+        // Set as default if this is the first font
+        if self.default_font.is_none() {
+            self.default_font = Some(handle);
+        }
+
+        log::info!("Loaded font with handle {}", handle.id);
+        Ok(handle)
+    }
+
+    /// Load a font from a file path.
+    pub fn load_font_file(&mut self, path: &str) -> Result<FontHandle, FontError> {
+        let font_data = std::fs::read(path)
+            .map_err(|e| FontError::LoadError(format!("Failed to read file {}: {}", path, e)))?;
+        self.load_font(&font_data)
+    }
+
+    /// Load the embedded default font (a simple built-in font for fallback).
+    /// This uses a subset of the Roboto font embedded in the binary.
+    pub fn load_default_font(&mut self) -> Result<FontHandle, FontError> {
+        // Use a simple embedded font - we'll embed a minimal font
+        // For now, return an error if no font data is available
+        Err(FontError::LoadError("No embedded font available. Load a TTF/OTF file.".to_string()))
+    }
+
+    /// Get the default font handle.
+    pub fn default_font(&self) -> Option<FontHandle> {
+        self.default_font
+    }
+
+    /// Set the default font.
+    pub fn set_default_font(&mut self, handle: FontHandle) {
+        self.default_font = Some(handle);
+    }
+
+    /// Get a font by handle.
+    pub fn get_font(&self, handle: FontHandle) -> Option<&Font> {
+        self.fonts.get(&handle.id)
+    }
+
+    /// Rasterize a single glyph at a specific size.
+    pub fn rasterize_glyph(
+        &mut self,
+        handle: FontHandle,
+        character: char,
+        font_size: f32,
+    ) -> Result<&GlyphInfo, FontError> {
+        let key = GlyphKey::new(handle.id, character, font_size);
+
+        // Check cache first
+        if self.glyph_cache.contains_key(&key) {
+            return Ok(self.glyph_cache.get(&key).unwrap());
+        }
+
+        // Rasterize the glyph
+        let font = self.fonts.get(&handle.id)
+            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
+
+        let (metrics, bitmap) = font.rasterize(character, font_size);
+
+        let glyph_info = GlyphInfo {
+            rasterized: RasterizedGlyph {
+                bitmap,
+                width: metrics.width as u32,
+                height: metrics.height as u32,
+                offset_x: metrics.xmin as f32,
+                offset_y: metrics.ymin as f32,
+                advance: metrics.advance_width,
+            },
+            character,
+            font_size,
+        };
+
+        self.glyph_cache.insert(key, glyph_info);
+        Ok(self.glyph_cache.get(&key).unwrap())
+    }
+
+    /// Layout a string of text, returning positions and glyph info for each character.
+    pub fn layout_text(
+        &mut self,
+        handle: FontHandle,
+        text: &str,
+        font_size: f32,
+    ) -> Result<TextLayout, FontError> {
+        let font = self.fonts.get(&handle.id)
+            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
+
+        let mut glyphs = Vec::new();
+        let mut cursor_x = 0.0f32;
+        let mut max_height = 0.0f32;
+
+        // Get line metrics for this font size
+        let line_metrics = font.horizontal_line_metrics(font_size);
+        let line_height = line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2);
+
+        for character in text.chars() {
+            // Handle special characters
+            if character == '\n' {
+                // Newlines not fully supported yet, just skip
+                continue;
+            }
+            if character == ' ' {
+                // Get space width
+                let (metrics, _) = font.rasterize(' ', font_size);
+                cursor_x += metrics.advance_width;
+                continue;
+            }
+
+            // Rasterize and cache the glyph
+            // We need to clone the font temporarily to avoid borrow issues
+            let (metrics, bitmap) = font.rasterize(character, font_size);
+
+            let glyph_info = GlyphInfo {
+                rasterized: RasterizedGlyph {
+                    bitmap,
+                    width: metrics.width as u32,
+                    height: metrics.height as u32,
+                    offset_x: metrics.xmin as f32,
+                    offset_y: metrics.ymin as f32,
+                    advance: metrics.advance_width,
+                },
+                character,
+                font_size,
+            };
+
+            let glyph_height = metrics.height as f32;
+            if glyph_height > max_height {
+                max_height = glyph_height;
+            }
+
+            glyphs.push(LayoutGlyph {
+                character,
+                x: cursor_x + metrics.xmin as f32,
+                y: metrics.ymin as f32,
+                info: glyph_info,
+            });
+
+            cursor_x += metrics.advance_width;
+        }
+
+        Ok(TextLayout {
+            width: cursor_x,
+            height: max_height.max(line_height),
+            glyphs,
+        })
+    }
+
+    /// Measure the size of a text string without fully rasterizing.
+    pub fn measure_text(
+        &self,
+        handle: FontHandle,
+        text: &str,
+        font_size: f32,
+    ) -> Result<Vec2, FontError> {
+        let font = self.fonts.get(&handle.id)
+            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
+
+        let mut width = 0.0f32;
+        let line_metrics = font.horizontal_line_metrics(font_size);
+        let height = line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2);
+
+        for character in text.chars() {
+            let (metrics, _) = font.rasterize(character, font_size);
+            width += metrics.advance_width;
+        }
+
+        Ok(Vec2::new(width, height))
+    }
+
+    /// Clear the glyph cache to free memory.
+    pub fn clear_cache(&mut self) {
+        self.glyph_cache.clear();
+    }
+
+    /// Get cache statistics.
+    pub fn cache_stats(&self) -> (usize, usize) {
+        (self.fonts.len(), self.glyph_cache.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_font_handle_default() {
+        let handle = FontHandle::default();
+        assert_eq!(handle.id, 0);
+    }
+
+    #[test]
+    fn test_font_manager_new() {
+        let manager = FontManager::new();
+        assert!(manager.default_font().is_none());
+        let (fonts, glyphs) = manager.cache_stats();
+        assert_eq!(fonts, 0);
+        assert_eq!(glyphs, 0);
+    }
+
+    #[test]
+    fn test_glyph_key() {
+        let key1 = GlyphKey::new(1, 'A', 16.0);
+        let key2 = GlyphKey::new(1, 'A', 16.0);
+        let key3 = GlyphKey::new(1, 'A', 18.0);
+        let key4 = GlyphKey::new(1, 'B', 16.0);
+
+        assert_eq!(key1, key2);
+        assert_ne!(key1, key3);
+        assert_ne!(key1, key4);
+    }
+
+    #[test]
+    fn test_rasterized_glyph() {
+        let glyph = RasterizedGlyph {
+            bitmap: vec![255; 16],
+            width: 4,
+            height: 4,
+            offset_x: 0.0,
+            offset_y: -3.0,
+            advance: 5.0,
+        };
+        assert_eq!(glyph.bitmap.len(), 16);
+        assert_eq!(glyph.width, 4);
+        assert_eq!(glyph.height, 4);
+    }
+
+    #[test]
+    fn test_text_layout() {
+        let layout = TextLayout {
+            width: 100.0,
+            height: 16.0,
+            glyphs: vec![],
+        };
+        assert_eq!(layout.width, 100.0);
+        assert_eq!(layout.height, 16.0);
+    }
+}

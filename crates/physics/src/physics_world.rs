@@ -116,10 +116,12 @@ impl Default for PhysicsWorld {
 impl PhysicsWorld {
     /// Create a new physics world
     pub fn new(config: PhysicsConfig) -> Self {
-        let mut integration_parameters = IntegrationParameters::default();
-        integration_parameters.num_solver_iterations = NonZeroUsize::new(config.velocity_iterations)
-            .unwrap_or(NonZeroUsize::new(8).unwrap());
-        integration_parameters.num_additional_friction_iterations = config.position_iterations;
+        let integration_parameters = IntegrationParameters {
+            num_solver_iterations: NonZeroUsize::new(config.velocity_iterations)
+                .unwrap_or(NonZeroUsize::new(8).unwrap()),
+            num_additional_friction_iterations: config.position_iterations,
+            ..IntegrationParameters::default()
+        };
 
         Self {
             rigid_body_set: RigidBodySet::new(),

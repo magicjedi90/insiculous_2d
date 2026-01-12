@@ -1,0 +1,233 @@
+//! Unified color type for the engine.
+
+use glam::Vec4;
+use serde::{Deserialize, Serialize};
+
+/// RGBA color representation.
+///
+/// All components are in the range 0.0 to 1.0.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Color {
+    /// Red component (0.0 - 1.0)
+    pub r: f32,
+    /// Green component (0.0 - 1.0)
+    pub g: f32,
+    /// Blue component (0.0 - 1.0)
+    pub b: f32,
+    /// Alpha component (0.0 - 1.0)
+    pub a: f32,
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self::WHITE
+    }
+}
+
+impl Color {
+    // Common color constants
+    pub const WHITE: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    pub const BLACK: Color = Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+    pub const TRANSPARENT: Color = Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+    pub const RED: Color = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+    pub const GREEN: Color = Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
+    pub const BLUE: Color = Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+    pub const YELLOW: Color = Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
+    pub const CYAN: Color = Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 };
+    pub const MAGENTA: Color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
+    pub const GRAY: Color = Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 };
+    pub const DARK_GRAY: Color = Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 };
+    pub const LIGHT_GRAY: Color = Color { r: 0.75, g: 0.75, b: 0.75, a: 1.0 };
+
+    /// Create a new color from RGBA components (0.0 - 1.0).
+    #[inline]
+    pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self { r, g, b, a }
+    }
+
+    /// Create a color from RGB components with full opacity.
+    #[inline]
+    pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
+        Self { r, g, b, a: 1.0 }
+    }
+
+    /// Create a color from 8-bit RGB values (0-255).
+    #[inline]
+    pub fn from_rgb8(r: u8, g: u8, b: u8) -> Self {
+        Self {
+            r: r as f32 / 255.0,
+            g: g as f32 / 255.0,
+            b: b as f32 / 255.0,
+            a: 1.0,
+        }
+    }
+
+    /// Create a color from 8-bit RGBA values (0-255).
+    #[inline]
+    pub fn from_rgba8(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self {
+            r: r as f32 / 255.0,
+            g: g as f32 / 255.0,
+            b: b as f32 / 255.0,
+            a: a as f32 / 255.0,
+        }
+    }
+
+    /// Create a color from a hex value (0xRRGGBB).
+    #[inline]
+    pub fn from_hex(hex: u32) -> Self {
+        let r = ((hex >> 16) & 0xFF) as u8;
+        let g = ((hex >> 8) & 0xFF) as u8;
+        let b = (hex & 0xFF) as u8;
+        Self::from_rgb8(r, g, b)
+    }
+
+    /// Create a color from a hex value with alpha (0xRRGGBBAA).
+    #[inline]
+    pub fn from_hex_rgba(hex: u32) -> Self {
+        let r = ((hex >> 24) & 0xFF) as u8;
+        let g = ((hex >> 16) & 0xFF) as u8;
+        let b = ((hex >> 8) & 0xFF) as u8;
+        let a = (hex & 0xFF) as u8;
+        Self::from_rgba8(r, g, b, a)
+    }
+
+    /// Create a color with modified alpha.
+    #[inline]
+    pub fn with_alpha(self, alpha: f32) -> Self {
+        Self { a: alpha, ..self }
+    }
+
+    /// Linearly interpolate between two colors.
+    #[inline]
+    pub fn lerp(self, other: Color, t: f32) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        Self {
+            r: self.r + (other.r - self.r) * t,
+            g: self.g + (other.g - self.g) * t,
+            b: self.b + (other.b - self.b) * t,
+            a: self.a + (other.a - self.a) * t,
+        }
+    }
+
+    /// Darken the color by a factor (0.0 = black, 1.0 = unchanged).
+    #[inline]
+    pub fn darken(self, factor: f32) -> Self {
+        Self {
+            r: self.r * factor,
+            g: self.g * factor,
+            b: self.b * factor,
+            a: self.a,
+        }
+    }
+
+    /// Lighten the color by a factor (0.0 = unchanged, 1.0 = white).
+    #[inline]
+    pub fn lighten(self, factor: f32) -> Self {
+        Self {
+            r: self.r + (1.0 - self.r) * factor,
+            g: self.g + (1.0 - self.g) * factor,
+            b: self.b + (1.0 - self.b) * factor,
+            a: self.a,
+        }
+    }
+
+    /// Convert to Vec4 for GPU/rendering use.
+    #[inline]
+    pub fn to_vec4(self) -> Vec4 {
+        Vec4::new(self.r, self.g, self.b, self.a)
+    }
+
+    /// Convert to array for GPU buffers.
+    #[inline]
+    pub fn to_array(self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+
+    /// Convert to 8-bit RGBA array.
+    #[inline]
+    pub fn to_rgba8(self) -> [u8; 4] {
+        [
+            (self.r * 255.0) as u8,
+            (self.g * 255.0) as u8,
+            (self.b * 255.0) as u8,
+            (self.a * 255.0) as u8,
+        ]
+    }
+}
+
+// Conversions to/from glam types
+impl From<Color> for Vec4 {
+    #[inline]
+    fn from(color: Color) -> Self {
+        color.to_vec4()
+    }
+}
+
+impl From<Vec4> for Color {
+    #[inline]
+    fn from(v: Vec4) -> Self {
+        Self::new(v.x, v.y, v.z, v.w)
+    }
+}
+
+impl From<Color> for [f32; 4] {
+    #[inline]
+    fn from(color: Color) -> Self {
+        color.to_array()
+    }
+}
+
+impl From<[f32; 4]> for Color {
+    #[inline]
+    fn from(arr: [f32; 4]) -> Self {
+        Self::new(arr[0], arr[1], arr[2], arr[3])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_color_constants() {
+        assert_eq!(Color::WHITE.r, 1.0);
+        assert_eq!(Color::BLACK.r, 0.0);
+        assert_eq!(Color::RED.r, 1.0);
+        assert_eq!(Color::RED.g, 0.0);
+    }
+
+    #[test]
+    fn test_color_from_rgb8() {
+        let color = Color::from_rgb8(255, 128, 0);
+        assert!((color.r - 1.0).abs() < 0.01);
+        assert!((color.g - 0.502).abs() < 0.01);
+        assert_eq!(color.b, 0.0);
+    }
+
+    #[test]
+    fn test_color_from_hex() {
+        let color = Color::from_hex(0xFF8000);
+        assert!((color.r - 1.0).abs() < 0.01);
+        assert!((color.g - 0.502).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_color_lerp() {
+        let mid = Color::BLACK.lerp(Color::WHITE, 0.5);
+        assert!((mid.r - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_color_conversions() {
+        let color = Color::new(0.1, 0.2, 0.3, 0.4);
+        let vec: Vec4 = color.into();
+        assert_eq!(vec.x, 0.1);
+
+        let arr: [f32; 4] = color.into();
+        assert_eq!(arr[0], 0.1);
+
+        let back: Color = arr.into();
+        assert_eq!(back.r, 0.1);
+    }
+}

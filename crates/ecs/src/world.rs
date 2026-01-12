@@ -85,9 +85,10 @@ impl World {
 
     /// Create a new world with archetype-based storage for optimal performance
     pub fn new_optimized() -> Self {
-        let mut config = WorldConfig::default();
-        config.use_archetype_storage = true;
-        Self::with_config(config)
+        Self::with_config(WorldConfig {
+            use_archetype_storage: true,
+            ..WorldConfig::default()
+        })
     }
 
     /// Initialize the world

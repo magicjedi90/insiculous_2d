@@ -1,0 +1,254 @@
+//! Unified 2D Camera type.
+
+use glam::{Mat4, Vec2, Vec3, Vec4};
+use serde::{Deserialize, Serialize};
+
+/// 2D Camera with orthographic projection.
+///
+/// This is the canonical camera type used across the engine.
+/// It combines features from both rendering and ECS requirements.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Camera2D {
+    /// Camera position in world space
+    pub position: Vec2,
+    /// Camera rotation in radians
+    pub rotation: f32,
+    /// Zoom level (1.0 = normal, 2.0 = 2x zoom in, 0.5 = 2x zoom out)
+    pub zoom: f32,
+    /// Viewport dimensions in pixels
+    pub viewport_size: Vec2,
+    /// Near clipping plane (typically negative for 2D)
+    pub near: f32,
+    /// Far clipping plane (typically positive for 2D)
+    pub far: f32,
+    /// Whether this is the main/active camera for rendering
+    pub is_main_camera: bool,
+}
+
+impl Default for Camera2D {
+    fn default() -> Self {
+        Self {
+            position: Vec2::ZERO,
+            rotation: 0.0,
+            zoom: 1.0,
+            viewport_size: Vec2::new(800.0, 600.0),
+            near: -1000.0,
+            far: 1000.0,
+            is_main_camera: false,
+        }
+    }
+}
+
+impl Camera2D {
+    /// Create a new camera at the given position with viewport size.
+    #[inline]
+    pub fn new(position: Vec2, viewport_size: Vec2) -> Self {
+        Self {
+            position,
+            viewport_size,
+            ..Default::default()
+        }
+    }
+
+    /// Set as the main camera (builder pattern).
+    #[inline]
+    pub fn as_main_camera(mut self) -> Self {
+        self.is_main_camera = true;
+        self
+    }
+
+    /// Set rotation (builder pattern).
+    #[inline]
+    pub fn with_rotation(mut self, rotation: f32) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
+    /// Set zoom level (builder pattern).
+    #[inline]
+    pub fn with_zoom(mut self, zoom: f32) -> Self {
+        self.zoom = zoom;
+        self
+    }
+
+    /// Set clipping planes (builder pattern).
+    #[inline]
+    pub fn with_clipping(mut self, near: f32, far: f32) -> Self {
+        self.near = near;
+        self.far = far;
+        self
+    }
+
+    /// Build the view matrix.
+    ///
+    /// The view matrix transforms world coordinates to view/camera space.
+    pub fn view_matrix(&self) -> Mat4 {
+        let mut view = Mat4::IDENTITY;
+
+        // Apply zoom
+        view *= Mat4::from_scale(Vec3::new(self.zoom, self.zoom, 1.0));
+
+        // Apply rotation
+        view *= Mat4::from_rotation_z(self.rotation);
+
+        // Apply translation (negated for view matrix)
+        view *= Mat4::from_translation(Vec3::new(-self.position.x, -self.position.y, 0.0));
+
+        view
+    }
+
+    /// Build the orthographic projection matrix.
+    pub fn projection_matrix(&self) -> Mat4 {
+        let half_width = self.viewport_size.x * 0.5;
+        let half_height = self.viewport_size.y * 0.5;
+
+        Mat4::orthographic_rh(
+            -half_width,
+            half_width,
+            -half_height,
+            half_height,
+            self.near,
+            self.far,
+        )
+    }
+
+    /// Build the combined view-projection matrix.
+    #[inline]
+    pub fn view_projection_matrix(&self) -> Mat4 {
+        self.projection_matrix() * self.view_matrix()
+    }
+
+    /// Convert screen coordinates to world coordinates.
+    ///
+    /// Screen coordinates have origin at top-left, Y increasing downward.
+    /// World coordinates have Y increasing upward.
+    pub fn screen_to_world(&self, screen_pos: Vec2) -> Vec2 {
+        // Convert to normalized device coordinates (-1 to 1)
+        let ndc = Vec2::new(
+            (screen_pos.x - self.viewport_size.x * 0.5) / (self.viewport_size.x * 0.5),
+            (self.viewport_size.y * 0.5 - screen_pos.y) / (self.viewport_size.y * 0.5),
+        );
+
+        // Transform by inverse view matrix
+        let world_pos = self.view_matrix().inverse() * Vec4::new(ndc.x, ndc.y, 0.0, 1.0);
+
+        Vec2::new(world_pos.x, world_pos.y)
+    }
+
+    /// Convert world coordinates to screen coordinates.
+    ///
+    /// Returns screen position with origin at top-left.
+    pub fn world_to_screen(&self, world_pos: Vec2) -> Vec2 {
+        // Transform by view-projection matrix
+        let clip_pos = self.view_projection_matrix() * Vec4::new(world_pos.x, world_pos.y, 0.0, 1.0);
+
+        // Convert to screen coordinates
+        Vec2::new(
+            (clip_pos.x + 1.0) * 0.5 * self.viewport_size.x,
+            (1.0 - clip_pos.y) * 0.5 * self.viewport_size.y,
+        )
+    }
+
+    /// Get the visible world bounds (min_x, min_y, max_x, max_y).
+    pub fn world_bounds(&self) -> (f32, f32, f32, f32) {
+        let half_w = self.viewport_size.x * 0.5 / self.zoom;
+        let half_h = self.viewport_size.y * 0.5 / self.zoom;
+
+        (
+            self.position.x - half_w,
+            self.position.y - half_h,
+            self.position.x + half_w,
+            self.position.y + half_h,
+        )
+    }
+
+    /// Check if a point is visible in the camera's view.
+    #[inline]
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        let (min_x, min_y, max_x, max_y) = self.world_bounds();
+        point.x >= min_x && point.x <= max_x && point.y >= min_y && point.y <= max_y
+    }
+
+    /// Update viewport size (call on window resize).
+    #[inline]
+    pub fn set_viewport_size(&mut self, width: f32, height: f32) {
+        self.viewport_size = Vec2::new(width, height);
+    }
+}
+
+/// Camera uniform data for GPU upload.
+///
+/// This struct is designed to be directly uploadable to GPU buffers.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    /// The view-projection matrix
+    pub view_projection: [[f32; 4]; 4],
+    /// Camera position for shader calculations
+    pub position: [f32; 2],
+    /// Padding to align to 16 bytes
+    pub _padding: [f32; 2],
+}
+
+impl CameraUniform {
+    /// Create camera uniform from a Camera2D.
+    pub fn from_camera(camera: &Camera2D) -> Self {
+        Self {
+            view_projection: camera.view_projection_matrix().to_cols_array_2d(),
+            position: camera.position.to_array(),
+            _padding: [0.0, 0.0],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_default() {
+        let camera = Camera2D::default();
+        assert_eq!(camera.position, Vec2::ZERO);
+        assert_eq!(camera.zoom, 1.0);
+        assert!(!camera.is_main_camera);
+    }
+
+    #[test]
+    fn test_camera_builder() {
+        let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
+            .with_zoom(2.0)
+            .with_rotation(0.5)
+            .as_main_camera();
+
+        assert_eq!(camera.position, Vec2::new(100.0, 200.0));
+        assert_eq!(camera.viewport_size, Vec2::new(1920.0, 1080.0));
+        assert_eq!(camera.zoom, 2.0);
+        assert_eq!(camera.rotation, 0.5);
+        assert!(camera.is_main_camera);
+    }
+
+    #[test]
+    fn test_world_bounds() {
+        let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let (min_x, min_y, max_x, max_y) = camera.world_bounds();
+        assert_eq!(min_x, -400.0);
+        assert_eq!(min_y, -300.0);
+        assert_eq!(max_x, 400.0);
+        assert_eq!(max_y, 300.0);
+    }
+
+    #[test]
+    fn test_contains_point() {
+        let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        assert!(camera.contains_point(Vec2::ZERO));
+        assert!(camera.contains_point(Vec2::new(399.0, 299.0)));
+        assert!(!camera.contains_point(Vec2::new(500.0, 0.0)));
+    }
+
+    #[test]
+    fn test_camera_uniform() {
+        let camera = Camera2D::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
+        let uniform = CameraUniform::from_camera(&camera);
+        assert_eq!(uniform.position, [50.0, 100.0]);
+    }
+}

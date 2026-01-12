@@ -10,6 +10,9 @@ use ecs::sprite_components::Transform2D;
 use crate::components::{Collider, RigidBody, CollisionData};
 use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 
+/// Type alias for collision callback to reduce complexity
+type CollisionCallback = Box<dyn FnMut(&CollisionData) + Send + Sync>;
+
 /// Physics system that steps the simulation and syncs transforms
 pub struct PhysicsSystem {
     /// The physics world
@@ -21,7 +24,7 @@ pub struct PhysicsSystem {
     /// Maximum delta time to prevent spiral of death
     max_delta_time: f32,
     /// Callback for collision events
-    collision_callback: Option<Box<dyn FnMut(&CollisionData) + Send + Sync>>,
+    collision_callback: Option<CollisionCallback>,
 }
 
 impl PhysicsSystem {

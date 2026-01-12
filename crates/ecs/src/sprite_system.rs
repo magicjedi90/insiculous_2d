@@ -95,11 +95,13 @@ impl System for SpriteRenderSystem {
         // Find main camera
         if let Some(camera_entity) = self.find_main_camera(world) {
             if let Some(camera) = world.get::<Camera2D>(camera_entity) {
-                let mut renderer_camera = RendererCamera2D::default();
-                renderer_camera.position = camera.position;
-                renderer_camera.rotation = camera.rotation;
-                renderer_camera.zoom = camera.zoom;
-                renderer_camera.viewport_size = camera.viewport_size;
+                let renderer_camera = RendererCamera2D {
+                    position: camera.position,
+                    rotation: camera.rotation,
+                    zoom: camera.zoom,
+                    viewport_size: camera.viewport_size,
+                    ..RendererCamera2D::default()
+                };
                 self.render_data.set_camera(renderer_camera);
             }
         }
@@ -110,7 +112,7 @@ impl System for SpriteRenderSystem {
         for entity_id in entity_ids {
             // Get transform (required)
             let transform = match world.get::<Transform2D>(entity_id) {
-                Some(t) => t.clone(),
+                Some(t) => *t,
                 None => continue,
             };
 

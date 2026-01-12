@@ -5,13 +5,14 @@ edition = "2021"
 description = "WGPU renderer for the insiculous_2d game engine"
 
 [dependencies]
+common = { workspace = true }
 log = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 thiserror = { workspace = true }
-glam = "0.29"
-bytemuck = { version = "1.16", features = ["derive"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
+glam = { workspace = true }
+bytemuck = { workspace = true }
+image = { workspace = true }
 
 [dev-dependencies]
 pollster = { workspace = true }

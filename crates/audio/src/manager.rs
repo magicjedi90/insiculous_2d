@@ -20,6 +20,8 @@ struct SoundData {
 /// Active sound playback instance.
 struct ActiveSound {
     sink: Sink,
+    /// Handle for future "stop by handle" functionality.
+    #[allow(dead_code)]
     handle: SoundHandle,
 }
 
@@ -220,7 +222,7 @@ impl AudioManager {
 
     /// Check if music is currently playing.
     pub fn is_music_playing(&self) -> bool {
-        self.music_sink.as_ref().map_or(false, |s| !s.is_paused() && !s.empty())
+        self.music_sink.as_ref().is_some_and(|s| !s.is_paused() && !s.empty())
     }
 
     /// Stop all currently playing sounds.

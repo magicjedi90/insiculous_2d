@@ -29,6 +29,7 @@ pub enum TextureError {
 
 /// Handle to a loaded texture
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub struct TextureHandle {
     pub id: u32,
 }
@@ -40,14 +41,10 @@ impl TextureHandle {
     }
 }
 
-impl Default for TextureHandle {
-    fn default() -> Self {
-        Self { id: 0 }
-    }
-}
 
 /// Texture loading configuration
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct TextureLoadConfig {
     /// Whether to generate mipmaps
     pub generate_mipmaps: bool,
@@ -57,15 +54,6 @@ pub struct TextureLoadConfig {
     pub sampler_config: SamplerConfig,
 }
 
-impl Default for TextureLoadConfig {
-    fn default() -> Self {
-        Self {
-            generate_mipmaps: false,
-            format: None,
-            sampler_config: SamplerConfig::default(),
-        }
-    }
-}
 
 /// Sampler configuration
 #[derive(Debug, Clone)]
@@ -268,7 +256,7 @@ impl TextureManager {
             for x in 0..width {
                 let check_x = (x / check_size) % 2;
                 let check_y = (y / check_size) % 2;
-                let color = if (check_x + check_y) % 2 == 0 { color1 } else { color2 };
+                let color = if (check_x + check_y).is_multiple_of(2) { color1 } else { color2 };
                 data.extend_from_slice(&color);
             }
         }

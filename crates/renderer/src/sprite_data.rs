@@ -1,8 +1,11 @@
 //! Sprite data structures and management
 
-use glam::{Vec2, Vec3, Vec4, Mat4};
+use glam::{Vec2, Vec3, Vec4};
 use std::sync::Arc;
 use wgpu::{Device, Queue, Texture, TextureView, Sampler, Buffer};
+
+// Re-export Camera2D and CameraUniform from common crate
+pub use common::{Camera2D, camera::CameraUniform};
 
 /// Vertex data for a sprite
 #[repr(C)]
@@ -140,128 +143,8 @@ impl SpriteInstance {
     }
 }
 
-/// 2D Camera with orthographic projection
-#[derive(Debug, Clone)]
-pub struct Camera2D {
-    /// Camera position in world space
-    pub position: Vec2,
-    /// Camera rotation in radians
-    pub rotation: f32,
-    /// Zoom level (1.0 = normal, 2.0 = 2x zoom in, 0.5 = 2x zoom out)
-    pub zoom: f32,
-    /// Viewport dimensions
-    pub viewport_size: Vec2,
-    /// Near clipping plane
-    pub near: f32,
-    /// Far clipping plane
-    pub far: f32,
-}
-
-impl Default for Camera2D {
-    fn default() -> Self {
-        Self {
-            position: Vec2::ZERO,
-            rotation: 0.0,
-            zoom: 1.0,
-            viewport_size: Vec2::new(800.0, 600.0),
-            near: -1000.0,
-            far: 1000.0,
-        }
-    }
-}
-
-impl Camera2D {
-    /// Create a new camera
-    pub fn new(position: Vec2, viewport_size: Vec2) -> Self {
-        Self {
-            position,
-            viewport_size,
-            ..Default::default()
-        }
-    }
-
-    /// Build view matrix
-    pub fn view_matrix(&self) -> Mat4 {
-        let mut view = Mat4::IDENTITY;
-        
-        // Apply zoom
-        view *= Mat4::from_scale(Vec3::new(self.zoom, self.zoom, 1.0));
-        
-        // Apply rotation
-        view *= Mat4::from_rotation_z(self.rotation);
-        
-        // Apply translation (note: we negate position for view matrix)
-        view *= Mat4::from_translation(Vec3::new(-self.position.x, -self.position.y, 0.0));
-        
-        view
-    }
-
-    /// Build orthographic projection matrix
-    pub fn projection_matrix(&self) -> Mat4 {
-        let half_width = self.viewport_size.x * 0.5;
-        let half_height = self.viewport_size.y * 0.5;
-        
-        Mat4::orthographic_rh(
-            -half_width,
-            half_width,
-            -half_height,
-            half_height,
-            self.near,
-            self.far,
-        )
-    }
-
-    /// Build view-projection matrix
-    pub fn view_projection_matrix(&self) -> Mat4 {
-        self.projection_matrix() * self.view_matrix()
-    }
-
-    /// Convert screen coordinates to world coordinates
-    pub fn screen_to_world(&self, screen_pos: Vec2) -> Vec2 {
-        // Convert screen coordinates to normalized device coordinates
-        let ndc = Vec2::new(
-            (screen_pos.x - self.viewport_size.x * 0.5) / (self.viewport_size.x * 0.5),
-            (self.viewport_size.y * 0.5 - screen_pos.y) / (self.viewport_size.y * 0.5), // Flip Y axis
-        );
-        
-        // Transform by inverse view-projection matrix
-        let world_pos = self.view_matrix().inverse() * Vec4::new(ndc.x, ndc.y, 0.0, 1.0);
-        
-        Vec2::new(world_pos.x, world_pos.y)
-    }
-
-    /// Convert world coordinates to screen coordinates
-    pub fn world_to_screen(&self, world_pos: Vec2) -> Vec2 {
-        // Transform by view-projection matrix
-        let clip_pos = self.view_projection_matrix() * Vec4::new(world_pos.x, world_pos.y, 0.0, 1.0);
-        
-        // Convert to screen coordinates
-        Vec2::new(
-            (clip_pos.x + 1.0) * 0.5 * self.viewport_size.x,
-            (1.0 - clip_pos.y) * 0.5 * self.viewport_size.y, // Flip Y axis
-        )
-    }
-}
-
-/// Camera uniform data for GPU
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pub view_projection: [[f32; 4]; 4],
-    pub position: [f32; 2],
-    pub _padding: [f32; 2],
-}
-
-impl CameraUniform {
-    /// Create camera uniform from camera
-    pub fn from_camera(camera: &Camera2D) -> Self {
-        Self {
-            view_projection: camera.view_projection_matrix().to_cols_array_2d(),
-            position: camera.position.to_array(),
-            _padding: [0.0, 0.0],
-        }
-    }
-}
+// Note: Camera2D and CameraUniform are now re-exported from common crate
+// This eliminates ~100 lines of duplicated code
 
 /// A texture with its view and sampler
 #[derive(Debug, Clone)]
@@ -386,7 +269,7 @@ impl<T: bytemuck::Pod> DynamicBuffer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glam::{Vec2, Vec3, Vec4};
+    use glam::{Vec2, Vec3, Vec4, Mat4};
 
     // ==================== SpriteVertex Tests ====================
 

@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 
 /// Body type for physics simulation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum RigidBodyType {
     /// A dynamic body affected by forces and collisions
+    #[default]
     Dynamic,
     /// A static body that never moves
     Static,
@@ -16,11 +18,6 @@ pub enum RigidBodyType {
     Kinematic,
 }
 
-impl Default for RigidBodyType {
-    fn default() -> Self {
-        Self::Dynamic
-    }
-}
 
 /// Rigid body component for physics simulation
 #[derive(Debug, Clone, Serialize, Deserialize)]

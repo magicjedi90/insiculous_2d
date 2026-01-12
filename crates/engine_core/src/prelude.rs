@@ -22,14 +22,22 @@ pub use crate::{
     EngineError,
 };
 
+// Re-export common types (Color, Transform2D, Camera2D, Rect)
+pub use common::{Color, Transform2D, Camera2D, Rect};
+
 // Re-export commonly used types from dependencies
 pub use glam::{Vec2, Vec4};
 pub use winit::keyboard::KeyCode;
 pub use ecs::{EntityId, World};
-pub use ecs::sprite_components::{Sprite, Transform2D};
+pub use ecs::sprite_components::Sprite;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use renderer::{TextureHandle, TextureLoadConfig};
 pub use audio::{AudioManager, SoundHandle, SoundSettings, PlaybackState};
+
+// Re-export UI types (UIRect and UIColor are aliases to common types for backwards compatibility)
+pub use ui::{UIContext, Theme as UITheme, WidgetId};
+pub use common::Rect as UIRect;
+pub use common::Color as UIColor;
 
 // Re-export physics types when the physics feature is enabled
 #[cfg(feature = "physics")]

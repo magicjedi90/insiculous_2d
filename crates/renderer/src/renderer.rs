@@ -100,7 +100,8 @@ impl Renderer {
 
         Ok(Self {
             window,
-            surface: unsafe { std::mem::transmute(surface) }, // Safe because window has 'static lifetime
+            // Safe because window has 'static lifetime
+            surface: unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface) },
             adapter,
             device,
             queue,

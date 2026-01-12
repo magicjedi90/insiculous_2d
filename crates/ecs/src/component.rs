@@ -192,6 +192,7 @@ impl LegacyComponentStorage {
 }
 
 /// New archetype-based component storage for optimal performance
+#[derive(Default)]
 pub struct ArchetypeStorage {
     /// Archetypes indexed by their ID
     archetypes: HashMap<ArchetypeId, Archetype>,
@@ -202,10 +203,7 @@ pub struct ArchetypeStorage {
 impl ArchetypeStorage {
     /// Create a new archetype storage
     pub fn new() -> Self {
-        Self {
-            archetypes: HashMap::new(),
-            entity_locations: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Add a component for an entity (moves entity between archetypes if needed)

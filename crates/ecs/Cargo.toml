@@ -5,10 +5,11 @@ edition = "2021"
 description = "Simple entity-component-system for the insiculous_2d game engine"
 
 [dependencies]
+common = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
-glam = { version = "0.29", features = ["serde"] }
+glam = { workspace = true }
 renderer = { path = "../renderer" }
 
 [dev-dependencies]

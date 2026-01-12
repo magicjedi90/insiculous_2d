@@ -332,6 +332,8 @@ impl SceneLoader {
                     zoom: *zoom,
                     viewport_size: Vec2::new(viewport_size.0, viewport_size.1),
                     is_main_camera: *is_main_camera,
+                    near: -1000.0,
+                    far: 1000.0,
                 };
                 let _ = world.add_component(&entity_id, camera);
             }

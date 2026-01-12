@@ -25,6 +25,8 @@
 //! }
 //! ```
 
+use std::collections::HashMap;
+
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use winit::{
@@ -41,6 +43,35 @@ use renderer::{
     sprite::{SpriteBatch, SpriteBatcher},
     texture::TextureHandle,
 };
+use ui::{UIContext, DrawCommand, Color as UIColor};
+
+/// Key for caching glyph textures
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GlyphCacheKey {
+    /// Character being rendered
+    character: char,
+    /// Width of the glyph bitmap
+    width: u32,
+    /// Height of the glyph bitmap
+    height: u32,
+    /// Color as RGB (u8 each)
+    color_rgb: [u8; 3],
+}
+
+impl GlyphCacheKey {
+    fn new(character: char, width: u32, height: u32, color: &UIColor) -> Self {
+        Self {
+            character,
+            width,
+            height,
+            color_rgb: [
+                (color.r * 255.0) as u8,
+                (color.g * 255.0) as u8,
+                (color.b * 255.0) as u8,
+            ],
+        }
+    }
+}
 
 use crate::assets::AssetManager;
 use crate::render_manager::RenderManager;
@@ -118,6 +149,8 @@ pub struct GameContext<'a> {
     pub assets: &'a mut AssetManager,
     /// Audio manager for sound playback
     pub audio: &'a mut AudioManager,
+    /// UI context for immediate-mode UI
+    pub ui: &'a mut UIContext,
     /// Delta time since last frame in seconds
     pub delta_time: f32,
     /// Current window size
@@ -134,6 +167,173 @@ pub struct RenderContext<'a> {
     pub camera: &'a mut renderer::Camera2D,
     /// Current window size
     pub window_size: Vec2,
+    /// UI draw commands to render
+    pub ui_commands: &'a [DrawCommand],
+    /// Cached glyph textures for text rendering
+    pub glyph_textures: &'a HashMap<GlyphCacheKey, TextureHandle>,
+}
+
+/// Helper function to convert UI draw commands to sprites.
+///
+/// UI elements render in screen space (0,0 = top-left) at high depth values
+/// to appear on top of game content. Rectangles and circles use the white
+/// texture (handle 0) with color tinting. Text glyphs use cached glyph textures.
+fn render_ui_commands(
+    sprites: &mut SpriteBatcher,
+    commands: &[DrawCommand],
+    window_size: Vec2,
+    glyph_textures: &HashMap<GlyphCacheKey, TextureHandle>,
+) {
+    let white_texture = TextureHandle { id: 0 };
+
+    for cmd in commands {
+        match cmd {
+            DrawCommand::Rect { bounds, color, depth, .. } => {
+                // Convert screen coordinates (0,0 = top-left) to world coordinates (0,0 = center)
+                let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
+                let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
+
+                let sprite = renderer::Sprite::new(white_texture)
+                    .with_position(Vec2::new(center_x, center_y))
+                    .with_scale(Vec2::new(bounds.width, bounds.height))
+                    .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
+                    .with_depth(*depth);
+
+                sprites.add_sprite(&sprite);
+            }
+            DrawCommand::RectBorder { bounds, color, width, depth, .. } => {
+                // Render border as 4 thin rectangles
+                let half_width = *width / 2.0;
+
+                // Top edge
+                let top = ui::Rect::new(bounds.x - half_width, bounds.y - half_width, bounds.width + *width, *width);
+                render_ui_rect(sprites, &top, color, *depth, window_size);
+
+                // Bottom edge
+                let bottom = ui::Rect::new(bounds.x - half_width, bounds.y + bounds.height - half_width, bounds.width + *width, *width);
+                render_ui_rect(sprites, &bottom, color, *depth, window_size);
+
+                // Left edge
+                let left = ui::Rect::new(bounds.x - half_width, bounds.y + half_width, *width, bounds.height - *width);
+                render_ui_rect(sprites, &left, color, *depth, window_size);
+
+                // Right edge
+                let right = ui::Rect::new(bounds.x + bounds.width - half_width, bounds.y + half_width, *width, bounds.height - *width);
+                render_ui_rect(sprites, &right, color, *depth, window_size);
+            }
+            DrawCommand::Text { data, depth } => {
+                // Render text with rasterized glyph data
+                if data.glyphs.is_empty() {
+                    // No glyphs - render as placeholder rectangle
+                    let center_x = data.position.x + data.width / 2.0 - window_size.x / 2.0;
+                    let center_y = window_size.y / 2.0 - (data.position.y + data.height / 2.0);
+
+                    let sprite = renderer::Sprite::new(white_texture)
+                        .with_position(Vec2::new(center_x, center_y))
+                        .with_scale(Vec2::new(data.width.max(data.font_size * 4.0), data.height.max(data.font_size)))
+                        .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a * 0.3))
+                        .with_depth(*depth);
+
+                    sprites.add_sprite(&sprite);
+                } else {
+                    // Render each glyph using cached glyph textures
+                    for glyph in &data.glyphs {
+                        // Skip glyphs with no bitmap (spaces, etc.)
+                        if glyph.width == 0 || glyph.height == 0 {
+                            continue;
+                        }
+
+                        // Calculate glyph position in world coordinates
+                        let glyph_x = data.position.x + glyph.x + glyph.width as f32 / 2.0 - window_size.x / 2.0;
+                        let glyph_y = window_size.y / 2.0 - (data.position.y + glyph.y + glyph.height as f32 / 2.0);
+
+                        // Look up glyph texture in cache
+                        let glyph_key = GlyphCacheKey::new(
+                            glyph.character,
+                            glyph.width,
+                            glyph.height,
+                            &data.color,
+                        );
+
+                        let texture = glyph_textures
+                            .get(&glyph_key)
+                            .copied()
+                            .unwrap_or(white_texture);
+
+                        // Render glyph with its texture (white color since texture has baked color)
+                        let sprite = renderer::Sprite::new(texture)
+                            .with_position(Vec2::new(glyph_x, glyph_y))
+                            .with_scale(Vec2::new(glyph.width as f32, glyph.height as f32))
+                            .with_color(glam::Vec4::new(1.0, 1.0, 1.0, data.color.a))
+                            .with_depth(*depth);
+
+                        sprites.add_sprite(&sprite);
+                    }
+                }
+            }
+            DrawCommand::TextPlaceholder { text, position, color, font_size, depth } => {
+                // Placeholder: render a small rectangle where text would be
+                let estimated_width = text.len() as f32 * *font_size * 0.6;
+                let center_x = position.x + estimated_width / 2.0 - window_size.x / 2.0;
+                let center_y = window_size.y / 2.0 - (position.y + *font_size / 2.0);
+
+                let sprite = renderer::Sprite::new(white_texture)
+                    .with_position(Vec2::new(center_x, center_y))
+                    .with_scale(Vec2::new(estimated_width, *font_size))
+                    .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a * 0.3))
+                    .with_depth(*depth);
+
+                sprites.add_sprite(&sprite);
+            }
+            DrawCommand::Circle { center, radius, color, depth } => {
+                // Render circle as a square (approximation until we have circle shader)
+                let center_x = center.x - window_size.x / 2.0;
+                let center_y = window_size.y / 2.0 - center.y;
+
+                let sprite = renderer::Sprite::new(white_texture)
+                    .with_position(Vec2::new(center_x, center_y))
+                    .with_scale(Vec2::new(*radius * 2.0, *radius * 2.0))
+                    .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
+                    .with_depth(*depth);
+
+                sprites.add_sprite(&sprite);
+            }
+            DrawCommand::Line { start, end, color, width, depth } => {
+                // Render line as a thin rotated rectangle
+                let dx = end.x - start.x;
+                let dy = end.y - start.y;
+                let length = (dx * dx + dy * dy).sqrt();
+                let angle = dy.atan2(dx);
+
+                let mid_x = (start.x + end.x) / 2.0 - window_size.x / 2.0;
+                let mid_y = window_size.y / 2.0 - (start.y + end.y) / 2.0;
+
+                let sprite = renderer::Sprite::new(white_texture)
+                    .with_position(Vec2::new(mid_x, mid_y))
+                    .with_rotation(-angle) // Negate for coordinate system
+                    .with_scale(Vec2::new(length, *width))
+                    .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
+                    .with_depth(*depth);
+
+                sprites.add_sprite(&sprite);
+            }
+        }
+    }
+}
+
+/// Helper to render a single UI rect as a sprite.
+fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &ui::Rect, color: &UIColor, depth: f32, window_size: Vec2) {
+    let white_texture = TextureHandle { id: 0 };
+    let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
+    let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
+
+    let sprite = renderer::Sprite::new(white_texture)
+        .with_position(Vec2::new(center_x, center_y))
+        .with_scale(Vec2::new(bounds.width, bounds.height))
+        .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
+        .with_depth(depth);
+
+    sprites.add_sprite(&sprite);
 }
 
 /// The main game trait. Implement this to create your game.
@@ -149,7 +349,8 @@ pub trait Game: Sized + 'static {
     fn update(&mut self, ctx: &mut GameContext);
 
     /// Called every frame to render sprites. Add sprites to `ctx.sprites`.
-    /// Default implementation extracts sprites from ECS entities with Transform2D and Sprite components.
+    /// Default implementation extracts sprites from ECS entities with Transform2D and Sprite components,
+    /// then renders UI draw commands on top.
     fn render(&mut self, ctx: &mut RenderContext) {
         // Default: extract sprites from ECS
         for entity_id in ctx.world.entities() {
@@ -178,6 +379,9 @@ pub trait Game: Sized + 'static {
                 ctx.sprites.add_sprite(&renderer_sprite);
             }
         }
+
+        // Render UI draw commands on top
+        render_ui_commands(ctx.sprites, ctx.ui_commands, ctx.window_size, ctx.glyph_textures);
     }
 
     /// Called when a key is pressed. Override for custom key handling.
@@ -242,6 +446,10 @@ struct GameRunner<G: Game> {
     audio_manager: Option<AudioManager>,
     /// Input handling
     input: InputHandler,
+    /// UI context for immediate-mode UI
+    ui_context: UIContext,
+    /// Cached glyph textures for text rendering
+    glyph_textures: HashMap<GlyphCacheKey, TextureHandle>,
     /// Main game scene containing ECS world
     scene: Scene,
     /// Whether the game's init() has been called
@@ -274,9 +482,66 @@ impl<G: Game> GameRunner<G> {
             asset_manager: None,
             audio_manager,
             input: InputHandler::new(),
+            ui_context: UIContext::new(),
+            glyph_textures: HashMap::new(),
             scene: Scene::new("main"),
             initialized: false,
             last_frame_time: std::time::Instant::now(),
+        }
+    }
+
+    /// Prepare glyph textures from UI draw commands.
+    ///
+    /// Scans Text commands for glyphs that need textures and creates them
+    /// on-demand, caching them for reuse.
+    fn prepare_glyph_textures(&mut self, commands: &[DrawCommand]) {
+        let asset_manager = match &mut self.asset_manager {
+            Some(am) => am,
+            None => return,
+        };
+
+        for cmd in commands {
+            if let DrawCommand::Text { data, .. } = cmd {
+                for glyph in &data.glyphs {
+                    // Skip empty glyphs (spaces, etc.)
+                    if glyph.width == 0 || glyph.height == 0 || glyph.bitmap.is_empty() {
+                        continue;
+                    }
+
+                    let key = GlyphCacheKey::new(
+                        glyph.character,
+                        glyph.width,
+                        glyph.height,
+                        &data.color,
+                    );
+
+                    // Skip if already cached
+                    if self.glyph_textures.contains_key(&key) {
+                        continue;
+                    }
+
+                    // Create glyph texture
+                    let color_rgb = [
+                        (data.color.r * 255.0) as u8,
+                        (data.color.g * 255.0) as u8,
+                        (data.color.b * 255.0) as u8,
+                    ];
+
+                    match asset_manager.create_glyph_texture(
+                        glyph.width,
+                        glyph.height,
+                        &glyph.bitmap,
+                        color_rgb,
+                    ) {
+                        Ok(handle) => {
+                            self.glyph_textures.insert(key, handle);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to create glyph texture for '{}': {}", glyph.character, e);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -317,30 +582,42 @@ impl<G: Game> GameRunner<G> {
         // Get window size
         let window_size = self.window_size();
 
-        // Get asset manager or return early (single check for entire frame)
-        let Some(asset_manager) = &mut self.asset_manager else {
+        // Check if managers are available (audio is optional)
+        let has_managers = self.asset_manager.is_some();
+        if !has_managers {
             return;
-        };
-
-        // Get audio manager or return early
-        let Some(audio_manager) = &mut self.audio_manager else {
-            return;
-        };
+        }
 
         // Update audio manager (cleans up finished sounds)
-        audio_manager.update();
+        if let Some(audio_manager) = &mut self.audio_manager {
+            audio_manager.update();
+        }
+
+        // Begin UI frame
+        self.ui_context.begin_frame(&self.input, window_size);
 
         // Initialize game if not yet done
         if !self.initialized {
-            let mut ctx = GameContext {
-                input: &self.input,
-                world: &mut self.scene.world,
-                assets: asset_manager,
-                audio: audio_manager,
-                delta_time,
-                window_size,
-            };
-            self.game.init(&mut ctx);
+            // Get mutable references to managers
+            let asset_manager = self.asset_manager.as_mut().unwrap();
+            let audio_manager = self.audio_manager.as_mut();
+
+            // Create a placeholder audio manager if none exists
+            let mut placeholder_audio = AudioManager::new().ok();
+            let audio = audio_manager.or(placeholder_audio.as_mut());
+
+            if let Some(audio) = audio {
+                let mut ctx = GameContext {
+                    input: &self.input,
+                    world: &mut self.scene.world,
+                    assets: asset_manager,
+                    audio,
+                    ui: &mut self.ui_context,
+                    delta_time,
+                    window_size,
+                };
+                self.game.init(&mut ctx);
+            }
             self.initialized = true;
         }
 
@@ -349,15 +626,29 @@ impl<G: Game> GameRunner<G> {
         self.input.process_queued_events();
 
         // Update game logic
-        let mut ctx = GameContext {
-            input: &self.input,
-            world: &mut self.scene.world,
-            assets: asset_manager,
-            audio: audio_manager,
-            delta_time,
-            window_size,
-        };
-        self.game.update(&mut ctx);
+        {
+            let asset_manager = self.asset_manager.as_mut().unwrap();
+            let audio_manager = self.audio_manager.as_mut();
+
+            let mut placeholder_audio = AudioManager::new().ok();
+            let audio = audio_manager.or(placeholder_audio.as_mut());
+
+            if let Some(audio) = audio {
+                let mut ctx = GameContext {
+                    input: &self.input,
+                    world: &mut self.scene.world,
+                    assets: asset_manager,
+                    audio,
+                    ui: &mut self.ui_context,
+                    delta_time,
+                    window_size,
+                };
+                self.game.update(&mut ctx);
+            }
+        }
+
+        // End UI frame
+        self.ui_context.end_frame();
 
         // Clear "just pressed/released" flags for next frame
         self.input.end_frame();
@@ -366,6 +657,12 @@ impl<G: Game> GameRunner<G> {
         if !self.render_manager.is_initialized() {
             return;
         }
+
+        // Get UI draw commands for rendering
+        let ui_commands: Vec<DrawCommand> = self.ui_context.draw_list().commands().to_vec();
+
+        // Prepare glyph textures for text rendering
+        self.prepare_glyph_textures(&ui_commands);
 
         // Build sprite batches
         let mut batcher = SpriteBatcher::new(1000);
@@ -376,6 +673,8 @@ impl<G: Game> GameRunner<G> {
                 sprites: &mut batcher,
                 camera: self.render_manager.camera_mut(),
                 window_size,
+                ui_commands: &ui_commands,
+                glyph_textures: &self.glyph_textures,
             };
             self.game.render(&mut ctx);
         }
@@ -476,6 +775,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             world: &mut self.scene.world,
                             assets: asset_manager,
                             audio: audio_manager,
+                            ui: &mut self.ui_context,
                             delta_time: 0.0,
                             window_size,
                         };

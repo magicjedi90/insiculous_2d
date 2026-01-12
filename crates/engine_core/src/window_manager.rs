@@ -175,7 +175,7 @@ impl WindowManager {
 
     /// Check if an event belongs to this window.
     pub fn is_our_window(&self, window_id: winit::window::WindowId) -> bool {
-        self.window.as_ref().map_or(false, |w| w.id() == window_id)
+        self.window.as_ref().is_some_and(|w| w.id() == window_id)
     }
 }
 

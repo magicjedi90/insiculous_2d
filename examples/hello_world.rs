@@ -1,4 +1,4 @@
-//! Hello World - Demonstrates the simplified Game API with Physics, Audio, and Scene Graph
+//! Hello World - Demonstrates the simplified Game API with Physics, Audio, UI, and Scene Graph
 //!
 //! This example shows how easy it is to create a game with the Insiculous 2D engine.
 //! All the window, event loop, and rendering boilerplate is handled internally.
@@ -9,13 +9,17 @@
 //! - ECS for entity/component management
 //! - Asset Manager for loading/creating textures
 //! - **Audio System** - sound effects and music playback
+//! - **UI System** - immediate-mode UI with buttons, sliders, and panels
+//! - **Font Rendering** - load TTF/OTF fonts for text display via fontdue
 //! - Input handling with keyboard
 //! - 2D Physics with rapier2d integration
 //! - **Scene Graph Hierarchy** - parent-child entity relationships with transform propagation
 //!
 //! Controls: WASD to move player, SPACE to jump, R to reset, M to toggle music, ESC to exit
+//!           Click UI buttons for interactive controls!
 //!
 //! Scene file: examples/assets/scenes/hello_world.scene.ron
+//! Font file: examples/assets/fonts/font.ttf (optional - download any TTF font)
 
 use engine_core::prelude::*;
 use ecs::hierarchy_system::TransformHierarchySystem;
@@ -34,6 +38,12 @@ struct HelloWorld {
     jump_sound: Option<SoundHandle>,
     /// Whether music is currently playing
     music_playing: bool,
+    /// Volume slider value (0.0 to 1.0)
+    volume: f32,
+    /// Whether to show the UI panel
+    show_ui: bool,
+    /// Whether a font was successfully loaded
+    font_loaded: bool,
 }
 
 impl HelloWorld {
@@ -45,6 +55,9 @@ impl HelloWorld {
             transform_hierarchy: TransformHierarchySystem::new(),
             jump_sound: None,
             music_playing: false,
+            volume: 1.0,
+            show_ui: true,
+            font_loaded: false,
         }
     }
 
@@ -171,14 +184,48 @@ impl Game for HelloWorld {
             }
         }
 
+        // Try to load a font for text rendering
+        match ctx.ui.load_font_file("examples/assets/fonts/font.ttf") {
+            Ok(_handle) => {
+                self.font_loaded = true;
+                println!("Font loaded - text will render with actual glyphs!");
+            }
+            Err(_) => {
+                // Try fallback paths for common system fonts
+                let font_paths = [
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                    "/System/Library/Fonts/Helvetica.ttc",
+                    "C:\\Windows\\Fonts\\arial.ttf",
+                ];
+
+                for path in font_paths {
+                    if let Ok(_) = ctx.ui.load_font_file(path) {
+                        self.font_loaded = true;
+                        println!("System font loaded from: {}", path);
+                        break;
+                    }
+                }
+
+                if !self.font_loaded {
+                    println!("No font loaded. Text will render as placeholders.");
+                    println!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
+                }
+            }
+        }
+
         println!("Game initialized with {} entities ({} root, {} children)",
                  total_count, root_count, child_count);
-        println!("Controls: WASD to move, SPACE to jump, R to reset, M to toggle music, ESC to exit");
+        println!("Controls: WASD to move, SPACE to jump, R to reset, M to toggle music, H to toggle UI, ESC to exit");
         println!("Physics enabled - push the wood boxes around!");
         if child_count > 0 {
             println!("Scene Graph: {} child entities will follow their parents!", child_count);
         }
         println!("Audio system ready - master volume: {:.0}%", ctx.audio.master_volume() * 100.0);
+        println!("UI system ready - click buttons and drag sliders!");
+        if self.font_loaded {
+            println!("Font system ready - text renders with actual glyphs!");
+        }
     }
 
     /// Called every frame - update game logic
@@ -246,6 +293,63 @@ impl Game for HelloWorld {
         {
             use ecs::System;
             self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
+        }
+
+        // ==================== UI Demo ====================
+        // Toggle UI visibility with H key
+        if ctx.input.is_key_just_pressed(KeyCode::KeyH) {
+            self.show_ui = !self.show_ui;
+        }
+
+        // Create UI elements (immediate-mode - describe UI every frame)
+        // Labels render with actual fonts if loaded, otherwise as placeholder rectangles
+        if self.show_ui {
+            // Draw a semi-transparent control panel in the top-left
+            let panel_rect = UIRect::new(10.0, 10.0, 220.0, 200.0);
+            ctx.ui.panel(panel_rect);
+
+            // Title label (renders with font glyphs if font loaded)
+            ctx.ui.label("Controls", Vec2::new(20.0, 25.0));
+
+            // Volume slider
+            ctx.ui.label("Volume:", Vec2::new(20.0, 55.0));
+            let slider_rect = UIRect::new(20.0, 70.0, 190.0, 20.0);
+            let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
+            if (new_volume - self.volume).abs() > 0.01 {
+                self.volume = new_volume;
+                ctx.audio.set_master_volume(self.volume);
+            }
+
+            // Music toggle button
+            let music_btn_rect = UIRect::new(20.0, 100.0, 90.0, 30.0);
+            let music_label = if self.music_playing { "Pause" } else { "Play" };
+            if ctx.ui.button("music_btn", music_label, music_btn_rect) {
+                if self.music_playing {
+                    ctx.audio.pause_music();
+                    self.music_playing = false;
+                } else {
+                    ctx.audio.resume_music();
+                    self.music_playing = true;
+                }
+            }
+
+            // Reset button
+            let reset_btn_rect = UIRect::new(120.0, 100.0, 90.0, 30.0);
+            if ctx.ui.button("reset_btn", "Reset", reset_btn_rect) {
+                self.reset_player(ctx);
+            }
+
+            // Progress bar showing current volume level
+            ctx.ui.label("Volume Bar:", Vec2::new(20.0, 145.0));
+            let progress_rect = UIRect::new(20.0, 160.0, 190.0, 15.0);
+            ctx.ui.progress_bar(self.volume, progress_rect);
+
+            // Help text and status at bottom
+            ctx.ui.label("H: Toggle UI", Vec2::new(20.0, 185.0));
+
+            // Show font status
+            let font_status = if self.font_loaded { "Font: ON" } else { "Font: OFF" };
+            ctx.ui.label(font_status, Vec2::new(140.0, 185.0));
         }
     }
 

@@ -78,7 +78,7 @@ pub struct PrefabData {
 }
 
 /// Entity instance in a scene
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EntityData {
     /// Optional name for this entity (for lookup)
     #[serde(default)]
@@ -101,19 +101,6 @@ pub struct EntityData {
     /// Child entities (alternative to using parent field - creates hierarchy inline)
     #[serde(default)]
     pub children: Vec<EntityData>,
-}
-
-impl Default for EntityData {
-    fn default() -> Self {
-        Self {
-            name: None,
-            prefab: None,
-            parent: None,
-            overrides: Vec::new(),
-            components: Vec::new(),
-            children: Vec::new(),
-        }
-    }
 }
 
 /// Component data variants for serialization

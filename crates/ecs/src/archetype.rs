@@ -3,7 +3,7 @@
 //! This module implements archetype-based component storage, which groups entities
 //! with the same component types together for better cache locality and iteration performance.
 
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::Vec;
@@ -171,6 +171,7 @@ impl Archetype {
     }
 
     /// Add an entity to this archetype with its components
+    #[allow(clippy::borrowed_box)]
     pub fn add_entity(&mut self, entity: EntityId, components: Vec<Box<dyn Component>>) {
         let index = self.entities.len();
         self.entities.push(entity);
@@ -178,7 +179,8 @@ impl Archetype {
 
         // Add components to their respective columns
         for component in components {
-            let type_id = component.type_id();
+            // Get type_id from the concrete type inside the Box
+            let type_id = (*component).type_id();
             let column = self.components.entry(type_id).or_insert_with(|| {
                 ComponentColumn::new(std::mem::size_of_val(component.as_ref()))
             });
