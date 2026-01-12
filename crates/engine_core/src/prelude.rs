@@ -5,7 +5,9 @@
 
 pub use crate::{
     // Simple game API (recommended)
-    game::{Game, GameConfig, GameContext, RenderContext, run_game},
+    game::{Game, run_game},
+    contexts::{GameContext, RenderContext, GlyphCacheKey},
+    game_config::GameConfig,
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
     // Scene serialization

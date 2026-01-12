@@ -28,6 +28,7 @@ mod game;
 mod game_loop;
 mod timing;
 mod scene;
+pub mod scene_manager;
 pub mod lifecycle;
 pub mod assets;
 pub mod scene_data;
@@ -36,6 +37,9 @@ pub mod render_manager;
 pub mod window_manager;
 pub mod game_loop_manager;
 pub mod ui_manager;
+pub mod game_config;
+pub mod contexts;
+pub mod ui_integration;
 
 pub mod prelude;
 
@@ -46,6 +50,7 @@ pub use game::*;
 pub use game_loop::*;
 pub use timing::*;
 pub use scene::*;
+pub use scene_manager::*;
 pub use lifecycle::*;
 pub use assets::*;
 pub use scene_data::*;
@@ -54,6 +59,7 @@ pub use render_manager::*;
 pub use window_manager::*;
 pub use game_loop_manager::*;
 pub use ui_manager::*;
+pub use game_config::*;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

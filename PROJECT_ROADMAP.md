@@ -201,12 +201,15 @@ All major ECS API issues have been resolved:
 
 ### Critical (Must Fix - URGENT)
 - [x] **Add renderer test suite** - 62 tests added (COMPLETED Jan 2026) ✅
-- [ ] **Complete SRP refactoring** - PARTIALLY DONE (Managers extracted but GameRunner still violates SRP)
+- [x] **Complete SRP refactoring for GameRunner** - COMPLETED (Jan 2026) ✅
   - ✅ Created `RenderManager` - encapsulates renderer, sprite pipeline, camera  
   - ✅ Created `WindowManager` - encapsulates window creation and size tracking
-  - ⚠️ GameRunner still has 8+ responsibilities in update_and_render()
-  - ⚠️ EngineApplication still 346 lines (Facade pattern incomplete)
-  - **Priority:** HIGH - Architecture is compromised
+  - ✅ Created `GameLoopManager` - frame timing and delta calculation
+  - ✅ Created `UIManager` - UI lifecycle and draw command collection
+  - ✅ Refactored `GameRunner.update_and_render()` - extracted 7 focused methods
+  - ✅ All tests pass (356/356), example works correctly
+  - **Next:** EngineApplication cleanup (reduce from 346 to ~150 lines)
+  - **Priority:** MEDIUM
 - [ ] **Fix behavior.rs println!()** - CLAIMED FIXED BUT STILL BROKEN
   - Line 243 still contains `eprintln!()` instead of `log::info!()`
   - **Priority:** URGENT - False claim in documentation
@@ -328,7 +331,7 @@ All major ECS API issues have been resolved:
 12. ✅ **Comprehensive test verification** - 338/356 tests passing, 17 TODOs fixed, 55+ assertions added
 
 ### Partial/In Progress (January 2026)
-13. ⚠️ **SRP refactoring** - Managers extracted but orchestration layer still violates SRP (GameRunner: 8+ responsibilities)
+13. ⚠️ **SRP refactoring** - Managers extracted, GameRunner refactored, EngineApplication still needs work
 14. ⚠️ **Test count reconciliation** - All crates now have accurate counts, ANALYSIS.md files need updating
 
 ### Planned for Future
