@@ -1,0 +1,11 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+description = "Common types and utilities for the Insiculous 2D game engine"
+
+[dependencies]
+glam = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+bytemuck = { workspace = true }

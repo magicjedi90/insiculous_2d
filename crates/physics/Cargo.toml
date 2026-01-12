@@ -1,0 +1,15 @@
+[package]
+name = "physics"
+version = "0.1.0"
+edition = "2021"
+description = "2D physics system for the insiculous_2d game engine using rapier2d"
+
+[dependencies]
+common = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+glam = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+rapier2d = "0.23"
+ecs = { path = "../ecs" }

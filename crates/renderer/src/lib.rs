@@ -1,211 +1,65 @@
-// crates/renderer/src/lib.rs
-use wgpu::{
-    Color, CompositeAlphaMode, Device, PresentMode, Queue, Surface, SurfaceConfiguration,
-    TextureUsages,
-};
-use winit::window::Window;
+//! WGPU renderer for the insiculous_2d game engine.
+//!
+//! This crate provides a simple renderer using WGPU.
 
-/// GPU renderer: holds surface, device, queue, and swapchain configuration
-pub struct Renderer {
-    surface: Surface<'static>,
-    device: Device,
-    queue: Queue,
-    config: SurfaceConfiguration,
+use std::sync::Arc;
+use winit::{
+    application::ApplicationHandler,
+    window::Window,
+};
+
+mod error;
+mod renderer;
+pub mod sprite;
+pub mod sprite_data;
+pub mod texture;
+mod window;
+
+pub mod prelude;
+
+// Re-export wgpu for use by dependent crates
+pub use wgpu;
+
+// Re-export for convenience
+pub use error::*;
+pub use renderer::*;
+pub use sprite_data::*;
+pub use window::*;
+
+// Selective re-exports to avoid conflicts
+// TextureHandle is the canonical definition in texture.rs
+pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline, TextureAtlas};
+pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle, TextureAtlasBuilder};
+
+/// Time resource for tracking delta time
+#[derive(Debug, Clone, Copy)]
+pub struct Time {
+    /// Delta time in seconds
+    pub delta_seconds: f32,
+    /// Total elapsed time in seconds
+    pub elapsed_seconds: f32,
 }
 
-impl Renderer {
-    /// Asynchronously create a new Renderer for the given window
-    pub async fn new(window: &Window) -> Self {
-        // 1. Create WGPU instance and surface
-        let instance = wgpu::Instance::default();
-        let raw_surface = instance.create_surface(window).unwrap();
-        // It's safe to transmute to 'static
-        let surface: Surface = unsafe { std::mem::transmute(raw_surface) };
-
-        // 2. Request an adapter compatible with the surface
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                compatible_surface: Some(&surface),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        // 3. Request device and queue
-        let (device, queue) = adapter
-            .request_device(&Default::default(), None)
-            .await
-            .unwrap();
-
-        // 4. Configure the surface
-        let size = window.inner_size();
-        let format = surface.get_capabilities(&adapter).formats[0];
-        let config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format,
-            width: size.width,
-            height: size.height,
-            present_mode: PresentMode::Fifo,
-            desired_maximum_frame_latency: 0,
-            alpha_mode: CompositeAlphaMode::Opaque,
-            view_formats: vec![format],
-        };
-        surface.configure(&device, &config);
-
+impl Default for Time {
+    fn default() -> Self {
         Self {
-            surface,
-            device,
-            queue,
-            config,
+            delta_seconds: 0.0,
+            elapsed_seconds: 0.0,
         }
     }
+}
 
-    // Change clear_screen to take &self
-    /// Clear the screen with a given color [r,g,b,a]
-    pub fn clear_screen(&self, rgba: [f64; 4]) {
-        // Acquire next frame
-        let frame = self.surface.get_current_texture().unwrap();
-        let view = frame.texture.create_view(&Default::default());
+/// Simplified renderer initialization - no tokio required
+pub async fn init(window: Arc<Window>) -> Result<Renderer, RendererError> {
+    log::info!("Initializing renderer");
+    Renderer::new(window).await
+}
 
-        // Encode commands
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        {
-            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("clear_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(Color {
-                            r: rgba[0],
-                            g: rgba[1],
-                            b: rgba[2],
-                            a: rgba[3],
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-        }
-        // Submit and present
-        self.queue.submit(Some(encoder.finish()));
-        frame.present();
-    }
-
-    /// Get a reference to the WGPU device
-    pub fn device(&self) -> &Device {
-        &self.device
-    }
-
-    /// Get a reference to the command queue
-    pub fn queue(&self) -> &Queue {
-        &self.queue
-    }
-
-    /// Get the swapchain texture format
-    pub fn target_format(&self) -> wgpu::TextureFormat {
-        self.config.format
-    }
-
-    /// Get the current target size (width, height)
-    pub fn target_size(&self) -> (u32, u32) {
-        (self.config.width, self.config.height)
-    }
-
-    /// Helper to run custom render passes (e.g., egui)
-    pub fn with_encoder<F: FnOnce(&mut wgpu::CommandEncoder, &wgpu::TextureView)>(&self, f: F) {
-        // Acquire next frame
-        let frame = self.surface.get_current_texture().unwrap();
-        let view = frame.texture.create_view(&Default::default());
-
-        // Encode commands
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        f(&mut encoder, &view);
-        self.queue.submit(Some(encoder.finish()));
-        frame.present();
-    }
-
-    pub fn render_egui(
-        &self,
-        egui_renderer: &mut egui_wgpu::Renderer,
-        paint_jobs: &[egui::ClippedPrimitive],
-        screen_desc: &egui_wgpu::ScreenDescriptor
-    ) {
-        // Get the current frame
-        let frame = self.surface.get_current_texture().unwrap();
-        let view = frame.texture.create_view(&Default::default());
-        
-        // Create command encoder
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("egui_encoder"),
-        });
-        
-        // Update the egui buffers
-        egui_renderer.update_buffers(
-            &self.device,
-            &self.queue,
-            &mut encoder,
-            paint_jobs,
-            screen_desc
-        );
-        
-        // Use a scope to ensure render pass is dropped before encoder.finish()
-        {
-            // Create render pass and transmute to 'static
-            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-            
-            // Transmute to 'static and render
-            let mut rpass = unsafe { std::mem::transmute::<_, wgpu::RenderPass<'static>>(render_pass) };
-            egui_renderer.render(&mut rpass, paint_jobs, screen_desc);
-            
-            // Drop the transmuted render pass
-            drop(rpass);
-        }
-        
-        // Submit work
-        self.queue.submit(std::iter::once(encoder.finish()));
-        
-        // Present
-        frame.present();
-    }
-    
-    // Helper method to update textures
-    pub fn update_egui_texture(
-        &self,
-        egui_renderer: &mut egui_wgpu::Renderer,
-        id: egui::TextureId,
-        delta: &egui::epaint::ImageDelta
-    ) {
-        egui_renderer.update_texture(
-            &self.device,
-            &self.queue,
-            id,
-            delta
-        );
-    }
-    
-    // Helper to free textures
-    pub fn free_egui_texture(
-        &self,
-        egui_renderer: &mut egui_wgpu::Renderer,
-        id: &egui::TextureId
-    ) {
-        egui_renderer.free_texture(id);
-    }
+/// Run the renderer with a custom application handler
+pub fn run_with_app<T>(app: &mut T) -> Result<(), RendererError>
+where
+    T: ApplicationHandler<()> + 'static
+{
+    log::info!("Running renderer with custom application handler");
+    Renderer::run_with_app(app)
 }

@@ -1,10 +1,19 @@
 [package]
 name = "renderer"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "WGPU renderer for the insiculous_2d game engine"
 
 [dependencies]
+common = { workspace = true }
+log = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
-egui       = { workspace = true }
-egui-wgpu  = { workspace = true }
+thiserror = { workspace = true }
+glam = { workspace = true }
+bytemuck = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

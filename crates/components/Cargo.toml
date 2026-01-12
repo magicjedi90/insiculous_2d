@@ -1,8 +1,0 @@
-[package]
-name = "components"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-hecs = { workspace = true }
-glam = { workspace = true }

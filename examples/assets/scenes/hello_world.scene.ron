@@ -1,0 +1,179 @@
+// Hello World Scene - Physics Platformer Demo with Scene Graph Hierarchy
+//
+// Controls: WASD to move, SPACE to jump, R to reset, ESC to exit
+//
+// This scene demonstrates:
+// - Physics simulation with rapier2d
+// - Prefabs for reusable entity templates
+// - Parent-child entity relationships (player has an indicator child)
+// - Texture loading (wood texture on obstacle boxes)
+//
+SceneData(
+    name: "Hello World",
+
+    // Physics settings for platformer gameplay
+    physics: Some(PhysicsSettings(
+        gravity: (0.0, -980.0),
+        pixels_per_meter: 100.0,
+        timestep: 0.016666668,
+    )),
+
+    // Prefab definitions - reusable entity templates
+    prefabs: {
+        // Player prefab - blue dynamic body with platformer physics and behavior
+        "Player": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0), scale: (1.0, 1.0)),
+                Sprite(
+                    texture: "#white",
+                    color: (0.2, 0.4, 1.0, 1.0),
+                ),
+                RigidBody(
+                    body_type: Dynamic,
+                    linear_damping: 5.0,
+                    can_rotate: false,
+                    ccd_enabled: true,
+                ),
+                Collider(
+                    shape: Box(half_extents: (40.0, 40.0)),
+                    friction: 0.8,
+                ),
+                // Player behavior - WASD movement + SPACE to jump
+                Behavior(PlayerPlatformer(
+                    move_speed: 120.0,
+                    jump_impulse: 420.0,
+                    jump_cooldown: 0.3,
+                )),
+            ],
+        ),
+
+        // Ground/platform prefab - static gray body
+        "Platform": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0), scale: (1.0, 1.0)),
+                Sprite(
+                    texture: "#white",
+                    color: (0.3, 0.3, 0.3, 1.0),
+                ),
+                RigidBody(body_type: Static),
+            ],
+        ),
+
+        // Pushable obstacle prefab - wood textured dynamic box
+        "Obstacle": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0), scale: (1.0, 1.0)),
+                Sprite(
+                    texture: "assets/images/wood_texture.png",
+                    color: (1.0, 1.0, 1.0, 1.0),
+                ),
+                RigidBody(
+                    body_type: Dynamic,
+                    linear_damping: 5.0,
+                    ccd_enabled: true,
+                ),
+                Collider(
+                    shape: Box(half_extents: (40.0, 40.0)),
+                    friction: 0.3,
+                    restitution: 0.2,
+                ),
+            ],
+        ),
+
+        // Decoration marker prefab (no physics) - used as child entities
+        "Marker": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0), scale: (0.25, 0.25)),
+                Sprite(
+                    texture: "#white",
+                    color: (1.0, 1.0, 0.0, 1.0),
+                    depth: 1.0,
+                ),
+            ],
+        ),
+    },
+
+    // Entity instances in the scene
+    entities: [
+        // Player - starts above ground, with a marker child
+        EntityData(
+            name: Some("player"),
+            prefab: Some("Player"),
+            overrides: [
+                Transform2D(position: (-200.0, 100.0)),
+            ],
+            // Child entities using inline children syntax (demonstrates hierarchy)
+            children: [
+                // Player indicator - marker above the player that follows it
+                EntityData(
+                    name: Some("player_indicator"),
+                    prefab: Some("Marker"),
+                    overrides: [
+                        // Position 80 units above player center, scale 0.5x (40 pixels)
+                        Transform2D(position: (0.0, 80.0), scale: (0.5, 0.5)),
+                        // Bright green color for visibility
+                        Sprite(texture: "#white", color: (0.0, 1.0, 0.0, 1.0), depth: 2.0),
+                    ],
+                ),
+            ],
+        ),
+
+        // Main ground platform
+        EntityData(
+            name: Some("ground"),
+            prefab: Some("Platform"),
+            overrides: [
+                Transform2D(position: (0.0, -250.0), scale: (10.0, 0.5)),
+            ],
+            components: [
+                Collider(
+                    shape: Box(half_extents: (400.0, 20.0)),
+                    friction: 0.8,
+                ),
+            ],
+        ),
+
+        // Floating platform
+        EntityData(
+            name: Some("floating_platform"),
+            prefab: Some("Platform"),
+            overrides: [
+                Transform2D(position: (100.0, -50.0), scale: (3.0, 0.5)),
+                Sprite(texture: "#white", color: (0.4, 0.4, 0.4, 1.0)),
+            ],
+            components: [
+                Collider(
+                    shape: Box(half_extents: (120.0, 20.0)),
+                    friction: 0.8,
+                ),
+            ],
+        ),
+
+        // Obstacle box 1
+        EntityData(
+            name: Some("obstacle_1"),
+            prefab: Some("Obstacle"),
+            overrides: [
+                Transform2D(position: (-100.0, 0.0)),
+            ],
+        ),
+
+        // Obstacle box 2
+        EntityData(
+            name: Some("obstacle_2"),
+            prefab: Some("Obstacle"),
+            overrides: [
+                Transform2D(position: (20.0, 0.0)),
+            ],
+        ),
+
+        // Obstacle box 3
+        EntityData(
+            name: Some("obstacle_3"),
+            prefab: Some("Obstacle"),
+            overrides: [
+                Transform2D(position: (140.0, 0.0)),
+            ],
+        ),
+    ],
+)

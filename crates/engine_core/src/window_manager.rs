@@ -1,0 +1,240 @@
+//! Window manager for handling window creation and lifecycle.
+//!
+//! This module provides a focused manager for window-related concerns,
+//! following the Single Responsibility Principle.
+
+use std::sync::Arc;
+
+use winit::{
+    event_loop::ActiveEventLoop,
+    window::{Window, WindowAttributes},
+};
+
+use renderer::RendererError;
+
+/// Configuration for window creation.
+#[derive(Debug, Clone)]
+pub struct WindowConfig {
+    /// Window title
+    pub title: String,
+    /// Window width in pixels
+    pub width: u32,
+    /// Window height in pixels
+    pub height: u32,
+    /// Whether the window is resizable
+    pub resizable: bool,
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            title: "Insiculous 2D".to_string(),
+            width: 800,
+            height: 600,
+            resizable: true,
+        }
+    }
+}
+
+impl WindowConfig {
+    /// Create a new window configuration with the given title.
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Set the window size.
+    pub fn with_size(mut self, width: u32, height: u32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    /// Set whether the window is resizable.
+    pub fn with_resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
+        self
+    }
+}
+
+/// Manages window creation and lifecycle.
+///
+/// This struct encapsulates all window-related responsibilities:
+/// - Window creation
+/// - Window size tracking
+/// - Window access
+pub struct WindowManager {
+    /// The window instance
+    window: Option<Arc<Window>>,
+    /// Current window configuration
+    config: WindowConfig,
+}
+
+impl Default for WindowManager {
+    fn default() -> Self {
+        Self::new(WindowConfig::default())
+    }
+}
+
+impl WindowManager {
+    /// Create a new window manager with the given configuration.
+    pub fn new(config: WindowConfig) -> Self {
+        Self {
+            window: None,
+            config,
+        }
+    }
+
+    /// Create the window using the active event loop.
+    ///
+    /// # Arguments
+    /// * `event_loop` - The active event loop from winit
+    ///
+    /// # Returns
+    /// * `Ok(Arc<Window>)` on successful creation
+    /// * `Err(RendererError)` if creation fails
+    pub fn create(&mut self, event_loop: &ActiveEventLoop) -> Result<Arc<Window>, RendererError> {
+        let window_attributes = WindowAttributes::default()
+            .with_title(&self.config.title)
+            .with_inner_size(winit::dpi::LogicalSize::new(
+                self.config.width,
+                self.config.height,
+            ))
+            .with_resizable(self.config.resizable);
+
+        match event_loop.create_window(window_attributes) {
+            Ok(window) => {
+                let window = Arc::new(window);
+                self.window = Some(window.clone());
+                log::info!("Window created: {}", self.config.title);
+                Ok(window)
+            }
+            Err(e) => {
+                log::error!("Failed to create window: {}", e);
+                Err(RendererError::WindowCreationError(e.to_string()))
+            }
+        }
+    }
+
+    /// Check if the window has been created.
+    pub fn is_created(&self) -> bool {
+        self.window.is_some()
+    }
+
+    /// Get a reference to the window if it exists.
+    pub fn window(&self) -> Option<&Arc<Window>> {
+        self.window.as_ref()
+    }
+
+    /// Get a clone of the window Arc if it exists.
+    pub fn window_clone(&self) -> Option<Arc<Window>> {
+        self.window.clone()
+    }
+
+    /// Update the tracked window size.
+    ///
+    /// Call this when receiving resize events.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.config.width = width;
+        self.config.height = height;
+    }
+
+    /// Get the current window size.
+    pub fn size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
+    }
+
+    /// Get the current window width.
+    pub fn width(&self) -> u32 {
+        self.config.width
+    }
+
+    /// Get the current window height.
+    pub fn height(&self) -> u32 {
+        self.config.height
+    }
+
+    /// Get the window title.
+    pub fn title(&self) -> &str {
+        &self.config.title
+    }
+
+    /// Request a redraw of the window.
+    pub fn request_redraw(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Get the window ID if the window exists.
+    pub fn window_id(&self) -> Option<winit::window::WindowId> {
+        self.window.as_ref().map(|w| w.id())
+    }
+
+    /// Check if an event belongs to this window.
+    pub fn is_our_window(&self, window_id: winit::window::WindowId) -> bool {
+        self.window.as_ref().is_some_and(|w| w.id() == window_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_config_default() {
+        let config = WindowConfig::default();
+        assert_eq!(config.title, "Insiculous 2D");
+        assert_eq!(config.width, 800);
+        assert_eq!(config.height, 600);
+        assert!(config.resizable);
+    }
+
+    #[test]
+    fn test_window_config_builder() {
+        let config = WindowConfig::new("Test Game")
+            .with_size(1024, 768)
+            .with_resizable(false);
+
+        assert_eq!(config.title, "Test Game");
+        assert_eq!(config.width, 1024);
+        assert_eq!(config.height, 768);
+        assert!(!config.resizable);
+    }
+
+    #[test]
+    fn test_window_manager_new() {
+        let config = WindowConfig::new("Test");
+        let manager = WindowManager::new(config);
+        assert!(!manager.is_created());
+        assert!(manager.window().is_none());
+    }
+
+    #[test]
+    fn test_window_manager_size() {
+        let config = WindowConfig::new("Test").with_size(1920, 1080);
+        let manager = WindowManager::new(config);
+        assert_eq!(manager.size(), (1920, 1080));
+        assert_eq!(manager.width(), 1920);
+        assert_eq!(manager.height(), 1080);
+    }
+
+    #[test]
+    fn test_window_manager_resize() {
+        let config = WindowConfig::default();
+        let mut manager = WindowManager::new(config);
+        assert_eq!(manager.size(), (800, 600));
+
+        manager.resize(1280, 720);
+        assert_eq!(manager.size(), (1280, 720));
+    }
+
+    #[test]
+    fn test_window_manager_title() {
+        let config = WindowConfig::new("My Awesome Game");
+        let manager = WindowManager::new(config);
+        assert_eq!(manager.title(), "My Awesome Game");
+    }
+}
