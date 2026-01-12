@@ -5,7 +5,7 @@ fn test_mouse_state_creation() {
     // Test creating a new mouse state
     let mouse = MouseState::new();
 
-    // TODO: Assert that the mouse state is properly initialized
+    // Assert that the mouse state is properly initialized
     // Initially the position should be (0, 0) and no buttons should be pressed
     assert_eq!(mouse.position().x, 0.0);
     assert_eq!(mouse.position().y, 0.0);
@@ -23,7 +23,7 @@ fn test_mouse_position() {
     // Update the position
     mouse.update_position(10.0, 20.0);
 
-    // TODO: Assert that the position was updated
+    // Assert that the position was updated
     assert_eq!(mouse.position().x, 10.0);
     assert_eq!(mouse.position().y, 20.0);
 
@@ -39,7 +39,7 @@ fn test_mouse_position() {
     // Update the position again
     mouse.update_position(15.0, 25.0);
 
-    // TODO: Assert that the position was updated
+    // Assert that the position was updated
     assert_eq!(mouse.position().x, 15.0);
     assert_eq!(mouse.position().y, 25.0);
 
@@ -61,7 +61,7 @@ fn test_mouse_button_press_and_release() {
     // Press a button
     mouse.handle_button_press(MouseButton::Left);
 
-    // TODO: Assert that the button is pressed and just pressed
+    // Assert that the button is pressed and just pressed
     assert!(mouse.is_button_pressed(MouseButton::Left));
     assert!(mouse.is_button_just_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_released(MouseButton::Left));
@@ -69,7 +69,7 @@ fn test_mouse_button_press_and_release() {
     // Update to clear the "just pressed" state
     mouse.update();
 
-    // TODO: Assert that the button is still pressed but not just pressed
+    // Assert that the button is still pressed but not just pressed
     assert!(mouse.is_button_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_released(MouseButton::Left));
@@ -77,7 +77,7 @@ fn test_mouse_button_press_and_release() {
     // Release the button
     mouse.handle_button_release(MouseButton::Left);
 
-    // TODO: Assert that the button is not pressed but just released
+    // Assert that the button is not pressed but just released
     assert!(!mouse.is_button_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_pressed(MouseButton::Left));
     assert!(mouse.is_button_just_released(MouseButton::Left));
@@ -85,7 +85,7 @@ fn test_mouse_button_press_and_release() {
     // Update to clear the "just released" state
     mouse.update();
 
-    // TODO: Assert that the button is not pressed and not just released
+    // Assert that the button is not pressed and not just released
     assert!(!mouse.is_button_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_released(MouseButton::Left));
@@ -99,19 +99,19 @@ fn test_mouse_wheel() {
     // Update the wheel delta
     mouse.update_wheel_delta(1.0);
 
-    // TODO: Assert that the wheel delta was updated
+    // Assert that the wheel delta was updated
     assert_eq!(mouse.wheel_delta(), 1.0);
 
     // Update to clear the wheel delta
     mouse.update();
 
-    // TODO: Assert that the wheel delta was cleared
+    // Assert that the wheel delta was cleared
     assert_eq!(mouse.wheel_delta(), 0.0);
 
     // Update the wheel delta again
     mouse.update_wheel_delta(-2.0);
 
-    // TODO: Assert that the wheel delta was updated
+    // Assert that the wheel delta was updated
     assert_eq!(mouse.wheel_delta(), -2.0);
 }
 
@@ -125,7 +125,7 @@ fn test_multiple_mouse_buttons() {
     mouse.handle_button_press(MouseButton::Right);
     mouse.handle_button_press(MouseButton::Middle);
 
-    // TODO: Assert that all buttons are pressed
+    // Assert that all buttons are pressed
     assert!(mouse.is_button_pressed(MouseButton::Left));
     assert!(mouse.is_button_pressed(MouseButton::Right));
     assert!(mouse.is_button_pressed(MouseButton::Middle));
@@ -133,7 +133,7 @@ fn test_multiple_mouse_buttons() {
     // Release one button
     mouse.handle_button_release(MouseButton::Right);
 
-    // TODO: Assert that the released button is not pressed but the others are
+    // Assert that the released button is not pressed but the others are
     assert!(mouse.is_button_pressed(MouseButton::Left));
     assert!(!mouse.is_button_pressed(MouseButton::Right));
     assert!(mouse.is_button_pressed(MouseButton::Middle));

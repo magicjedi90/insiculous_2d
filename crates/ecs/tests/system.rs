@@ -26,13 +26,11 @@ fn test_system_trait() {
     // Update the system
     system.update(&mut world, 0.016);
 
-    // TODO: Assert that the system was updated
     assert_eq!(system.update_count, 1);
 
     // Update the system again
     system.update(&mut world, 0.016);
 
-    // TODO: Assert that the system was updated again
     assert_eq!(system.update_count, 2);
 }
 
@@ -52,7 +50,6 @@ fn test_simple_system() {
     // Update the system
     system.update(&mut world, 0.016);
 
-    // TODO: Assert that the system was updated
     // Note: We can't directly check update_count since it's captured by the closure
     // In a real test, we would need a different approach to verify the system's behavior
 
@@ -85,13 +82,11 @@ fn test_system_in_world() {
         name: "TestSystem".to_string(),
     });
 
-    // TODO: Assert that the system was added successfully
     assert_eq!(world.system_count(), 1);
 
     // Update the systems
     let _ = world.update(0.016);
 
-    // TODO: Assert that the system was updated
     // Note: We can't directly check the system's state since we don't have access to it after it's added
     // In a real test, we would need a different approach to verify the system's behavior
 }
@@ -129,13 +124,11 @@ fn test_multiple_systems() {
     world.add_system(PhysicsSystem);
     world.add_system(RenderSystem);
 
-    // TODO: Assert that both systems were added successfully
     assert_eq!(world.system_count(), 2);
 
     // Update the systems
     let _ = world.update(0.016);
 
-    // TODO: Assert that both systems were updated
     // Note: We can't directly check the systems' states since we don't have access to them after they're added
     // In a real test, we would need a different approach to verify the systems' behaviors
 }

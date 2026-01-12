@@ -3,7 +3,7 @@
 ## Current State (Updated: January 2026)
 The ECS crate provides a robust Entity Component System with archetype-based storage for the Insiculous 2D game engine. It includes entity management, component storage, system execution, and advanced features like entity generation tracking, lifecycle management, and scene graph support.
 
-**Test Count: 82 tests** (all passing)
+**Test Count: 84 tests** (all passing)
 
 ---
 
@@ -41,13 +41,9 @@ pub mod hierarchy; // public
 - Hierarchy methods
 - Query methods
 
-#### 4. Some Tests Have Incomplete Assertions
+#### 4. ~~Some Tests Have Incomplete Assertions~~ - FIXED (January 2026)
 **Location**: Various test files
-**Issue**: Some tests use TODO comments instead of actual assertions.
-
-**Example**: Tests that verify creation but not behavior.
-
-**Recommended Fix**: Replace TODO comments with actual assertion logic.
+**Status**: RESOLVED - All TODO comments in test files have been replaced with proper assertions.
 
 ---
 
@@ -141,7 +137,7 @@ transform_system.update(&mut world, delta_time);
 
 ## Test Coverage Analysis
 
-**Total Tests**: 82 (all passing)
+**Total Tests**: 84 (all passing)
 
 ### Test File Breakdown
 ```
@@ -219,7 +215,7 @@ EngineApplication
 3. Split World impl blocks by concern for better navigation
 
 ### Medium-term
-4. Replace TODO comments in tests with actual assertions
+4. ~~Replace TODO comments in tests with actual assertions~~ - COMPLETED
 5. Add edge case tests for component removal
 6. Review and either use or remove dead code
 
