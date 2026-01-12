@@ -4,9 +4,15 @@ use engine_core::prelude::*;
 fn test_init() {
     // Test initializing the engine core
     let result = init();
-
-    // TODO: Assert that initialization was successful
-    assert!(result.is_ok());
+    
+    // Verify initialization was successful  
+    assert!(result.is_ok(), "Engine initialization should succeed");
+    
+    // Verify no error was returned
+    match result {
+        Ok(()) => {}, // Success - no value returned
+        Err(e) => panic!("Engine initialization failed: {e}"),
+    }
 }
 
 #[test]
@@ -14,10 +20,10 @@ fn test_engine_error() {
     // Test creating an engine error
     let error = EngineError::InitializationError("Test error".to_string());
 
-    // TODO: Assert that the error is correctly created
+    // Verify the error is correctly created with the right message
     match error {
         EngineError::InitializationError(ref msg) => {
-            assert_eq!(msg, "Test error");
+            assert_eq!(msg, "Test error", "Error message should match");
         }
         _ => panic!("Wrong error type"),
     }
