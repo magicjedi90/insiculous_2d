@@ -28,27 +28,15 @@ winit = "0.30"
 thiserror = "2.0"
 pollster = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-ron = "0.9"
-glam = { version = "0.29", features = ["serde"] }
+toml = "0.9.11+spec-1.1.0"
+ron = "0.12.0"
+glam = { version = "0.30.10", features = ["serde"] }
 bytemuck = { version = "1.21", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
 
 [dependencies]
 engine_core = { path = "crates/engine_core" }
-renderer = { path = "crates/renderer" }
 ecs = { path = "crates/ecs" }
-input = { path = "crates/input" }
-physics = { path = "crates/physics" }
-audio = { path = "crates/audio" }
-ui = { path = "crates/ui" }
-log = { workspace = true }
-env_logger = { workspace = true }
-glam = { workspace = true }
-wgpu = { workspace = true }
-winit = { workspace = true }
-pollster = { workspace = true }
-bytemuck = { workspace = true }
 
 # Examples
 [[example]]
