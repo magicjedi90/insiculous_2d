@@ -236,8 +236,7 @@ None - all high priority issues resolved! ✅
 - [x] **renderer/ARCH-002: Time struct misplaced** - ✅ Time now defined in common, re-exported from renderer
 
 **engine_core:**
-- [ ] **Glyph texture key collision** - Color in cache key but textures grayscale
-  - Location: `engine_core/src/contexts.rs:50-74`
+- [x] **Glyph texture key collision** - ✅ Removed `color_rgb` from `GlyphCacheKey`, textures are now color-agnostic alpha masks, color applied at render time
 - [ ] **Silent texture fallback** - Missing textures show white, no warning
   - Location: `engine_core/src/game.rs:262`
 - [ ] **EngineApplication cleanup** - Reduce from 346 to ~150 lines
@@ -317,14 +316,14 @@ None - all high priority issues resolved! ✅
 
 | Crate | High | Medium | Low | Total | Overall Assessment |
 |-------|------|--------|-----|-------|-------------------|
-| engine_core | 0 | 3 | 10 | 13 | SRP complete ✅, behavior optimized ✅ |
+| engine_core | 0 | 2 | 10 | 12 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅ |
 | renderer | 0 | 3 | 7 | 10 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
 | ecs | 0 | 1 | 11 | 12 | Tests complete ✅, cycle detection ✅ |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
 | input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **8** | **49** | **57** | |
+| **Total** | **0** | **7** | **49** | **56** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅

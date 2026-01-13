@@ -5,7 +5,7 @@ Last audited: January 2026
 ## Summary
 - DRY violations: 5
 - SRP violations: 3
-- KISS violations: 2
+- KISS violations: 1 (1 resolved)
 - Architecture issues: 3
 
 ---
@@ -103,14 +103,9 @@ Last audited: January 2026
 
 ## KISS Violations
 
-### [KISS-001] Glyph cache key includes color unnecessarily
+### ~~[KISS-001] Glyph cache key includes color unnecessarily~~ ✅ RESOLVED
 - **File:** `contexts.rs`
-- **Lines:** 16-41
-- **Issue:** `GlyphCacheKey` includes `color_rgb` in the hash key, but glyph textures are stored as grayscale and multiplied by color at render time. This causes:
-  - Memory waste: Same glyph cached multiple times for different colors
-  - Cache misses: Different colors = different keys
-- **Suggested fix:** Remove `color_rgb` from `GlyphCacheKey` since textures are color-agnostic.
-- **Priority:** High (tracked in PROJECT_ROADMAP.md as known issue)
+- **Resolution:** Removed `color_rgb` from `GlyphCacheKey`. Glyph textures are now color-agnostic grayscale alpha masks. The text color is applied at render time by setting the sprite color. This allows the same glyph texture to be reused for any color, eliminating memory waste and cache misses. Also removed the unused `_color` parameter from `create_glyph_texture()` and fixed the sprite rendering to use the actual text color instead of white.
 
 ### [KISS-002] Over-engineered lifecycle state machine
 - **File:** `lifecycle.rs`

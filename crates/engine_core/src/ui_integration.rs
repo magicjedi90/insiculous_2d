@@ -95,12 +95,11 @@ pub fn render_ui_commands(
                         let glyph_x = data.position.x + glyph.x + glyph.width as f32 / 2.0 - window_size.x / 2.0;
                         let glyph_y = window_size.y / 2.0 - (data.position.y + glyph.y + glyph.height as f32 / 2.0);
 
-                        // Look up glyph texture in cache
+                        // Look up glyph texture in cache (color-agnostic)
                         let glyph_key = GlyphCacheKey::new(
                             glyph.character,
                             glyph.width,
                             glyph.height,
-                            &data.color,
                         );
 
                         let texture = glyph_textures
@@ -108,14 +107,14 @@ pub fn render_ui_commands(
                             .copied()
                             .unwrap_or(white_texture);
 
-                        // Render glyph with its texture (white color since texture has baked color)
+                        // Render glyph with text color - texture is grayscale alpha mask
                         let render_width = glyph.width as f32;
                         let render_height = glyph.height as f32;
 
                         let sprite = Sprite::new(texture)
                             .with_position(Vec2::new(glyph_x, glyph_y))
                             .with_scale(Vec2::new(render_width, render_height))
-                            .with_color(glam::Vec4::new(1.0, 1.0, 1.0, data.color.a))
+                            .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a))
                             .with_depth(*depth);
 
                         sprites.add_sprite(&sprite);

@@ -180,17 +180,17 @@ impl AssetManager {
         Ok(handle)
     }
 
-    /// Create a glyph texture from grayscale bitmap data
+    /// Create a glyph texture from grayscale bitmap data.
     ///
-    /// Converts a grayscale bitmap to an RGBA texture where all channels (RGBA) 
-    /// contain the grayscale value. This allows the shader to multiply by text color.
-    /// The `color` parameter is kept for API compatibility but not used in the texture.
+    /// Converts a grayscale bitmap to an RGBA texture where all channels (RGBA)
+    /// contain the grayscale value. This creates an alpha mask that can be
+    /// multiplied by any text color at render time, enabling cache reuse for
+    /// the same glyph rendered in different colors.
     pub fn create_glyph_texture(
         &mut self,
         width: u32,
         height: u32,
         grayscale: &[u8],
-        _color: [u8; 3],
     ) -> Result<TextureHandle, AssetError> {
         if width == 0 || height == 0 {
             // Return the white texture for empty glyphs (like spaces)
