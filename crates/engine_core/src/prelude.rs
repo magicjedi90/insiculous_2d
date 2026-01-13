@@ -29,11 +29,19 @@ pub use common::{Color, Transform2D, Camera, Rect};
 
 // Re-export commonly used types from dependencies
 pub use glam::{Vec2, Vec4};
-pub use winit::keyboard::KeyCode;
+
+// Re-export ECS types
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::Sprite;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
+
+// Re-export input types (KeyCode re-exported through input crate, not directly from winit)
+pub use input::prelude::KeyCode;
+
+// Re-export renderer types
 pub use renderer::{TextureHandle, TextureLoadConfig};
+
+// Re-export audio types
 pub use audio::{AudioManager, SoundHandle, SoundSettings, PlaybackState};
 
 // Re-export UI types (UIRect and UIColor are aliases to common types for backwards compatibility)
