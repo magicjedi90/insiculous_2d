@@ -3,10 +3,10 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 3
+- DRY violations: 3 (1 resolved)
 - SRP violations: 0 (1 resolved)
 - KISS violations: 0 (1 resolved)
-- Architecture issues: 2
+- Architecture issues: 2 (2 resolved/documented)
 
 **Overall Assessment:** The input crate is well-designed with clean architecture. Most issues are minor DRY violations from the necessary structural similarity between input device types.
 
@@ -106,17 +106,15 @@ Last audited: January 2026
   This allows automatic conversion using `?` operator when needed.
 - **Resolved:** January 2026
 
-### [ARCH-002] InputEvent uses winit types directly
+### ~~[ARCH-002] InputEvent uses winit types directly~~ ✅ DOCUMENTED
 - **File:** `input_handler.rs`
-- **Lines:** 11-31
-- **Issue:** `InputEvent` variants use winit types directly:
-  ```rust
-  KeyPressed(winit::keyboard::KeyCode),
-  MouseButtonPressed(winit::event::MouseButton),
-  ```
-  This couples the event system to winit. If the engine ever needs to support other windowing systems or abstract input sources, this will need refactoring.
-- **Suggested fix:** Consider internal key/button enums that are converted from winit types at the boundary. Low priority since winit is the standard for Rust game engines.
-- **Priority:** Low (acceptable coupling for now)
+- **Resolution:** Added documentation to `InputEvent` enum explaining the intentional design:
+  - **Winit is the standard** for Rust windowing and is unlikely to be replaced
+  - **Reduces mapping overhead** - no conversion layer needed
+  - **Full compatibility** - all winit key codes and mouse buttons supported automatically
+  - **Simpler codebase** - fewer types to maintain
+  - If abstraction becomes necessary, it can be added at the boundary without changing the public API
+- **Resolved:** January 2026
 
 ---
 

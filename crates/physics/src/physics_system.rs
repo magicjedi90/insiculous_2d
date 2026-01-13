@@ -1,6 +1,28 @@
 //! Physics system for ECS integration
 //!
 //! This module provides a system that synchronizes ECS components with the physics world.
+//!
+//! # API Design: Pass-Through Methods
+//!
+//! [`PhysicsSystem`] provides several methods that delegate directly to [`PhysicsWorld`]:
+//! - `set_gravity()` / `gravity()`
+//! - `apply_impulse()` / `apply_force()`
+//! - `raycast()`
+//! - `collision_events()`
+//!
+//! These pass-through methods exist intentionally for **API ergonomics**:
+//!
+//! ```ignore
+//! // With pass-through (cleaner):
+//! physics_system.apply_impulse(entity, Vec2::new(0.0, 100.0));
+//!
+//! // Without pass-through:
+//! physics_system.physics_world_mut().apply_impulse(entity, Vec2::new(0.0, 100.0));
+//! ```
+//!
+//! Users who need advanced physics operations can still access the underlying
+//! [`PhysicsWorld`] via [`physics_world()`](PhysicsSystem::physics_world) and
+//! [`physics_world_mut()`](PhysicsSystem::physics_world_mut).
 
 use glam::Vec2;
 

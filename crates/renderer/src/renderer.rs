@@ -1,4 +1,24 @@
 //! WGPU renderer implementation.
+//!
+//! # Design Decisions
+//!
+//! The [`Renderer`] struct handles both initialization and rendering. While this
+//! could be split into separate concerns (initialization vs rendering), the current
+//! design is intentional:
+//!
+//! - **Initialization** (`new()`) creates the WGPU context (instance, surface, adapter,
+//!   device, queue) which is inherently tied to the renderer's lifetime.
+//! - **Rendering** (`render()`, `render_with_sprites()`) uses those resources.
+//! - These concerns are tightly coupled in WGPU - the surface, device, and queue are
+//!   all needed together and share lifetimes.
+//!
+//! Splitting them would add complexity without clear benefit for a 2D game engine.
+//!
+//! # Static Method: `run_with_app`
+//!
+//! The [`Renderer::run_with_app`] static method exists for legacy compatibility.
+//! New code should use the [`Game`](engine_core::Game) trait and [`run_game()`](engine_core::run_game)
+//! function which handle window/event loop management internally.
 
 use std::sync::Arc;
 use wgpu::{

@@ -93,15 +93,7 @@ impl System for TransformHierarchySystem {
                 // Root entity - GlobalTransform equals local Transform
                 if let Some(local_transform) = world.get::<Transform2D>(entity) {
                     let global = GlobalTransform2D::from_transform(local_transform);
-
-                    // Update or add GlobalTransform2D
-                    if world.get::<GlobalTransform2D>(entity).is_some() {
-                        if let Some(global_transform) = world.get_mut::<GlobalTransform2D>(entity) {
-                            *global_transform = global;
-                        }
-                    } else {
-                        world.add_component(&entity, global).ok();
-                    }
+                    Self::set_global_transform(world, entity, global);
                 }
             }
         }
@@ -126,6 +118,20 @@ impl System for TransformHierarchySystem {
 }
 
 impl TransformHierarchySystem {
+    /// Set or add a GlobalTransform2D component on an entity.
+    ///
+    /// If the entity already has a GlobalTransform2D, updates it.
+    /// Otherwise, adds a new GlobalTransform2D component.
+    fn set_global_transform(world: &mut World, entity: EntityId, global: GlobalTransform2D) {
+        if world.get::<GlobalTransform2D>(entity).is_some() {
+            if let Some(global_transform) = world.get_mut::<GlobalTransform2D>(entity) {
+                *global_transform = global;
+            }
+        } else {
+            world.add_component(&entity, global).ok();
+        }
+    }
+
     /// Recursively propagate transforms from parent to children
     fn propagate_transforms(&self, world: &mut World, entity: EntityId) {
         // Get the parent's global transform (if this entity has children)
@@ -144,15 +150,7 @@ impl TransformHierarchySystem {
         for child in children {
             if let Some(local_transform) = world.get::<Transform2D>(child) {
                 let child_global = parent_global.mul_transform(local_transform);
-
-                // Update or add GlobalTransform2D on child
-                if world.get::<GlobalTransform2D>(child).is_some() {
-                    if let Some(global_transform) = world.get_mut::<GlobalTransform2D>(child) {
-                        *global_transform = child_global;
-                    }
-                } else {
-                    world.add_component(&child, child_global).ok();
-                }
+                Self::set_global_transform(world, child, child_global);
             }
 
             // Recursively propagate to grandchildren

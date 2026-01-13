@@ -4,9 +4,9 @@ Last audited: January 2026
 
 ## Summary
 - DRY violations: 3 (1 resolved)
-- SRP violations: 3
+- SRP violations: 3 (1 documented)
 - KISS violations: 0 (1 resolved)
-- Architecture issues: 4
+- Architecture issues: 4 (1 resolved)
 
 ---
 
@@ -78,19 +78,13 @@ Last audited: January 2026
   - `TextureBindGroupManager` - Texture bind groups and cache
 - **Priority:** Medium
 
-### [SRP-002] Renderer handles both initialization and rendering
+### ~~[SRP-002] Renderer handles both initialization and rendering~~ ✅ DOCUMENTED
 - **File:** `renderer.rs`
-- **Lines:** 16-395
-- **Issue:** The `Renderer` struct handles:
-  1. WGPU initialization (adapter, device, queue, surface)
-  2. Surface configuration
-  3. White texture creation
-  4. Basic frame rendering
-  5. Sprite-based rendering
-  6. Surface resize handling
-  7. Static event loop management (`run_with_app`)
-- **Suggested fix:** Consider separating initialization concerns from rendering concerns. The `run_with_app` static method is particularly out of place.
-- **Priority:** Low (working, but not ideal)
+- **Resolution:** Added module-level documentation explaining the intentional design:
+  - Initialization and rendering are tightly coupled in WGPU (surface, device, queue share lifetimes)
+  - Splitting would add complexity without clear benefit for a 2D game engine
+  - `run_with_app` is noted as legacy - new code should use `Game` trait and `run_game()`
+- **Resolved:** January 2026
 
 ### [SRP-003] RenderPipelineInspector mixes logging with operation wrapping
 - **File:** `render_pipeline_inspector.rs`

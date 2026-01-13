@@ -42,8 +42,11 @@ pub struct World {
     /// The system registry
     systems: SystemRegistry,
     /// Archetype storage for optimized component access.
-    /// Reserved for future archetype-based query optimization when archetype mode is enabled.
-    #[allow(dead_code)]
+    ///
+    /// Currently created when `use_archetype_storage` is enabled but not yet used for queries.
+    /// This is scaffolding for future archetype-based query optimization. The field is retained
+    /// to avoid breaking the `World::new_optimized()` API contract.
+    #[allow(dead_code)] // Scaffolding: stored for future archetype query implementation
     archetype_storage: Option<ArchetypeStorage>,
     /// Whether the world is initialized
     initialized: bool,

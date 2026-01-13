@@ -341,8 +341,10 @@ mod tests {
         value: i32,
     }
 
+    /// Test component used for TypeId in archetype tests.
+    /// Fields are unused because only the TypeId matters for archetype testing.
     #[derive(Debug, Clone)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Fields unused - struct used only for its TypeId
     struct OtherComponent {
         name: String,
     }

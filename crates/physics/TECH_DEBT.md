@@ -3,10 +3,10 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 1
+- DRY violations: 1 (1 resolved)
 - SRP violations: 1
-- KISS violations: 0
-- Architecture issues: 2 (1 resolved)
+- KISS violations: 0 (1 resolved)
+- Architecture issues: 2 (2 resolved/documented)
 
 ## January 2026 Fixes
 - ✅ **ARCH-002**: PhysicsSystem now supports multiple collision callbacks via:
@@ -88,27 +88,13 @@ Last audited: January 2026
 
 ## Architecture Issues
 
-### [ARCH-001] PhysicsSystem has pass-through methods
+### ~~[ARCH-001] PhysicsSystem has pass-through methods~~ ✅ DOCUMENTED
 - **File:** `physics_system.rs`
-- **Lines:** 72-100
-- **Issue:** Several methods on `PhysicsSystem` are simple pass-throughs to `PhysicsWorld`:
-  ```rust
-  pub fn set_gravity(&mut self, gravity: Vec2) {
-      self.physics_world.set_gravity(gravity);
-  }
-  pub fn gravity(&self) -> Vec2 {
-      self.physics_world.gravity()
-  }
-  pub fn apply_impulse(&mut self, entity: EntityId, impulse: Vec2) {
-      self.physics_world.apply_impulse(entity, impulse);
-  }
-  ```
-  Users could just call `physics_system.physics_world().method()` directly.
-- **Suggested fix:** Either:
-  1. Keep pass-throughs for cleaner API (acceptable)
-  2. Remove them and document users should use `physics_world()`
-  3. Use `Deref` to `PhysicsWorld` (unusual but works)
-- **Priority:** Low (convenience methods are fine)
+- **Resolution:** Added module-level documentation explaining the API design:
+  - Pass-through methods exist intentionally for **API ergonomics**
+  - `physics_system.apply_impulse(...)` is cleaner than `physics_system.physics_world_mut().apply_impulse(...)`
+  - Users who need advanced operations can still access `PhysicsWorld` via `physics_world()` / `physics_world_mut()`
+- **Resolved:** January 2026
 
 ### ~~[ARCH-002] Collision callback stored as `Option<Box<dyn FnMut>>`~~ ✅ RESOLVED
 - **File:** `physics_system.rs`

@@ -2,24 +2,41 @@
 //!
 //! This crate provides a minimal ECS implementation with archetype-based
 //! component storage for optimal performance.
+//!
+//! # Module Visibility Strategy
+//!
+//! This crate uses two visibility patterns intentionally:
+//!
+//! - **Private modules** (`mod` + `pub use *`): Core infrastructure types like
+//!   [`EntityId`], [`Component`], [`World`], and archetypes. These are re-exported
+//!   at the crate root for convenient access while keeping implementation details hidden.
+//!
+//! - **Public modules** (`pub mod` + `pub use *`): Domain-specific modules like
+//!   [`behavior`], [`hierarchy`], [`sprite_components`], etc. These are publicly
+//!   visible for documentation discoverability while also re-exported at the crate root.
+//!
+//! All public types are accessible from the crate root: `use ecs::EntityId;`
 
+// Core infrastructure - private modules, re-exported at crate root
 mod archetype;
-pub mod audio_components;
-pub mod behavior;
 mod component;
 mod entity;
+mod world;
+
+// Domain modules - public for documentation, also re-exported at crate root
+pub mod audio_components;
+pub mod behavior;
 pub mod generation;
 pub mod hierarchy;
 pub mod hierarchy_ext;
 pub mod hierarchy_system;
-pub mod system;
-mod world;
 pub mod sprite_components;
 pub mod sprite_system;
+pub mod system;
 
 pub mod prelude;
 
-// Re-export for convenience
+// Re-export all public items at crate root for convenient access
 pub use archetype::*;
 pub use audio_components::*;
 pub use behavior::*;
@@ -29,10 +46,10 @@ pub use generation::*;
 pub use hierarchy::*;
 pub use hierarchy_ext::*;
 pub use hierarchy_system::*;
-pub use system::*;
-pub use world::*;
 pub use sprite_components::*;
 pub use sprite_system::*;
+pub use system::*;
+pub use world::*;
 
 /// Initialize the ECS
 pub fn init() -> Result<World, EcsError> {

@@ -283,17 +283,18 @@ None - all high priority issues resolved! ✅
 **Architecture (Nice to Have):**
 - [x] ecs/SRP-001: World struct has many responsibilities - ✅ Fixed: Extracted hierarchy methods to `WorldHierarchyExt` trait
 - [x] ecs/ARCH-001: Entity ID format inconsistency (u32 vs usize) - ✅ Reviewed: Not an issue, EntityId uses u64 consistently
-- [ ] ecs/ARCH-004: Mixed visibility patterns
+- [x] ecs/ARCH-004: Mixed visibility patterns - ✅ Documented: Module visibility strategy documented in `lib.rs` (private vs public modules explained)
 - [x] ecs/KISS-001: QueryIterator scaffolding always returns None - ✅ Fixed: Removed scaffolding, implemented functional `query_entities()` method
+- [x] ecs/DRY-002: Repeated GlobalTransform update pattern - ✅ Fixed: Extracted `set_global_transform()` helper in `hierarchy_system.rs`
 - [x] renderer/SRP-001: SpritePipeline manages 13 GPU resources - ✅ Reviewed: Acceptable complexity for GPU rendering, resources are cohesive
-- [ ] renderer/SRP-002: Renderer handles init AND rendering
+- [x] renderer/SRP-002: Renderer handles init AND rendering - ✅ Documented: Design decision documented in `renderer.rs` (tight coupling intentional)
 - [x] renderer/ARCH-004: Inconsistent error types (RendererError vs TextureError) - ✅ Fixed: added `From<TextureError>` for `RendererError`
 - [x] input/ARCH-001: Dual error types (InputError vs InputThreadError) - ✅ Fixed: added `From<InputThreadError>` for `InputError`
-- [ ] input/ARCH-002: InputEvent uses winit types directly (acceptable coupling)
+- [x] input/ARCH-002: InputEvent uses winit types directly - ✅ Documented: Coupling documented as intentional (winit is standard, reduces overhead)
 - [x] ui/ARCH-002: rect.rs is essentially a re-export - ✅ Fixed: removed rect.rs, re-export directly from common in lib.rs
 - [x] ui/ARCH-003: TextDrawData duplicates GlyphDrawData info - ✅ Reviewed: `text` field needed for width estimation
 - [x] common/KISS-001: Unused `with_prefixed_fields!` macro - ✅ Fixed: removed unused macro
-- [ ] physics/ARCH-001: PhysicsSystem has pass-through methods
+- [x] physics/ARCH-001: PhysicsSystem has pass-through methods - ✅ Documented: Pass-through methods documented as API ergonomics improvement
 - [x] physics/ARCH-002: Single collision callback limitation - ✅ Fixed: PhysicsSystem now supports multiple collision callbacks via `add_collision_callback()` and `with_collision_callback()`
 
 ### Architecture (Future Features)

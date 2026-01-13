@@ -25,7 +25,21 @@ use crate::input_mapping::{InputMapping, InputSource, GameAction};
 use winit::event::{WindowEvent, ElementState};
 use std::collections::VecDeque;
 
-/// Input events that can be queued for processing
+/// Input events that can be queued for processing.
+///
+/// # Winit Coupling
+///
+/// This enum uses [`winit::keyboard::KeyCode`] and [`winit::event::MouseButton`] directly
+/// rather than defining custom key/button types. This is an intentional design choice:
+///
+/// - **Winit is the standard** for Rust windowing and is unlikely to be replaced
+/// - **Reduces mapping overhead** - no conversion layer needed between winit and internal types
+/// - **Full compatibility** - all winit key codes and mouse buttons are supported automatically
+/// - **Simpler codebase** - fewer types to maintain
+///
+/// If abstraction becomes necessary (e.g., for non-winit platforms), the conversion can
+/// be added at the boundary in [`InputHandler::handle_window_event`] without changing
+/// the public API.
 #[derive(Debug, Clone)]
 pub enum InputEvent {
     /// Keyboard key pressed

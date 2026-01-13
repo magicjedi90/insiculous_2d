@@ -3,16 +3,17 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 4
+- DRY violations: 4 (1 resolved)
 - SRP violations: 3 (1 resolved)
 - KISS violations: 2 (2 resolved)
-- Architecture issues: 4 (2 resolved)
+- Architecture issues: 4 (3 resolved)
 
 ## January 2026 Fixes
 - ✅ **SRP-001**: Extracted hierarchy methods to `WorldHierarchyExt` extension trait (~150 lines moved, 11 tests)
 - ✅ **KISS-001**: Replaced non-functional `QueryIterator` scaffolding with working `query_entities::<Q>()` method (1 test added)
-- ✅ **ARCH-001**: Verified entity ID format is consistent (u64 throughout, not u32 vs usize as originally thought)
+- ✅ **ARCH-001**: Module visibility strategy documented in `lib.rs` - private modules for core infrastructure, public modules for domain-specific concerns
 - ✅ **ARCH-002**: Cycle detection added to `set_parent()` (implemented in `WorldHierarchyExt`)
+- ✅ **DRY-002**: Extracted `set_global_transform()` helper in `hierarchy_system.rs` to eliminate duplicate update-or-add pattern
 
 ---
 
@@ -25,21 +26,11 @@ Last audited: January 2026
 - **Suggested fix:** Extract to a helper method `ensure_entity_exists(&self, entity_id) -> Result<(), EcsError>` or use early validation.
 - **Priority:** Low (explicit checks aid debugging)
 
-### [DRY-002] Repeated GlobalTransform update pattern in hierarchy_system.rs
+### ~~[DRY-002] Repeated GlobalTransform update pattern in hierarchy_system.rs~~ ✅ RESOLVED
 - **File:** `hierarchy_system.rs`
-- **Lines:** 97-103, 148-154
-- **Issue:** The pattern of checking if GlobalTransform2D exists, then updating or adding is duplicated:
-  ```rust
-  if world.get::<GlobalTransform2D>(entity).is_some() {
-      if let Some(global_transform) = world.get_mut::<GlobalTransform2D>(entity) {
-          *global_transform = global;
-      }
-  } else {
-      world.add_component(&entity, global).ok();
-  }
-  ```
-- **Suggested fix:** Extract to a helper method `set_or_add_global_transform(world, entity, transform)`.
-- **Priority:** Medium
+- **Resolution:** Extracted `set_global_transform(world, entity, global)` helper method.
+  Both the root entity update loop and recursive `propagate_transforms()` now use this shared helper.
+- **Resolved:** January 2026
 
 ### [DRY-003] Duplicate matrix computation in GlobalTransform2D
 - **File:** `hierarchy.rs`
@@ -126,17 +117,15 @@ Last audited: January 2026
 
 ## Architecture Issues
 
-### [ARCH-001] Inconsistent module visibility
+### ~~[ARCH-001] Inconsistent module visibility~~ ✅ RESOLVED
 - **File:** `lib.rs`
-- **Lines:** 6-17
-- **Issue:** Mix of private and public module declarations without clear rationale:
-  - `mod archetype;` (private) then `pub use archetype::*;` (re-exports everything)
-  - `pub mod behavior;` (fully public)
-  - `mod component;` (private) then `pub use component::*;`
-
-  This creates an unclear public API surface.
-- **Suggested fix:** Standardize on one pattern. Document which items should be part of public API.
-- **Priority:** Low (noted in ANALYSIS.md)
+- **Resolution:** Added documentation explaining the intentional visibility strategy:
+  - **Private modules** (`mod` + `pub use *`): Core infrastructure (archetype, component, entity, world)
+    - Implementation details hidden, public API exposed at crate root
+  - **Public modules** (`pub mod` + `pub use *`): Domain-specific modules (behavior, hierarchy, sprite_components, etc.)
+    - Visible for documentation discoverability
+  - All types accessible from crate root: `use ecs::EntityId;`
+- **Resolved:** January 2026
 
 ### [ARCH-002] ~~Circular reference risk in hierarchy components~~ ✅ RESOLVED
 - **File:** `hierarchy.rs`, `world.rs`
