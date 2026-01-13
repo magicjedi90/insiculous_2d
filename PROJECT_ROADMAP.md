@@ -199,6 +199,8 @@ All major ECS API issues have been resolved:
 
 ## Technical Debt
 
+**Full Reports:** Each crate has a detailed `TECH_DEBT.md` with line numbers and suggested fixes.
+
 ### ✅ Completed (January 2026)
 - [x] Renderer test suite - 62 tests added
 - [x] SRP refactoring - GameRunner broken into 4 managers + 5 modules
@@ -212,21 +214,104 @@ All major ECS API issues have been resolved:
 - [x] Font rendering first-frame bug fixed
 - [x] **Font rendering visibility fix** - UI depth clipping (1000→900) + batch sorting
 - [x] **Dead code suppressions documented** - Added explanatory comments to all remaining #[allow(dead_code)]
+- [x] **Bind group caching** - Camera bind group created once, texture bind groups cached per handle
+- [x] **Behavior system clone inefficiency** - Behaviors now accessed by reference, only small BehaviorState cloned
+- [x] **renderer/KISS-002: Unsafe transmute removed** - Surface now uses proper `'static` lifetime from `Arc<Window>`
 
-### High Priority (Remaining)
-- [ ] **Cache bind groups** in renderer (created every frame)
-- [ ] **Behavior system clone inefficiency** - 40+ allocations/frame
-  - Location: `engine_core/src/behavior.rs:96-102`
+### High Priority (Safety/Functional Issues)
+- [ ] **physics/KISS-001: Collision events don't detect collision end** - Affects gameplay
+  - Location: `physics/src/physics_world.rs:352-370`
+  - Issue: `step()` always sets `started: true, stopped: false` - can't detect when collisions end
+  - Fix: Implement proper `EventHandler` or document limitation
 
-### Medium Priority (Remaining)
+### Medium Priority
+
+**Cross-Crate Issues:**
+- [ ] **common/ARCH-001: CameraUniform duplicated** - Exists in both common and renderer crates
+  - Location: `common/src/camera.rs:179-202`, `renderer/src/sprite_data.rs`
+  - Fix: Remove from renderer, use common::CameraUniform everywhere
+- [ ] **ui/ARCH-001 + engine_core/KISS-001: Dual glyph caching** - Caches exist in both ui and engine_core
+  - Location: `ui/src/font.rs`, `engine_core/src/contexts.rs`
+  - Fix: Consolidate caching strategy (ui=CPU bitmaps, engine_core=GPU textures)
+- [ ] **renderer/ARCH-002: Time struct misplaced** - General timing concept in renderer crate
+  - Location: `renderer/src/lib.rs:34-50`
+  - Fix: Move to common or engine_core crate
+
+**engine_core:**
 - [ ] **Glyph texture key collision** - Color in cache key but textures grayscale
-  - Location: `engine_core/src/game.rs:50-74`
+  - Location: `engine_core/src/contexts.rs:50-74`
 - [ ] **Silent texture fallback** - Missing textures show white, no warning
   - Location: `engine_core/src/game.rs:262`
-- [ ] Consolidate redundant device/queue accessors in renderer
-- [ ] EngineApplication cleanup (reduce from 346 to ~150 lines)
+- [ ] **EngineApplication cleanup** - Reduce from 346 to ~150 lines
+  - Location: `engine_core/src/application.rs`
 
-### Architecture (Future)
+**renderer:**
+- [ ] **ARCH-001: Redundant device/queue accessors** - Both Arc-returning and borrowed versions
+  - Location: `renderer/src/renderer.rs:269-286`
+  - Fix: Keep only borrowed accessors
+- [ ] **DRY-001: Duplicate surface error handling** - Same pattern in two render methods
+  - Location: `renderer/src/renderer.rs:127-142, 219-234`
+- [ ] **DRY-002: Duplicate sampler creation** - Nearly identical in 4 locations
+  - Location: `sprite.rs:312-321`, `sprite.rs:647-656`, `sprite_data.rs:163-172`, `texture.rs:375-389`
+- [ ] **SRP-001: SpritePipeline too large** - Manages 13 GPU resources
+  - Location: `renderer/src/sprite.rs:225-254`
+  - Fix: Split into PipelineResources, BufferManager, CameraManager, TextureBindGroupManager
+
+**ecs:**
+- [ ] **ARCH-002: No cycle detection in hierarchy** - Could cause infinite loops
+  - Location: `ecs/src/hierarchy_system.rs`
+  - Fix: Add cycle detection in `set_parent()`
+- [ ] **KISS-002: ComponentColumn uses unsafe** - Raw pointer dereferencing
+  - Location: `ecs/src/component.rs:112-145`
+  - Fix: Consider safe alternatives or add safety documentation
+
+**input:**
+- [ ] **SRP-001: Dual update methods confusion** - `update()` vs `end_frame()` unclear
+  - Location: `input/src/input_handler.rs:238-258`
+  - Fix: Rename to `process_and_end_frame()` vs `end_frame()` or document clearly
+- [ ] **KISS-001: Multi-action binding asymmetry** - `get_action()` returns only first action
+  - Location: `input/src/input_mapping.rs:122-139`
+  - Fix: Document limitation or change to `HashMap<InputSource, Vec<GameAction>>`
+
+**ui:**
+- [ ] **DRY-001: Duplicate glyph-to-draw-data conversion** - Same pattern in two methods
+  - Location: `ui/src/context.rs:215-235, 255-279`
+- [ ] **SRP-001: FontManager too many responsibilities** - Loading, storage, rasterization, caching, layout
+  - Location: `ui/src/font.rs:100-315`
+
+**physics:**
+- [ ] **DRY-001: Repeated pixel-to-meter conversion** - Pattern repeated dozens of times
+  - Location: `physics/src/physics_world.rs` (throughout)
+  - Fix: Consider newtype wrappers `Pixels(f32)` and `Meters(f32)`
+
+### Low Priority (Code Organization)
+
+**DRY Violations (Working but verbose):**
+- [ ] renderer/DRY-003: Duplicate render pass descriptor creation
+- [ ] renderer/DRY-004: Duplicate texture descriptor creation
+- [ ] ecs/DRY-001: Repeated component storage operations
+- [ ] ecs/DRY-002: Duplicate error variants
+- [ ] input/DRY-001: Repeated input state tracking pattern across device types
+- [ ] input/DRY-002: Repeated action checking pattern
+- [ ] ui/DRY-002: Duplicate checkbox drawing logic
+- [ ] ui/DRY-003: Duplicate UIContext constructor logic
+- [ ] physics/DRY-002: Repeated body builder pattern
+
+**Architecture (Nice to Have):**
+- [ ] ecs/SRP-001: World struct has many responsibilities
+- [ ] ecs/ARCH-001: Entity ID format inconsistency (u32 vs usize)
+- [ ] ecs/ARCH-004: Mixed visibility patterns
+- [ ] renderer/SRP-002: Renderer handles init AND rendering
+- [ ] renderer/ARCH-004: Inconsistent error types (RendererError vs TextureError)
+- [ ] input/ARCH-001: Dual error types (InputError vs InputThreadError)
+- [ ] input/ARCH-002: InputEvent uses winit types directly (acceptable coupling)
+- [ ] ui/ARCH-002: rect.rs is essentially a re-export
+- [ ] ui/ARCH-003: TextDrawData duplicates GlyphDrawData info
+- [ ] common/KISS-001: Unused `with_prefixed_fields!` macro
+- [ ] physics/ARCH-001: PhysicsSystem has pass-through methods
+- [ ] physics/ARCH-002: Single collision callback limitation
+
+### Architecture (Future Features)
 - [ ] Plugin system for extensibility
 - [ ] Centralized event bus
 - [ ] Configuration management system
@@ -236,15 +321,26 @@ All major ECS API issues have been resolved:
 
 ## Code Quality Summary
 
-### Remaining Issues by Crate
+### Issues by Crate (from TECH_DEBT.md reports)
 
-| Crate | High | Medium | Notes |
-|-------|------|--------|-------|
-| engine_core | 1 (clone inefficiency) | 2 (glyph cache, silent fallback) | SRP complete ✅ |
-| renderer | 1 (bind groups) | - | Dead code documented ✅ |
-| ecs | - | - | Tests complete ✅, dead code documented ✅ |
-| input | - | - | Tests complete ✅ |
-| physics | - | - | - |
+| Crate | High | Medium | Low | Total | Overall Assessment |
+|-------|------|--------|-----|-------|-------------------|
+| engine_core | 0 | 3 | 10 | 13 | SRP complete ✅, behavior optimized ✅ |
+| renderer | 0 | 5 | 7 | 12 | Bind groups cached ✅, unsafe fixed ✅ |
+| ecs | 0 | 2 | 11 | 13 | Tests complete ✅, cycle detection needed |
+| ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
+| input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
+| physics | 1 | 0 | 5 | 6 | Clean rapier2d integration |
+| common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
+| **Total** | **1** | **15** | **49** | **65** | |
+
+### High Priority Summary
+1. **physics/KISS-001**: Collision events can't detect collision end (functionality)
+
+### Cross-Crate Dependencies to Address
+1. CameraUniform: common ↔ renderer (duplication)
+2. Glyph caching: ui ↔ engine_core (dual caches)
+3. Time struct: renderer → common (misplaced)
 
 ### Documented Scaffolding (Intentional Dead Code)
 All `#[allow(dead_code)]` suppressions are now documented with explanatory comments:
@@ -302,3 +398,10 @@ All `#[allow(dead_code)]` suppressions are now documented with explanatory comme
 - 338/356 tests passing (100% success rate)
 - 0 TODOs, 155+ assertions
 - All 7 ANALYSIS.md files completed
+
+**Technical Debt Audit (January 2026):**
+- Created TECH_DEBT.md reports for all 7 crates
+- Identified 66 total issues (2 high, 15 medium, 49 low priority)
+- Categorized by DRY (23), SRP (13), KISS (10), Architecture (20)
+- High priority: unsafe transmute in renderer, incomplete collision events in physics
+- Cross-crate issues documented: CameraUniform duplication, dual glyph caching

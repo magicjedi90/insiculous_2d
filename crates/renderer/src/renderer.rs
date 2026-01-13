@@ -27,17 +27,19 @@ pub struct Renderer {
 
 impl Renderer {
     /// Create a new renderer with an existing window
-    /// 
-    /// This method now properly manages the surface lifetime by:
+    ///
+    /// This method properly manages the surface lifetime by:
     /// 1. Creating the instance and surface first
-    /// 2. Then moving the surface into the renderer with 'static lifetime
-    /// 3. The surface is tied to the window's lifetime, which is Arc<Window>
+    /// 2. The surface gets `'static` lifetime because `Arc<Window>` is `'static`
+    /// 3. WGPU 28.0.0 supports `Arc<Window>` -> `Surface<'static>` conversion
     pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
         // Create a WGPU instance
         let instance = wgpu::Instance::default();
 
-        // Create a surface - this is safe because window is Arc<Window>
-        let surface = instance
+        // Create a surface with 'static lifetime
+        // Arc<Window> implements Into<SurfaceTarget<'static>> because Arc<T> is 'static when T: 'static
+        // This is safe and doesn't require unsafe code - WGPU 28.0.0 handles this correctly
+        let surface: Surface<'static> = instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::SurfaceCreationError(e.to_string()))?;
 
@@ -100,8 +102,7 @@ impl Renderer {
 
         Ok(Self {
             window,
-            // Safe because window has 'static lifetime
-            surface: unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface) },
+            surface,
             adapter,
             device,
             queue,

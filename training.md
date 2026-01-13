@@ -327,12 +327,12 @@ drop(texture); // Now fully cleaned up
 ## Current Known Limitations (Updated January 2026)
 
 **Technical Debt Tracking:**
-- SRP violations in GameRunner (8+ responsibilities remain)
-- Bind groups created per frame (performance impact)
+- ~~SRP violations in GameRunner~~ ✅ FIXED: Managers extracted, game.rs refactored
+- ~~Bind groups created per frame~~ ✅ FIXED: Camera bind group cached, texture bind groups cached per handle
 - Glyph texture cache includes color in key (memory waste)
-- First-frame UI placeholder flicker
-- 40+ allocations per frame in behavior system
-- ~25 #[allow(dead_code)] suppressions remain
+- ~~First-frame UI placeholder flicker~~ ✅ FIXED: Font rendering bug fixed
+- ~~40+ allocations per frame in behavior system~~ ✅ FIXED: Behaviors accessed by reference
+- ~25 #[allow(dead_code)] suppressions remain (all documented)
 
 **All tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
 
