@@ -246,8 +246,7 @@ None - all high priority issues resolved! ✅
 **renderer:**
 - [x] **ARCH-001: Redundant device/queue accessors** - ✅ Both versions kept with clear documentation for different use cases
 - [x] **DRY-001: Duplicate surface error handling** - ✅ Extracted to `acquire_frame()` helper method
-- [ ] **DRY-002: Duplicate sampler creation** - Nearly identical in 4 locations
-  - Location: `sprite.rs:312-321`, `sprite.rs:647-656`, `sprite_data.rs:163-172`, `texture.rs:375-389`
+- [x] **DRY-002: Duplicate sampler creation** - ✅ Added `SamplerConfig::create_sampler()` method, all 4 locations now delegate to shared helper
 - [ ] **SRP-001: SpritePipeline too large** - Manages 13 GPU resources
   - Location: `renderer/src/sprite.rs:225-254`
   - Fix: Split into PipelineResources, BufferManager, CameraManager, TextureBindGroupManager
@@ -319,13 +318,13 @@ None - all high priority issues resolved! ✅
 | Crate | High | Medium | Low | Total | Overall Assessment |
 |-------|------|--------|-----|-------|-------------------|
 | engine_core | 0 | 3 | 10 | 13 | SRP complete ✅, behavior optimized ✅ |
-| renderer | 0 | 5 | 7 | 12 | Bind groups cached ✅, unsafe fixed ✅ |
+| renderer | 0 | 3 | 7 | 10 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
 | ecs | 0 | 1 | 11 | 12 | Tests complete ✅, cycle detection ✅ |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
 | input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **10** | **49** | **59** | |
+| **Total** | **0** | **8** | **49** | **57** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅

@@ -87,6 +87,29 @@ impl Default for SamplerConfig {
     }
 }
 
+impl SamplerConfig {
+    /// Create a WGPU sampler from this configuration.
+    ///
+    /// This is the single place where samplers are created from config,
+    /// eliminating duplicate sampler creation code across the crate.
+    pub fn create_sampler(&self, device: &Device, label: Option<&str>) -> Sampler {
+        device.create_sampler(&wgpu::SamplerDescriptor {
+            label,
+            address_mode_u: self.address_mode_u,
+            address_mode_v: self.address_mode_v,
+            address_mode_w: self.address_mode_w,
+            mag_filter: self.mag_filter,
+            min_filter: self.min_filter,
+            mipmap_filter: self.mipmap_filter,
+            lod_min_clamp: self.lod_min_clamp,
+            lod_max_clamp: self.lod_max_clamp,
+            compare: self.compare,
+            anisotropy_clamp: self.anisotropy_clamp,
+            ..Default::default()
+        })
+    }
+}
+
 /// Texture manager for loading and caching textures
 pub struct TextureManager {
     device: Arc<Device>,
@@ -371,22 +394,9 @@ impl TextureManager {
         self.create_texture_from_rgba(width, height, bytemuck::cast_slice(&data), TextureLoadConfig::default())
     }
 
-    /// Create sampler from config
+    /// Create sampler from config (delegates to SamplerConfig::create_sampler)
     fn create_sampler(&self, config: &SamplerConfig) -> Sampler {
-        self.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture Sampler"),
-            address_mode_u: config.address_mode_u,
-            address_mode_v: config.address_mode_v,
-            address_mode_w: config.address_mode_w,
-            mag_filter: config.mag_filter,
-            min_filter: config.min_filter,
-            mipmap_filter: config.mipmap_filter,
-            lod_min_clamp: config.lod_min_clamp,
-            lod_max_clamp: config.lod_max_clamp,
-            compare: config.compare,
-            anisotropy_clamp: config.anisotropy_clamp,
-            ..Default::default()
-        })
+        config.create_sampler(&self.device, Some("Texture Sampler"))
     }
 }
 

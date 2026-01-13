@@ -75,13 +75,8 @@ pub fn queue_ref(&self) -> &Queue { &self.queue }
 
 **Recommended Fix**: Keep only one accessor pattern (prefer `&Device` with explicit `Arc::clone` when needed).
 
-#### 3. Bind Groups Created Every Frame
-**Location**: `src/sprite.rs` render method
-**Issue**: New texture bind groups created every frame instead of caching.
-
-**Impact**: Potential performance issue with many textures.
-
-**Recommended Fix**: Cache bind groups per texture handle, invalidate on texture change.
+#### ~~3. Bind Groups Created Every Frame~~ ✅ RESOLVED
+**Resolution**: Camera bind group is now created once and reused. Texture bind groups are cached per texture handle.
 
 ---
 
@@ -205,21 +200,24 @@ renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_re
 
 ## Recommended Fixes (Priority Order)
 
+### ✅ Completed
+1. ~~Cache bind groups per texture (avoid per-frame creation)~~ - Camera and texture bind groups now cached
+2. ~~Consolidate device/queue accessors~~ - Both versions documented for different use cases
+3. ~~Fix DRY-002: Duplicate sampler creation~~ - Added `SamplerConfig::create_sampler()` method
+
 ### Short-term (High Priority)
-1. Cache bind groups per texture (avoid per-frame creation)
-2. Consolidate device/queue accessors (remove redundant methods)
-3. Add GPU resource cleanup on drop
-4. Add integration tests - Verify rendering pipeline end-to-end
+1. Add GPU resource cleanup on drop
+2. Add integration tests - Verify rendering pipeline end-to-end
 
 ### Medium-term (Architecture)
-5. Split SpritePipeline into focused structs
-6. Add async texture loading option
-7. Add surface format auto-detection
+3. Split SpritePipeline into focused structs
+4. Add async texture loading option
+5. Add surface format auto-detection
 
 ### Long-term (Features)
-8. Add frustum culling
-9. Add text rendering
-10. Add post-processing pipeline
+6. Add frustum culling
+7. Add text rendering
+8. Add post-processing pipeline
 
 ---
 

@@ -7,7 +7,7 @@ use wgpu::{Device, Queue, RenderPipeline, PipelineLayout, BindGroupLayout, Buffe
 use wgpu::util::DeviceExt;
 
 use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera2D, CameraUniform, TextureResource, DynamicBuffer};
-use crate::texture::TextureHandle;
+use crate::texture::{TextureHandle, SamplerConfig};
 
 /// A single sprite to be rendered
 #[derive(Debug, Clone)]
@@ -308,17 +308,8 @@ impl SpritePipeline {
             ..Default::default()
         });
 
-        // Create sampler
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Sprite Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
+        // Create sampler using shared configuration
+        let sampler = SamplerConfig::default().create_sampler(device, Some("Sprite Sampler"));
 
         // Create quad vertices (full texture coordinates)
         let vertices = [
@@ -643,17 +634,7 @@ impl TextureAtlas {
         }));
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture Atlas Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = SamplerConfig::default().create_sampler(device, Some("Texture Atlas Sampler"));
 
         Self {
             texture,

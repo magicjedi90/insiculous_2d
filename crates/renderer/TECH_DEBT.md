@@ -3,9 +3,9 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 4
+- DRY violations: 3 (1 resolved)
 - SRP violations: 3
-- KISS violations: 1
+- KISS violations: 0 (1 resolved)
 - Architecture issues: 4
 
 ---
@@ -27,15 +27,13 @@ Last audited: January 2026
 - **Suggested fix:** Extract to `fn acquire_frame(&self) -> Result<wgpu::SurfaceTexture, RendererError>`.
 - **Priority:** Medium
 
-### [DRY-002] Duplicate sampler creation in multiple locations
-- **File:** `sprite.rs:312-321`, `sprite.rs:647-656`, `sprite_data.rs:163-172`, `texture.rs:375-389`
-- **Issue:** Nearly identical `SamplerDescriptor` configurations appear in 4 locations:
-  - `SpritePipeline::new()` sampler creation
-  - `TextureAtlas::new()` sampler creation
-  - `TextureResource::new()` sampler creation
-  - `TextureManager::create_sampler()` sampler creation
-- **Suggested fix:** Create a shared `default_sprite_sampler(device)` helper function in a common location.
-- **Priority:** Medium
+### ~~[DRY-002] Duplicate sampler creation in multiple locations~~ ✅ RESOLVED
+- **File:** `sprite.rs`, `sprite_data.rs`, `texture.rs`
+- **Resolution:** Added `SamplerConfig::create_sampler(&self, device, label)` method to `texture.rs`. All 4 locations now delegate to this shared helper:
+  - `SpritePipeline::new()` → `SamplerConfig::default().create_sampler(device, Some("Sprite Sampler"))`
+  - `TextureAtlas::new()` → `SamplerConfig::default().create_sampler(device, Some("Texture Atlas Sampler"))`
+  - `TextureResource::new()` → `SamplerConfig::default().create_sampler(device, Some("Texture Sampler"))`
+  - `TextureManager::create_sampler()` → `config.create_sampler(&self.device, Some("Texture Sampler"))`
 
 ### [DRY-003] Duplicate render pass descriptor in sprite.rs
 - **File:** `sprite.rs`
@@ -201,25 +199,28 @@ These issues have been resolved:
 | `#[allow(dead_code)]` | 5 instances |
 | `unsafe` blocks | 0 |
 | High priority issues | 0 |
-| Medium priority issues | 5 |
+| Medium priority issues | 3 |
 | Low priority issues | 7 |
 
 ---
 
 ## Recommendations
 
-### Immediate Actions
-1. **Fix DRY-001** - Extract surface acquisition helper to reduce duplication
+### ✅ Completed
+1. ~~**Fix DRY-001** - Extract surface acquisition helper to reduce duplication~~ (done: acquire_frame helper)
+2. ~~**Fix DRY-002** - Create shared sampler creation helper~~ (done: SamplerConfig::create_sampler)
+3. ~~**Fix ARCH-001** - Consolidate device/queue accessors~~ (documented: both versions kept for different use cases)
+4. ~~**Fix ARCH-002** - Move Time struct to appropriate crate~~ (done: moved to common crate)
+5. ~~**Fix KISS-002** - Remove unsafe transmute~~ (done: WGPU 28.0.0 properly infers lifetime)
 
 ### Short-term Improvements
-2. **Fix SRP-001** - Split SpritePipeline into focused structs
-3. **Fix ARCH-001** - Consolidate device/queue accessors
-4. **Fix DRY-002** - Create shared sampler creation helper
+1. **Fix SRP-001** - Split SpritePipeline into focused structs
 
 ### Technical Debt Backlog
-- ARCH-002: Move Time struct to appropriate crate
 - ARCH-003: Review and remove dead code
 - ARCH-004: Unify error types
+- DRY-003: Consolidate render pass descriptor creation
+- DRY-004: Create texture descriptor helper
 
 ---
 
@@ -228,11 +229,8 @@ These issues have been resolved:
 | This Report | ANALYSIS.md | Status |
 |-------------|-------------|--------|
 | SRP-001: SpritePipeline too large | "Split SpritePipeline into focused structs" | Known, unresolved |
-| ARCH-001: Redundant accessors | "Consolidate device/queue accessors" | Known, unresolved |
-| DRY-002: Sampler creation | Not tracked | New finding |
+| ARCH-001: Redundant accessors | "Consolidate device/queue accessors" | ✅ Documented (both versions kept intentionally) |
+| DRY-001: Surface error handling | Not tracked | ✅ RESOLVED (acquire_frame helper) |
+| DRY-002: Sampler creation | Not tracked | ✅ RESOLVED (SamplerConfig::create_sampler) |
 | KISS-002: Unsafe transmute | Not tracked | ✅ RESOLVED |
-| ARCH-002: Time misplaced | Not tracked | New finding |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- DRY-002: Sampler creation duplicated in 4 locations
-- ARCH-002: Time struct misplaced in renderer crate (should be in common/engine_core)
+| ARCH-002: Time misplaced | Not tracked | ✅ RESOLVED (moved to common crate)

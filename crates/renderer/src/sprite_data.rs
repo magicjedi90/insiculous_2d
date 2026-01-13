@@ -3,6 +3,7 @@
 use glam::{Vec2, Vec3, Vec4};
 use std::sync::Arc;
 use wgpu::{Device, Queue, Texture, TextureView, Sampler, Buffer};
+use crate::texture::SamplerConfig;
 
 // Re-export Camera2D and CameraUniform from common crate
 pub use common::{Camera2D, camera::CameraUniform};
@@ -160,16 +161,7 @@ impl TextureResource {
     /// Create a new texture resource from existing texture
     pub fn new(device: &Device, texture: Arc<Texture>) -> Self {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = SamplerConfig::default().create_sampler(device, Some("Texture Sampler"));
 
         let size = texture.size();
         
