@@ -3,7 +3,7 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 4
+- DRY violations: 4 (3 resolved)
 - SRP violations: 2
 - KISS violations: 1
 - Architecture issues: 3 (2 resolved)
@@ -12,25 +12,11 @@ Last audited: January 2026
 
 ## DRY Violations
 
-### [DRY-001] Duplicate glyph-to-draw-data conversion in context.rs
+### ~~[DRY-001] Duplicate glyph-to-draw-data conversion in context.rs~~ ✅ RESOLVED
 - **File:** `context.rs`
-- **Lines:** 215-235, 255-279
-- **Issue:** The pattern of converting `LayoutGlyph` to `GlyphDrawData` is duplicated between `label_styled()` and `label_with_font()`:
-  ```rust
-  let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
-      GlyphDrawData {
-          bitmap: g.info.rasterized.bitmap.clone(),
-          width: g.info.rasterized.width,
-          height: g.info.rasterized.height,
-          x: g.x,
-          y: g.y,
-          character: g.character,
-      }
-  }).collect();
-  ```
-  And the identical `TextDrawData` construction follows.
-- **Suggested fix:** Extract to `fn layout_to_draw_data(layout: TextLayout, text: &str, position: Vec2, color: Color, font_size: f32) -> TextDrawData`.
-- **Priority:** Medium
+- **Resolution:** Extracted `layout_to_draw_data(&TextLayout, &str, Vec2, Color, f32) -> TextDrawData` helper method.
+  Both `label_styled()` and `label_with_font()` now use this helper to convert font layout to draw data.
+- **Resolved:** January 2026
 
 ### ~~[DRY-002] Duplicate checkbox drawing logic~~ ✅ RESOLVED
 - **File:** `context.rs`
@@ -166,10 +152,10 @@ These issues from ANALYSIS.md have been resolved:
 |--------|-------|
 | Total source files | 7 |
 | Total lines | ~1,500 |
-| Test coverage | 42 tests (100% pass rate) |
+| Test coverage | 39 tests (100% pass rate) |
 | `#[allow(...)]` | 2 instances (clippy lints in draw.rs) |
 | High priority issues | 0 |
-| Medium priority issues | 4 |
+| Medium priority issues | 3 |
 | Low priority issues | 6 |
 
 ---
@@ -180,13 +166,13 @@ These issues from ANALYSIS.md have been resolved:
 None required - the crate is well-structured with no high-priority issues.
 
 ### Short-term Improvements
-1. **Fix DRY-001** - Extract glyph-to-draw-data conversion helper
+1. ~~**Fix DRY-001** - Extract glyph-to-draw-data conversion helper~~ ✅ DONE
 2. **Fix DRY-004** - Extract common text rendering logic
-3. **Address ARCH-001** - Review glyph caching strategy with engine_core
+3. ~~**Address ARCH-001** - Review glyph caching strategy with engine_core~~ ✅ RESOLVED
 
 ### Technical Debt Backlog
 - SRP-001: Consider FontManager refactoring if it grows
-- ARCH-002: Clean up rect.rs re-export
+- ~~ARCH-002: Clean up rect.rs re-export~~ ✅ DONE
 - ARCH-003: Reduce TextDrawData redundancy
 
 ---
@@ -196,12 +182,8 @@ None required - the crate is well-structured with no high-priority issues.
 | This Report | ANALYSIS.md | Status |
 |-------------|-------------|--------|
 | First-frame bug | "Font Rendering First-Frame Bug Fix" | RESOLVED |
-| DRY-001: Glyph conversion | Not tracked | New finding |
-| ARCH-001: Dual glyph caching | Related to engine_core KISS-001 | Known relationship |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- DRY-001: Duplicate glyph-to-draw-data conversion in context.rs
-- ARCH-001: Glyph caching exists in both ui and engine_core crates
+| DRY-001: Glyph conversion | Not tracked | RESOLVED |
+| ARCH-001: Dual glyph caching | Related to engine_core KISS-001 | RESOLVED |
 
 ---
 

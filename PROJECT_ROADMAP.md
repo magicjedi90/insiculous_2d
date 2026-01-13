@@ -258,8 +258,7 @@ None - all high priority issues resolved! ✅
 - [x] **KISS-001: Multi-action binding asymmetry** - ✅ Comprehensive documentation added: module-level binding model docs, detailed method docs explaining the limitation, guidance to use `is_action_active()` instead of `get_action()`
 
 **ui:**
-- [ ] **DRY-001: Duplicate glyph-to-draw-data conversion** - Same pattern in two methods
-  - Location: `ui/src/context.rs:215-235, 255-279`
+- [x] **DRY-001: Duplicate glyph-to-draw-data conversion** - ✅ Extracted `layout_to_draw_data()` helper method
 - [ ] **SRP-001: FontManager too many responsibilities** - Loading, storage, rasterization, caching, layout
   - Location: `ui/src/font.rs:100-315`
 
@@ -312,11 +311,11 @@ None - all high priority issues resolved! ✅
 | engine_core | 0 | 1 | 10 | 11 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅, texture warnings ✅ |
 | renderer | 0 | 1 | 7 | 8 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
 | ecs | 0 | 0 | 11 | 11 | Tests complete ✅, cycle detection ✅, unsafe documented ✅ |
-| ui | 0 | 1 | 8 | 9 | Well-structured immediate-mode UI, glyph caching fixed ✅ |
+| ui | 0 | 1 | 7 | 8 | Well-structured immediate-mode UI, glyph caching fixed ✅, DRY-001 fixed ✅ |
 | input | 0 | 0 | 5 | 5 | Production-ready, fully documented ✅ |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **4** | **49** | **53** | |
+| **Total** | **0** | **4** | **48** | **52** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅
