@@ -393,6 +393,14 @@ impl World {
             return Err(EcsError::SystemError("Cannot set entity as its own parent".to_string()));
         }
 
+        // Prevent cycles: if `child` is an ancestor of `parent`, setting this parent would create a cycle
+        // (child -> ... -> parent -> child)
+        if self.is_ancestor_of(child, parent) {
+            return Err(EcsError::SystemError(
+                "Cannot set parent: would create a cycle in the hierarchy".to_string()
+            ));
+        }
+
         // Remove from previous parent if any
         if let Some(old_parent) = self.get::<crate::hierarchy::Parent>(child) {
             let old_parent_id = old_parent.entity();

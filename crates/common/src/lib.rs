@@ -8,6 +8,7 @@ pub mod transform;
 pub mod camera;
 pub mod rect;
 pub mod macros;
+pub mod time;
 
 pub mod prelude {
     //! Prelude module for common types.
@@ -18,6 +19,7 @@ pub mod prelude {
     pub use crate::transform::Transform2D;
     pub use crate::camera::Camera2D;
     pub use crate::rect::Rect;
+    pub use crate::time::Time;
 }
 
 // Re-export at crate root for convenience
@@ -25,3 +27,4 @@ pub use color::Color;
 pub use transform::Transform2D;
 pub use camera::Camera2D;
 pub use rect::Rect;
+pub use time::Time;

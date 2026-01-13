@@ -103,3 +103,39 @@ fn test_world_initialization() {
     assert_eq!(world.entity_count(), 0);
     assert_eq!(world.system_count(), 0);
 }
+
+#[test]
+fn test_hierarchy_cycle_detection() {
+    // Test that setting a parent that would create a cycle is rejected
+    let mut world = World::new();
+
+    // Create a chain: grandparent -> parent -> child
+    let grandparent = world.create_entity();
+    let parent = world.create_entity();
+    let child = world.create_entity();
+
+    // Set up the hierarchy
+    assert!(world.set_parent(parent, grandparent).is_ok());
+    assert!(world.set_parent(child, parent).is_ok());
+
+    // Attempt to create a cycle: grandparent -> child (child is an ancestor of grandparent via parent)
+    // This would create: child -> parent -> grandparent -> child (cycle!)
+    let result = world.set_parent(grandparent, child);
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("cycle"));
+}
+
+#[test]
+fn test_hierarchy_self_parent_rejected() {
+    // Test that an entity cannot be its own parent
+    let mut world = World::new();
+
+    let entity = world.create_entity();
+
+    // Attempt to set entity as its own parent
+    let result = world.set_parent(entity, entity);
+
+    // This should be rejected - self-parenting creates a trivial cycle
+    assert!(result.is_err());
+}

@@ -123,15 +123,14 @@ Last audited: January 2026
 - **Suggested fix:** Standardize on one pattern. Document which items should be part of public API.
 - **Priority:** Low (noted in ANALYSIS.md)
 
-### [ARCH-002] Circular reference risk in hierarchy components
+### [ARCH-002] ~~Circular reference risk in hierarchy components~~ ✅ RESOLVED
 - **File:** `hierarchy.rs`, `world.rs`
 - **Issue:** `Parent` component stores an `EntityId`, and `Children` stores `Vec<EntityId>`. No validation prevents:
   1. An entity being its own ancestor (circular hierarchy)
   2. Children list and Parent component becoming inconsistent
-
-  While `set_parent` in `world.rs:392` checks for self-parenting, it doesn't check for cycles like A→B→A.
-- **Suggested fix:** Add cycle detection in `set_parent()`.
-- **Priority:** Medium
+- **Resolution:** Added cycle detection in `set_parent()` using `is_ancestor_of()` check.
+  Tests added: `test_hierarchy_cycle_detection`, `test_hierarchy_self_parent_rejected`
+- **Resolved:** January 2026
 
 ### [ARCH-003] Dead code marked but not removed
 - **Files:** Multiple
@@ -166,6 +165,7 @@ These issues from ANALYSIS.md have been resolved:
 | Incomplete test assertions (TODO comments) | FIXED: All replaced with meaningful assertions |
 | Memory safety issues | FIXED: Generation tracking implemented |
 | System registry memory safety | FIXED: catch_unwind for panic isolation |
+| ARCH-002: Hierarchy cycle detection | FIXED: Cycle detection in `set_parent()` + 2 tests |
 
 ---
 
@@ -187,7 +187,7 @@ These issues from ANALYSIS.md have been resolved:
 
 ### Immediate Actions
 1. **Fix KISS-002** - Review unsafe code in ComponentColumn for safety
-2. **Fix ARCH-002** - Add cycle detection to prevent hierarchy corruption
+2. ~~**Fix ARCH-002** - Add cycle detection to prevent hierarchy corruption~~ ✅ DONE
 
 ### Short-term Improvements
 3. **Fix SRP-001** - Split World hierarchy methods into separate trait/module
@@ -208,11 +208,11 @@ These issues from ANALYSIS.md have been resolved:
 | SRP-001: World too many responsibilities | "Split World impl blocks by concern" | Known, unresolved |
 | ARCH-001: Module visibility | "Document visibility rationale" | Known, unresolved |
 | ARCH-003: Dead code | "Review and either use or remove" | Known, unresolved |
-| ARCH-002: Hierarchy cycles | Not tracked | New finding |
+| ARCH-002: Hierarchy cycles | Tracked | ✅ Resolved |
 | KISS-002: Unsafe ComponentColumn | Not tracked | New finding |
 | ARCH-004: Dual storage systems | Not tracked | New finding |
 
 **New issues to add to PROJECT_ROADMAP.md:**
-- ARCH-002: Hierarchy cycle detection needed in `set_parent()`
+- ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
 - KISS-002: ComponentColumn uses unsafe code without demonstrated need
 - ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden

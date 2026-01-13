@@ -31,23 +31,8 @@ pub use window::*;
 pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline, TextureAtlas};
 pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle, TextureAtlasBuilder};
 
-/// Time resource for tracking delta time
-#[derive(Debug, Clone, Copy)]
-pub struct Time {
-    /// Delta time in seconds
-    pub delta_seconds: f32,
-    /// Total elapsed time in seconds
-    pub elapsed_seconds: f32,
-}
-
-impl Default for Time {
-    fn default() -> Self {
-        Self {
-            delta_seconds: 0.0,
-            elapsed_seconds: 0.0,
-        }
-    }
-}
+// Re-export Time from common crate (moved from renderer for proper placement)
+pub use common::Time;
 
 /// Simplified renderer initialization - no tokio required
 pub async fn init(window: Arc<Window>) -> Result<Renderer, RendererError> {

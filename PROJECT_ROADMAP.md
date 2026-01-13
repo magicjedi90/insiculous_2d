@@ -218,6 +218,10 @@ All major ECS API issues have been resolved:
 - [x] **Behavior system clone inefficiency** - Behaviors now accessed by reference, only small BehaviorState cloned
 - [x] **renderer/KISS-002: Unsafe transmute removed** - Surface now uses proper `'static` lifetime from `Arc<Window>`
 - [x] **physics/KISS-001: Collision start/stop detection** - Proper tracking with `CollisionPair` and frame-to-frame comparison
+- [x] **renderer/ARCH-002: Time struct consolidated** - Re-exported from common crate
+- [x] **renderer/ARCH-001: device/queue accessors documented** - Both versions kept with clear documentation
+- [x] **renderer/DRY-001: Surface error handling extracted** - `acquire_frame()` helper method
+- [x] **ecs/ARCH-002: Hierarchy cycle detection** - `set_parent()` now detects and rejects cycles
 
 ### High Priority (Safety/Functional Issues)
 None - all high priority issues resolved! ✅
@@ -225,15 +229,11 @@ None - all high priority issues resolved! ✅
 ### Medium Priority
 
 **Cross-Crate Issues:**
-- [ ] **common/ARCH-001: CameraUniform duplicated** - Exists in both common and renderer crates
-  - Location: `common/src/camera.rs:179-202`, `renderer/src/sprite_data.rs`
-  - Fix: Remove from renderer, use common::CameraUniform everywhere
+- [x] **common/ARCH-001: CameraUniform duplicated** - ✅ Already re-exported from common via renderer
 - [ ] **ui/ARCH-001 + engine_core/KISS-001: Dual glyph caching** - Caches exist in both ui and engine_core
   - Location: `ui/src/font.rs`, `engine_core/src/contexts.rs`
   - Fix: Consolidate caching strategy (ui=CPU bitmaps, engine_core=GPU textures)
-- [ ] **renderer/ARCH-002: Time struct misplaced** - General timing concept in renderer crate
-  - Location: `renderer/src/lib.rs:34-50`
-  - Fix: Move to common or engine_core crate
+- [x] **renderer/ARCH-002: Time struct misplaced** - ✅ Time now defined in common, re-exported from renderer
 
 **engine_core:**
 - [ ] **Glyph texture key collision** - Color in cache key but textures grayscale
@@ -244,11 +244,8 @@ None - all high priority issues resolved! ✅
   - Location: `engine_core/src/application.rs`
 
 **renderer:**
-- [ ] **ARCH-001: Redundant device/queue accessors** - Both Arc-returning and borrowed versions
-  - Location: `renderer/src/renderer.rs:269-286`
-  - Fix: Keep only borrowed accessors
-- [ ] **DRY-001: Duplicate surface error handling** - Same pattern in two render methods
-  - Location: `renderer/src/renderer.rs:127-142, 219-234`
+- [x] **ARCH-001: Redundant device/queue accessors** - ✅ Both versions kept with clear documentation for different use cases
+- [x] **DRY-001: Duplicate surface error handling** - ✅ Extracted to `acquire_frame()` helper method
 - [ ] **DRY-002: Duplicate sampler creation** - Nearly identical in 4 locations
   - Location: `sprite.rs:312-321`, `sprite.rs:647-656`, `sprite_data.rs:163-172`, `texture.rs:375-389`
 - [ ] **SRP-001: SpritePipeline too large** - Manages 13 GPU resources
@@ -256,9 +253,7 @@ None - all high priority issues resolved! ✅
   - Fix: Split into PipelineResources, BufferManager, CameraManager, TextureBindGroupManager
 
 **ecs:**
-- [ ] **ARCH-002: No cycle detection in hierarchy** - Could cause infinite loops
-  - Location: `ecs/src/hierarchy_system.rs`
-  - Fix: Add cycle detection in `set_parent()`
+- [x] **ARCH-002: No cycle detection in hierarchy** - ✅ Cycle detection added in `set_parent()`, 2 tests
 - [ ] **KISS-002: ComponentColumn uses unsafe** - Raw pointer dereferencing
   - Location: `ecs/src/component.rs:112-145`
   - Fix: Consider safe alternatives or add safety documentation
@@ -325,20 +320,20 @@ None - all high priority issues resolved! ✅
 |-------|------|--------|-----|-------|-------------------|
 | engine_core | 0 | 3 | 10 | 13 | SRP complete ✅, behavior optimized ✅ |
 | renderer | 0 | 5 | 7 | 12 | Bind groups cached ✅, unsafe fixed ✅ |
-| ecs | 0 | 2 | 11 | 13 | Tests complete ✅, cycle detection needed |
+| ecs | 0 | 1 | 11 | 12 | Tests complete ✅, cycle detection ✅ |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
 | input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **15** | **49** | **64** | |
+| **Total** | **0** | **10** | **49** | **59** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅
 
 ### Cross-Crate Dependencies to Address
-1. CameraUniform: common ↔ renderer (duplication)
+1. ~~CameraUniform: common ↔ renderer (duplication)~~ ✅ Already properly shared
 2. Glyph caching: ui ↔ engine_core (dual caches)
-3. Time struct: renderer → common (misplaced)
+3. ~~Time struct: renderer → common (misplaced)~~ ✅ Consolidated in common
 
 ### Documented Scaffolding (Intentional Dead Code)
 All `#[allow(dead_code)]` suppressions are now documented with explanatory comments:
