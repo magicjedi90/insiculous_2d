@@ -192,12 +192,12 @@ impl EngineApplication {
     }
 
     /// Get a reference to the 2D camera.
-    pub fn camera_2d(&self) -> &renderer::Camera2D {
+    pub fn camera_2d(&self) -> &renderer::Camera {
         self.render_manager.camera()
     }
 
     /// Get a mutable reference to the 2D camera.
-    pub fn camera_2d_mut(&mut self) -> &mut renderer::Camera2D {
+    pub fn camera_2d_mut(&mut self) -> &mut renderer::Camera {
         self.render_manager.camera_mut()
     }
 

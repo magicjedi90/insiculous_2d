@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// This is the canonical camera type used across the engine.
 /// It combines features from both rendering and ECS requirements.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Camera2D {
+pub struct Camera {
     /// Camera position in world space
     pub position: Vec2,
     /// Camera rotation in radians
@@ -25,7 +25,7 @@ pub struct Camera2D {
     pub is_main_camera: bool,
 }
 
-impl Default for Camera2D {
+impl Default for Camera {
     fn default() -> Self {
         Self {
             position: Vec2::ZERO,
@@ -39,7 +39,7 @@ impl Default for Camera2D {
     }
 }
 
-impl Camera2D {
+impl Camera {
     /// Create a new camera at the given position with viewport size.
     #[inline]
     pub fn new(position: Vec2, viewport_size: Vec2) -> Self {
@@ -192,7 +192,7 @@ pub struct CameraUniform {
 
 impl CameraUniform {
     /// Create camera uniform from a Camera2D.
-    pub fn from_camera(camera: &Camera2D) -> Self {
+    pub fn from_camera(camera: &Camera) -> Self {
         Self {
             view_projection: camera.view_projection_matrix().to_cols_array_2d(),
             position: camera.position.to_array(),
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_camera_default() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         assert_eq!(camera.position, Vec2::ZERO);
         assert_eq!(camera.zoom, 1.0);
         assert!(!camera.is_main_camera);
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_camera_builder() {
-        let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
+        let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
             .with_zoom(2.0)
             .with_rotation(0.5)
             .as_main_camera();
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_world_bounds() {
-        let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
         let (min_x, min_y, max_x, max_y) = camera.world_bounds();
         assert_eq!(min_x, -400.0);
         assert_eq!(min_y, -300.0);
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_contains_point() {
-        let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
         assert!(camera.contains_point(Vec2::ZERO));
         assert!(camera.contains_point(Vec2::new(399.0, 299.0)));
         assert!(!camera.contains_point(Vec2::new(500.0, 0.0)));
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_camera_uniform() {
-        let camera = Camera2D::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
+        let camera = Camera::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
         let uniform = CameraUniform::from_camera(&camera);
         assert_eq!(uniform.position, [50.0, 100.0]);
     }

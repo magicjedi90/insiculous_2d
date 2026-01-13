@@ -4,10 +4,10 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 
 // Re-export common types for ECS use
-pub use common::{Transform2D, Camera2D};
+pub use common::{Transform2D, Camera};
 
 // Re-export types from renderer that we need
-use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
+use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
 
 /// Sprite component that defines visual appearance
 #[derive(Debug, Clone, Serialize, Deserialize)]

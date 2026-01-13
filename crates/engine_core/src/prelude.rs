@@ -25,7 +25,7 @@ pub use crate::{
 };
 
 // Re-export common types (Color, Transform2D, Camera2D, Rect)
-pub use common::{Color, Transform2D, Camera2D, Rect};
+pub use common::{Color, Transform2D, Camera, Rect};
 
 // Re-export commonly used types from dependencies
 pub use glam::{Vec2, Vec4};

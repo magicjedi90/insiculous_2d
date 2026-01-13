@@ -6,7 +6,7 @@ use std::sync::Arc;
 use wgpu::{Device, Queue, RenderPipeline, PipelineLayout, BindGroupLayout, Buffer, Sampler, TextureView, CommandEncoder};
 use wgpu::util::DeviceExt;
 
-use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera2D, CameraUniform, TextureResource, DynamicBuffer};
+use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera, CameraUniform, TextureResource, DynamicBuffer};
 use crate::texture::{TextureHandle, SamplerConfig};
 
 /// A single sprite to be rendered
@@ -351,7 +351,7 @@ impl SpritePipeline {
         // Create camera uniform buffer
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite Camera Buffer"),
-            contents: bytemuck::cast_slice(&[CameraUniform::from_camera(&Camera2D::default())]),
+            contents: bytemuck::cast_slice(&[CameraUniform::from_camera(&Camera::default())]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -429,7 +429,7 @@ impl SpritePipeline {
     }
 
     /// Update camera uniform
-    pub fn update_camera(&self, queue: &Queue, camera: &Camera2D) {
+    pub fn update_camera(&self, queue: &Queue, camera: &Camera) {
         let uniform = CameraUniform::from_camera(camera);
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
@@ -497,7 +497,7 @@ impl SpritePipeline {
     pub fn draw(
         &mut self,
         encoder: &mut CommandEncoder,
-        _camera: &Camera2D,
+        _camera: &Camera,
         texture_resources: &HashMap<TextureHandle, TextureResource>,
         batches: &[&SpriteBatch],
         target: &TextureView,

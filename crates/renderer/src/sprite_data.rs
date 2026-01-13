@@ -6,7 +6,7 @@ use wgpu::{Device, Queue, Texture, TextureView, Sampler, Buffer};
 use crate::texture::SamplerConfig;
 
 // Re-export Camera2D and CameraUniform from common crate
-pub use common::{Camera2D, camera::CameraUniform};
+pub use common::{Camera, camera::CameraUniform};
 
 /// Vertex data for a sprite
 #[repr(C)]
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_default() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         assert_eq!(camera.position, Vec2::ZERO);
         assert_eq!(camera.rotation, 0.0);
         assert_eq!(camera.zoom, 1.0);
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_new() {
-        let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0));
+        let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0));
         assert_eq!(camera.position, Vec2::new(100.0, 200.0));
         assert_eq!(camera.viewport_size, Vec2::new(1920.0, 1080.0));
         // Other fields should be default
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_matrix_identity_at_origin() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         let view = camera.view_matrix();
         // At origin with no rotation and zoom 1.0, view should be identity
         let identity = Mat4::IDENTITY;
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_matrix_with_position() {
-        let mut camera = Camera2D::default();
+        let mut camera = Camera::default();
         camera.position = Vec2::new(100.0, 50.0);
         let view = camera.view_matrix();
 
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_matrix_with_zoom() {
-        let mut camera = Camera2D::default();
+        let mut camera = Camera::default();
         camera.zoom = 2.0; // 2x zoom in
         let view = camera.view_matrix();
 
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_projection_matrix() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         let proj = camera.projection_matrix();
 
         // For an 800x600 viewport, half extents are 400x300
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_projection_combines_both() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         let vp = camera.view_projection_matrix();
         let expected = camera.projection_matrix() * camera.view_matrix();
 
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_screen_to_world_center() {
-        let camera = Camera2D::default(); // 800x600 viewport, position at origin
+        let camera = Camera::default(); // 800x600 viewport, position at origin
         // Screen center (400, 300) should map to world origin (0, 0)
         let world_pos = camera.screen_to_world(Vec2::new(400.0, 300.0));
         assert!((world_pos.x).abs() < 1.0, "x: {}", world_pos.x);
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_world_to_screen_origin() {
-        let camera = Camera2D::default(); // 800x600 viewport
+        let camera = Camera::default(); // 800x600 viewport
         // World origin (0, 0) should map to screen center (400, 300)
         let screen_pos = camera.world_to_screen(Vec2::ZERO);
         assert!((screen_pos.x - 400.0).abs() < 1.0, "x: {}", screen_pos.x);
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_camera2d_world_to_screen_corners() {
-        let camera = Camera2D::default(); // 800x600 viewport
+        let camera = Camera::default(); // 800x600 viewport
 
         // World top-right corner (400, 300) should map to screen top-right (800, 0)
         let top_right = camera.world_to_screen(Vec2::new(400.0, 300.0));
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_camera_uniform_from_camera() {
-        let camera = Camera2D::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
+        let camera = Camera::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
         let uniform = CameraUniform::from_camera(&camera);
 
         assert_eq!(uniform.position, [50.0, 100.0]);
@@ -482,7 +482,7 @@ mod tests {
 
     #[test]
     fn test_camera_uniform_bytemuck() {
-        let camera = Camera2D::default();
+        let camera = Camera::default();
         let uniform = CameraUniform::from_camera(&camera);
         // Verify bytemuck traits work
         let _bytes: &[u8] = bytemuck::bytes_of(&uniform);

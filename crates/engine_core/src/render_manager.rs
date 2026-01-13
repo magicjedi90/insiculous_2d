@@ -14,7 +14,7 @@ use renderer::{
     sprite_data::TextureResource,
     texture::TextureHandle,
     wgpu::{Device, Queue},
-    Camera2D, Renderer, RendererError,
+    Camera, Renderer, RendererError,
 };
 
 /// Manages the renderer lifecycle and sprite rendering pipeline.
@@ -30,7 +30,7 @@ pub struct RenderManager {
     /// The sprite rendering pipeline
     sprite_pipeline: Option<SpritePipeline>,
     /// The 2D camera for orthographic projection
-    camera: Camera2D,
+    camera: Camera,
 }
 
 impl Default for RenderManager {
@@ -45,7 +45,7 @@ impl RenderManager {
         Self {
             renderer: None,
             sprite_pipeline: None,
-            camera: Camera2D::default(),
+            camera: Camera::default(),
         }
     }
 
@@ -196,12 +196,12 @@ impl RenderManager {
     }
 
     /// Get a reference to the camera.
-    pub fn camera(&self) -> &Camera2D {
+    pub fn camera(&self) -> &Camera {
         &self.camera
     }
 
     /// Get a mutable reference to the camera.
-    pub fn camera_mut(&mut self) -> &mut Camera2D {
+    pub fn camera_mut(&mut self) -> &mut Camera {
         &mut self.camera
     }
 

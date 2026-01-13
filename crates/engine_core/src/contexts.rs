@@ -8,7 +8,7 @@ use ecs::World;
 use input::InputHandler;
 use audio::AudioManager;
 use ui::UIContext;
-use renderer::{sprite::SpriteBatcher, Camera2D, texture::TextureHandle};
+use renderer::{sprite::SpriteBatcher, Camera, texture::TextureHandle};
 use std::collections::HashMap;
 use crate::assets::AssetManager;
 
@@ -63,7 +63,7 @@ pub struct RenderContext<'a> {
     /// Sprite batcher for adding sprites to render
     pub sprites: &'a mut SpriteBatcher,
     /// The 2D camera
-    pub camera: &'a mut Camera2D,
+    pub camera: &'a mut Camera,
     /// Current window size
     pub window_size: Vec2,
     /// UI draw commands to render

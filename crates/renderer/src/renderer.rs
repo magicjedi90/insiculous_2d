@@ -222,7 +222,7 @@ impl Renderer {
     pub fn render_with_sprites(
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
-        camera: &crate::sprite_data::Camera2D,
+        camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
@@ -245,7 +245,7 @@ impl Renderer {
     fn render_with_sprites_internal(
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
-        camera: &crate::sprite_data::Camera2D,
+        camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
