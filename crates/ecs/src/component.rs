@@ -251,14 +251,22 @@ impl ArchetypeStorage {
         }
     }
 
-    /// Get a reference to a component for an entity
+    /// Get a reference to a component for an entity.
+    ///
+    /// # Safety Note
+    ///
+    /// This method uses unsafe pointer casting internally. Safety is ensured by:
+    /// - The `TypeId` lookup ensures we access the correct column for type `T`
+    /// - The column stores components of type `T` with matching `element_size`
+    /// - Index bounds are checked by `ComponentColumn::get()`
     pub fn get<T: Component>(&self, entity_id: &EntityId) -> Option<&dyn Component> {
         let type_id = TypeId::of::<T>();
-        
+
         if let Some((archetype_id, index)) = self.entity_locations.get(entity_id).cloned() {
             if let Some(archetype) = self.archetypes.get(&archetype_id) {
                 if let Some(column) = archetype.get_column(&type_id) {
                     if let Some(ptr) = column.get(index) {
+                        // SAFETY: TypeId ensures this column contains T, and bounds were checked
                         return Some(unsafe { &*(ptr as *const dyn Component) });
                     }
                 }
@@ -267,14 +275,24 @@ impl ArchetypeStorage {
         None
     }
 
-    /// Get a mutable reference to a component for an entity
+    /// Get a mutable reference to a component for an entity.
+    ///
+    /// # Safety Note
+    ///
+    /// This method uses unsafe pointer casting internally. Safety is ensured by:
+    /// - The `TypeId` lookup ensures we access the correct column for type `T`
+    /// - The column stores components of type `T` with matching `element_size`
+    /// - Index bounds are checked by `ComponentColumn::get_mut()`
+    /// - Mutable borrow of `self` prevents aliasing
     pub fn get_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut dyn Component> {
         let type_id = TypeId::of::<T>();
-        
+
         if let Some((archetype_id, index)) = self.entity_locations.get(entity_id).cloned() {
             if let Some(archetype) = self.archetypes.get_mut(&archetype_id) {
                 if let Some(column) = archetype.get_column_mut(&type_id) {
                     if let Some(ptr) = column.get_mut(index) {
+                        // SAFETY: TypeId ensures this column contains T, bounds were checked,
+                        // and &mut self prevents aliasing
                         return Some(unsafe { &mut *(ptr as *mut dyn Component) });
                     }
                 }

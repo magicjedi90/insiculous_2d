@@ -1,4 +1,45 @@
 //! Input mapping system for binding inputs to game actions.
+//!
+//! # Binding Model
+//!
+//! The input mapping system supports two lookup directions:
+//!
+//! - **Action → Inputs**: "What inputs trigger this action?" (`get_bindings()`)
+//! - **Input → Action**: "What action does this input trigger?" (`get_action()`)
+//!
+//! ## One-to-Many: Multiple Inputs per Action (Recommended)
+//!
+//! The common case is binding multiple inputs to a single action:
+//! ```ignore
+//! // Both W and Up arrow trigger MoveUp
+//! mapping.bind_input(InputSource::Keyboard(KeyCode::KeyW), GameAction::MoveUp);
+//! mapping.bind_input(InputSource::Keyboard(KeyCode::ArrowUp), GameAction::MoveUp);
+//!
+//! // get_bindings returns both inputs
+//! mapping.get_bindings(&GameAction::MoveUp); // [KeyW, ArrowUp]
+//! ```
+//!
+//! ## One-to-Many: Multiple Actions per Input (Advanced)
+//!
+//! You can bind one input to multiple actions via `bind_input_to_multiple_actions()`.
+//! **Note**: The reverse lookup `get_action()` only returns the *first* action:
+//!
+//! ```ignore
+//! // Space triggers both Jump and Confirm
+//! mapping.bind_input_to_multiple_actions(
+//!     InputSource::Keyboard(KeyCode::Space),
+//!     vec![GameAction::Action1, GameAction::Select]
+//! );
+//!
+//! // Forward lookup: Both actions recognize Space as a trigger
+//! mapping.get_bindings(&GameAction::Action1); // [Space]
+//! mapping.get_bindings(&GameAction::Select);  // [Space]
+//!
+//! // Reverse lookup: Only returns first action
+//! mapping.get_action(&InputSource::Keyboard(KeyCode::Space)); // Some(Action1)
+//! ```
+//!
+//! For most games, checking `is_action_active()` is preferred over `get_action()`.
 
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;
@@ -118,7 +159,32 @@ impl InputMapping {
         self.action_bindings.entry(action).or_default().push(input);
     }
 
-    /// Bind an input source to multiple game actions (allows one input to trigger multiple actions)
+    /// Bind an input source to multiple game actions.
+    ///
+    /// This allows one input to trigger multiple actions simultaneously.
+    /// For example, you might want the Space key to trigger both "Jump" and "Confirm".
+    ///
+    /// # Lookup Behavior
+    ///
+    /// - `get_bindings(action)` will return the input for ALL specified actions
+    /// - `get_action(input)` will only return the **first** action in the list
+    ///
+    /// This asymmetry exists because the reverse lookup uses a single-value HashMap.
+    /// For most use cases, you should check actions via `InputHandler::is_action_active()`
+    /// rather than using `get_action()`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// mapping.bind_input_to_multiple_actions(
+    ///     InputSource::Keyboard(KeyCode::Space),
+    ///     vec![GameAction::Action1, GameAction::Select]
+    /// );
+    ///
+    /// // Both actions now respond to Space
+    /// assert!(input.is_action_active(&GameAction::Action1)); // true when Space pressed
+    /// assert!(input.is_action_active(&GameAction::Select));  // true when Space pressed
+    /// ```
     pub fn bind_input_to_multiple_actions(&mut self, input: InputSource, actions: Vec<GameAction>) {
         // Remove any existing binding for this input
         if let Some(old_action) = self.bindings.remove(&input) {
@@ -127,12 +193,12 @@ impl InputMapping {
             }
         }
 
-        // Bind to the first action for the reverse lookup
+        // Bind to the first action for the reverse lookup (limitation: only first action returned by get_action)
         if let Some(first_action) = actions.first() {
             self.bindings.insert(input, *first_action);
         }
 
-        // Add bindings for all actions
+        // Add bindings for all actions (all actions will respond to this input)
         for action in actions {
             self.action_bindings.entry(action).or_default().push(input);
         }
@@ -160,12 +226,20 @@ impl InputMapping {
         }
     }
 
-    /// Get the action bound to an input source
+    /// Get the action bound to an input source.
+    ///
+    /// **Note**: If the input was bound to multiple actions via
+    /// `bind_input_to_multiple_actions()`, this only returns the *first* action.
+    /// For checking if an action is triggered, prefer `InputHandler::is_action_active()`.
     pub fn get_action(&self, input: &InputSource) -> Option<&GameAction> {
         self.bindings.get(input)
     }
 
-    /// Get all input sources bound to an action
+    /// Get all input sources bound to an action.
+    ///
+    /// This is the recommended way to query bindings, as it correctly returns
+    /// all inputs that trigger the action, including those bound via
+    /// `bind_input_to_multiple_actions()`.
     pub fn get_bindings(&self, action: &GameAction) -> &[InputSource] {
         self.action_bindings.get(action).map(|v| v.as_slice()).unwrap_or(&[])
     }

@@ -164,15 +164,15 @@ Last audited: January 2026
 - **Suggested fix:** Either use these fields/methods or remove them. The "potential future use" justification adds maintenance burden.
 - **Priority:** Low
 
-### [ARCH-004] Inconsistent error types between modules
+### ~~[ARCH-004] Inconsistent error types between modules~~ ✅ RESOLVED
 - **Files:** `error.rs`, `texture.rs`
-- **Issue:** Two separate error enums exist:
-  - `RendererError` in `error.rs` - General renderer errors
-  - `TextureError` in `texture.rs` - Texture-specific errors
-
-  These aren't unified, so callers must handle both types. `TextureError` doesn't implement `From<RendererError>` or vice versa.
-- **Suggested fix:** Either unify into a single error enum or implement proper conversions.
-- **Priority:** Low
+- **Resolution:** Added `From<TextureError>` implementation for `RendererError`:
+  ```rust
+  #[error("Texture error: {0}")]
+  TextureError(#[from] TextureError),
+  ```
+  Callers can now use `?` to automatically convert `TextureError` to `RendererError` when needed.
+- **Resolved:** January 2026
 
 ---
 

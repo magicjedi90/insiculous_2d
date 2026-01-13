@@ -32,28 +32,23 @@ Last audited: January 2026
 - **Suggested fix:** Extract to `fn layout_to_draw_data(layout: TextLayout, text: &str, position: Vec2, color: Color, font_size: f32) -> TextDrawData`.
 - **Priority:** Medium
 
-### [DRY-002] Duplicate checkbox drawing logic
+### ~~[DRY-002] Duplicate checkbox drawing logic~~ ✅ RESOLVED
 - **File:** `context.rs`
-- **Lines:** 375-403
-- **Issue:** Checkbox uses the same background/border drawing pattern as buttons but reimplements it instead of reusing a helper. Same applies to checkmark inner rect drawing.
-- **Suggested fix:** Extract common widget background drawing to a helper method like `draw_widget_background(&mut self, bounds: Rect, state: WidgetState, style: &ButtonStyle)`.
-- **Priority:** Low
+- **Resolution:** Extracted `widget_background_color(&self, state: WidgetState) -> Color` helper method.
+  Both `button_styled()` and `checkbox()` now use this helper to get the background color based on widget state.
+- **Resolved:** January 2026
 
-### [DRY-003] Duplicate UIContext constructor logic
+### ~~[DRY-003] Duplicate UIContext constructor logic~~ ✅ RESOLVED
 - **File:** `context.rs`
-- **Lines:** 53-61, 64-72
-- **Issue:** `new()` and `with_theme()` have identical field initialization except for the theme:
+- **Resolution:** `with_theme()` now delegates to `new()`:
   ```rust
-  Self {
-      interaction: InteractionManager::new(),
-      draw_list: DrawList::new(),
-      theme: ...,  // Only this differs
-      window_size: Vec2::new(800.0, 600.0),
-      font_manager: FontManager::new(),
+  pub fn with_theme(theme: Theme) -> Self {
+      let mut ctx = Self::new();
+      ctx.theme = theme;
+      ctx
   }
   ```
-- **Suggested fix:** Use `new()` in `with_theme()`: `let mut ctx = Self::new(); ctx.theme = theme; ctx`.
-- **Priority:** Low
+- **Resolved:** January 2026
 
 ### [DRY-004] Repeated font check and placeholder fallback
 - **File:** `context.rs`
@@ -131,14 +126,14 @@ Last audited: January 2026
 - **Suggested fix:** Consolidate caching strategy. The ui crate should handle CPU-side caching (bitmaps), and engine_core should only cache GPU resources.
 - **Priority:** Medium (related to engine_core KISS-001)
 
-### [ARCH-002] rect.rs is essentially a re-export
-- **File:** `rect.rs`
-- **Lines:** 1-45
-- **Issue:** This entire file just re-exports `common::Rect` and has tests. The tests are duplicating tests that likely exist in the common crate.
-- **Suggested fix:** Either:
-  1. Remove rect.rs entirely and re-export from lib.rs directly
-  2. Or add UI-specific Rect extensions if needed
-- **Priority:** Low (working, just redundant)
+### ~~[ARCH-002] rect.rs is essentially a re-export~~ ✅ RESOLVED
+- **File:** `rect.rs` (removed)
+- **Resolution:** Removed `rect.rs` entirely. `Rect` is now re-exported directly from `common` in `lib.rs`:
+  ```rust
+  pub use common::Rect;
+  ```
+  The duplicate tests (4 tests) were removed as they duplicated coverage from `common::rect` tests.
+- **Resolved:** January 2026
 
 ### [ARCH-003] TextDrawData duplicates GlyphDrawData info
 - **File:** `draw.rs`

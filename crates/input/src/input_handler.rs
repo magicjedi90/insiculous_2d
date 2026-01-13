@@ -1,4 +1,22 @@
 //! Unified input handling.
+//!
+//! # Frame Lifecycle
+//!
+//! The input system follows a specific frame lifecycle:
+//!
+//! 1. **Event Collection** (automatic): Window events are queued via `handle_window_event()`
+//! 2. **Event Processing** (start of frame): Call `process_queued_events()` to update input state
+//! 3. **Game Logic**: Read input state via `is_key_pressed()`, `is_action_active()`, etc.
+//! 4. **State Reset** (end of frame): Call `end_frame()` to clear just_pressed/just_released flags
+//!
+//! ```ignore
+//! // Typical frame loop:
+//! input.process_queued_events();  // Process this frame's input
+//! // ... game logic reads input state ...
+//! input.end_frame();              // Clear just_pressed/just_released for next frame
+//! ```
+//!
+//! For simple use cases, `update()` combines steps 2 and 4 into one call.
 
 use crate::gamepad::GamepadManager;
 use crate::keyboard::{KeyboardState, convert_physical_key};
@@ -67,85 +85,68 @@ impl InputHandler {
         &mut self.input_mapping
     }
 
+    // ================== Input Source Helpers ==================
+
+    /// Check if an input source is currently pressed
+    fn is_input_pressed(&self, source: &InputSource) -> bool {
+        match source {
+            InputSource::Keyboard(key) => self.keyboard.is_key_pressed(*key),
+            InputSource::Mouse(button) => self.mouse.is_button_pressed(*button),
+            InputSource::Gamepad(id, button) => self
+                .gamepads
+                .get_gamepad(*id)
+                .map_or(false, |g| g.is_button_pressed(*button)),
+        }
+    }
+
+    /// Check if an input source was just pressed this frame
+    fn is_input_just_pressed(&self, source: &InputSource) -> bool {
+        match source {
+            InputSource::Keyboard(key) => self.keyboard.is_key_just_pressed(*key),
+            InputSource::Mouse(button) => self.mouse.is_button_just_pressed(*button),
+            InputSource::Gamepad(id, button) => self
+                .gamepads
+                .get_gamepad(*id)
+                .map_or(false, |g| g.is_button_just_pressed(*button)),
+        }
+    }
+
+    /// Check if an input source was just released this frame
+    fn is_input_just_released(&self, source: &InputSource) -> bool {
+        match source {
+            InputSource::Keyboard(key) => self.keyboard.is_key_just_released(*key),
+            InputSource::Mouse(button) => self.mouse.is_button_just_released(*button),
+            InputSource::Gamepad(id, button) => self
+                .gamepads
+                .get_gamepad(*id)
+                .map_or(false, |g| g.is_button_just_released(*button)),
+        }
+    }
+
+    // ================== Action Checking ==================
+
     /// Check if a game action is currently active (any bound input is pressed)
     pub fn is_action_active(&self, action: &GameAction) -> bool {
-        let bindings = self.input_mapping.get_bindings(action);
-        for binding in bindings {
-            match binding {
-                InputSource::Keyboard(key) => {
-                    if self.keyboard.is_key_pressed(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(button) => {
-                    if self.mouse.is_button_pressed(*button) {
-                        return true;
-                    }
-                }
-                InputSource::Gamepad(id, button) => {
-                    if let Some(gamepad) = self.gamepads.get_gamepad(*id) {
-                        if gamepad.is_button_pressed(*button) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        false
+        self.input_mapping
+            .get_bindings(action)
+            .iter()
+            .any(|source| self.is_input_pressed(source))
     }
 
     /// Check if a game action was just activated this frame
     pub fn is_action_just_activated(&self, action: &GameAction) -> bool {
-        let bindings = self.input_mapping.get_bindings(action);
-        for binding in bindings {
-            match binding {
-                InputSource::Keyboard(key) => {
-                    if self.keyboard.is_key_just_pressed(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(button) => {
-                    if self.mouse.is_button_just_pressed(*button) {
-                        return true;
-                    }
-                }
-                InputSource::Gamepad(id, button) => {
-                    if let Some(gamepad) = self.gamepads.get_gamepad(*id) {
-                        if gamepad.is_button_just_pressed(*button) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        false
+        self.input_mapping
+            .get_bindings(action)
+            .iter()
+            .any(|source| self.is_input_just_pressed(source))
     }
 
     /// Check if a game action was just deactivated this frame
     pub fn is_action_just_deactivated(&self, action: &GameAction) -> bool {
-        let bindings = self.input_mapping.get_bindings(action);
-        for binding in bindings {
-            match binding {
-                InputSource::Keyboard(key) => {
-                    if self.keyboard.is_key_just_released(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(button) => {
-                    if self.mouse.is_button_just_released(*button) {
-                        return true;
-                    }
-                }
-                InputSource::Gamepad(id, button) => {
-                    if let Some(gamepad) = self.gamepads.get_gamepad(*id) {
-                        if gamepad.is_button_just_released(*button) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        false
+        self.input_mapping
+            .get_bindings(action)
+            .iter()
+            .any(|source| self.is_input_just_released(source))
     }
 
     /// Queue an input event for later processing
@@ -153,7 +154,17 @@ impl InputHandler {
         self.event_queue.push_back(event);
     }
 
-    /// Process all queued input events
+    /// Process all queued input events, updating input state.
+    ///
+    /// Call this at the **start** of each frame, before reading input state.
+    /// This processes all events that were queued via `handle_window_event()`
+    /// since the last call, updating keyboard, mouse, and gamepad state.
+    ///
+    /// After calling this, you can read current input state via methods like
+    /// `is_key_pressed()`, `is_key_just_pressed()`, `is_action_active()`, etc.
+    ///
+    /// At the end of the frame, call `end_frame()` to reset the "just pressed"
+    /// and "just released" flags for the next frame.
     pub fn process_queued_events(&mut self) {
         while let Some(event) = self.event_queue.pop_front() {
             self.process_event(event);
@@ -235,7 +246,18 @@ impl InputHandler {
         }
     }
 
-    /// Update all input states for the next frame (processes queued events then clears just pressed/released states)
+    /// Convenience method that processes events and resets state in one call.
+    ///
+    /// This is equivalent to calling `process_queued_events()` followed by `end_frame()`.
+    /// Use this for simple applications where you don't need fine-grained control over
+    /// when events are processed vs when state is reset.
+    ///
+    /// For most game loops, prefer the two-step approach:
+    /// ```ignore
+    /// input.process_queued_events();  // At start of frame
+    /// // ... game logic ...
+    /// input.end_frame();              // At end of frame
+    /// ```
     pub fn update(&mut self) {
         // Process any queued input events first
         self.process_queued_events();
@@ -246,11 +268,29 @@ impl InputHandler {
         self.gamepads.update();
     }
 
-    /// End the frame by clearing just pressed/released states
+    /// Reset input state for the next frame.
     ///
-    /// Call this at the end of each frame after game logic has run.
-    /// This clears the "just pressed" and "just released" flags without processing events.
-    /// Use this when you've already called `process_queued_events()` earlier in the frame.
+    /// Clears "just pressed" and "just released" flags from all input devices.
+    /// Call this at the **end** of each frame, after all game logic has had a
+    /// chance to check input state.
+    ///
+    /// # When to Use
+    ///
+    /// Use `end_frame()` when you've separately called `process_queued_events()` at
+    /// the start of the frame. This is the recommended pattern for game loops:
+    ///
+    /// ```ignore
+    /// // Start of frame
+    /// input.process_queued_events();
+    ///
+    /// // Game logic - can check is_key_just_pressed(), etc.
+    /// if input.is_key_just_pressed(KeyCode::Space) {
+    ///     player.jump();
+    /// }
+    ///
+    /// // End of frame - reset for next frame
+    /// input.end_frame();
+    /// ```
     pub fn end_frame(&mut self) {
         self.keyboard.update();
         self.mouse.update();

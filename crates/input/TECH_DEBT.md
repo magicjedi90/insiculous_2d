@@ -4,8 +4,8 @@ Last audited: January 2026
 
 ## Summary
 - DRY violations: 3
-- SRP violations: 1
-- KISS violations: 1
+- SRP violations: 0 (1 resolved)
+- KISS violations: 0 (1 resolved)
 - Architecture issues: 2
 
 **Overall Assessment:** The input crate is well-designed with clean architecture. Most issues are minor DRY violations from the necessary structural similarity between input device types.
@@ -33,27 +33,20 @@ Last audited: January 2026
   ```
 - **Priority:** Low (working pattern, abstraction may add complexity)
 
-### [DRY-002] Repeated action checking pattern in input_handler.rs
+### ~~[DRY-002] Repeated action checking pattern in input_handler.rs~~ ✅ RESOLVED
 - **File:** `input_handler.rs`
-- **Lines:** 71-149
-- **Issue:** `is_action_active()`, `is_action_just_activated()`, and `is_action_just_deactivated()` have identical structure:
+- **Resolution:** Extracted three helper methods:
+  - `is_input_pressed(&self, source: &InputSource) -> bool`
+  - `is_input_just_pressed(&self, source: &InputSource) -> bool`
+  - `is_input_just_released(&self, source: &InputSource) -> bool`
+
+  The action methods now use `iter().any()` with these helpers:
   ```rust
-  let bindings = self.input_mapping.get_bindings(action);
-  for binding in bindings {
-      match binding {
-          InputSource::Keyboard(key) => { if self.keyboard.is_key_XXX(*key) { return true; } }
-          InputSource::Mouse(button) => { if self.mouse.is_button_XXX(*button) { return true; } }
-          InputSource::Gamepad(id, button) => { ... }
-      }
+  pub fn is_action_active(&self, action: &GameAction) -> bool {
+      self.input_mapping.get_bindings(action).iter().any(|s| self.is_input_pressed(s))
   }
-  false
   ```
-- **Suggested fix:** Extract a helper method that takes a closure for the check:
-  ```rust
-  fn check_bindings<F>(&self, action: &GameAction, check: F) -> bool
-  where F: Fn(&InputSource) -> bool
-  ```
-- **Priority:** Medium
+- **Resolved:** January 2026
 
 ### [DRY-003] Repeated unbind logic in input_mapping.rs
 - **File:** `input_mapping.rs`
@@ -74,53 +67,44 @@ Last audited: January 2026
 
 ## SRP Violations
 
-### [SRP-001] InputHandler has dual update methods
+### ~~[SRP-001] InputHandler has dual update methods~~ ✅ RESOLVED
 - **File:** `input_handler.rs`
-- **Lines:** 238-258
-- **Issue:** Two similar methods exist for frame-end processing:
-  - `update()` - processes queued events AND clears just_pressed/released
-  - `end_frame()` - ONLY clears just_pressed/released
+- **Resolution:** Comprehensive documentation added to clarify the frame lifecycle:
+  - Module-level doc explains the 4-step frame lifecycle (Event Collection → Event Processing → Game Logic → State Reset)
+  - `process_queued_events()` - clearly documented as "call at start of frame"
+  - `end_frame()` - clearly documented as "call at end of frame" with code examples
+  - `update()` - documented as convenience method combining both steps for simple use cases
 
-  The documentation says use `end_frame()` "when you've already called `process_queued_events()` earlier in the frame" but this creates confusion about the correct API to call.
-- **Suggested fix:** Either:
-  1. Remove `end_frame()` and always use `update()`
-  2. Rename to make distinction clear: `process_and_end_frame()` vs `end_frame()`
-  3. Document more clearly which to use when
-- **Priority:** Medium (API confusion)
+  The API is intentionally separated for fine-grained control in game loops.
 
 ---
 
 ## KISS Violations
 
-### [KISS-001] bind_input_to_multiple_actions has inconsistent behavior
+### ~~[KISS-001] bind_input_to_multiple_actions has inconsistent behavior~~ ✅ RESOLVED
 - **File:** `input_mapping.rs`
-- **Lines:** 122-139
-- **Issue:** The method `bind_input_to_multiple_actions()` only stores the first action in `bindings` HashMap, but adds the input to all action_bindings. This creates asymmetric behavior:
-  - `get_bindings(action)` returns correct inputs for ALL actions
-  - `get_action(input)` only returns the FIRST action
+- **Resolution:** Comprehensive documentation added to clarify the intentional asymmetric behavior:
+  - Module-level docs explain the binding model and the limitation
+  - `bind_input_to_multiple_actions()` has detailed docs explaining that `get_action()` only returns the first action
+  - `get_action()` has a warning note about the limitation
+  - `get_bindings()` is documented as the recommended lookup method
+  - Users are guided to use `InputHandler::is_action_active()` for most use cases
 
-  The comment says "Bind to the first action for the reverse lookup" but this is confusing and potentially buggy.
-- **Suggested fix:** Either:
-  1. Don't support multiple actions per input (simpler)
-  2. Change `bindings` to `HashMap<InputSource, Vec<GameAction>>`
-  3. Document the limitation clearly
-- **Priority:** Medium (semantic confusion)
+  The behavior is intentional (simpler data structure) and now well-documented.
 
 ---
 
 ## Architecture Issues
 
-### [ARCH-001] Dual error types for same domain
-- **Files:** `lib.rs:32-39`, `thread_safe.rs:151-159`
-- **Issue:** Two separate error enums exist:
-  - `InputError` - For initialization and device errors
-  - `InputThreadError` - For thread-safe wrapper errors
-
-  These aren't unified, so different APIs return different error types.
-- **Suggested fix:** Either:
-  1. Have `InputThreadError` wrap `InputError`
-  2. Unify into a single `InputError` with thread-related variants
-- **Priority:** Low (working, just inconsistent)
+### ~~[ARCH-001] Dual error types for same domain~~ ✅ RESOLVED
+- **Files:** `lib.rs:32-42`, `thread_safe.rs:151-159`
+- **Resolution:** Added `From<InputThreadError>` implementation for `InputError`:
+  ```rust
+  #[error("Thread-safe input error: {0}")]
+  ThreadError(#[from] InputThreadError),
+  ```
+  This allows automatic conversion using `?` operator when needed.
+- **Resolved:** January 2026
 
 ### [ARCH-002] InputEvent uses winit types directly
 - **File:** `input_handler.rs`
@@ -168,20 +152,19 @@ These are **feature gaps**, not technical debt:
 | Test coverage | 60 tests (all passing) |
 | Error types | 2 (could be unified) |
 | High priority issues | 0 |
-| Medium priority issues | 4 |
+| Medium priority issues | 2 |
 | Low priority issues | 3 |
 
 ---
 
 ## Recommendations
 
-### Immediate Actions
-None required - the crate is production-ready.
+### ✅ Completed
+1. ~~**Fix SRP-001** - Clarify `update()` vs `end_frame()` API~~ - Comprehensive documentation added
+2. ~~**Fix KISS-001** - Document or fix multi-action binding behavior~~ - Comprehensive documentation added
 
 ### Short-term Improvements
-1. **Fix SRP-001** - Clarify `update()` vs `end_frame()` API
-2. **Fix DRY-002** - Extract action binding check helper
-3. **Fix KISS-001** - Document or fix multi-action binding behavior
+1. **Fix DRY-002** - Extract action binding check helper
 
 ### Technical Debt Backlog
 - DRY-001: Consider generic InputStateTracker (optional, may over-abstract)
@@ -196,13 +179,9 @@ None required - the crate is production-ready.
 |-------------|-------------|--------|
 | TODO comments | ✅ COMPLETED - All replaced | Resolved |
 | Dead zone tests | "No Gamepad Analog Stick Dead Zone Tests" | Feature gap (not debt) |
-| DRY-002: Action checking | Not tracked | New finding |
-| SRP-001: Dual update methods | Not tracked | New finding |
-| KISS-001: Multi-action binding | Not tracked | New finding |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- SRP-001: InputHandler has confusing dual update methods (`update()` vs `end_frame()`)
-- KISS-001: `bind_input_to_multiple_actions()` has asymmetric behavior
+| DRY-002: Action checking | Not tracked | Open |
+| SRP-001: Dual update methods | Not tracked | ✅ RESOLVED - Documentation added |
+| KISS-001: Multi-action binding | Not tracked | ✅ RESOLVED - Documentation added |
 
 ---
 

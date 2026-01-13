@@ -222,6 +222,7 @@ All major ECS API issues have been resolved:
 - [x] **renderer/ARCH-001: device/queue accessors documented** - Both versions kept with clear documentation
 - [x] **renderer/DRY-001: Surface error handling extracted** - `acquire_frame()` helper method
 - [x] **ecs/ARCH-002: Hierarchy cycle detection** - `set_parent()` now detects and rejects cycles
+- [x] **ecs/KISS-002: ComponentColumn unsafe documented** - Comprehensive safety invariants and justification documented
 
 ### High Priority (Safety/Functional Issues)
 None - all high priority issues resolved! ✅
@@ -251,17 +252,11 @@ None - all high priority issues resolved! ✅
 
 **ecs:**
 - [x] **ARCH-002: No cycle detection in hierarchy** - ✅ Cycle detection added in `set_parent()`, 2 tests
-- [ ] **KISS-002: ComponentColumn uses unsafe** - Raw pointer dereferencing
-  - Location: `ecs/src/component.rs:112-145`
-  - Fix: Consider safe alternatives or add safety documentation
+- [x] **KISS-002: ComponentColumn uses unsafe** - ✅ Comprehensive safety documentation added (invariants, justification, method-level SAFETY comments)
 
 **input:**
-- [ ] **SRP-001: Dual update methods confusion** - `update()` vs `end_frame()` unclear
-  - Location: `input/src/input_handler.rs:238-258`
-  - Fix: Rename to `process_and_end_frame()` vs `end_frame()` or document clearly
-- [ ] **KISS-001: Multi-action binding asymmetry** - `get_action()` returns only first action
-  - Location: `input/src/input_mapping.rs:122-139`
-  - Fix: Document limitation or change to `HashMap<InputSource, Vec<GameAction>>`
+- [x] **SRP-001: Dual update methods confusion** - ✅ Comprehensive documentation added: module-level frame lifecycle docs, clear method docs with examples for `process_queued_events()`, `end_frame()`, and `update()`
+- [x] **KISS-001: Multi-action binding asymmetry** - ✅ Comprehensive documentation added: module-level binding model docs, detailed method docs explaining the limitation, guidance to use `is_action_active()` instead of `get_action()`
 
 **ui:**
 - [ ] **DRY-001: Duplicate glyph-to-draw-data conversion** - Same pattern in two methods
@@ -277,27 +272,27 @@ None - all high priority issues resolved! ✅
 ### Low Priority (Code Organization)
 
 **DRY Violations (Working but verbose):**
-- [ ] renderer/DRY-003: Duplicate render pass descriptor creation
-- [ ] renderer/DRY-004: Duplicate texture descriptor creation
+- [x] renderer/DRY-003: Duplicate render pass descriptor creation - ✅ Reviewed: acceptable (different render passes with different purposes)
+- [x] renderer/DRY-004: Duplicate texture descriptor creation - ✅ Reviewed: acceptable (different textures with different params)
 - [ ] ecs/DRY-001: Repeated component storage operations
 - [ ] ecs/DRY-002: Duplicate error variants
 - [ ] input/DRY-001: Repeated input state tracking pattern across device types
-- [ ] input/DRY-002: Repeated action checking pattern
-- [ ] ui/DRY-002: Duplicate checkbox drawing logic
-- [ ] ui/DRY-003: Duplicate UIContext constructor logic
-- [ ] physics/DRY-002: Repeated body builder pattern
+- [x] input/DRY-002: Repeated action checking pattern - ✅ Fixed: extracted `is_input_pressed/just_pressed/just_released` helpers
+- [x] ui/DRY-002: Duplicate checkbox drawing logic - ✅ Fixed: extracted `widget_background_color()` helper
+- [x] ui/DRY-003: Duplicate UIContext constructor logic - ✅ Fixed: `with_theme()` now delegates to `new()`
+- [x] physics/DRY-002: Repeated body builder pattern - ✅ Reviewed: acceptable (each body type has different builder options)
 
 **Architecture (Nice to Have):**
 - [ ] ecs/SRP-001: World struct has many responsibilities
 - [ ] ecs/ARCH-001: Entity ID format inconsistency (u32 vs usize)
 - [ ] ecs/ARCH-004: Mixed visibility patterns
 - [ ] renderer/SRP-002: Renderer handles init AND rendering
-- [ ] renderer/ARCH-004: Inconsistent error types (RendererError vs TextureError)
-- [ ] input/ARCH-001: Dual error types (InputError vs InputThreadError)
+- [x] renderer/ARCH-004: Inconsistent error types (RendererError vs TextureError) - ✅ Fixed: added `From<TextureError>` for `RendererError`
+- [x] input/ARCH-001: Dual error types (InputError vs InputThreadError) - ✅ Fixed: added `From<InputThreadError>` for `InputError`
 - [ ] input/ARCH-002: InputEvent uses winit types directly (acceptable coupling)
-- [ ] ui/ARCH-002: rect.rs is essentially a re-export
-- [ ] ui/ARCH-003: TextDrawData duplicates GlyphDrawData info
-- [ ] common/KISS-001: Unused `with_prefixed_fields!` macro
+- [x] ui/ARCH-002: rect.rs is essentially a re-export - ✅ Fixed: removed rect.rs, re-export directly from common in lib.rs
+- [x] ui/ARCH-003: TextDrawData duplicates GlyphDrawData info - ✅ Reviewed: `text` field needed for width estimation
+- [x] common/KISS-001: Unused `with_prefixed_fields!` macro - ✅ Fixed: removed unused macro
 - [ ] physics/ARCH-001: PhysicsSystem has pass-through methods
 - [ ] physics/ARCH-002: Single collision callback limitation
 
@@ -316,13 +311,13 @@ None - all high priority issues resolved! ✅
 | Crate | High | Medium | Low | Total | Overall Assessment |
 |-------|------|--------|-----|-------|-------------------|
 | engine_core | 0 | 1 | 10 | 11 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅, texture warnings ✅ |
-| renderer | 0 | 3 | 7 | 10 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
-| ecs | 0 | 1 | 11 | 12 | Tests complete ✅, cycle detection ✅ |
+| renderer | 0 | 1 | 7 | 8 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
+| ecs | 0 | 0 | 11 | 11 | Tests complete ✅, cycle detection ✅, unsafe documented ✅ |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
-| input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
+| input | 0 | 0 | 5 | 5 | Production-ready, fully documented ✅ |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **6** | **49** | **55** | |
+| **Total** | **0** | **5** | **49** | **54** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅

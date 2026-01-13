@@ -5,7 +5,7 @@ Last audited: January 2026
 ## Summary
 - DRY violations: 4
 - SRP violations: 3
-- KISS violations: 2
+- KISS violations: 1 (1 resolved)
 - Architecture issues: 4
 
 ---
@@ -97,15 +97,16 @@ Last audited: January 2026
 - **Suggested fix:** Either implement basic query functionality or remove the scaffolding. Dead code adds maintenance burden without value.
 - **Priority:** Medium
 
-### [KISS-002] Over-engineered ComponentColumn raw pointer manipulation
-- **File:** `archetype.rs`
-- **Lines:** 41-133
-- **Issue:** `ComponentColumn` uses raw byte vectors with manual size tracking and unsafe pointer arithmetic for "optimal performance", but:
-  1. The archetype storage is rarely used (legacy is default)
-  2. Uses `unsafe` blocks that could be replaced with `Vec<Box<dyn Component>>` with minimal performance loss
-  3. Memory safety concerns with raw pointer casting
-- **Suggested fix:** Simplify to use safe Rust collections until performance profiling proves unsafe code is necessary.
-- **Priority:** Medium (safety concern)
+### ~~[KISS-002] Over-engineered ComponentColumn raw pointer manipulation~~ ✅ RESOLVED
+- **File:** `archetype.rs`, `component.rs`
+- **Resolution:** Added comprehensive safety documentation throughout:
+  - `ComponentColumn` struct: Documented 4 safety invariants (element size correctness, index bounds, capacity invariant, type safety at boundary) and explained why unsafe is necessary for ECS performance
+  - `get()` and `get_mut()`: Documented that pointers are valid for `element_size` bytes
+  - `push()`: Documented caller responsibility and copy_nonoverlapping safety
+  - `swap_remove()`: Documented bounds checking and non-overlapping regions
+  - `ArchetypeComponentStorage::get()` and `get_mut()`: Documented the safety chain (TypeId lookup ensures correct column)
+
+  The unsafe code is intentional for cache-friendly component storage, a common ECS pattern.
 
 ---
 
@@ -186,7 +187,7 @@ These issues from ANALYSIS.md have been resolved:
 ## Recommendations
 
 ### Immediate Actions
-1. **Fix KISS-002** - Review unsafe code in ComponentColumn for safety
+1. ~~**Fix KISS-002** - Review unsafe code in ComponentColumn for safety~~ ✅ DONE - Comprehensive safety docs added
 2. ~~**Fix ARCH-002** - Add cycle detection to prevent hierarchy corruption~~ ✅ DONE
 
 ### Short-term Improvements
@@ -209,10 +210,10 @@ These issues from ANALYSIS.md have been resolved:
 | ARCH-001: Module visibility | "Document visibility rationale" | Known, unresolved |
 | ARCH-003: Dead code | "Review and either use or remove" | Known, unresolved |
 | ARCH-002: Hierarchy cycles | Tracked | ✅ Resolved |
-| KISS-002: Unsafe ComponentColumn | Not tracked | New finding |
+| KISS-002: Unsafe ComponentColumn | Tracked | ✅ Resolved - Comprehensive safety docs added |
 | ARCH-004: Dual storage systems | Not tracked | New finding |
 
 **New issues to add to PROJECT_ROADMAP.md:**
 - ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
-- KISS-002: ComponentColumn uses unsafe code without demonstrated need
+- ~~KISS-002: ComponentColumn uses unsafe code without demonstrated need~~ ✅ RESOLVED - Comprehensive safety documentation added
 - ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden

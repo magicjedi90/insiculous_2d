@@ -36,12 +36,10 @@ None identified. Each file has a single, well-defined responsibility:
 
 ## KISS Violations
 
-### [KISS-001] `with_prefixed_fields!` macro requires paste dependency
-- **File:** `macros.rs`
-- **Lines:** 35-61
-- **Issue:** The `with_prefixed_fields!` macro uses `paste::paste!` to generate method names with `with_` prefix. This requires a `paste` crate dependency. However, this macro is never used in the codebase - all builder patterns use the simpler `with_fields!` or manually written `with_*` methods.
-- **Suggested fix:** Remove `with_prefixed_fields!` if unused, or document its purpose if planned for future use.
-- **Priority:** Low (unused but not harmful)
+### ~~[KISS-001] `with_prefixed_fields!` macro requires paste dependency~~ ✅ RESOLVED
+- **File:** `macros.rs` (macro removed)
+- **Resolution:** Removed the unused `with_prefixed_fields!` macro. The `paste` crate dependency wasn't actually present in Cargo.toml, so the macro would have failed compilation if used.
+- **Resolved:** January 2026
 
 ---
 

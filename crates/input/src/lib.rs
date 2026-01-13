@@ -36,4 +36,7 @@ pub enum InputError {
 
     #[error("Input device error: {0}")]
     DeviceError(String),
+
+    #[error("Thread-safe input error: {0}")]
+    ThreadError(#[from] InputThreadError),
 }
