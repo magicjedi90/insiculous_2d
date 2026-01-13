@@ -6,7 +6,7 @@ Last audited: January 2026
 - DRY violations: 4
 - SRP violations: 2
 - KISS violations: 1
-- Architecture issues: 3
+- Architecture issues: 3 (2 resolved)
 
 ---
 
@@ -116,15 +116,16 @@ Last audited: January 2026
 
 ## Architecture Issues
 
-### [ARCH-001] Glyph cache duplicates in engine_core
+### ~~[ARCH-001] Glyph cache duplicates in engine_core~~ ✅ RESOLVED
 - **Files:** `font.rs` (this crate), `engine_core/src/contexts.rs`
-- **Issue:** Two separate glyph caching mechanisms exist:
-  1. `FontManager.glyph_cache` in ui crate - caches `GlyphInfo` by `GlyphKey`
-  2. `GlyphCacheKey` in engine_core - caches GPU textures by (char, font_size, color_rgb)
+- **Resolution:** The dual caching is intentional and correct - they serve different purposes:
+  1. `FontManager.glyph_cache` in ui crate - caches CPU-side rasterized glyph bitmaps (avoids re-rasterization)
+  2. `glyph_textures` in engine_core - caches GPU textures created from bitmaps (avoids GPU uploads)
 
-  This duplication means glyphs may be cached twice at different levels.
-- **Suggested fix:** Consolidate caching strategy. The ui crate should handle CPU-side caching (bitmaps), and engine_core should only cache GPU resources.
-- **Priority:** Medium (related to engine_core KISS-001)
+  **Fixed:** `layout_text()` now properly uses `rasterize_glyph()` which utilizes the glyph cache.
+  Previously, `layout_text()` was bypassing the cache and re-rasterizing every glyph on every call.
+  This was the actual bug causing performance waste.
+- **Resolved:** January 2026
 
 ### ~~[ARCH-002] rect.rs is essentially a re-export~~ ✅ RESOLVED
 - **File:** `rect.rs` (removed)

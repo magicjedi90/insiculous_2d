@@ -231,9 +231,8 @@ None - all high priority issues resolved! ✅
 
 **Cross-Crate Issues:**
 - [x] **common/ARCH-001: CameraUniform duplicated** - ✅ Already re-exported from common via renderer
-- [ ] **ui/ARCH-001 + engine_core/KISS-001: Dual glyph caching** - Caches exist in both ui and engine_core
-  - Location: `ui/src/font.rs`, `engine_core/src/contexts.rs`
-  - Fix: Consolidate caching strategy (ui=CPU bitmaps, engine_core=GPU textures)
+- [x] **ui/ARCH-001 + engine_core/KISS-001: Dual glyph caching** - ✅ Caches were intentionally separate (CPU bitmaps vs GPU textures)
+  - Fixed: `layout_text()` now uses glyph cache properly instead of re-rasterizing every frame
 - [x] **renderer/ARCH-002: Time struct misplaced** - ✅ Time now defined in common, re-exported from renderer
 
 **engine_core:**
@@ -313,18 +312,18 @@ None - all high priority issues resolved! ✅
 | engine_core | 0 | 1 | 10 | 11 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅, texture warnings ✅ |
 | renderer | 0 | 1 | 7 | 8 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
 | ecs | 0 | 0 | 11 | 11 | Tests complete ✅, cycle detection ✅, unsafe documented ✅ |
-| ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
+| ui | 0 | 1 | 8 | 9 | Well-structured immediate-mode UI, glyph caching fixed ✅ |
 | input | 0 | 0 | 5 | 5 | Production-ready, fully documented ✅ |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **5** | **49** | **54** | |
+| **Total** | **0** | **4** | **49** | **53** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅
 
 ### Cross-Crate Dependencies to Address
 1. ~~CameraUniform: common ↔ renderer (duplication)~~ ✅ Already properly shared
-2. Glyph caching: ui ↔ engine_core (dual caches)
+2. ~~Glyph caching: ui ↔ engine_core (dual caches)~~ ✅ layout_text() now uses glyph cache
 3. ~~Time struct: renderer → common (misplaced)~~ ✅ Consolidated in common
 
 ### Documented Scaffolding (Intentional Dead Code)

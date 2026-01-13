@@ -212,22 +212,32 @@ impl FontManager {
     }
 
     /// Layout a string of text, returning positions and glyph info for each character.
+    ///
+    /// This method uses the internal glyph cache to avoid re-rasterizing glyphs that have
+    /// already been rendered at the same font/size combination. The CPU bitmap cache here
+    /// works in tandem with engine_core's GPU texture cache - this caches the rasterized
+    /// bitmaps, while engine_core caches the GPU textures created from those bitmaps.
     pub fn layout_text(
         &mut self,
         handle: FontHandle,
         text: &str,
         font_size: f32,
     ) -> Result<TextLayout, FontError> {
-        let font = self.fonts.get(&handle.id)
-            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
+        // Verify font exists first
+        if !self.fonts.contains_key(&handle.id) {
+            return Err(FontError::NotFound(format!("Font {} not found", handle.id)));
+        }
+
+        // Get line metrics (need font reference)
+        let line_height = {
+            let font = self.fonts.get(&handle.id).unwrap();
+            let line_metrics = font.horizontal_line_metrics(font_size);
+            line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2)
+        };
 
         let mut glyphs = Vec::new();
         let mut cursor_x = 0.0f32;
         let mut max_height = 0.0f32;
-
-        // Get line metrics for this font size
-        let line_metrics = font.horizontal_line_metrics(font_size);
-        let line_height = line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2);
 
         for character in text.chars() {
             // Handle special characters
@@ -235,43 +245,28 @@ impl FontManager {
                 // Newlines not fully supported yet, just skip
                 continue;
             }
-            if character == ' ' {
-                // Get space width
-                let (metrics, _) = font.rasterize(' ', font_size);
-                cursor_x += metrics.advance_width;
-                continue;
+
+            // Use rasterize_glyph which properly caches (including spaces)
+            let glyph_info = self.rasterize_glyph(handle, character, font_size)?;
+
+            // Skip rendering for zero-width glyphs but still advance cursor
+            let advance = glyph_info.rasterized.advance;
+
+            if character != ' ' && glyph_info.rasterized.width > 0 {
+                let glyph_height = glyph_info.rasterized.height as f32;
+                if glyph_height > max_height {
+                    max_height = glyph_height;
+                }
+
+                glyphs.push(LayoutGlyph {
+                    character,
+                    x: cursor_x + glyph_info.rasterized.offset_x,
+                    y: glyph_info.rasterized.offset_y,
+                    info: glyph_info.clone(),
+                });
             }
 
-            // Rasterize and cache the glyph
-            // We need to clone the font temporarily to avoid borrow issues
-            let (metrics, bitmap) = font.rasterize(character, font_size);
-
-            let glyph_info = GlyphInfo {
-                rasterized: RasterizedGlyph {
-                    bitmap,
-                    width: metrics.width as u32,
-                    height: metrics.height as u32,
-                    offset_x: metrics.xmin as f32,
-                    offset_y: metrics.ymin as f32,
-                    advance: metrics.advance_width,
-                },
-                character,
-                font_size,
-            };
-
-            let glyph_height = metrics.height as f32;
-            if glyph_height > max_height {
-                max_height = glyph_height;
-            }
-
-            glyphs.push(LayoutGlyph {
-                character,
-                x: cursor_x + metrics.xmin as f32,
-                y: metrics.ymin as f32,
-                info: glyph_info,
-            });
-
-            cursor_x += metrics.advance_width;
+            cursor_x += advance;
         }
 
         Ok(TextLayout {
