@@ -2,7 +2,7 @@
 //!
 //! This module provides a wrapper around rapier2d that integrates with the ECS.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 
 use glam::Vec2;
@@ -15,6 +15,31 @@ use crate::components::{
     Collider, ColliderShape, CollisionData, CollisionEvent, ContactPoint, RigidBody,
     RigidBodyType,
 };
+
+/// A canonical collision pair (entity IDs always in consistent order for comparison)
+/// This ensures (A, B) and (B, A) are treated as the same collision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct CollisionPair(EntityId, EntityId);
+
+impl CollisionPair {
+    /// Create a new collision pair with canonical ordering (smaller ID first)
+    fn new(a: EntityId, b: EntityId) -> Self {
+        // Use deterministic ordering based on entity ID internals
+        // We compare combining id and generation to ensure consistent ordering
+        let a_bits = a.value() | (a.generation() << 32);
+        let b_bits = b.value() | (b.generation() << 32);
+        if a_bits <= b_bits {
+            Self(a, b)
+        } else {
+            Self(b, a)
+        }
+    }
+
+    /// Get the entities in canonical order
+    fn entities(&self) -> (EntityId, EntityId) {
+        (self.0, self.1)
+    }
+}
 
 /// Configuration for the physics world
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +130,8 @@ pub struct PhysicsWorld {
     collider_to_entity: HashMap<ColliderHandle, EntityId>,
     /// Collision events from the last step
     collision_events: Vec<CollisionData>,
+    /// Active collision pairs from the previous frame (for detecting start/stop)
+    previous_collisions: HashSet<CollisionPair>,
 }
 
 impl Default for PhysicsWorld {
@@ -141,6 +168,7 @@ impl PhysicsWorld {
             entity_to_collider: HashMap::new(),
             collider_to_entity: HashMap::new(),
             collision_events: Vec::new(),
+            previous_collisions: HashSet::new(),
         }
     }
 
@@ -369,6 +397,9 @@ impl PhysicsWorld {
             &event_handler,
         );
 
+        // Build current collision set and process collision events
+        let mut current_collisions = HashSet::new();
+
         // Process collision events from narrow phase
         for contact_pair in self.narrow_phase.contact_pairs() {
             let collider1 = contact_pair.collider1;
@@ -381,13 +412,18 @@ impl PhysicsWorld {
                 let has_contact = contact_pair.has_any_active_contact;
 
                 if has_contact {
+                    let pair = CollisionPair::new(entity_a, entity_b);
+                    current_collisions.insert(pair);
+
+                    // Check if this is a new collision (started)
+                    let started = !self.previous_collisions.contains(&pair);
                     let contacts = self.get_contact_points_from_pair(contact_pair);
 
                     self.collision_events.push(CollisionData {
                         event: CollisionEvent {
                             entity_a,
                             entity_b,
-                            started: true,
+                            started,
                             stopped: false,
                         },
                         contacts,
@@ -395,6 +431,25 @@ impl PhysicsWorld {
                 }
             }
         }
+
+        // Find collisions that ended (were in previous but not in current)
+        for pair in &self.previous_collisions {
+            if !current_collisions.contains(pair) {
+                let (entity_a, entity_b) = pair.entities();
+                self.collision_events.push(CollisionData {
+                    event: CollisionEvent {
+                        entity_a,
+                        entity_b,
+                        started: false,
+                        stopped: true,
+                    },
+                    contacts: Vec::new(), // No contacts for ended collisions
+                });
+            }
+        }
+
+        // Update previous collisions for next frame
+        self.previous_collisions = current_collisions;
     }
 
     /// Get contact points from a contact pair
@@ -663,5 +718,150 @@ mod tests {
         let (hit_entity, _hit_point, distance) = result.unwrap();
         assert_eq!(hit_entity, entity);
         assert!(distance > 0.0);
+    }
+
+    #[test]
+    fn test_collision_started_event() {
+        // Create world with no gravity so objects don't fall
+        let config = PhysicsConfig::new(Vec2::ZERO);
+        let mut world = PhysicsWorld::new(config);
+
+        // Create two entities that will collide
+        let entity_a = EntityId::new();
+        let entity_b = EntityId::new();
+
+        // Entity A: static floor
+        let mut body_a = RigidBody::new_static();
+        let mut collider_a = Collider::box_collider(200.0, 20.0);
+        world.add_rigid_body(entity_a, &mut body_a, Vec2::new(0.0, 0.0), 0.0);
+        world.add_collider(entity_a, &mut collider_a, Some(&body_a));
+
+        // Entity B: dynamic box that will land on the floor
+        let mut body_b = RigidBody::new_dynamic().with_gravity_scale(0.0);
+        let mut collider_b = Collider::box_collider(20.0, 20.0);
+        // Position slightly above but overlapping
+        world.add_rigid_body(entity_b, &mut body_b, Vec2::new(0.0, 15.0), 0.0);
+        world.add_collider(entity_b, &mut collider_b, Some(&body_b));
+
+        // First step - collision should start
+        world.step(1.0 / 60.0);
+
+        let events = world.collision_events();
+        assert!(!events.is_empty(), "Should have collision events");
+
+        // Find the collision event between our entities
+        let collision = events.iter().find(|e| {
+            (e.event.entity_a == entity_a && e.event.entity_b == entity_b) ||
+            (e.event.entity_a == entity_b && e.event.entity_b == entity_a)
+        });
+
+        assert!(collision.is_some(), "Should have collision between entities");
+        let collision = collision.unwrap();
+        assert!(collision.event.started, "Collision should be marked as started");
+        assert!(!collision.event.stopped, "Collision should not be marked as stopped");
+    }
+
+    #[test]
+    fn test_collision_ongoing_not_started() {
+        // Create world with no gravity
+        let config = PhysicsConfig::new(Vec2::ZERO);
+        let mut world = PhysicsWorld::new(config);
+
+        // Create two overlapping entities
+        let entity_a = EntityId::new();
+        let entity_b = EntityId::new();
+
+        let mut body_a = RigidBody::new_static();
+        let mut collider_a = Collider::box_collider(100.0, 100.0);
+        world.add_rigid_body(entity_a, &mut body_a, Vec2::ZERO, 0.0);
+        world.add_collider(entity_a, &mut collider_a, Some(&body_a));
+
+        let mut body_b = RigidBody::new_dynamic().with_gravity_scale(0.0);
+        let mut collider_b = Collider::box_collider(50.0, 50.0);
+        world.add_rigid_body(entity_b, &mut body_b, Vec2::ZERO, 0.0);
+        world.add_collider(entity_b, &mut collider_b, Some(&body_b));
+
+        // First step - collision starts
+        world.step(1.0 / 60.0);
+        let events = world.collision_events();
+        let first_collision = events.iter().find(|e| {
+            (e.event.entity_a == entity_a && e.event.entity_b == entity_b) ||
+            (e.event.entity_a == entity_b && e.event.entity_b == entity_a)
+        });
+        assert!(first_collision.is_some());
+        assert!(first_collision.unwrap().event.started, "First frame should be started");
+
+        // Second step - collision continues but shouldn't be marked as "started"
+        world.step(1.0 / 60.0);
+        let events = world.collision_events();
+        let ongoing_collision = events.iter().find(|e| {
+            (e.event.entity_a == entity_a && e.event.entity_b == entity_b) ||
+            (e.event.entity_a == entity_b && e.event.entity_b == entity_a)
+        });
+        assert!(ongoing_collision.is_some());
+        assert!(!ongoing_collision.unwrap().event.started, "Ongoing collision should not be marked as started");
+        assert!(!ongoing_collision.unwrap().event.stopped, "Ongoing collision should not be marked as stopped");
+    }
+
+    #[test]
+    fn test_collision_stopped_event() {
+        // Create world with no gravity
+        let config = PhysicsConfig::new(Vec2::ZERO);
+        let mut world = PhysicsWorld::new(config);
+
+        // Create two overlapping entities
+        let entity_a = EntityId::new();
+        let entity_b = EntityId::new();
+
+        let mut body_a = RigidBody::new_static();
+        let mut collider_a = Collider::box_collider(50.0, 50.0);
+        world.add_rigid_body(entity_a, &mut body_a, Vec2::ZERO, 0.0);
+        world.add_collider(entity_a, &mut collider_a, Some(&body_a));
+
+        let mut body_b = RigidBody::new_dynamic().with_gravity_scale(0.0);
+        let mut collider_b = Collider::box_collider(50.0, 50.0);
+        world.add_rigid_body(entity_b, &mut body_b, Vec2::new(10.0, 0.0), 0.0);
+        world.add_collider(entity_b, &mut collider_b, Some(&body_b));
+
+        // First step - collision starts
+        world.step(1.0 / 60.0);
+        assert!(!world.collision_events().is_empty(), "Should have collision");
+
+        // Move entity_b far away to end the collision
+        world.set_body_transform(entity_b, Vec2::new(500.0, 0.0), 0.0);
+
+        // Step again - collision should end
+        world.step(1.0 / 60.0);
+        let events = world.collision_events();
+
+        // Find the stopped collision event
+        let stopped_collision = events.iter().find(|e| {
+            e.event.stopped &&
+            ((e.event.entity_a == entity_a && e.event.entity_b == entity_b) ||
+             (e.event.entity_a == entity_b && e.event.entity_b == entity_a))
+        });
+
+        assert!(stopped_collision.is_some(), "Should have a stopped collision event");
+        let stopped = stopped_collision.unwrap();
+        assert!(!stopped.event.started, "Stopped event should not be marked as started");
+        assert!(stopped.event.stopped, "Stopped event should be marked as stopped");
+    }
+
+    #[test]
+    fn test_collision_pair_canonical_order() {
+        let entity_a = EntityId::new();
+        let entity_b = EntityId::new();
+
+        // Both orderings should produce the same pair
+        let pair1 = CollisionPair::new(entity_a, entity_b);
+        let pair2 = CollisionPair::new(entity_b, entity_a);
+
+        assert_eq!(pair1, pair2, "CollisionPair should be order-independent");
+
+        // The entities method should return consistent results
+        let (e1, e2) = pair1.entities();
+        let (e3, e4) = pair2.entities();
+        assert_eq!(e1, e3);
+        assert_eq!(e2, e4);
     }
 }

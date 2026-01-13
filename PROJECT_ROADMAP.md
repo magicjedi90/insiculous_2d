@@ -217,12 +217,10 @@ All major ECS API issues have been resolved:
 - [x] **Bind group caching** - Camera bind group created once, texture bind groups cached per handle
 - [x] **Behavior system clone inefficiency** - Behaviors now accessed by reference, only small BehaviorState cloned
 - [x] **renderer/KISS-002: Unsafe transmute removed** - Surface now uses proper `'static` lifetime from `Arc<Window>`
+- [x] **physics/KISS-001: Collision start/stop detection** - Proper tracking with `CollisionPair` and frame-to-frame comparison
 
 ### High Priority (Safety/Functional Issues)
-- [ ] **physics/KISS-001: Collision events don't detect collision end** - Affects gameplay
-  - Location: `physics/src/physics_world.rs:352-370`
-  - Issue: `step()` always sets `started: true, stopped: false` - can't detect when collisions end
-  - Fix: Implement proper `EventHandler` or document limitation
+None - all high priority issues resolved! ✅
 
 ### Medium Priority
 
@@ -330,12 +328,12 @@ All major ECS API issues have been resolved:
 | ecs | 0 | 2 | 11 | 13 | Tests complete ✅, cycle detection needed |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
 | input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
-| physics | 1 | 0 | 5 | 6 | Clean rapier2d integration |
+| physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **1** | **15** | **49** | **65** | |
+| **Total** | **0** | **15** | **49** | **64** | |
 
 ### High Priority Summary
-1. **physics/KISS-001**: Collision events can't detect collision end (functionality)
+All high priority issues resolved! ✅
 
 ### Cross-Crate Dependencies to Address
 1. CameraUniform: common ↔ renderer (duplication)

@@ -5,7 +5,7 @@ Last audited: January 2026
 ## Summary
 - DRY violations: 2
 - SRP violations: 1
-- KISS violations: 1
+- KISS violations: 0
 - Architecture issues: 2
 
 **Overall Assessment:** The physics crate is well-designed with clean rapier2d integration. Most issues are minor and relate to code organization rather than functionality.
@@ -66,16 +66,14 @@ Last audited: January 2026
 
 ## KISS Violations
 
-### [KISS-001] Collision event handling is incomplete
+### ~~[KISS-001] Collision event handling is incomplete~~ ✅ RESOLVED
 - **File:** `physics_world.rs`
-- **Lines:** 352-370
-- **Issue:** The `step()` method creates an empty event handler:
-  ```rust
-  let event_handler = ();
-  ```
-  Then manually iterates contact pairs to collect collision events. This bypasses rapier's proper event system which provides `started` and `stopped` events. Current implementation always sets `started: true, stopped: false`.
-- **Suggested fix:** Implement a proper `EventHandler` to track collision start/stop transitions, or document that only "currently colliding" events are supported.
-- **Priority:** Medium (affects gameplay - can't detect collision end)
+- **Resolution:** Implemented proper collision start/stop tracking by:
+  1. Added `CollisionPair` type with canonical ordering for consistent comparison
+  2. Added `previous_collisions: HashSet<CollisionPair>` to track active collisions between frames
+  3. `started` flag is now `true` only when collision is new (not in previous frame)
+  4. `stopped` flag is now `true` when collision ended (was in previous but not current)
+  5. Added 4 new tests: `test_collision_started_event`, `test_collision_ongoing_not_started`, `test_collision_stopped_event`, `test_collision_pair_canonical_order`
 
 ---
 
@@ -122,11 +120,12 @@ Last audited: January 2026
 
 ## Previously Resolved (Reference)
 
-These issues from ANALYSIS.md have been resolved:
+These issues have been resolved:
 
 | Issue | Resolution |
 |-------|------------|
 | Dead code in PhysicsWorld | FIXED: `pixels_to_meters_scalar`, `meters_to_pixels`, `meters_to_pixels_scalar` are now public API |
+| KISS-001: Collision events incomplete | FIXED: Proper start/stop detection with frame-to-frame collision tracking |
 
 ---
 
@@ -146,11 +145,11 @@ These are **test coverage gaps**, not code quality issues:
 | Metric | Value |
 |--------|-------|
 | Total source files | 6 |
-| Total lines | ~1,100 |
-| Test coverage | 22 tests (all passing) |
-| Rapier2d types managed | 13 |
+| Total lines | ~1,150 |
+| Test coverage | 26 tests (all passing) |
+| Rapier2d types managed | 14 (including CollisionPair) |
 | High priority issues | 0 |
-| Medium priority issues | 1 |
+| Medium priority issues | 0 |
 | Low priority issues | 5 |
 
 ---
@@ -158,11 +157,11 @@ These are **test coverage gaps**, not code quality issues:
 ## Recommendations
 
 ### Immediate Actions
-1. **Fix KISS-001** - Implement proper collision start/stop detection or document limitation
+None required - all high/medium priority issues resolved.
 
 ### Short-term Improvements
-2. **Add tests** for friction, kinematic bodies, and sensors (per ANALYSIS.md)
-3. **Document** single-callback limitation (ARCH-002)
+1. **Add tests** for friction, kinematic bodies, and sensors (per ANALYSIS.md)
+2. **Document** single-callback limitation (ARCH-002)
 
 ### Technical Debt Backlog
 - DRY-001: Consider newtype wrappers for Pixels/Meters (optional)
@@ -176,11 +175,8 @@ These are **test coverage gaps**, not code quality issues:
 | This Report | ANALYSIS.md | Status |
 |-------------|-------------|--------|
 | Dead code warning | "Coordinate conversion methods" | RESOLVED - Now public API |
-| KISS-001: Collision events | Not tracked | New finding |
+| KISS-001: Collision events | Not tracked | ✅ RESOLVED |
 | Test gaps | "No friction/kinematic/sensor tests" | Feature gap (not debt) |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- KISS-001: Collision event handling doesn't detect collision end (only "currently colliding")
 
 ---
 
