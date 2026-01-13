@@ -359,8 +359,8 @@ impl TextureManager {
         })
     }
 
-    /// Create a placeholder texture (reserved for future use)
-    #[allow(dead_code)]
+    /// Create a placeholder texture (utility for debugging/fallback)
+    #[allow(dead_code)] // Reserved for future error handling
     fn create_placeholder_texture(
         &self,
         width: u32,

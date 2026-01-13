@@ -117,7 +117,7 @@ impl DrawList {
     pub fn new() -> Self {
         Self {
             commands: Vec::new(),
-            base_depth: 1000.0, // UI renders on top of game content
+            base_depth: 900.0, // UI renders on top of game content (< camera far=1000)
         }
     }
 

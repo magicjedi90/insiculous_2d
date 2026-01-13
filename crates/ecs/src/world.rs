@@ -537,14 +537,15 @@ impl Default for World {
 }
 
 /// Iterator for querying entities with specific component types
+/// Note: Fields are scaffolding for future full query implementation
 pub struct QueryIterator<'w, Q: QueryTypes> {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Scaffolding for full query implementation
     world: &'w World,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Scaffolding for archetype iteration
     archetype_ids: Vec<crate::archetype::ArchetypeId>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Scaffolding for archetype iteration
     current_archetype: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Scaffolding for entity iteration
     current_entity: usize,
     _phantom: std::marker::PhantomData<Q>,
 }

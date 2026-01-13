@@ -210,9 +210,10 @@ All major ECS API issues have been resolved:
 - [x] Double-check pattern fixed in asset_manager
 - [x] Deprecated PlayerTag alias removed
 - [x] Font rendering first-frame bug fixed
+- [x] **Font rendering visibility fix** - UI depth clipping (1000→900) + batch sorting
+- [x] **Dead code suppressions documented** - Added explanatory comments to all remaining #[allow(dead_code)]
 
 ### High Priority (Remaining)
-- [ ] **Remove dead code** - ~25 #[allow(dead_code)] suppressions
 - [ ] **Cache bind groups** in renderer (created every frame)
 - [ ] **Behavior system clone inefficiency** - 40+ allocations/frame
   - Location: `engine_core/src/behavior.rs:96-102`
@@ -240,15 +241,19 @@ All major ECS API issues have been resolved:
 | Crate | High | Medium | Notes |
 |-------|------|--------|-------|
 | engine_core | 1 (clone inefficiency) | 2 (glyph cache, silent fallback) | SRP complete ✅ |
-| renderer | 1 (bind groups) | 1 (dead code) | - |
-| ecs | - | 1 (dead code) | Tests complete ✅ |
+| renderer | 1 (bind groups) | - | Dead code documented ✅ |
+| ecs | - | - | Tests complete ✅, dead code documented ✅ |
 | input | - | - | Tests complete ✅ |
 | physics | - | - | - |
 
-### Dead Code Locations
-1. `renderer/sprite.rs:164,230,233,246` - Multiple unused pipeline fields
-2. `ecs/world.rs:540-546` - Helper methods marked dead
-3. `ecs/archetype.rs:236,290` - Helper methods marked dead
+### Documented Scaffolding (Intentional Dead Code)
+All `#[allow(dead_code)]` suppressions are now documented with explanatory comments:
+1. `renderer/sprite.rs` - Reserved fields for batch splitting, pipeline recreation, sampler fallback
+2. `renderer/sprite_data.rs` - Buffer usage stored for potential recreation
+3. `renderer/texture.rs` - Builder pattern field stored for future use
+4. `ecs/world.rs` - Scaffolding for future full query implementation
+5. `ecs/archetype.rs` - Scaffolding for query types
+6. `audio/manager.rs` - Reserved for future "stop by handle" API
 
 ---
 

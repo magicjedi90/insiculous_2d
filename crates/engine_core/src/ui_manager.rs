@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_ui_manager_creation() {
-        let manager = UIManager::new();
+        let _manager = UIManager::new();
         // Should create without errors
     }
 

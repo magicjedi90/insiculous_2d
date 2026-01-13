@@ -161,7 +161,7 @@ impl SpriteBatch {
 /// Sprite batcher for efficient rendering
 pub struct SpriteBatcher {
     batches: HashMap<TextureHandle, SpriteBatch>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for future batch splitting optimization
     max_sprites_per_batch: usize,
 }
 
@@ -225,12 +225,11 @@ impl SpriteBatcher {
 pub struct SpritePipeline {
     /// The render pipeline
     pipeline: RenderPipeline,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Keep for potential pipeline recreation
     /// The pipeline layout
     layout: PipelineLayout,
     /// Vertex buffer for quad geometry
     vertex_buffer: Buffer,
-    #[allow(dead_code)]
     /// Instance buffer for sprite data
     instance_buffer: DynamicBuffer<SpriteInstance>,
     /// Index buffer for quad geometry
@@ -241,7 +240,7 @@ pub struct SpritePipeline {
     texture_bind_group_layout: BindGroupLayout,
     /// Camera bind group layout
     camera_bind_group_layout: BindGroupLayout,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Kept for potential future use (e.g., default sampler fallback)
     /// Sampler for textures
     sampler: Sampler,
     /// Maximum sprites per batch

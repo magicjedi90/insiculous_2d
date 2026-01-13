@@ -425,8 +425,14 @@ impl<G: Game> GameRunner<G> {
             self.game.render(&mut ctx);
         }
 
-        // Collect batches and render with asset manager's textures
-        let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
+        // Collect batches, sort by depth, and render with asset manager's textures
+        let mut batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
+        // Sort batches by their minimum depth (ascending for back-to-front rendering)
+        batches.sort_by(|a, b| {
+            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
+            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
+            a_min.partial_cmp(&b_min).unwrap()
+        });
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
 
         // Get textures from asset manager (need to reborrow after RenderContext)

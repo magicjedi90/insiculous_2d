@@ -217,7 +217,7 @@ impl TextureResource {
 pub struct DynamicBuffer<T> {
     buffer: Buffer,
     capacity: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Stored for potential buffer recreation
     usage: wgpu::BufferUsages,
     _phantom: std::marker::PhantomData<T>,
 }

@@ -20,8 +20,7 @@ struct SoundData {
 /// Active sound playback instance.
 struct ActiveSound {
     sink: Sink,
-    /// Handle for future "stop by handle" functionality.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for future "stop by handle" API
     handle: SoundHandle,
 }
 

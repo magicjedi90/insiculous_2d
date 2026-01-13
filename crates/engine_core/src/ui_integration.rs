@@ -109,9 +109,8 @@ pub fn render_ui_commands(
                             .unwrap_or(white_texture);
 
                         // Render glyph with its texture (white color since texture has baked color)
-                        // Use minimum size of 16x16 to ensure visibility (for testing)
-                        let render_width = (glyph.width as f32).max(16.0);
-                        let render_height = (glyph.height as f32).max(16.0);
+                        let render_width = glyph.width as f32;
+                        let render_height = glyph.height as f32;
 
                         let sprite = Sprite::new(texture)
                             .with_position(Vec2::new(glyph_x, glyph_y))
