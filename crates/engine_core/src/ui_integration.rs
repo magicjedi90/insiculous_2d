@@ -102,10 +102,17 @@ pub fn render_ui_commands(
                             glyph.height,
                         );
 
-                        let texture = glyph_textures
-                            .get(&glyph_key)
-                            .copied()
-                            .unwrap_or(white_texture);
+                        let texture = match glyph_textures.get(&glyph_key) {
+                            Some(&tex) => tex,
+                            None => {
+                                log::warn!(
+                                    "Missing glyph texture for '{}' ({}x{}). Using white fallback. \
+                                     This may indicate the glyph wasn't pre-cached.",
+                                    glyph.character, glyph.width, glyph.height
+                                );
+                                white_texture
+                            }
+                        };
 
                         // Render glyph with text color - texture is grayscale alpha mask
                         let render_width = glyph.width as f32;

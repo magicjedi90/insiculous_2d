@@ -237,8 +237,7 @@ None - all high priority issues resolved! ✅
 
 **engine_core:**
 - [x] **Glyph texture key collision** - ✅ Removed `color_rgb` from `GlyphCacheKey`, textures are now color-agnostic alpha masks, color applied at render time
-- [ ] **Silent texture fallback** - Missing textures show white, no warning
-  - Location: `engine_core/src/game.rs:262`
+- [x] **Silent texture fallback** - ✅ Added warnings for missing textures in `sprite.rs:draw()` and `ui_integration.rs` glyph lookup
 - [ ] **EngineApplication cleanup** - Reduce from 346 to ~150 lines
   - Location: `engine_core/src/application.rs`
 
@@ -316,14 +315,14 @@ None - all high priority issues resolved! ✅
 
 | Crate | High | Medium | Low | Total | Overall Assessment |
 |-------|------|--------|-----|-------|-------------------|
-| engine_core | 0 | 2 | 10 | 12 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅ |
+| engine_core | 0 | 1 | 10 | 11 | SRP complete ✅, behavior optimized ✅, glyph cache fixed ✅, texture warnings ✅ |
 | renderer | 0 | 3 | 7 | 10 | Bind groups cached ✅, unsafe fixed ✅, sampler DRY ✅ |
 | ecs | 0 | 1 | 11 | 12 | Tests complete ✅, cycle detection ✅ |
 | ui | 0 | 2 | 8 | 10 | Well-structured immediate-mode UI |
 | input | 0 | 2 | 5 | 7 | Production-ready, minor API confusion |
 | physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **7** | **49** | **56** | |
+| **Total** | **0** | **6** | **49** | **55** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅

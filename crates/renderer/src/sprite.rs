@@ -508,6 +508,18 @@ impl SpritePipeline {
         // Ensure all textures have cached bind groups
         self.cache_texture_bind_groups(texture_resources);
 
+        // Warn about missing textures (texture handle not found in provided resources)
+        for batch in batches {
+            if !batch.is_empty() && !texture_resources.contains_key(&batch.texture_handle) {
+                log::warn!(
+                    "Missing texture: handle {:?} referenced by {} sprite(s) not found in texture resources. \
+                     Sprites will not render. Ensure the texture is loaded via AssetManager.",
+                    batch.texture_handle,
+                    batch.len()
+                );
+            }
+        }
+
         // Begin render pass with clearing
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sprite Render Pass"),
