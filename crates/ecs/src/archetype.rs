@@ -293,15 +293,7 @@ impl Archetype {
     }
 }
 
-/// Type-safe query for entities with specific component types
-/// Note: Scaffolding for future full query implementation
-pub struct Query<T: QueryTypes> {
-    #[allow(dead_code)] // Scaffolding for query execution
-    archetypes: Vec<ArchetypeId>,
-    _phantom: PhantomData<T>,
-}
-
-/// Trait for defining query types
+/// Trait for defining query types used by `World::query_entities()`
 pub trait QueryTypes {
     /// Get the component types required by this query
     fn component_types() -> Vec<TypeId>;

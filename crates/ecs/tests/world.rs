@@ -139,3 +139,43 @@ fn test_hierarchy_self_parent_rejected() {
     // This should be rejected - self-parenting creates a trivial cycle
     assert!(result.is_err());
 }
+
+#[test]
+fn test_query_entities() {
+    use ecs::{Single, Pair};
+    use ecs::sprite_components::{Transform2D, Sprite};
+
+    let mut world = World::new();
+
+    // Create entities with different component combinations
+    let entity_with_transform = world.create_entity();
+    world.add_component(&entity_with_transform, Transform2D::default()).unwrap();
+
+    let entity_with_sprite = world.create_entity();
+    world.add_component(&entity_with_sprite, Sprite::new(0)).unwrap();
+
+    let entity_with_both = world.create_entity();
+    world.add_component(&entity_with_both, Transform2D::default()).unwrap();
+    world.add_component(&entity_with_both, Sprite::new(0)).unwrap();
+
+    let entity_with_nothing = world.create_entity();
+
+    // Query for entities with Transform2D
+    let with_transform = world.query_entities::<Single<Transform2D>>();
+    assert_eq!(with_transform.len(), 2);
+    assert!(with_transform.contains(&entity_with_transform));
+    assert!(with_transform.contains(&entity_with_both));
+    assert!(!with_transform.contains(&entity_with_sprite));
+    assert!(!with_transform.contains(&entity_with_nothing));
+
+    // Query for entities with Sprite
+    let with_sprite = world.query_entities::<Single<Sprite>>();
+    assert_eq!(with_sprite.len(), 2);
+    assert!(with_sprite.contains(&entity_with_sprite));
+    assert!(with_sprite.contains(&entity_with_both));
+
+    // Query for entities with both Transform2D and Sprite
+    let with_both = world.query_entities::<Pair<Transform2D, Sprite>>();
+    assert_eq!(with_both.len(), 1);
+    assert!(with_both.contains(&entity_with_both));
+}

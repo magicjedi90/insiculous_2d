@@ -110,6 +110,14 @@ impl ComponentStorage {
         }
     }
 
+    /// Check if an entity has any component stored in this storage
+    pub fn has_entity(&self, entity_id: &EntityId, type_id: TypeId) -> bool {
+        match self {
+            Self::Legacy(storage) => storage.has_entity(entity_id),
+            Self::Archetype(storage) => storage.has_entity(entity_id, type_id),
+        }
+    }
+
     /// Remove all components for an entity
     pub fn remove_all(&mut self, entity_id: &EntityId) {
         match self {
@@ -172,6 +180,11 @@ impl LegacyComponentStorage {
 
     /// Check if an entity has a component
     pub fn has<T: Component>(&self, entity_id: &EntityId) -> bool {
+        self.components.contains_key(entity_id)
+    }
+
+    /// Check if an entity has any component stored in this storage (for query support)
+    pub fn has_entity(&self, entity_id: &EntityId) -> bool {
         self.components.contains_key(entity_id)
     }
 
@@ -304,7 +317,16 @@ impl ArchetypeStorage {
     /// Check if an entity has a component
     pub fn has<T: Component>(&self, entity_id: &EntityId) -> bool {
         let type_id = TypeId::of::<T>();
-        
+
+        if let Some((archetype_id, _)) = self.entity_locations.get(entity_id).cloned() {
+            archetype_id.contains(&type_id)
+        } else {
+            false
+        }
+    }
+
+    /// Check if an entity has a component of a specific type ID (for query support)
+    pub fn has_entity(&self, entity_id: &EntityId, type_id: TypeId) -> bool {
         if let Some((archetype_id, _)) = self.entity_locations.get(entity_id).cloned() {
             archetype_id.contains(&type_id)
         } else {
@@ -436,6 +458,15 @@ impl ComponentRegistry {
     pub fn has<T: Component>(&self, entity_id: &EntityId) -> bool {
         let type_id = TypeId::of::<T>();
         self.storages.get(&type_id).is_some_and(|s| s.has::<T>(entity_id))
+    }
+
+    /// Check if an entity has a component of a specific type ID
+    ///
+    /// This is used internally by query_entities() to check for components by TypeId.
+    pub fn has_type(&self, entity_id: &EntityId, type_id: TypeId) -> bool {
+        self.storages
+            .get(&type_id)
+            .is_some_and(|storage| storage.has_entity(entity_id, type_id))
     }
 
     /// Remove all components for an entity

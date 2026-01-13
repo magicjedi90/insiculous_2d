@@ -5,6 +5,7 @@
 
 use crate::entity::EntityId;
 use crate::hierarchy::{GlobalTransform2D, Parent};
+use crate::hierarchy_ext::WorldHierarchyExt;
 use crate::sprite_components::Transform2D;
 use crate::system::System;
 use crate::world::World;

@@ -9,7 +9,7 @@ use std::path::Path;
 use glam::Vec2;
 
 use ecs::sprite_components::{Camera2D, Sprite, SpriteAnimation, Transform2D};
-use ecs::{EntityId, World};
+use ecs::{EntityId, World, WorldHierarchyExt};
 use renderer::TextureHandle;
 
 use crate::assets::AssetManager;

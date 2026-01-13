@@ -267,29 +267,27 @@ impl PhysicsWorld {
         // Remove existing collider if any
         self.remove_collider(entity);
 
-        let ppm = self.config.pixels_per_meter;
-
-        // Create rapier shape
+        // Create rapier shape (converting from pixels to meters)
         let shape: SharedShape = match &collider.shape {
             ColliderShape::Box { half_extents } => {
-                let he = *half_extents / ppm;
+                let he = self.pixels_to_meters(*half_extents);
                 SharedShape::cuboid(he.x, he.y)
             }
             ColliderShape::Circle { radius } => {
-                SharedShape::ball(*radius / ppm)
+                SharedShape::ball(self.pixels_to_meters_scalar(*radius))
             }
             ColliderShape::CapsuleY { half_height, radius } => SharedShape::capsule_y(
-                *half_height / ppm,
-                *radius / ppm,
+                self.pixels_to_meters_scalar(*half_height),
+                self.pixels_to_meters_scalar(*radius),
             ),
             ColliderShape::CapsuleX { half_height, radius } => SharedShape::capsule_x(
-                *half_height / ppm,
-                *radius / ppm,
+                self.pixels_to_meters_scalar(*half_height),
+                self.pixels_to_meters_scalar(*radius),
             ),
         };
 
         // Build collider
-        let offset = collider.offset / ppm;
+        let offset = self.pixels_to_meters(collider.offset);
         let mut builder = ColliderBuilder::new(shape)
             .translation(vector![offset.x, offset.y])
             .friction(collider.friction)
@@ -368,11 +366,8 @@ impl PhysicsWorld {
     pub fn step(&mut self, delta_time: f32) {
         self.integration_parameters.dt = delta_time;
 
-        let ppm = self.config.pixels_per_meter;
-        let gravity = vector![
-            self.config.gravity.x / ppm,
-            self.config.gravity.y / ppm
-        ];
+        let gravity_meters = self.pixels_to_meters(self.config.gravity);
+        let gravity = vector![gravity_meters.x, gravity_meters.y];
 
         // Clear previous collision events
         self.collision_events.clear();
@@ -455,15 +450,15 @@ impl PhysicsWorld {
     /// Get contact points from a contact pair
     fn get_contact_points_from_pair(&self, contact_pair: &ContactPair) -> Vec<ContactPoint> {
         let mut contacts = Vec::new();
-        let ppm = self.config.pixels_per_meter;
 
         for manifold in &contact_pair.manifolds {
             for point in &manifold.points {
                 let world_point = manifold.local_n1 * point.dist + point.local_p1.coords;
+                let point_meters = Vec2::new(world_point.x, world_point.y);
                 contacts.push(ContactPoint {
-                    point: Vec2::new(world_point.x * ppm, world_point.y * ppm),
+                    point: self.meters_to_pixels(point_meters),
                     normal: Vec2::new(manifold.local_n1.x, manifold.local_n1.y),
-                    depth: point.dist * ppm,
+                    depth: self.meters_to_pixels_scalar(point.dist),
                 });
             }
         }
@@ -482,12 +477,9 @@ impl PhysicsWorld {
         let body = self.rigid_body_set.get(*handle)?;
         let translation = body.translation();
         let rotation = body.rotation().angle();
-        let ppm = self.config.pixels_per_meter;
+        let pos_meters = Vec2::new(translation.x, translation.y);
 
-        Some((
-            Vec2::new(translation.x * ppm, translation.y * ppm),
-            rotation,
-        ))
+        Some((self.meters_to_pixels(pos_meters), rotation))
     }
 
     /// Get the velocity of a rigid body
@@ -496,18 +488,14 @@ impl PhysicsWorld {
         let body = self.rigid_body_set.get(*handle)?;
         let linvel = body.linvel();
         let angvel = body.angvel();
-        let ppm = self.config.pixels_per_meter;
+        let vel_meters = Vec2::new(linvel.x, linvel.y);
 
-        Some((
-            Vec2::new(linvel.x * ppm, linvel.y * ppm),
-            angvel,
-        ))
+        Some((self.meters_to_pixels(vel_meters), angvel))
     }
 
     /// Set the position and rotation of a rigid body
     pub fn set_body_transform(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
-        let ppm = self.config.pixels_per_meter;
-        let pos = position / ppm;
+        let pos = self.pixels_to_meters(position);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {
             if let Some(body) = self.rigid_body_set.get_mut(handle) {
@@ -523,8 +511,7 @@ impl PhysicsWorld {
     /// The body will move to this position during the next physics step,
     /// properly interacting with other bodies along the way.
     pub fn set_kinematic_target(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
-        let ppm = self.config.pixels_per_meter;
-        let pos = position / ppm;
+        let pos = self.pixels_to_meters(position);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {
             if let Some(body) = self.rigid_body_set.get_mut(handle) {
@@ -536,8 +523,7 @@ impl PhysicsWorld {
 
     /// Set the velocity of a rigid body
     pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
-        let ppm = self.config.pixels_per_meter;
-        let vel = linear / ppm;
+        let vel = self.pixels_to_meters(linear);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {
             if let Some(body) = self.rigid_body_set.get_mut(handle) {
@@ -549,8 +535,7 @@ impl PhysicsWorld {
 
     /// Apply an impulse to a rigid body
     pub fn apply_impulse(&mut self, entity: EntityId, impulse: Vec2) {
-        let ppm = self.config.pixels_per_meter;
-        let imp = impulse / ppm;
+        let imp = self.pixels_to_meters(impulse);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {
             if let Some(body) = self.rigid_body_set.get_mut(handle) {
@@ -561,8 +546,7 @@ impl PhysicsWorld {
 
     /// Apply a force to a rigid body
     pub fn apply_force(&mut self, entity: EntityId, force: Vec2) {
-        let ppm = self.config.pixels_per_meter;
-        let f = force / ppm;
+        let f = self.pixels_to_meters(force);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {
             if let Some(body) = self.rigid_body_set.get_mut(handle) {
@@ -573,13 +557,12 @@ impl PhysicsWorld {
 
     /// Cast a ray and return the first hit
     pub fn raycast(&self, origin: Vec2, direction: Vec2, max_distance: f32) -> Option<(EntityId, Vec2, f32)> {
-        let ppm = self.config.pixels_per_meter;
-        let origin_m = origin / ppm;
+        let origin_m = self.pixels_to_meters(origin);
         let ray = Ray::new(
             point![origin_m.x, origin_m.y],
             vector![direction.x, direction.y],
         );
-        let max_toi = max_distance / ppm;
+        let max_toi = self.pixels_to_meters_scalar(max_distance);
 
         if let Some((handle, toi)) = self.query_pipeline.cast_ray(
             &self.rigid_body_set,
@@ -591,10 +574,11 @@ impl PhysicsWorld {
         ) {
             if let Some(&entity) = self.collider_to_entity.get(&handle) {
                 let hit_point = ray.point_at(toi);
+                let hit_meters = Vec2::new(hit_point.x, hit_point.y);
                 return Some((
                     entity,
-                    Vec2::new(hit_point.x * ppm, hit_point.y * ppm),
-                    toi * ppm,
+                    self.meters_to_pixels(hit_meters),
+                    self.meters_to_pixels_scalar(toi),
                 ));
             }
         }

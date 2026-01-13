@@ -3,10 +3,18 @@
 Last audited: January 2026
 
 ## Summary
-- DRY violations: 2
+- DRY violations: 1
 - SRP violations: 1
 - KISS violations: 0
-- Architecture issues: 2
+- Architecture issues: 2 (1 resolved)
+
+## January 2026 Fixes
+- ✅ **ARCH-002**: PhysicsSystem now supports multiple collision callbacks via:
+  - `with_collision_callback()` - builder pattern, chainable
+  - `add_collision_callback()` - mutable method
+  - `clear_collision_callbacks()` - remove all callbacks
+  - `collision_callback_count()` - query number of registered callbacks
+  - Tests added: `test_multiple_collision_callbacks`, `test_add_collision_callback`
 
 **Overall Assessment:** The physics crate is well-designed with clean rapier2d integration. Most issues are minor and relate to code organization rather than functionality.
 
@@ -14,12 +22,13 @@ Last audited: January 2026
 
 ## DRY Violations
 
-### [DRY-001] Repeated pixel-to-meter conversion pattern
+### ~~[DRY-001] Repeated pixel-to-meter conversion pattern~~ ✅ RESOLVED
 - **File:** `physics_world.rs`
-- **Lines:** Throughout (163-180, 188-189, 242-264, 344-347, 403-412, 454-448, etc.)
-- **Issue:** The pattern `value / self.config.pixels_per_meter` or `value * ppm` is repeated dozens of times throughout the file. Each physics method manually handles the conversion.
-- **Suggested fix:** Consider using newtype wrappers like `Pixels(f32)` and `Meters(f32)` with `From` implementations, or at minimum inline helper methods for common cases like position/velocity.
-- **Priority:** Low (working, just verbose)
+- **Resolution:** Refactored all 12+ locations to consistently use the helper methods:
+  - `pixels_to_meters(Vec2)` / `pixels_to_meters_scalar(f32)` for converting to meters
+  - `meters_to_pixels(Vec2)` / `meters_to_pixels_scalar(f32)` for converting to pixels
+- **Methods updated:** `add_collider`, `step`, `get_contact_points_from_pair`, `get_body_transform`, `get_body_velocity`, `set_body_transform`, `set_kinematic_target`, `set_body_velocity`, `apply_impulse`, `apply_force`, `raycast`
+- **Benefit:** Single point of change for conversion logic, improved readability
 
 ### [DRY-002] Repeated body builder pattern in add_rigid_body
 - **File:** `physics_world.rs`
@@ -101,20 +110,15 @@ Last audited: January 2026
   3. Use `Deref` to `PhysicsWorld` (unusual but works)
 - **Priority:** Low (convenience methods are fine)
 
-### [ARCH-002] Collision callback stored as `Option<Box<dyn FnMut>>`
+### ~~[ARCH-002] Collision callback stored as `Option<Box<dyn FnMut>>`~~ ✅ RESOLVED
 - **File:** `physics_system.rs`
-- **Lines:** 14, 27
-- **Issue:** The collision callback uses a complex type:
-  ```rust
-  type CollisionCallback = Box<dyn FnMut(&CollisionData) + Send + Sync>;
-  collision_callback: Option<CollisionCallback>,
-  ```
-  This only supports a single callback. If multiple systems need collision notifications, they can't both register.
-- **Suggested fix:** Consider:
-  1. Use `Vec<CollisionCallback>` for multiple callbacks
-  2. Provide a pub/sub pattern
-  3. Document single-callback limitation
-- **Priority:** Low (current limitation is acceptable for simple games)
+- **Resolution:** Changed from `Option<CollisionCallback>` to `Vec<CollisionCallback>`:
+  - Multiple systems can now register for collision notifications
+  - All registered callbacks are invoked for each collision event
+  - Callbacks are invoked in registration order
+  - New methods: `add_collision_callback()`, `clear_collision_callbacks()`, `collision_callback_count()`
+  - Tests added for multiple callback registration and clearing
+- **Resolved:** January 2026
 
 ---
 
@@ -126,6 +130,8 @@ These issues have been resolved:
 |-------|------------|
 | Dead code in PhysicsWorld | FIXED: `pixels_to_meters_scalar`, `meters_to_pixels`, `meters_to_pixels_scalar` are now public API |
 | KISS-001: Collision events incomplete | FIXED: Proper start/stop detection with frame-to-frame collision tracking |
+| DRY-001: Repeated pixel-to-meter conversion | FIXED: All 12+ locations now use helper methods consistently |
+| ARCH-002: Single collision callback | FIXED: `Vec<CollisionCallback>` now supports multiple listeners |
 
 ---
 
@@ -145,12 +151,12 @@ These are **test coverage gaps**, not code quality issues:
 | Metric | Value |
 |--------|-------|
 | Total source files | 6 |
-| Total lines | ~1,150 |
-| Test coverage | 26 tests (all passing) |
+| Total lines | ~1,200 |
+| Test coverage | 28 tests (all passing) |
 | Rapier2d types managed | 14 (including CollisionPair) |
 | High priority issues | 0 |
 | Medium priority issues | 0 |
-| Low priority issues | 5 |
+| Low priority issues | 3 |
 
 ---
 
@@ -164,7 +170,7 @@ None required - all high/medium priority issues resolved.
 2. **Document** single-callback limitation (ARCH-002)
 
 ### Technical Debt Backlog
-- DRY-001: Consider newtype wrappers for Pixels/Meters (optional)
+- ~~DRY-001: Consider newtype wrappers for Pixels/Meters (optional)~~ ✅ RESOLVED - using helper methods
 - SRP-001: Consider reorganizing PhysicsWorld internals (optional)
 - ARCH-001: Decide on pass-through method policy
 
@@ -176,6 +182,7 @@ None required - all high/medium priority issues resolved.
 |-------------|-------------|--------|
 | Dead code warning | "Coordinate conversion methods" | RESOLVED - Now public API |
 | KISS-001: Collision events | Not tracked | ✅ RESOLVED |
+| DRY-001: Pixel/meter conversion | Not tracked | ✅ RESOLVED - Helper methods used |
 | Test gaps | "No friction/kinematic/sensor tests" | Feature gap (not debt) |
 
 ---

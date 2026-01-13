@@ -23,6 +23,7 @@
 
 use engine_core::prelude::*;
 use ecs::hierarchy_system::TransformHierarchySystem;
+use ecs::WorldHierarchyExt;
 use std::path::Path;
 
 /// Our game state - simplified with BehaviorRunner handling player movement

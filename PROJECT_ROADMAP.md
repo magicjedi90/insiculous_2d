@@ -4,22 +4,22 @@
 
 | System | Status | Tests (Verified) | Ignored* | Total | Notes |
 |--------|--------|------------------|----------|-------|-------|
-| ECS | Working | 84 | 0 | 84 | Comprehensive archetype tests |
+| ECS | Working | 99 | 0 | 99 | Archetype tests + hierarchy ext + query_entities |
 | Input System | Working | 56 | 0 | 56 | Thread-safe, event-based |
 | Engine Core | Working | 53 | 7 | 60 | Lifecycle + manager tests |
-| Physics | Working | 22 | 2 | 24 | rapier2d integration |
+| Physics | Working | 28 | 2 | 30 | rapier2d + multiple collision callbacks |
 | Sprite Rendering | Working | 62 | 6 | 68 | 62 unit + 6 integration |
 | Scene Graph | Working | 12 | 0 | 12 | Hierarchy system tests |
 | Audio | Working | 7 | 1 | 8 | Basic coverage |
 | UI Framework | Working | 42 | 0 | 42 | Immediate-mode UI |
 
-**Total Tests:** 338 passed, 18 ignored, 356 total
-**Success Rate:** 100% of executable tests (338/338) ✅
+**Total Tests:** 358 passed, 24 ignored, 382 total
+**Success Rate:** 100% of executable tests (358/358) ✅
 
 \* Ignored tests require GPU/window - acceptable for CI skip
 
-**Verification:** `cargo test --workspace` executed January 12, 2026
-**Command:** Verified all 338 unit tests pass (0 failures)
+**Verification:** `cargo test --workspace` executed January 13, 2026
+**Command:** Verified all 358 unit tests pass (0 failures)
 **Demo:** `cargo run --example hello_world` - Full physics platformer with UI, audio, and sprite rendering
 
 **Major Improvements:**
@@ -91,11 +91,12 @@ All major ECS API issues have been resolved:
 ### ECS Optimization - DONE
 - Archetype-based component storage
 - Dense arrays for cache locality
-- Type-safe queries (Single, Pair, Triple)
+- Type-safe queries (Single, Pair, Triple) via `query_entities::<Q>()`
 - `World::new_optimized()` for archetype mode
 - Typed component access via `get::<T>()` / `get_mut::<T>()`
 - Entity iteration via `entities()`
 - Sprite systems (SpriteAnimationSystem, SpriteRenderSystem)
+- Hierarchy methods via `WorldHierarchyExt` extension trait
 
 ### Resource Management - DONE
 **Priority:** High
@@ -131,6 +132,7 @@ All major ECS API issues have been resolved:
   - `RigidBody::player_platformer()` / `player_top_down()` / `pushable()`
   - `Collider::player_box()` / `platform()` / `pushable_box()` / `bouncy()` / `slippery()`
   - `MovementConfig::platformer()` / `top_down()` / `floaty()`
+- **Multiple collision callbacks** - Register multiple listeners via `add_collision_callback()` or builder pattern `with_collision_callback()`
 - Debug visualization (future)
 
 ---
@@ -263,9 +265,7 @@ None - all high priority issues resolved! ✅
   - Location: `ui/src/font.rs:100-315`
 
 **physics:**
-- [ ] **DRY-001: Repeated pixel-to-meter conversion** - Pattern repeated dozens of times
-  - Location: `physics/src/physics_world.rs` (throughout)
-  - Fix: Consider newtype wrappers `Pixels(f32)` and `Meters(f32)`
+- [x] **DRY-001: Repeated pixel-to-meter conversion** - ✅ Refactored all 12+ locations to use `pixels_to_meters()` / `meters_to_pixels()` helper methods
 
 ### Low Priority (Code Organization)
 
@@ -281,9 +281,11 @@ None - all high priority issues resolved! ✅
 - [x] physics/DRY-002: Repeated body builder pattern - ✅ Reviewed: acceptable (each body type has different builder options)
 
 **Architecture (Nice to Have):**
-- [ ] ecs/SRP-001: World struct has many responsibilities
-- [ ] ecs/ARCH-001: Entity ID format inconsistency (u32 vs usize)
+- [x] ecs/SRP-001: World struct has many responsibilities - ✅ Fixed: Extracted hierarchy methods to `WorldHierarchyExt` trait
+- [x] ecs/ARCH-001: Entity ID format inconsistency (u32 vs usize) - ✅ Reviewed: Not an issue, EntityId uses u64 consistently
 - [ ] ecs/ARCH-004: Mixed visibility patterns
+- [x] ecs/KISS-001: QueryIterator scaffolding always returns None - ✅ Fixed: Removed scaffolding, implemented functional `query_entities()` method
+- [x] renderer/SRP-001: SpritePipeline manages 13 GPU resources - ✅ Reviewed: Acceptable complexity for GPU rendering, resources are cohesive
 - [ ] renderer/SRP-002: Renderer handles init AND rendering
 - [x] renderer/ARCH-004: Inconsistent error types (RendererError vs TextureError) - ✅ Fixed: added `From<TextureError>` for `RendererError`
 - [x] input/ARCH-001: Dual error types (InputError vs InputThreadError) - ✅ Fixed: added `From<InputThreadError>` for `InputError`
@@ -292,7 +294,7 @@ None - all high priority issues resolved! ✅
 - [x] ui/ARCH-003: TextDrawData duplicates GlyphDrawData info - ✅ Reviewed: `text` field needed for width estimation
 - [x] common/KISS-001: Unused `with_prefixed_fields!` macro - ✅ Fixed: removed unused macro
 - [ ] physics/ARCH-001: PhysicsSystem has pass-through methods
-- [ ] physics/ARCH-002: Single collision callback limitation
+- [x] physics/ARCH-002: Single collision callback limitation - ✅ Fixed: PhysicsSystem now supports multiple collision callbacks via `add_collision_callback()` and `with_collision_callback()`
 
 ### Architecture (Future Features)
 - [ ] Plugin system for extensibility
@@ -313,9 +315,9 @@ None - all high priority issues resolved! ✅
 | ecs | 0 | 0 | 11 | 11 | Tests complete ✅, cycle detection ✅, unsafe documented ✅ |
 | ui | 0 | 1 | 7 | 8 | Well-structured immediate-mode UI, glyph caching fixed ✅, DRY-001 fixed ✅ |
 | input | 0 | 0 | 5 | 5 | Production-ready, fully documented ✅ |
-| physics | 0 | 0 | 5 | 5 | Clean rapier2d integration, collision detection ✅ |
+| physics | 0 | 0 | 4 | 4 | Clean rapier2d integration, collision detection ✅, DRY-001 fixed ✅ |
 | common | 0 | 1 | 3 | 4 | Minimal debt, well-designed foundation |
-| **Total** | **0** | **4** | **48** | **52** | |
+| **Total** | **0** | **3** | **47** | **50** | |
 
 ### High Priority Summary
 All high priority issues resolved! ✅

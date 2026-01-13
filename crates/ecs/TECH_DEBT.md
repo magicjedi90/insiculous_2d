@@ -4,9 +4,15 @@ Last audited: January 2026
 
 ## Summary
 - DRY violations: 4
-- SRP violations: 3
-- KISS violations: 1 (1 resolved)
-- Architecture issues: 4
+- SRP violations: 3 (1 resolved)
+- KISS violations: 2 (2 resolved)
+- Architecture issues: 4 (2 resolved)
+
+## January 2026 Fixes
+- ✅ **SRP-001**: Extracted hierarchy methods to `WorldHierarchyExt` extension trait (~150 lines moved, 11 tests)
+- ✅ **KISS-001**: Replaced non-functional `QueryIterator` scaffolding with working `query_entities::<Q>()` method (1 test added)
+- ✅ **ARCH-001**: Verified entity ID format is consistent (u64 throughout, not u32 vs usize as originally thought)
+- ✅ **ARCH-002**: Cycle detection added to `set_parent()` (implemented in `WorldHierarchyExt`)
 
 ---
 
@@ -53,20 +59,23 @@ Last audited: January 2026
 
 ## SRP Violations
 
-### [SRP-001] World struct has too many responsibilities
-- **File:** `world.rs`
-- **Lines:** 35-531
-- **Issue:** The `World` struct handles ~8 distinct responsibilities in ~500 lines:
+### ~~[SRP-001] World struct has too many responsibilities~~ ✅ RESOLVED
+- **File:** `world.rs`, `hierarchy_ext.rs`
+- **Resolution:** Extracted 10 hierarchy methods (~150 lines) to `WorldHierarchyExt` extension trait:
+  - `set_parent()`, `remove_parent()`, `get_parent()`, `get_children()`
+  - `get_root_entities()`, `get_descendants()`, `get_ancestors()`
+  - `is_ancestor_of()`, `is_descendant_of()`, `remove_entity_hierarchy()`
+
+  World struct now handles 6 core responsibilities (~400 lines):
   1. Entity management (create, remove, validate)
   2. Component management (add, remove, get)
   3. System management (add, update)
-  4. Hierarchy management (set_parent, remove_parent, get_children, etc.)
-  5. Query management (query<Q>)
-  6. Lifecycle management (initialize, start, stop, shutdown)
-  7. Generation tracking
-  8. Configuration management
-- **Suggested fix:** Split hierarchy methods into a `HierarchyExt` trait or separate module. Consider extracting lifecycle into `WorldLifecycle`.
-- **Priority:** Medium (mentioned in ANALYSIS.md but unresolved)
+  4. Query management (`query_entities::<Q>()`)
+  5. Lifecycle management (initialize, start, stop, shutdown)
+  6. Configuration management
+
+  Hierarchy methods available via `use ecs::WorldHierarchyExt;`
+- **Resolved:** January 2026
 
 ### [SRP-002] ComponentStorage enum handles both storage types
 - **File:** `component.rs`
@@ -90,12 +99,17 @@ Last audited: January 2026
 
 ## KISS Violations
 
-### [KISS-001] Over-engineered QueryIterator scaffolding
+### ~~[KISS-001] Over-engineered QueryIterator scaffolding~~ ✅ RESOLVED
 - **File:** `world.rs`
-- **Lines:** 539-582
-- **Issue:** `QueryIterator` has 4 fields marked with `#[allow(dead_code)]` and `next()` always returns `None`. The struct exists as "scaffolding for future full query implementation" but provides no actual functionality.
-- **Suggested fix:** Either implement basic query functionality or remove the scaffolding. Dead code adds maintenance burden without value.
-- **Priority:** Medium
+- **Resolution:** Removed `QueryIterator` scaffolding that always returned `None`.
+  Replaced with a functional `query_entities::<Q>()` method that:
+  - Takes a `QueryTypes` bound (Single<T>, Pair<T,U>, or Triple<T,U,V>)
+  - Returns `Vec<EntityId>` of entities matching the query
+  - Uses `ComponentRegistry::has_type()` for type-based checking
+
+  New method is simpler (25 lines vs 45 lines) and actually works.
+  Test added: `test_query_entities` in `tests/world.rs`
+- **Resolved:** January 2026
 
 ### ~~[KISS-002] Over-engineered ComponentColumn raw pointer manipulation~~ ✅ RESOLVED
 - **File:** `archetype.rs`, `component.rs`
