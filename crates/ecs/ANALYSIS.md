@@ -207,25 +207,6 @@ EngineApplication
 
 ---
 
-## Recommended Fixes (Priority Order)
-
-### Short-term (Medium Priority)
-1. Remove deprecated `PlayerTag` alias (or document migration path)
-2. Document module visibility rationale in lib.rs
-3. Split World impl blocks by concern for better navigation
-
-### Medium-term
-4. ~~Replace TODO comments in tests with actual assertions~~ - COMPLETED
-5. Add edge case tests for component removal
-6. Review and either use or remove dead code
-
-### Long-term
-7. Add system scheduling with dependencies
-8. Add component reflection for runtime introspection
-9. Consider memory pooling for entities/components
-
----
-
 ## Production Readiness Assessment
 
 ### Stable

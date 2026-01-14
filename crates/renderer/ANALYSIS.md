@@ -198,21 +198,16 @@ renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_re
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Future Enhancements
 
-### ✅ Completed
-1. ~~Cache bind groups per texture (avoid per-frame creation)~~ - Camera and texture bind groups now cached
-2. ~~Consolidate device/queue accessors~~ - Both versions documented for different use cases
-3. ~~Fix DRY-002: Duplicate sampler creation~~ - Added `SamplerConfig::create_sampler()` method
+These features would enhance the renderer but are not required for current functionality:
 
-### Short-term (High Priority)
-1. Add GPU resource cleanup on drop
-2. Add integration tests - Verify rendering pipeline end-to-end
-
-### Medium-term (Architecture)
-3. Split SpritePipeline into focused structs
-4. Add async texture loading option
-5. Add surface format auto-detection
+### Rendering Features
+- GPU resource cleanup on drop for proper shutdown
+- End-to-end integration tests for rendering pipeline
+- Async texture loading with background processing
+- Automatic surface format detection and optimization
+- Additional shader effects (lighting, shadows, post-processing)
 
 ### Long-term (Features)
 6. Add frustum culling

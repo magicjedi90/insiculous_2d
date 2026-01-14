@@ -209,3 +209,33 @@ These issues from ANALYSIS.md have been resolved:
 - DRY-002: Coordinate transformation duplication in ui_integration.rs
 - ARCH-001: EngineApplication deprecation needed
 - ARCH-002: Timer/GameLoopManager consolidation
+
+---
+
+## Future Enhancements (Not Technical Debt)
+
+These features would enhance the engine but are not required for current functionality:
+
+### Advanced Asset Pipeline
+- Multi-threaded asset loading with progress tracking
+- Asset dependency management and automatic reloading
+- Compressed texture formats (DXT, ETC, PVRTC)
+- Font asset preprocessing and character set optimization
+
+### Performance Optimizations
+- Frustum culling for large worlds
+- Occlusion culling for 2D layers
+- Instanced rendering for identical sprites
+- GPU particle systems
+
+### Advanced Physics
+- Physics material system (friction, bounciness)
+- Terrain/collision mesh support
+- Joint constraints for complex objects
+- Trigger volumes for game logic
+
+### Editor Integration
+- Live scene editing with immediate preview
+- Visual debugger for entity/component state
+- Performance profiler integration
+- Hot-reloading for assets and scenes

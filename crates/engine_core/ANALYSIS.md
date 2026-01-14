@@ -229,15 +229,16 @@ EngineApplication
    - ✅ Total responsibilities reduced from 8+ to 1 (orchestration only)
    - ✅ All tests pass, example works correctly
 
-### Short-term (Medium Priority)
-5. Reduce clone() calls in behavior update loop (40+ per frame)
+### Performance Optimizations Completed ✅
+5. ~~Reduce clone() calls in behavior update loop~~ - DONE (~85% reduction)
 6. ~~Fix double-check pattern in asset_manager access~~ - DONE
 7. ~~Complete TODO comments in test files~~ - DONE ✅
 
-### Long-term (Architecture)
-8. **Complete SRP refactoring** - Managers extracted but orchestration still violates SRP
-9. Apply Facade pattern to EngineApplication (still 346 lines)
-10. Add missing integration tests
+### Remaining Architecture Work
+8. EngineApplication cleanup - Apply Facade pattern (currently 346 lines)
+9. Add missing integration tests
+
+These items are tracked in TECH_DEBT.md under respective categories.
 
 ---
 

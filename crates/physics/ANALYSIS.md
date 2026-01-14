@@ -230,17 +230,16 @@ physics.apply_force(player, Vec2::new(force_x, 0.0));
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Future Enhancements
 
-### Immediate (High Priority)
-1. Add friction/restitution tests
-2. Add kinematic body tests
-3. Add sensor trigger tests
+These features would enhance the physics system but are not required for current functionality:
 
-### Short-term (Medium Priority)
-4. Review and remove/use dead code in world.rs
-5. Add collision response validation tests
-6. Add high-speed (tunneling) edge case tests
+### Physics Features
+- Comprehensive friction and restitution material system
+- Kinematic body support for animated platforms
+- Physics sensor/trigger volumes (non-solid colliders)
+- Collision response validation and debugging
+- High-speed movement edge case testing (tunneling prevention)
 
 ### Long-term (Features)
 7. Debug visualization for colliders

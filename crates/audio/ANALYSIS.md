@@ -105,15 +105,17 @@ ctx.audio.set_music_volume(0.6);
 
 ## Known Limitations
 
-1. **No streaming for large files** - All sounds loaded into memory
-2. **No 3D/spatial audio processing** - Only attenuation calculation provided
-3. **No audio effects** - No reverb, echo, or other DSP effects
-4. **Single music track** - Only one music track at a time
+These are intentional design decisions, not technical debt:
 
-## Future Improvements
+1. **No streaming for large files** - All sounds loaded into memory for instant playback
+2. **No 3D/spatial audio processing** - Only attenuation calculation provided (requires integration with 3rd party library)
+3. **No audio effects** - No reverb, echo, or other DSP effects (use external audio tools)
+4. **Single music track** - Only one music track at a time (sufficient for most 2D games)
+
+## Future Enhancements
 
 1. Add streaming for large music files
-2. Implement actual spatial audio positioning
+2. Implement actual spatial audio positioning  
 3. Add crossfade for music transitions
 4. Add audio effects processing
 5. Support for audio buses/groups

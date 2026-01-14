@@ -220,3 +220,24 @@ These issues from ANALYSIS.md have been resolved:
 - ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
 - ~~KISS-002: ComponentColumn uses unsafe code without demonstrated need~~ ✅ RESOLVED - Comprehensive safety documentation added
 - ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden
+
+---
+
+## Future Enhancements (Not Technical Debt)
+
+These features would enhance the ECS but are not required for current functionality:
+
+### System Scheduling
+- Add system dependency graph for automatic execution ordering
+- Parallel system execution for multi-core optimization
+- System groups for organizing related systems
+
+### Component Introspection
+- Component reflection for runtime type information
+- Dynamic component addition/removal based on string names
+- Editor integration for visual component editing
+
+### Performance Optimizations  
+- Memory pooling for entity and component allocations
+- Component pack optimization for cache locality
+- Archetype fragmentation reduction strategies

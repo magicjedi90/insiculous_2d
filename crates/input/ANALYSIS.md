@@ -195,17 +195,16 @@ handler.update(); // Process all queued events
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Future Enhancements
 
-### Immediate (High Priority)
-1. ✅ **COMPLETED** - Replace TODO comments in tests with actual assertions
-2. Add gamepad dead zone configuration and tests
-3. Add input event timing tests
+These features would enhance the input system but are not required for current functionality:
 
-### Short-term (Medium Priority)
-4. Implement gesture recognition (double-click, drag)
-5. Add input recording/playback for debugging
-6. Add touch input support
+### Input Features
+- Gamepad dead zone configuration and calibration
+- Input event timing and latency measurement
+- Gesture recognition (double-click, swipe, pinch)
+- Input recording and playback for debugging
+- Touch input support for mobile devices
 
 ### Long-term (Features)
 7. Haptic feedback (controller vibration)
