@@ -171,7 +171,13 @@ High-performance component storage using archetypes:
 world.add_component(&entity, Transform2D::new(pos)).ok();
 world.add_component(&entity, Sprite::new(texture_handle)).ok();
 
-// Type-safe queries
+// Type-safe queries - get entities with specific components
+use ecs::{Single, Pair, Triple};
+let transforms = world.query_entities::<Single<Transform2D>>();
+let sprites_with_transform = world.query_entities::<Pair<Transform2D, Sprite>>();
+let full_entities = world.query_entities::<Triple<Transform2D, Sprite, RigidBody>>();
+
+// Type-safe component access
 if let Some((transform, sprite)) = world.get_two_mut::<(Transform2D, Sprite)>(entity) {
     transform.position += sprite.velocity * delta_time;
 }
@@ -180,9 +186,16 @@ if let Some((transform, sprite)) = world.get_two_mut::<(Transform2D, Sprite)>(en
 for entity in world.entities() {
     // Process entities
 }
+
+// Hierarchy methods via WorldHierarchyExt trait
+use ecs::WorldHierarchyExt;
+world.set_parent(child, parent)?;
+let children = world.get_children(parent);
+let descendants = world.get_descendants(root);
+let roots = world.get_root_entities();
 ```
 
-**Files:** `ecs/lib.rs`, `ecs/component.rs`, `ecs/entity.rs`, `ecs/world.rs`
+**Files:** `ecs/lib.rs`, `ecs/component.rs`, `ecs/entity.rs`, `ecs/world.rs`, `ecs/hierarchy_ext.rs`
 
 ### Immediate-Mode UI Pattern
 UI described every frame rather than retained state:
@@ -267,7 +280,7 @@ ECS-friendly 2D physics via rapier2d:
 ```rust
 // Add physics components
 world.add_component(&entity, RigidBody::player_platformer()).ok();
-world.add_component(&entity, 
+world.add_component(&entity,
     Collider::player_box()).ok()
 )?;
 
@@ -277,11 +290,25 @@ RigidBody::pushable()               // Dynamic, can be pushed
 Collider::platform(width, height)   // Static ground/platform
 Collider::bouncy()                  // High restitution
 
+// Multiple collision callbacks (all listeners receive each collision)
+let mut physics = PhysicsSystem::new()
+    .with_collision_callback(|collision| {
+        println!("Audio: collision!");
+    })
+    .with_collision_callback(|collision| {
+        println!("Particles: spawn sparks!");
+    });
+
+// Or add callbacks later
+physics.add_collision_callback(|collision| {
+    println!("Score system: check for pickup!");
+});
+
 // Update physics
 physics_system.update(&mut world, delta_time)?;
 ```
 
-**Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`
+**Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`, `physics/physics_system.rs`
 
 ### Input Mapping Pattern
 Action-based input bindings:
@@ -327,12 +354,12 @@ drop(texture); // Now fully cleaned up
 ## Current Known Limitations (Updated January 2026)
 
 **Technical Debt Tracking:**
-- SRP violations in GameRunner (8+ responsibilities remain)
-- Bind groups created per frame (performance impact)
+- ~~SRP violations in GameRunner~~ ✅ FIXED: Managers extracted, game.rs refactored
+- ~~Bind groups created per frame~~ ✅ FIXED: Camera bind group cached, texture bind groups cached per handle
 - Glyph texture cache includes color in key (memory waste)
-- First-frame UI placeholder flicker
-- 40+ allocations per frame in behavior system
-- ~25 #[allow(dead_code)] suppressions remain
+- ~~First-frame UI placeholder flicker~~ ✅ FIXED: Font rendering bug fixed
+- ~~40+ allocations per frame in behavior system~~ ✅ FIXED: Behaviors accessed by reference
+- ~25 #[allow(dead_code)] suppressions remain (all documented)
 
 **All tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
 

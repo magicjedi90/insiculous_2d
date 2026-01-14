@@ -1,5 +1,7 @@
 //! Error types for the renderer.
 
+use crate::texture::TextureError;
+
 /// Errors that can occur in the renderer
 #[derive(Debug, thiserror::Error)]
 pub enum RendererError {
@@ -32,4 +34,7 @@ pub enum RendererError {
 
     #[error("Asset loading error: {0}")]
     AssetLoadingError(String),
+
+    #[error("Texture error: {0}")]
+    TextureError(#[from] TextureError),
 }

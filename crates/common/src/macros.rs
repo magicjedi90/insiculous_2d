@@ -32,34 +32,6 @@ macro_rules! with_fields {
     };
 }
 
-/// Generate builder-style setter methods with `with_` prefix.
-///
-/// # Example
-/// ```ignore
-/// impl Sprite {
-///     with_prefixed_fields! {
-///         offset: Vec2,
-///         rotation: f32,
-///     }
-/// }
-/// // Generates: with_offset(Vec2), with_rotation(f32)
-/// ```
-#[macro_export]
-macro_rules! with_prefixed_fields {
-    ($($field:ident : $type:ty),* $(,)?) => {
-        paste::paste! {
-            $(
-                #[doc = concat!("Set the `", stringify!($field), "` field (builder pattern).")]
-                #[inline]
-                pub fn [<with_ $field>](mut self, value: $type) -> Self {
-                    self.$field = value;
-                    self
-                }
-            )*
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use glam::Vec2;

@@ -3,7 +3,7 @@
 use glam::{Vec2, Vec3, Vec4};
 use ecs::sprite_components::*;
 use ecs::Component;
-use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
+use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
 use renderer::TextureHandle;
 
 #[test]
@@ -99,7 +99,7 @@ fn test_transform2d_inverse_matrix() {
 
 #[test]
 fn test_camera2d_creation() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
         .with_rotation(std::f32::consts::PI)
         .with_zoom(2.0)
         .as_main_camera();
@@ -113,7 +113,7 @@ fn test_camera2d_creation() {
 
 #[test]
 fn test_camera2d_default() {
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     
     assert_eq!(camera.position, Vec2::ZERO);
     assert_eq!(camera.rotation, 0.0);
@@ -124,7 +124,7 @@ fn test_camera2d_default() {
 
 #[test]
 fn test_camera2d_view_matrix() {
-    let camera = Camera2D {
+    let camera = Camera {
         position: Vec2::new(100.0, 200.0),
         rotation: std::f32::consts::FRAC_PI_2, // 90 degrees
         zoom: 2.0,
@@ -147,7 +147,7 @@ fn test_camera2d_view_matrix() {
 
 #[test]
 fn test_camera2d_projection_matrix() {
-    let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
     let proj_matrix = camera.projection_matrix();
     
     // Test that the projection matrix is orthographic
@@ -164,7 +164,7 @@ fn test_camera2d_projection_matrix() {
 
 #[test]
 fn test_camera2d_view_projection_matrix() {
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     let vp_matrix = camera.view_projection_matrix();
     
     // Should be valid matrix
@@ -174,7 +174,7 @@ fn test_camera2d_view_projection_matrix() {
 
 #[test]
 fn test_camera2d_screen_to_world() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
     
     // Test center of screen
     let _screen_center = Vec2::new(400.0, 300.0);
@@ -188,7 +188,7 @@ fn test_camera2d_screen_to_world() {
 
 #[test]
 fn test_camera2d_world_to_screen() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
     
     // Test camera position
     // Note: world_to_screen method doesn't exist in ecs::Camera2D, testing matrix instead
@@ -354,7 +354,7 @@ fn test_component_trait() {
     // Test that all sprite components implement the Component trait
     let sprite = Sprite::default();
     let transform = Transform2D::default();
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     let animation = SpriteAnimation::default();
     
     // These should compile if the types implement Component

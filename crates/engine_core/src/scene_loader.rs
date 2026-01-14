@@ -8,8 +8,8 @@ use std::path::Path;
 
 use glam::Vec2;
 
-use ecs::sprite_components::{Camera2D, Sprite, SpriteAnimation, Transform2D};
-use ecs::{EntityId, World};
+use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+use ecs::{EntityId, World, WorldHierarchyExt};
 use renderer::TextureHandle;
 
 use crate::assets::AssetManager;
@@ -326,7 +326,7 @@ impl SceneLoader {
                 viewport_size,
                 is_main_camera,
             } => {
-                let camera = Camera2D {
+                let camera = Camera {
                     position: Vec2::new(position.0, position.1),
                     rotation: *rotation,
                     zoom: *zoom,

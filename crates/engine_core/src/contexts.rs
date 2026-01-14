@@ -7,12 +7,17 @@ use glam::Vec2;
 use ecs::World;
 use input::InputHandler;
 use audio::AudioManager;
-use ui::{UIContext, Color as UIColor};
-use renderer::{sprite::SpriteBatcher, Camera2D, texture::TextureHandle};
+use ui::UIContext;
+use renderer::{sprite::SpriteBatcher, Camera, texture::TextureHandle};
 use std::collections::HashMap;
 use crate::assets::AssetManager;
 
-/// Key for caching glyph textures
+/// Key for caching glyph textures.
+///
+/// Note: Color is NOT included in the cache key because glyph textures are
+/// grayscale alpha masks. The color is applied at render time by multiplying
+/// the sprite color with the texture, allowing the same glyph texture to be
+/// reused for any color.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GlyphCacheKey {
     /// Character being rendered
@@ -21,21 +26,14 @@ pub struct GlyphCacheKey {
     width: u32,
     /// Height of the glyph bitmap
     height: u32,
-    /// Color as RGB (u8 each)
-    color_rgb: [u8; 3],
 }
 
 impl GlyphCacheKey {
-    pub(crate) fn new(character: char, width: u32, height: u32, color: &UIColor) -> Self {
+    pub(crate) fn new(character: char, width: u32, height: u32) -> Self {
         Self {
             character,
             width,
             height,
-            color_rgb: [
-                (color.r * 255.0) as u8,
-                (color.g * 255.0) as u8,
-                (color.b * 255.0) as u8,
-            ],
         }
     }
 }
@@ -65,7 +63,7 @@ pub struct RenderContext<'a> {
     /// Sprite batcher for adding sprites to render
     pub sprites: &'a mut SpriteBatcher,
     /// The 2D camera
-    pub camera: &'a mut Camera2D,
+    pub camera: &'a mut Camera,
     /// Current window size
     pub window_size: Vec2,
     /// UI draw commands to render

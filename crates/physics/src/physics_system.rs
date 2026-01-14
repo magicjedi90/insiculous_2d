@@ -1,6 +1,28 @@
 //! Physics system for ECS integration
 //!
 //! This module provides a system that synchronizes ECS components with the physics world.
+//!
+//! # API Design: Pass-Through Methods
+//!
+//! [`PhysicsSystem`] provides several methods that delegate directly to [`PhysicsWorld`]:
+//! - `set_gravity()` / `gravity()`
+//! - `apply_impulse()` / `apply_force()`
+//! - `raycast()`
+//! - `collision_events()`
+//!
+//! These pass-through methods exist intentionally for **API ergonomics**:
+//!
+//! ```ignore
+//! // With pass-through (cleaner):
+//! physics_system.apply_impulse(entity, Vec2::new(0.0, 100.0));
+//!
+//! // Without pass-through:
+//! physics_system.physics_world_mut().apply_impulse(entity, Vec2::new(0.0, 100.0));
+//! ```
+//!
+//! Users who need advanced physics operations can still access the underlying
+//! [`PhysicsWorld`] via [`physics_world()`](PhysicsSystem::physics_world) and
+//! [`physics_world_mut()`](PhysicsSystem::physics_world_mut).
 
 use glam::Vec2;
 
@@ -23,8 +45,8 @@ pub struct PhysicsSystem {
     fixed_timestep: f32,
     /// Maximum delta time to prevent spiral of death
     max_delta_time: f32,
-    /// Callback for collision events
-    collision_callback: Option<CollisionCallback>,
+    /// Callbacks for collision events (supports multiple listeners)
+    collision_callbacks: Vec<CollisionCallback>,
 }
 
 impl PhysicsSystem {
@@ -40,7 +62,7 @@ impl PhysicsSystem {
             time_accumulator: 0.0,
             fixed_timestep: 1.0 / 60.0,
             max_delta_time: 0.1,
-            collision_callback: None,
+            collision_callbacks: Vec::new(),
         }
     }
 
@@ -50,13 +72,37 @@ impl PhysicsSystem {
         self
     }
 
-    /// Set the collision callback
+    /// Add a collision callback (builder pattern)
+    ///
+    /// Multiple callbacks can be registered. They will all be invoked
+    /// for each collision event in the order they were added.
     pub fn with_collision_callback<F>(mut self, callback: F) -> Self
     where
         F: FnMut(&CollisionData) + Send + Sync + 'static,
     {
-        self.collision_callback = Some(Box::new(callback));
+        self.collision_callbacks.push(Box::new(callback));
         self
+    }
+
+    /// Add a collision callback (mutable method)
+    ///
+    /// Multiple callbacks can be registered. They will all be invoked
+    /// for each collision event in the order they were added.
+    pub fn add_collision_callback<F>(&mut self, callback: F)
+    where
+        F: FnMut(&CollisionData) + Send + Sync + 'static,
+    {
+        self.collision_callbacks.push(Box::new(callback));
+    }
+
+    /// Remove all collision callbacks
+    pub fn clear_collision_callbacks(&mut self) {
+        self.collision_callbacks.clear();
+    }
+
+    /// Get the number of registered collision callbacks
+    pub fn collision_callback_count(&self) -> usize {
+        self.collision_callbacks.len()
     }
 
     /// Get a reference to the physics world
@@ -213,10 +259,13 @@ impl System for PhysicsSystem {
         // Sync physics results back to ECS
         self.sync_physics_to_ecs(world);
 
-        // Process collision callbacks
-        if let Some(callback) = &mut self.collision_callback {
-            for collision in self.physics_world.collision_events() {
-                callback(collision);
+        // Process collision callbacks (all registered callbacks receive each event)
+        if !self.collision_callbacks.is_empty() {
+            let events = self.physics_world.collision_events();
+            for collision in events {
+                for callback in &mut self.collision_callbacks {
+                    callback(collision);
+                }
             }
         }
     }
@@ -316,5 +365,45 @@ mod tests {
         // Check that entity has not moved
         let final_pos = world.get::<Transform2D>(entity).unwrap().position;
         assert_eq!(initial_pos, final_pos, "Static body should not move");
+    }
+
+    #[test]
+    fn test_multiple_collision_callbacks() {
+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+
+        let counter1 = Arc::new(AtomicUsize::new(0));
+        let counter2 = Arc::new(AtomicUsize::new(0));
+
+        let counter1_clone = counter1.clone();
+        let counter2_clone = counter2.clone();
+
+        let system = PhysicsSystem::new()
+            .with_collision_callback(move |_| {
+                counter1_clone.fetch_add(1, Ordering::SeqCst);
+            })
+            .with_collision_callback(move |_| {
+                counter2_clone.fetch_add(1, Ordering::SeqCst);
+            });
+
+        // Verify both callbacks are registered
+        assert_eq!(system.collision_callback_count(), 2);
+
+        // Note: Without actual collisions, the callbacks won't be invoked,
+        // but this test verifies the API works correctly
+    }
+
+    #[test]
+    fn test_add_collision_callback() {
+        let mut system = PhysicsSystem::new();
+        assert_eq!(system.collision_callback_count(), 0);
+
+        system.add_collision_callback(|_| {});
+        assert_eq!(system.collision_callback_count(), 1);
+
+        system.add_collision_callback(|_| {});
+        assert_eq!(system.collision_callback_count(), 2);
+
+        system.clear_collision_callbacks();
+        assert_eq!(system.collision_callback_count(), 0);
     }
 }

@@ -236,11 +236,11 @@ impl<G: Game> GameRunner<G> {
                         continue;
                     }
 
+                    // Cache key is color-agnostic - same texture can be reused for any color
                     let key = GlyphCacheKey::new(
                         glyph.character,
                         glyph.width,
                         glyph.height,
-                        &data.color,
                     );
 
                     // Skip if already cached
@@ -248,18 +248,11 @@ impl<G: Game> GameRunner<G> {
                         continue;
                     }
 
-                    // Create glyph texture
-                    let color_rgb = [
-                        (data.color.r * 255.0) as u8,
-                        (data.color.g * 255.0) as u8,
-                        (data.color.b * 255.0) as u8,
-                    ];
-
+                    // Create glyph texture (grayscale alpha mask)
                     match asset_manager.create_glyph_texture(
                         glyph.width,
                         glyph.height,
                         &glyph.bitmap,
-                        color_rgb,
                     ) {
                         Ok(handle) => {
                             self.glyph_textures.insert(key, handle);

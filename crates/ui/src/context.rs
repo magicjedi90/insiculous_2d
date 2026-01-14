@@ -8,7 +8,7 @@ use input::InputHandler;
 
 use crate::{
     Color, DrawList, FontError, FontHandle, FontManager, GlyphDrawData, InteractionManager,
-    InteractionResult, Rect, TextDrawData, Theme, WidgetId, WidgetState,
+    InteractionResult, Rect, TextDrawData, TextLayout, Theme, WidgetId, WidgetState,
 };
 
 /// The main UI context for immediate-mode UI rendering.
@@ -62,13 +62,9 @@ impl UIContext {
 
     /// Create a new UI context with a custom theme.
     pub fn with_theme(theme: Theme) -> Self {
-        Self {
-            interaction: InteractionManager::new(),
-            draw_list: DrawList::new(),
-            theme,
-            window_size: Vec2::new(800.0, 600.0),
-            font_manager: FontManager::new(),
-        }
+        let mut ctx = Self::new();
+        ctx.theme = theme;
+        ctx
     }
 
     // ================== Font Methods ==================
@@ -140,6 +136,52 @@ impl UIContext {
         self.interaction.mouse_pos()
     }
 
+    // ================== Widget Helpers ==================
+
+    /// Get the background color for a widget based on its state and the button style
+    fn widget_background_color(&self, state: WidgetState) -> Color {
+        let style = &self.theme.button;
+        match state {
+            WidgetState::Normal => style.background,
+            WidgetState::Hovered => style.background_hovered,
+            WidgetState::Active => style.background_pressed,
+            WidgetState::Disabled => style.background_disabled,
+        }
+    }
+
+    /// Convert a TextLayout to TextDrawData for rendering.
+    ///
+    /// This helper extracts the common pattern of converting font layout information
+    /// into the draw data structure used by the rendering system.
+    fn layout_to_draw_data(
+        layout: &TextLayout,
+        text: &str,
+        position: Vec2,
+        color: Color,
+        font_size: f32,
+    ) -> TextDrawData {
+        let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
+            GlyphDrawData {
+                bitmap: g.info.rasterized.bitmap.clone(),
+                width: g.info.rasterized.width,
+                height: g.info.rasterized.height,
+                x: g.x,
+                y: g.y,
+                character: g.character,
+            }
+        }).collect();
+
+        TextDrawData {
+            text: text.to_string(),
+            position,
+            color,
+            font_size,
+            width: layout.width,
+            height: layout.height,
+            glyphs,
+        }
+    }
+
     // ================== Widget Methods ==================
 
     /// Create a button widget.
@@ -165,13 +207,7 @@ impl UIContext {
         let id = id.into();
         let result = self.interaction.interact(id, bounds, enabled);
         let style = &self.theme.button;
-
-        let background = match result.state {
-            WidgetState::Normal => style.background,
-            WidgetState::Hovered => style.background_hovered,
-            WidgetState::Active => style.background_pressed,
-            WidgetState::Disabled => style.background_disabled,
-        };
+        let background = self.widget_background_color(result.state);
 
         let text_color = if enabled {
             style.text_color
@@ -212,26 +248,7 @@ impl UIContext {
         if let Some(font_handle) = self.font_manager.default_font() {
             match self.font_manager.layout_text(font_handle, text, font_size) {
                 Ok(layout) => {
-                    let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
-                        GlyphDrawData {
-                            bitmap: g.info.rasterized.bitmap.clone(),
-                            width: g.info.rasterized.width,
-                            height: g.info.rasterized.height,
-                            x: g.x,
-                            y: g.y,
-                            character: g.character,
-                        }
-                    }).collect();
-
-                    let text_data = TextDrawData {
-                        text: text.to_string(),
-                        position,
-                        color,
-                        font_size,
-                        width: layout.width,
-                        height: layout.height,
-                        glyphs,
-                    };
+                    let text_data = Self::layout_to_draw_data(&layout, text, position, color, font_size);
                     self.draw_list.text(text_data);
                     return;
                 }
@@ -252,26 +269,7 @@ impl UIContext {
     pub fn label_with_font(&mut self, text: &str, position: Vec2, font: FontHandle, font_size: f32) {
         let color = self.theme.text.color;
         if let Ok(layout) = self.font_manager.layout_text(font, text, font_size) {
-            let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
-                GlyphDrawData {
-                    bitmap: g.info.rasterized.bitmap.clone(),
-                    width: g.info.rasterized.width,
-                    height: g.info.rasterized.height,
-                    x: g.x,
-                    y: g.y,
-                    character: g.character,
-                }
-            }).collect();
-
-            let text_data = TextDrawData {
-                text: text.to_string(),
-                position,
-                color,
-                font_size,
-                width: layout.width,
-                height: layout.height,
-                glyphs,
-            };
+            let text_data = Self::layout_to_draw_data(&layout, text, position, color, font_size);
             self.draw_list.text(text_data);
         } else {
             self.draw_list.text_placeholder(text, position, color, font_size);
@@ -376,13 +374,7 @@ impl UIContext {
         let id = id.into();
         let result = self.interaction.interact(id, bounds, true);
         let style = &self.theme.button;
-
-        let background = match result.state {
-            WidgetState::Normal => style.background,
-            WidgetState::Hovered => style.background_hovered,
-            WidgetState::Active => style.background_pressed,
-            WidgetState::Disabled => style.background_disabled,
-        };
+        let background = self.widget_background_color(result.state);
 
         // Draw checkbox background
         self.draw_list
