@@ -15,8 +15,9 @@
 | Scene Graph | 12 | ✅ 100% pass |
 | Audio | 7 | ✅ 100% pass |
 | UI | 42 + 7 new | ✅ 100% pass |
+| Editor | 64 | ✅ 100% pass |
 
-**Total:** 358/358 tests passing (100% success rate)
+**Total:** 422/422 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 18 ignored (GPU/window only)
 
 ### Completed Features
@@ -42,9 +43,10 @@
 **Goal:** Create a visual scene editor for building game worlds
 
 **Core Editor Features:**
-- [ ] **Editor UI Framework** - Dockable panels, toolbar, menus
+- [x] **Editor UI Framework** - Dockable panels, toolbar, menus ✅ COMPLETE
   - Based on existing immediate-mode UI system
   - Panel types: Scene view, Inspector, Hierarchy, Asset browser
+  - 64 tests, DockArea/DockPanel, MenuBar, Toolbar components
 - [ ] **Scene Viewport** - Render game world with editor overlay
   - Grid overlay and alignment guides
   - Camera pan/zoom controls
@@ -59,12 +61,12 @@
   - Preserve editor state (camera position, selection)
   - Backward compatibility with runtime scenes
 
-**Technical Implementation:**
-- Create `crates/editor/` - Editor-specific code
+**Technical Implementation:** ✅ COMPLETE
+- Created `crates/editor/` - Editor-specific code
 - `EditorContext` - Extends `GameContext` with editor state
 - `EditorTool` enum - Select, Move, Rotate, Scale
 - `Selection` struct - Track selected entities
-- Gizmo rendering system - Transform handles
+- `Gizmo` struct - Transform handles (translate, rotate, scale)
 
 **Milestone:** Edit `hello_world.scene.ron` visually, move platforms, adjust physics
 

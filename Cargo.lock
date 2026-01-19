@@ -792,6 +792,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "editor"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "ecs",
+ "engine_core",
+ "env_logger",
+ "glam",
+ "input",
+ "log",
+ "renderer",
+ "ui",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1154,8 +1169,15 @@ dependencies = [
 name = "insiculous_2d"
 version = "0.1.0"
 dependencies = [
+ "common",
  "ecs",
+ "editor",
  "engine_core",
+ "env_logger",
+ "glam",
+ "log",
+ "ui",
+ "winit",
 ]
 
 [[package]]

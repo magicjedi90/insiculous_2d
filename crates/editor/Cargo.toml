@@ -1,0 +1,22 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2021"
+description = "Visual scene editor for insiculous_2d game engine"
+authors = ["Insiculous Team"]
+
+[dependencies]
+# Internal crates
+common = { path = "../common" }
+ecs = { path = "../ecs" }
+ui = { path = "../ui" }
+input = { path = "../input" }
+renderer = { path = "../renderer" }
+engine_core = { path = "../engine_core" }
+
+# External dependencies
+glam = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
