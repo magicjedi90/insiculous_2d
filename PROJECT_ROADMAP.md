@@ -224,6 +224,8 @@
 
 **Overall Status:** 50 total items (59 completed, 50 remaining - 54% resolution rate)
 
+**Priority Order:** Address the biggest risks first (stability, architecture, and data loss) before lower-impact improvements.
+
 ### High Priority (0 items) ✅
 All high priority technical debt has been resolved.
 
@@ -274,6 +276,18 @@ All high priority technical debt has been resolved.
 - [ ] **ARCH-001: CameraUniform duplicated in renderer crate** - Exists in both common and renderer
   - Fix: Use `common::CameraUniform` everywhere, remove renderer copy
 
+**audio (1 item):**
+- [ ] **ARCH-001: No streaming for large music assets** - All audio loaded eagerly into memory
+  - Fix: Add optional streaming path for long tracks (keep cache for SFX)
+
+**input (1 item):**
+- [ ] **TEST-001: Missing input timing + dead zone tests** - Gamepad dead zone and frame timing unvalidated
+  - Fix: Add tests for dead zone normalization and frame-accurate event timing
+
+**physics (1 item):**
+- [ ] **TEST-001: Missing friction/kinematic/sensor validation** - Core physics materials and triggers untested
+  - Fix: Add coverage for friction/restitution, kinematic bodies, and sensors
+
 ### Low Priority (38 items)
 
 **engine_core (6 items):**
@@ -308,6 +322,10 @@ All high priority technical debt has been resolved.
 - [ ] **KISS-001: WidgetPersistentState has unused flexibility** - String field rarely used
 - [ ] **ARCH-003: TextDrawData duplicates GlyphDrawData info** - Text field overlaps with glyphs vector
 
+**audio (2 items):**
+- [ ] **DOC-001: Spatial audio limitations undocumented** - Attenuation-only behavior not explicit in API docs
+- [ ] **FEATURE-001: Music mixing/bus support** - Track need for multi-track music or mixing buses
+
 **physics (2 items):**
 - [ ] **DRY-002: Repeated body builder pattern in add_rigid_body** - Similar builder code for body types
 - [ ] **SRP-001: PhysicsWorld handles too many rapier types** - Direct exposure of rapier internals
@@ -315,6 +333,9 @@ All high priority technical debt has been resolved.
 **input (2 items):**
 - [ ] **DRY-001: Repeated input state tracking pattern** - Keyboard/mouse/gamepad similar structure
 - [ ] **DRY-003: Repeated unbind logic in input_mapping.rs** - Unbinding has duplicate patterns
+
+**common (1 item):**
+- [ ] **DOC-001: Macros module usage is undocumented** - Clarify intended consumers and examples
 
 **common (2 items):**
 - [ ] **DRY-001: Duplicate matrix construction pattern in transform.rs** - Similar to GlobalTransform2D pattern
