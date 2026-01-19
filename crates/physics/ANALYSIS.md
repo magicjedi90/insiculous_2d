@@ -1,5 +1,22 @@
 # Physics Crate Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- Rapier2D-backed physics system with ECS components, presets, and fixed timestep updates.
+- Exposes `PhysicsWorld`, `PhysicsSystem`, and helpers for common body/collider setups.
+- Integrates through `engine_core` as a default feature.
+
+### Strengths
+- Clear component API with presets for platformer/top-down workflows.
+- In-crate tests validate base integration and simulation flow.
+- Coordinate conversion helpers are part of the public API.
+
+### Risks & Follow-ups
+- Extend tests for friction/restitution, kinematic bodies, and sensor triggers.
+- Document the 100 px/m scale and ensure configurability remains visible.
+- Consider feature-gating heavy debug utilities if added later.
+
 ## Current State (Updated: January 2026)
 The physics crate provides 2D physics simulation for the Insiculous 2D game engine using rapier2d as the underlying physics engine.
 

@@ -1,5 +1,22 @@
 # ECS (Entity Component System) Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- Archetype-based ECS with scene graph support, lifecycle-aware systems, and sprite-focused components.
+- Public API combines core ECS types with renderer-facing sprite components.
+- Extensive test coverage and documentation already exists.
+
+### Strengths
+- Strong entity generation tracking and hierarchy utilities for gameplay scenes.
+- Re-exported sprite/transform components make engine integration ergonomic.
+- Comprehensive test suite provides confidence in core operations.
+
+### Risks & Follow-ups
+- `renderer` is a direct dependency; consider feature-gating or isolating render-specific components.
+- `world.rs` remains large; continued modularization would improve maintainability.
+- Module visibility in `lib.rs` is mixed; document which modules are intentionally public/private.
+
 ## Current State (Updated: January 2026)
 The ECS crate provides a robust Entity Component System with archetype-based storage for the Insiculous 2D game engine. It includes entity management, component storage, system execution, and advanced features like entity generation tracking, lifecycle management, and scene graph support.
 

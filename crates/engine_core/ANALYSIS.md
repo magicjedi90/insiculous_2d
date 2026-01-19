@@ -1,5 +1,22 @@
 # Engine Core Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- Central orchestration crate tying together windowing, rendering, input, audio, ECS, and UI.
+- Uses focused managers (`RenderManager`, `WindowManager`, `GameLoopManager`, `UIManager`) and optional physics.
+- Provides the primary `Game` API and scene lifecycle management.
+
+### Strengths
+- Clear integration surface for game code via `GameContext` and `RenderContext`.
+- Feature-gated physics keeps dependencies optional.
+- Recent refactors improved separation of concerns with dedicated modules.
+
+### Risks & Follow-ups
+- `EngineApplication` and `game.rs` remain large; keep pushing responsibilities into dedicated managers.
+- Dependency surface is broad; watch for cyclical coupling between UI/renderer/audio systems.
+- Ensure new features keep the default game loop deterministic and testable.
+
 ## Current State (Updated: January 2026)
 The engine_core crate provides lifecycle management, scene management, timing, and a simplified Game API for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
 

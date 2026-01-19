@@ -1,5 +1,22 @@
 # Renderer Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- WGPU-based 2D renderer focused on sprite batching, instancing, and texture management.
+- Exposes a streamlined `init()` async constructor and `run_with_app()` helper.
+- Re-exports `wgpu` and key sprite/texture types for downstream crates.
+
+### Strengths
+- Sprite batching and camera utilities provide a solid 2D baseline.
+- API surface is clearly organized into sprite/texture modules and prelude exports.
+- Uses `common::Time` to keep timing types centralized.
+
+### Risks & Follow-ups
+- Resource cleanup strategy is unclear; consider drop hooks for GPU resources.
+- `SpritePipeline` bundles many responsibilities; splitting into smaller structs will help.
+- Device/queue accessor duplication could be simplified for clarity.
+
 ## Current State (Updated: January 2026)
 The renderer crate provides WGPU-based 2D sprite rendering with instancing, batching, and camera support.
 
