@@ -6,6 +6,11 @@
 use glam::Vec2;
 
 use crate::{
+    editor_input::EditorInputMapping,
+    grid::GridRenderer,
+    picking::EntityPicker,
+    viewport::SceneViewport,
+    viewport_input::ViewportInputHandler,
     DockArea, DockPanel, DockPosition, EditorTool, Gizmo, GizmoMode, MenuBar, PanelId, Selection,
     Toolbar,
 };
@@ -23,14 +28,16 @@ pub struct EditorContext {
     pub menu_bar: MenuBar,
     /// Dock area for panels
     pub dock_area: DockArea,
-    /// Editor camera offset (for panning)
-    camera_offset: Vec2,
-    /// Editor camera zoom level
-    camera_zoom: f32,
-    /// Grid visibility
-    grid_visible: bool,
-    /// Grid size (in world units)
-    grid_size: f32,
+    /// Scene viewport for rendering and navigation
+    pub viewport: SceneViewport,
+    /// Grid renderer for scene view
+    pub grid: GridRenderer,
+    /// Entity picker for selection
+    pub picker: EntityPicker,
+    /// Viewport input handler
+    pub viewport_input: ViewportInputHandler,
+    /// Editor input mapping
+    pub input_mapping: EditorInputMapping,
     /// Snap to grid enabled
     snap_to_grid: bool,
     /// Whether the editor is in play mode (running the game)
@@ -76,10 +83,11 @@ impl EditorContext {
             toolbar: Toolbar::new().with_position(Vec2::new(220.0, 34.0)), // Below menu, after hierarchy
             menu_bar: MenuBar::editor_default(),
             dock_area,
-            camera_offset: Vec2::ZERO,
-            camera_zoom: 1.0,
-            grid_visible: true,
-            grid_size: 32.0,
+            viewport: SceneViewport::new(),
+            grid: GridRenderer::new(),
+            picker: EntityPicker::new(),
+            viewport_input: ViewportInputHandler::new(),
+            input_mapping: EditorInputMapping::new(),
             snap_to_grid: false,
             play_mode: false,
         }
@@ -107,78 +115,80 @@ impl EditorContext {
     }
 
     // ================== Camera Methods ==================
+    // These delegate to the SceneViewport for camera control
 
-    /// Get the camera offset.
+    /// Get the camera offset (position).
     pub fn camera_offset(&self) -> Vec2 {
-        self.camera_offset
+        self.viewport.camera_position()
     }
 
-    /// Set the camera offset.
+    /// Set the camera offset (position).
     pub fn set_camera_offset(&mut self, offset: Vec2) {
-        self.camera_offset = offset;
+        self.viewport.set_camera_position(offset);
     }
 
     /// Pan the camera by a delta.
     pub fn pan_camera(&mut self, delta: Vec2) {
-        self.camera_offset += delta;
+        self.viewport.pan_immediate(delta);
     }
 
     /// Get the camera zoom level.
     pub fn camera_zoom(&self) -> f32 {
-        self.camera_zoom
+        self.viewport.camera_zoom()
     }
 
     /// Set the camera zoom level.
     pub fn set_camera_zoom(&mut self, zoom: f32) {
-        self.camera_zoom = zoom.clamp(0.1, 10.0);
+        self.viewport.set_camera_zoom(zoom);
     }
 
     /// Zoom the camera by a factor.
     pub fn zoom_camera(&mut self, factor: f32) {
-        self.camera_zoom = (self.camera_zoom * factor).clamp(0.1, 10.0);
+        let new_zoom = self.viewport.camera_zoom() * factor;
+        self.viewport.set_camera_zoom(new_zoom);
     }
 
     /// Reset camera to default view.
     pub fn reset_camera(&mut self) {
-        self.camera_offset = Vec2::ZERO;
-        self.camera_zoom = 1.0;
+        self.viewport.reset_camera_immediate();
     }
 
     /// Convert screen position to world position.
-    pub fn screen_to_world(&self, screen_pos: Vec2, window_center: Vec2) -> Vec2 {
-        (screen_pos - window_center) / self.camera_zoom + self.camera_offset
+    pub fn screen_to_world(&self, screen_pos: Vec2) -> Vec2 {
+        self.viewport.screen_to_world(screen_pos)
     }
 
     /// Convert world position to screen position.
-    pub fn world_to_screen(&self, world_pos: Vec2, window_center: Vec2) -> Vec2 {
-        (world_pos - self.camera_offset) * self.camera_zoom + window_center
+    pub fn world_to_screen(&self, world_pos: Vec2) -> Vec2 {
+        self.viewport.world_to_screen(world_pos)
     }
 
     // ================== Grid Methods ==================
+    // These delegate to the GridRenderer
 
     /// Check if the grid is visible.
     pub fn is_grid_visible(&self) -> bool {
-        self.grid_visible
+        self.grid.is_visible()
     }
 
     /// Set grid visibility.
     pub fn set_grid_visible(&mut self, visible: bool) {
-        self.grid_visible = visible;
+        self.grid.set_visible(visible);
     }
 
     /// Toggle grid visibility.
     pub fn toggle_grid(&mut self) {
-        self.grid_visible = !self.grid_visible;
+        self.grid.toggle_visible();
     }
 
     /// Get the grid size.
     pub fn grid_size(&self) -> f32 {
-        self.grid_size
+        self.grid.grid_size()
     }
 
     /// Set the grid size.
     pub fn set_grid_size(&mut self, size: f32) {
-        self.grid_size = size.max(1.0);
+        self.grid.set_grid_size(size);
     }
 
     /// Check if snap to grid is enabled.
@@ -199,9 +209,10 @@ impl EditorContext {
     /// Snap a position to the grid.
     pub fn snap_position(&self, pos: Vec2) -> Vec2 {
         if self.snap_to_grid {
+            let grid_size = self.grid.grid_size();
             Vec2::new(
-                (pos.x / self.grid_size).round() * self.grid_size,
-                (pos.y / self.grid_size).round() * self.grid_size,
+                (pos.x / grid_size).round() * grid_size,
+                (pos.y / grid_size).round() * grid_size,
             )
         } else {
             pos
@@ -235,7 +246,7 @@ impl EditorContext {
     /// Update layout based on window size.
     ///
     /// This should be called each frame before rendering to ensure
-    /// panels are properly sized.
+    /// panels are properly sized and viewport bounds are updated.
     pub fn update_layout(&mut self, window_size: Vec2) {
         // Reserve space for menu bar
         let menu_height = self.menu_bar.height();
@@ -249,8 +260,18 @@ impl EditorContext {
         self.dock_area.set_bounds(content_bounds);
         self.dock_area.layout();
 
+        // Update viewport bounds from scene view panel
+        if let Some(scene_bounds) = self.scene_view_bounds() {
+            self.viewport.set_viewport_bounds(scene_bounds);
+        }
+
         // Note: The gizmo position should be set by the caller based on entity transform
         // after calling update_layout, using self.selection.primary() to get the selected entity
+    }
+
+    /// Update viewport interpolation. Call each frame.
+    pub fn update_viewport(&mut self, delta_time: f32) {
+        self.viewport.update(delta_time);
     }
 
     /// Get the scene view content bounds (where the game world is rendered).
@@ -272,6 +293,77 @@ impl EditorContext {
         self.dock_area
             .get_panel(PanelId::HIERARCHY)
             .map(|p| p.content_bounds())
+    }
+
+    // ================== Gizmo Integration ==================
+
+    /// Update gizmo position based on selected entity positions.
+    ///
+    /// Call this after selection changes to position the gizmo at the
+    /// selection center.
+    pub fn update_gizmo_from_selection(&mut self, entity_positions: &[(ecs::EntityId, Vec2)]) {
+        // Find positions of selected entities
+        let selected_positions: Vec<Vec2> = entity_positions
+            .iter()
+            .filter(|(id, _)| self.selection.contains(*id))
+            .map(|(_, pos)| *pos)
+            .collect();
+
+        if selected_positions.is_empty() {
+            // No selection - hide gizmo
+            self.gizmo.set_mode(crate::GizmoMode::None);
+            return;
+        }
+
+        // Calculate center of selection
+        let center = if selected_positions.len() == 1 {
+            selected_positions[0]
+        } else {
+            let sum: Vec2 = selected_positions.iter().copied().sum();
+            sum / selected_positions.len() as f32
+        };
+
+        // Update gizmo position (world coords)
+        self.gizmo.set_position(center);
+    }
+
+    /// Get the screen position for the gizmo based on its world position.
+    ///
+    /// Use this to pass to gizmo.render().
+    pub fn gizmo_screen_position(&self) -> Vec2 {
+        self.viewport.world_to_screen(self.gizmo.position())
+    }
+
+    /// Convert a gizmo delta from screen space to world space.
+    ///
+    /// The gizmo returns deltas in screen pixels. This converts them
+    /// to world units accounting for camera zoom.
+    pub fn gizmo_delta_to_world(&self, screen_delta: Vec2) -> Vec2 {
+        Vec2::new(
+            screen_delta.x / self.viewport.camera_zoom(),
+            screen_delta.y / self.viewport.camera_zoom(),
+        )
+    }
+
+    /// Check if the gizmo should take priority over picking.
+    ///
+    /// Returns true if the gizmo is currently being interacted with,
+    /// meaning picking should be skipped.
+    pub fn gizmo_has_priority(&self) -> bool {
+        self.gizmo.is_active()
+    }
+
+    /// Focus the viewport camera on the current selection.
+    pub fn focus_on_selection(&mut self, entity_positions: &[(ecs::EntityId, Vec2)]) {
+        let selected_positions: Vec<Vec2> = entity_positions
+            .iter()
+            .filter(|(id, _)| self.selection.contains(*id))
+            .map(|(_, pos)| *pos)
+            .collect();
+
+        if !selected_positions.is_empty() {
+            self.viewport.focus_on_bounds(&selected_positions);
+        }
     }
 }
 
@@ -347,25 +439,26 @@ mod tests {
     #[test]
     fn test_editor_context_coordinate_conversion() {
         let mut ctx = EditorContext::new();
-        let window_center = Vec2::new(400.0, 300.0);
+        // Set up viewport bounds first
+        ctx.update_layout(Vec2::new(800.0, 600.0));
 
-        // No offset, no zoom: screen center = world origin
-        let world = ctx.screen_to_world(window_center, window_center);
-        assert_eq!(world, Vec2::ZERO);
+        // Get viewport center
+        let viewport_center = ctx.viewport.viewport_center();
 
-        let screen = ctx.world_to_screen(Vec2::ZERO, window_center);
-        assert_eq!(screen, window_center);
+        // No offset, no zoom: viewport center = world origin
+        let world = ctx.screen_to_world(viewport_center);
+        assert!((world.x).abs() < 0.01);
+        assert!((world.y).abs() < 0.01);
+
+        let screen = ctx.world_to_screen(Vec2::ZERO);
+        assert!((screen.x - viewport_center.x).abs() < 0.01);
+        assert!((screen.y - viewport_center.y).abs() < 0.01);
 
         // With offset
         ctx.set_camera_offset(Vec2::new(100.0, 50.0));
-        let world = ctx.screen_to_world(window_center, window_center);
-        assert_eq!(world, Vec2::new(100.0, 50.0));
-
-        // With zoom
-        ctx.reset_camera();
-        ctx.set_camera_zoom(2.0);
-        let world = ctx.screen_to_world(Vec2::new(500.0, 300.0), window_center);
-        assert_eq!(world, Vec2::new(50.0, 0.0)); // (500-400)/2 = 50
+        let world = ctx.screen_to_world(viewport_center);
+        assert!((world.x - 100.0).abs() < 0.01);
+        assert!((world.y - 50.0).abs() < 0.01);
     }
 
     #[test]
@@ -442,5 +535,89 @@ mod tests {
         let bounds = scene_bounds.unwrap();
         assert!(bounds.width > 0.0);
         assert!(bounds.height > 0.0);
+    }
+
+    #[test]
+    fn test_gizmo_delta_to_world() {
+        let mut ctx = EditorContext::new();
+
+        // At zoom 1.0, delta is unchanged
+        let delta = Vec2::new(100.0, 50.0);
+        let world_delta = ctx.gizmo_delta_to_world(delta);
+        assert_eq!(world_delta, delta);
+
+        // At zoom 2.0, delta is halved
+        ctx.set_camera_zoom(2.0);
+        let world_delta = ctx.gizmo_delta_to_world(delta);
+        assert_eq!(world_delta, Vec2::new(50.0, 25.0));
+    }
+
+    #[test]
+    fn test_gizmo_has_priority() {
+        let ctx = EditorContext::new();
+
+        // Gizmo not active by default
+        assert!(!ctx.gizmo_has_priority());
+    }
+
+    #[test]
+    fn test_update_gizmo_from_selection_empty() {
+        let mut ctx = EditorContext::new();
+        ctx.set_tool(EditorTool::Move); // Set to Move so gizmo shows
+
+        // Empty selection should hide gizmo
+        let entities: Vec<(ecs::EntityId, Vec2)> = vec![];
+        ctx.update_gizmo_from_selection(&entities);
+
+        assert_eq!(ctx.gizmo.mode(), GizmoMode::None);
+    }
+
+    #[test]
+    fn test_update_gizmo_from_selection_single() {
+        let mut ctx = EditorContext::new();
+        ctx.set_tool(EditorTool::Move);
+
+        let entity_id = ecs::EntityId::with_generation(1, 1);
+        ctx.selection.select(entity_id);
+
+        let entities = vec![(entity_id, Vec2::new(100.0, 200.0))];
+        ctx.update_gizmo_from_selection(&entities);
+
+        assert_eq!(ctx.gizmo.position(), Vec2::new(100.0, 200.0));
+    }
+
+    #[test]
+    fn test_update_gizmo_from_selection_multiple() {
+        let mut ctx = EditorContext::new();
+        ctx.set_tool(EditorTool::Move);
+
+        let id1 = ecs::EntityId::with_generation(1, 1);
+        let id2 = ecs::EntityId::with_generation(2, 1);
+        ctx.selection.select(id1);
+        ctx.selection.add(id2);
+
+        let entities = vec![
+            (id1, Vec2::new(0.0, 0.0)),
+            (id2, Vec2::new(100.0, 100.0)),
+        ];
+        ctx.update_gizmo_from_selection(&entities);
+
+        // Gizmo should be at center of selection
+        assert_eq!(ctx.gizmo.position(), Vec2::new(50.0, 50.0));
+    }
+
+    #[test]
+    fn test_gizmo_screen_position() {
+        let mut ctx = EditorContext::new();
+        ctx.update_layout(Vec2::new(800.0, 600.0));
+
+        // Set gizmo at world origin
+        ctx.gizmo.set_position(Vec2::ZERO);
+
+        // Should be at viewport center
+        let screen_pos = ctx.gizmo_screen_position();
+        let viewport_center = ctx.viewport.viewport_center();
+        assert!((screen_pos.x - viewport_center.x).abs() < 0.01);
+        assert!((screen_pos.y - viewport_center.y).abs() < 0.01);
     }
 }

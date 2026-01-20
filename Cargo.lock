@@ -804,6 +804,7 @@ dependencies = [
  "log",
  "renderer",
  "ui",
+ "winit",
 ]
 
 [[package]]

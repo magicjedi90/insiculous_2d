@@ -24,23 +24,36 @@
 
 mod context;
 mod dock;
+mod editor_input;
 mod gizmo;
+mod grid;
 mod menu;
+mod picking;
 mod selection;
 mod toolbar;
+mod viewport;
+mod viewport_input;
 
 // Re-export main types
 pub use context::EditorContext;
 pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
+pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
 pub use gizmo::{Gizmo, GizmoMode};
+pub use grid::{GridColors, GridConfig, GridRenderer};
 pub use menu::{Menu, MenuBar, MenuItem};
+pub use picking::{EntityPicker, PickResult, PickableEntity, SelectionRect, AABB};
 pub use selection::Selection;
 pub use toolbar::{EditorTool, Toolbar};
+pub use viewport::SceneViewport;
+pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInputResult};
 
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
-        DockArea, DockPanel, DockPosition, EditorContext, EditorTool, Gizmo,
-        GizmoMode, Menu, MenuBar, MenuItem, PanelId, Selection, Toolbar,
+        DockArea, DockPanel, DockPosition, EditorAction, EditorContext, EditorInputMapping,
+        EditorInputState, EditorTool, EntityPicker, Gizmo, GizmoMode, GridRenderer, Menu,
+        MenuBar, MenuItem, PanelId, PickResult, PickableEntity, SceneViewport, Selection,
+        SelectionRect, Toolbar, ViewportInputConfig, ViewportInputHandler,
+        ViewportInputResult, AABB,
     };
 }
