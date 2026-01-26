@@ -88,6 +88,13 @@ pub enum DrawCommand {
         width: f32,
         depth: f32,
     },
+    /// Begin clipping to a rectangular region.
+    /// All subsequent draws are clipped to this bounds until PopClipRect.
+    PushClipRect {
+        bounds: Rect,
+    },
+    /// End the current clipping region, restore previous clip state.
+    PopClipRect,
 }
 
 impl DrawCommand {
@@ -100,6 +107,8 @@ impl DrawCommand {
             DrawCommand::TextPlaceholder { depth, .. } => *depth,
             DrawCommand::Circle { depth, .. } => *depth,
             DrawCommand::Line { depth, .. } => *depth,
+            DrawCommand::PushClipRect { .. } => 0.0, // Clip commands don't have depth
+            DrawCommand::PopClipRect => 0.0,
         }
     }
 }
@@ -238,6 +247,17 @@ impl DrawList {
             width,
             depth: self.base_depth + self.commands.len() as f32 * 0.001,
         });
+    }
+
+    /// Begin clipping all subsequent draws to the given bounds.
+    /// Must be paired with `pop_clip_rect()`.
+    pub fn push_clip_rect(&mut self, bounds: Rect) {
+        self.commands.push(DrawCommand::PushClipRect { bounds });
+    }
+
+    /// End the current clip region, restoring the previous clip state.
+    pub fn pop_clip_rect(&mut self) {
+        self.commands.push(DrawCommand::PopClipRect);
     }
 
     /// Draw a panel background with border.
@@ -426,5 +446,27 @@ mod tests {
         let depths: Vec<f32> = list.commands().iter().map(|c| c.depth()).collect();
         assert!(depths[0] < depths[1]);
         assert!(depths[1] < depths[2]);
+    }
+
+    #[test]
+    fn test_draw_list_clip_rect() {
+        let mut list = DrawList::new();
+        let bounds = Rect::new(10.0, 10.0, 100.0, 100.0);
+
+        list.push_clip_rect(bounds);
+        list.rect(Rect::new(20.0, 20.0, 50.0, 50.0), Color::RED);
+        list.pop_clip_rect();
+
+        assert_eq!(list.len(), 3);
+
+        // First command should be PushClipRect
+        if let DrawCommand::PushClipRect { bounds: clip_bounds } = &list.commands()[0] {
+            assert_eq!(clip_bounds.x, 10.0);
+        } else {
+            panic!("Expected PushClipRect");
+        }
+
+        // Last command should be PopClipRect
+        assert!(matches!(list.commands()[2], DrawCommand::PopClipRect));
     }
 }
