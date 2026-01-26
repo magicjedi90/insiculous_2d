@@ -43,6 +43,7 @@ pub use audio_components::*;
 pub use behavior::*;
 pub use component::*;
 pub use component_registry::{global_registry, ComponentMeta};
+pub use ecs_macros::ComponentMeta as DeriveComponentMeta;
 pub use entity::*;
 pub use generation::*;
 pub use hierarchy::*;
