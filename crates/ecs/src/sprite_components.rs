@@ -192,7 +192,15 @@ impl SpriteAnimation {
     }
 }
 
+impl crate::component_registry::ComponentMeta for SpriteAnimation {
+    fn type_name() -> &'static str {
+        "SpriteAnimation"
+    }
 
+    fn field_names() -> &'static [&'static str] {
+        &["current_frame", "fps", "playing", "loop_animation", "time_accumulator", "frames"]
+    }
+}
 
 /// Sprite renderer system data
 #[derive(Debug, Default)]

@@ -400,3 +400,15 @@ fn test_sprite_render_system_applies_animation_frame() {
     // Should be frame 1's region [0.25, 0.0, 0.25, 0.25], not sprite default [0,0,1,1]
     assert_eq!(rendered_sprite.tex_region, [0.25, 0.0, 0.25, 0.25]);
 }
+
+#[test]
+fn test_sprite_animation_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<SpriteAnimation as ComponentMeta>::type_name(), "SpriteAnimation");
+
+    let fields = <SpriteAnimation as ComponentMeta>::field_names();
+    assert!(fields.contains(&"fps"));
+    assert!(fields.contains(&"frames"));
+    assert!(fields.contains(&"playing"));
+}
