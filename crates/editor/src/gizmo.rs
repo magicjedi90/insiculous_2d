@@ -276,8 +276,8 @@ impl Gizmo {
             interaction.handle = Some(handle);
             interaction.delta = match handle {
                 GizmoHandle::AxisX => Vec2::new(delta.x, 0.0),
-                GizmoHandle::AxisY => Vec2::new(0.0, -delta.y), // Flip Y for world space
-                GizmoHandle::Center => Vec2::new(delta.x, -delta.y),
+                GizmoHandle::AxisY => Vec2::new(0.0, delta.y),
+                GizmoHandle::Center => delta,
                 _ => Vec2::ZERO,
             };
 
