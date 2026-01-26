@@ -5,6 +5,8 @@
 
 use ui::{Color, Rect, TextAlign, UIContext, WidgetId};
 
+use crate::layout::{DEFAULT_PANEL_WIDTH, HEADER_HEIGHT, MIN_PANEL_SIZE, RESIZE_HANDLE_SIZE};
+
 /// Unique identifier for a dock panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PanelId(pub u32);
@@ -75,8 +77,8 @@ impl DockPanel {
             title: title.into(),
             position,
             bounds: Rect::default(),
-            size: 250.0,
-            min_size: 100.0,
+            size: DEFAULT_PANEL_WIDTH,
+            min_size: MIN_PANEL_SIZE,
             visible: true,
             resizable: true,
         }
@@ -102,7 +104,6 @@ impl DockPanel {
 
     /// Get the content bounds (excluding header).
     pub fn content_bounds(&self) -> Rect {
-        const HEADER_HEIGHT: f32 = 24.0;
         Rect::new(
             self.bounds.x,
             self.bounds.y + HEADER_HEIGHT,
@@ -137,8 +138,8 @@ impl DockArea {
         Self {
             panels: Vec::new(),
             bounds: Rect::default(),
-            header_height: 24.0,
-            resize_handle_size: 4.0,
+            header_height: HEADER_HEIGHT,
+            resize_handle_size: RESIZE_HANDLE_SIZE,
         }
     }
 
