@@ -231,8 +231,9 @@ impl DockArea {
 
     /// Render all panels.
     ///
-    /// Returns the content bounds for each visible panel so callers can
-    /// render their content inside.
+    /// Returns the content bounds for each visible panel. The caller should:
+    /// 1. Render content within each bounds
+    /// 2. Call `end_panel_content(ui)` after rendering each panel's content
     pub fn render(&mut self, ui: &mut UIContext) -> Vec<(PanelId, Rect)> {
         let mut content_areas = Vec::new();
 
@@ -256,11 +257,22 @@ impl DockArea {
             // Draw panel title - properly centered
             ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
 
-            // Track content area
-            content_areas.push((panel.id, panel.content_bounds()));
+            // Get content bounds and push clip rect
+            let content = panel.content_bounds();
+            ui.push_clip_rect(content);
+
+            // Track content area (caller will render content, then pop clip)
+            content_areas.push((panel.id, content));
         }
 
         content_areas
+    }
+
+    /// Call after rendering content for each panel to pop the clip rect.
+    pub fn end_panel_content(&self, ui: &mut UIContext, panel_count: usize) {
+        for _ in 0..panel_count {
+            ui.pop_clip_rect();
+        }
     }
 
     /// Handle resize dragging for panels.
