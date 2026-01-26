@@ -3,8 +3,7 @@
 //! Provides a flexible layout system with dockable panels that can be
 //! positioned at different edges of the window or floated.
 
-use glam::Vec2;
-use ui::{Color, Rect, UIContext, WidgetId};
+use ui::{Color, Rect, TextAlign, UIContext, WidgetId};
 
 /// Unique identifier for a dock panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -253,12 +252,8 @@ impl DockArea {
             );
             ui.rect_rounded(header_bounds, Color::new(0.15, 0.15, 0.15, 1.0), 0.0);
 
-            // Draw panel title
-            let title_pos = Vec2::new(
-                header_bounds.x + 8.0,
-                header_bounds.center().y,
-            );
-            ui.label(&panel.title, title_pos);
+            // Draw panel title - properly centered
+            ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
 
             // Track content area
             content_areas.push((panel.id, panel.content_bounds()));

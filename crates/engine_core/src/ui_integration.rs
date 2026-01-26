@@ -176,6 +176,14 @@ pub fn render_ui_commands(
 
                 sprites.add_sprite(&sprite);
             }
+            DrawCommand::PushClipRect { bounds } => {
+                // Clip rect commands are handled at a higher level
+                // Log for debugging during development
+                log::trace!("PushClipRect: {:?}", bounds);
+            }
+            DrawCommand::PopClipRect => {
+                log::trace!("PopClipRect");
+            }
         }
     }
 }
