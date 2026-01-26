@@ -316,7 +316,7 @@ impl Game for HelloWorld {
             ctx.ui.label("Volume:", Vec2::new(20.0, 55.0));
             let slider_rect = UIRect::new(20.0, 70.0, 190.0, 20.0);
             let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
-            if (new_volume - self.volume).abs() > 0.01 {
+            if new_volume != self.volume {
                 self.volume = new_volume;
                 ctx.audio.set_master_volume(self.volume);
             }
