@@ -387,15 +387,25 @@ drop(texture); // Now fully cleaned up
 Unified component definition with metadata for scene serialization and editor inspection:
 
 ```rust
-// Define components with automatic derives and defaults
+// Option 1: Derive macro (preferred for new components)
+use ecs::DeriveComponentMeta;
+use ecs::component_registry::ComponentMeta;
+
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
+pub struct Health {
+    pub value: f32,
+    pub max: f32,
+}
+
+// Option 2: define_component! macro (includes Default impl)
 define_component! {
-    pub struct Health {
+    pub struct Stamina {
         pub value: f32 = 100.0,
         pub max: f32 = 100.0,
     }
 }
 
-// ComponentMeta trait auto-implemented - provides runtime type info
+// ComponentMeta trait provides runtime type info
 assert_eq!(Health::type_name(), "Health");
 assert_eq!(Health::field_names(), &["value", "max"]);
 
@@ -403,6 +413,10 @@ assert_eq!(Health::field_names(), &["value", "max"]);
 let registry = global_registry();
 assert!(registry.is_registered("Transform2D"));
 assert!(registry.is_registered("Sprite"));
+
+// Create components dynamically from JSON
+let json = serde_json::json!({"value": 50.0, "max": 100.0});
+let component = registry.create_component("Health", json)?;
 ```
 
 **Built-in Components with ComponentMeta:**
@@ -411,7 +425,7 @@ assert!(registry.is_registered("Sprite"));
 - `Camera` - position, rotation, zoom, viewport_size, is_main_camera, near, far
 - `SpriteAnimation` - fps, frames, playing, loop_animation, current_frame, time_accumulator
 
-**Files:** `ecs/src/component_registry.rs`, `ecs/src/sprite_components.rs`
+**Files:** `ecs/src/component_registry.rs`, `ecs/src/sprite_components.rs`, `ecs_macros/src/lib.rs`
 
 ## Current Known Limitations (Updated January 2026)
 
@@ -421,7 +435,7 @@ assert!(registry.is_registered("Sprite"));
 - Glyph texture cache includes color in key (memory waste)
 - ~~First-frame UI placeholder flicker~~ ✅ FIXED: Font rendering bug fixed
 - ~~40+ allocations per frame in behavior system~~ ✅ FIXED: Behaviors accessed by reference
-- Component registration still requires separate ComponentMeta impl (macro only handles struct definition)
+- ~~Component registration still requires separate ComponentMeta impl~~ ✅ FIXED: #[derive(ComponentMeta)] macro added
 
 **All tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
 
