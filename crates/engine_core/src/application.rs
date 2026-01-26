@@ -1,7 +1,23 @@
-//! Engine application handler using winit.
+//! **DEPRECATED** - Use the Game API instead (see `game.rs`)
 //!
-//! This module provides the `EngineApplication` struct which implements
-//! the winit `ApplicationHandler` trait for running games.
+//! This module provides the lower-level `EngineApplication` struct which
+//! implements the winit `ApplicationHandler` trait. While still functional
+//! for backward compatibility, new code should use the `Game` trait instead.
+//!
+//! # Migration Guide
+//!
+//! Instead of:
+//! ```ignore
+//! let mut app = EngineApplication::with_scene(scene);
+//! // Manual event loop handling
+//! ```
+//!
+//! Use the simpler Game API:
+//! ```ignore
+//! struct MyGame;
+//! impl Game for MyGame { /* ... */ }
+//! run_game(MyGame, GameConfig::default())?;
+//! ```
 
 use std::sync::Arc;
 
