@@ -351,6 +351,36 @@ drop(texture); // Now fully cleaned up
 
 **Files:** `renderer/renderer.rs`, `renderer/texture.rs`
 
+### Component Registry Pattern
+Unified component definition with metadata for scene serialization and editor inspection:
+
+```rust
+// Define components with automatic derives and defaults
+define_component! {
+    pub struct Health {
+        pub value: f32 = 100.0,
+        pub max: f32 = 100.0,
+    }
+}
+
+// ComponentMeta trait auto-implemented - provides runtime type info
+assert_eq!(Health::type_name(), "Health");
+assert_eq!(Health::field_names(), &["value", "max"]);
+
+// Global registry for type lookup by name (built-ins registered at startup)
+let registry = global_registry();
+assert!(registry.is_registered("Transform2D"));
+assert!(registry.is_registered("Sprite"));
+```
+
+**Built-in Components with ComponentMeta:**
+- `Transform2D` - position, rotation, scale
+- `Sprite` - texture_handle, offset, rotation, scale, color, depth, tex_region
+- `Camera` - position, rotation, zoom, viewport_size, is_main_camera, near, far
+- `SpriteAnimation` - fps, frames, playing, loop_animation, current_frame, time_accumulator
+
+**Files:** `ecs/src/component_registry.rs`, `ecs/src/sprite_components.rs`
+
 ## Current Known Limitations (Updated January 2026)
 
 **Technical Debt Tracking:**
