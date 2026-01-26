@@ -3,6 +3,10 @@
 //! This module provides macros and traits for defining components that work
 //! seamlessly with the ECS, scene serialization, and editor inspection.
 
+use std::any::TypeId;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 /// Metadata about a component type for editor inspection and serialization
 pub trait ComponentMeta: Send + Sync + 'static {
     /// The component's display name (e.g., "Transform2D")
@@ -14,6 +18,59 @@ pub trait ComponentMeta: Send + Sync + 'static {
     fn field_names() -> &'static [&'static str]
     where
         Self: Sized;
+}
+
+/// Global registry of component types
+static COMPONENT_REGISTRY: OnceLock<ComponentRegistry> = OnceLock::new();
+
+/// Runtime registry for component type lookup by name
+pub struct ComponentRegistry {
+    types: HashMap<&'static str, TypeId>,
+}
+
+impl ComponentRegistry {
+    /// Create a new empty registry
+    pub fn new() -> Self {
+        Self {
+            types: HashMap::new(),
+        }
+    }
+
+    /// Register a component type
+    pub fn register<T: ComponentMeta + 'static>(&mut self) {
+        self.types.insert(T::type_name(), TypeId::of::<T>());
+    }
+
+    /// Check if a component type is registered
+    pub fn is_registered(&self, name: &str) -> bool {
+        self.types.contains_key(name)
+    }
+
+    /// Get TypeId for a component name
+    pub fn get_type_id(&self, name: &str) -> Option<TypeId> {
+        self.types.get(name).copied()
+    }
+
+    /// Get all registered type names
+    pub fn type_names(&self) -> impl Iterator<Item = &&'static str> {
+        self.types.keys()
+    }
+}
+
+impl Default for ComponentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Get or initialize the global component registry
+pub fn global_registry() -> &'static ComponentRegistry {
+    COMPONENT_REGISTRY.get_or_init(|| {
+        #[allow(unused_mut)]
+        let mut registry = ComponentRegistry::new();
+        // Register built-in components (to be added in next task)
+        registry
+    })
 }
 
 /// Simple macro for defining components with standard derives
@@ -109,5 +166,23 @@ mod tests {
 
         assert_eq!(parsed.value, 3.14);
         assert_eq!(parsed.name, "serialized");
+    }
+
+    #[test]
+    fn test_registry_register_and_lookup() {
+        let mut registry = ComponentRegistry::new();
+        registry.register::<TestComponent>();
+
+        assert!(registry.is_registered("TestComponent"));
+        assert!(!registry.is_registered("NonExistent"));
+    }
+
+    #[test]
+    fn test_registry_type_names() {
+        let mut registry = ComponentRegistry::new();
+        registry.register::<TestComponent>();
+
+        let names: Vec<_> = registry.type_names().collect();
+        assert!(names.contains(&&"TestComponent"));
     }
 }
