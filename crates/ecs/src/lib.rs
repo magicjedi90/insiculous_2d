@@ -42,7 +42,7 @@ pub use archetype::*;
 pub use audio_components::*;
 pub use behavior::*;
 pub use component::*;
-pub use component_registry::ComponentMeta;
+pub use component_registry::{global_registry, ComponentMeta};
 pub use entity::*;
 pub use generation::*;
 pub use hierarchy::*;

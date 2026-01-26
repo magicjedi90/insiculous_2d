@@ -66,9 +66,15 @@ impl Default for ComponentRegistry {
 /// Get or initialize the global component registry
 pub fn global_registry() -> &'static ComponentRegistry {
     COMPONENT_REGISTRY.get_or_init(|| {
-        #[allow(unused_mut)]
         let mut registry = ComponentRegistry::new();
-        // Register built-in components (to be added in next task)
+
+        // Register built-in ECS components
+        use crate::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+        registry.register::<Transform2D>();
+        registry.register::<Sprite>();
+        registry.register::<SpriteAnimation>();
+        registry.register::<Camera>();
+
         registry
     })
 }
@@ -184,5 +190,15 @@ mod tests {
 
         let names: Vec<_> = registry.type_names().collect();
         assert!(names.contains(&&"TestComponent"));
+    }
+
+    #[test]
+    fn test_global_registry_has_builtin_components() {
+        let registry = global_registry();
+
+        assert!(registry.is_registered("Transform2D"));
+        assert!(registry.is_registered("Sprite"));
+        assert!(registry.is_registered("SpriteAnimation"));
+        assert!(registry.is_registered("Camera"));
     }
 }
