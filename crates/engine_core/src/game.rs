@@ -498,6 +498,10 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                 // Notify game
                 self.game.on_resize(size.width, size.height);
             }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.window_manager.set_scale_factor(scale_factor);
+                log::info!("Scale factor changed to: {}", scale_factor);
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
                     // Handle escape to exit early (before we need managers)
