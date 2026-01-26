@@ -23,6 +23,7 @@ impl Default for EditorDemo {
 impl Game for EditorDemo {
     fn init(&mut self, ctx: &mut GameContext) {
         // Try to load a font for text rendering
+        // Note: BellamysMapbats and BlackSamsGold are decorative/symbol fonts
         let font_paths = [
             "examples/assets/fonts/font.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",

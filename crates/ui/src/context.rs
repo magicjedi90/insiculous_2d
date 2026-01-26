@@ -225,10 +225,27 @@ impl UIContext {
                 .rect_border_rounded(bounds, style.border, style.border_width, style.corner_radius);
         }
 
-        // Draw label (centered)
+        // Draw label (centered) - use actual font if available
+        let font_size = self.theme.text.font_size;
+        if let Some(font_handle) = self.font_manager.default_font() {
+            // Measure text to center it properly
+            if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
+                let text_pos = Vec2::new(
+                    bounds.x + (bounds.width - text_size.x) / 2.0,
+                    bounds.y + (bounds.height - text_size.y) / 2.0 + text_size.y * 0.8,
+                );
+                if let Ok(layout) = self.font_manager.layout_text(font_handle, label, font_size) {
+                    let text_data = Self::layout_to_draw_data(&layout, label, text_pos, text_color, font_size);
+                    self.draw_list.text(text_data);
+                    return result.clicked;
+                }
+            }
+        }
+
+        // Fallback to placeholder if no font
         let text_pos = bounds.center();
         self.draw_list
-            .text_placeholder(label, text_pos, text_color, self.theme.text.font_size);
+            .text_placeholder(label, text_pos, text_color, font_size);
 
         result.clicked
     }
