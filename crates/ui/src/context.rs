@@ -6,6 +6,18 @@
 use glam::Vec2;
 use input::InputHandler;
 
+/// Text alignment within a bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlign {
+    /// Align text to the left edge
+    #[default]
+    Left,
+    /// Center text horizontally
+    Center,
+    /// Align text to the right edge
+    Right,
+}
+
 use crate::{
     Color, DrawList, FontError, FontHandle, FontManager, GlyphDrawData, InteractionManager,
     InteractionResult, Rect, TextDrawData, TextLayout, Theme, WidgetId, WidgetState,
@@ -648,5 +660,11 @@ mod tests {
         // but the important fix is that it *retries* the font check every frame
         // instead of being blocked by the static PRINTED flag
         assert!(matches!(&ui.draw_list().commands()[0], DrawCommand::TextPlaceholder { .. }));
+    }
+
+    #[test]
+    fn test_text_align_default() {
+        let align = TextAlign::default();
+        assert_eq!(align, TextAlign::Left);
     }
 }
