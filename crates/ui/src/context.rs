@@ -541,6 +541,21 @@ impl UIContext {
         self.draw_list.line(start, end, color, width);
     }
 
+    /// Begin clipping all subsequent draws to the given bounds.
+    ///
+    /// Use this to prevent content from rendering outside panel boundaries.
+    /// Must be paired with `pop_clip_rect()`. Clip regions can be nested.
+    pub fn push_clip_rect(&mut self, bounds: Rect) {
+        self.draw_list.push_clip_rect(bounds);
+    }
+
+    /// End the current clip region, restoring the previous clip state.
+    ///
+    /// If no clip region is active, this resets to the full viewport.
+    pub fn pop_clip_rect(&mut self) {
+        self.draw_list.pop_clip_rect();
+    }
+
     /// Check if a point is inside a rectangle (for custom hit testing).
     pub fn hit_test(&self, point: Vec2, bounds: Rect) -> bool {
         bounds.contains(point)
@@ -737,5 +752,17 @@ mod tests {
 
         // Should generate a draw command (placeholder without font)
         assert_eq!(ui.draw_list().len(), 1);
+    }
+
+    #[test]
+    fn test_ui_context_clip_rect() {
+        let mut ui = UIContext::new();
+        let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+
+        ui.push_clip_rect(bounds);
+        ui.rect(Rect::new(10.0, 10.0, 50.0, 50.0), Color::RED);
+        ui.pop_clip_rect();
+
+        assert_eq!(ui.draw_list().len(), 3);
     }
 }
