@@ -190,6 +190,20 @@ impl FontManager {
         self.fonts.get(&handle.id)
     }
 
+    /// Get font metrics for layout calculations.
+    ///
+    /// Returns None if the font handle is invalid or metrics unavailable.
+    pub fn metrics(&self, handle: FontHandle, font_size: f32) -> Option<FontMetrics> {
+        let font = self.fonts.get(&handle.id)?;
+        let line_metrics = font.horizontal_line_metrics(font_size)?;
+
+        Some(FontMetrics {
+            ascent: line_metrics.ascent,
+            descent: line_metrics.descent,
+            line_height: line_metrics.ascent - line_metrics.descent + line_metrics.line_gap,
+        })
+    }
+
     /// Rasterize a single glyph at a specific size.
     pub fn rasterize_glyph(
         &mut self,
@@ -392,5 +406,12 @@ mod tests {
         assert_eq!(metrics.ascent, 14.0);
         assert_eq!(metrics.descent, -4.0);
         assert_eq!(metrics.line_height, 20.0);
+    }
+
+    #[test]
+    fn test_font_manager_metrics_no_font() {
+        let manager = FontManager::new();
+        let handle = FontHandle { id: 999 };
+        assert!(manager.metrics(handle, 16.0).is_none());
     }
 }
