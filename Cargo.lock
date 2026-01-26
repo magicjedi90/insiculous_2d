@@ -782,6 +782,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "criterion",
+ "ecs_macros",
  "glam",
  "log",
  "pollster",
@@ -790,6 +791,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "ecs_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -849,6 +859,7 @@ dependencies = [
  "renderer",
  "ron",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
  "toml",
  "ui",
