@@ -239,6 +239,38 @@ world.add_component(&entity, Sprite::new(texture.id)).ok();
 
 **Files:** `assets.rs`, `texture.rs`
 
+### Generic Component Inspector Pattern
+Display any Serialize component without hardcoding field display logic:
+
+```rust
+use editor::inspector::{inspect_component, InspectorStyle};
+
+// Works with any component that implements Serialize
+let style = InspectorStyle::default();
+
+// Display component fields automatically
+if let Some(transform) = world.get::<Transform2D>(entity) {
+    y = inspect_component(ui, "Transform2D", transform, x, y, &style);
+}
+if let Some(sprite) = world.get::<Sprite>(entity) {
+    y = inspect_component(ui, "Sprite", sprite, x, y, &style);
+}
+
+// Inspector automatically:
+// - Extracts fields via JSON serialization (serde)
+// - Handles nested objects (Vec2, Vec3, Vec4)
+// - Displays arrays with count and inline formatting
+// - Formats floats with 2 decimal precision
+// - Recursively renders complex types with indentation
+```
+
+**Benefits:**
+- Single implementation handles all component types
+- New components automatically work in inspector
+- No per-component display code needed
+
+**Files:** `editor/src/inspector.rs`
+
 ### Scene Serialization Pattern
 Load entire game levels from RON files:
 
