@@ -253,7 +253,7 @@ impl UIContext {
             if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
                 let text_pos = Vec2::new(
                     bounds.x + (bounds.width - text_size.x) / 2.0,
-                    bounds.y + (bounds.height - text_size.y) / 2.0 + text_size.y * 0.8,
+                    bounds.y + (bounds.height - text_size.y) / 2.0,
                 );
                 if let Ok(layout) = self.font_manager.layout_text(font_handle, label, font_size) {
                     let text_data = Self::layout_to_draw_data(&layout, label, text_pos, text_color, font_size);
@@ -323,16 +323,19 @@ impl UIContext {
         let font_size = self.theme.text.font_size;
         let padding = 8.0; // Standard padding
 
+        // Get text dimensions if font is available
+        let text_size = if let Some(font_handle) = self.font_manager.default_font() {
+            self.font_manager.measure_text(font_handle, text, font_size).ok()
+        } else {
+            None
+        };
+
         // Calculate X position based on alignment
-        let x = if let Some(font_handle) = self.font_manager.default_font() {
-            if let Ok(text_size) = self.font_manager.measure_text(font_handle, text, font_size) {
-                match align {
-                    TextAlign::Left => bounds.x + padding,
-                    TextAlign::Center => bounds.x + (bounds.width - text_size.x) / 2.0,
-                    TextAlign::Right => bounds.x + bounds.width - text_size.x - padding,
-                }
-            } else {
-                bounds.x + padding
+        let x = if let Some(size) = text_size {
+            match align {
+                TextAlign::Left => bounds.x + padding,
+                TextAlign::Center => bounds.x + (bounds.width - size.x) / 2.0,
+                TextAlign::Right => bounds.x + bounds.width - size.x - padding,
             }
         } else {
             // Fallback: estimate text width
@@ -344,17 +347,11 @@ impl UIContext {
             }
         };
 
-        // Calculate Y position (baseline) for vertical centering
-        let baseline_y = if let Some(metrics) = self.font_metrics(font_size) {
-            // Proper centering: baseline positioned so text is visually centered
-            // ascent is positive (above baseline), descent is negative (below baseline)
-            bounds.y + (bounds.height + metrics.ascent + metrics.descent) / 2.0
-        } else {
-            // Fallback: approximate center (treats position as top-left)
-            bounds.y + bounds.height / 2.0 + font_size * 0.35
-        };
+        // Calculate Y position (top-left) for vertical centering
+        let text_height = text_size.map(|s| s.y).unwrap_or(font_size);
+        let y = bounds.y + (bounds.height - text_height) / 2.0;
 
-        self.label(text, Vec2::new(x, baseline_y));
+        self.label(text, Vec2::new(x, y));
     }
 
     /// Create a panel (container background).
