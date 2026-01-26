@@ -65,11 +65,16 @@ impl SpriteRenderSystem {
         &self,
         entity_transform: &Transform2D,
         sprite: &Sprite,
-        _animation: Option<&SpriteAnimation>,
+        animation: Option<&SpriteAnimation>,
     ) -> RendererSprite {
         let world_position = entity_transform.position + entity_transform.transform_point(sprite.offset);
         let world_rotation = entity_transform.rotation + sprite.rotation;
         let world_scale = entity_transform.scale * sprite.scale;
+
+        // Use animation frame's tex_region if animation exists, otherwise use sprite's tex_region
+        let tex_region = animation
+            .map(|anim| anim.current_frame_region())
+            .unwrap_or(sprite.tex_region);
 
         // Create renderer sprite using builder pattern
         RendererSprite::new(renderer::TextureHandle { id: sprite.texture_handle })
@@ -78,6 +83,7 @@ impl SpriteRenderSystem {
             .with_scale(world_scale * 80.0) // Default size
             .with_color(sprite.color)
             .with_depth(sprite.depth)
+            .with_tex_region(tex_region[0], tex_region[1], tex_region[2], tex_region[3])
     }
 }
 

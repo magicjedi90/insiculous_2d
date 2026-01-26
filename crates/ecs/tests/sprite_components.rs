@@ -365,3 +365,38 @@ fn test_component_trait() {
     assert_component(&camera);
     assert_component(&animation);
 }
+
+#[test]
+fn test_sprite_render_system_applies_animation_frame() {
+    use ecs::{World, System};
+    use ecs::sprite_system::SpriteRenderSystem;
+
+    let mut world = World::new();
+    let entity = world.create_entity();
+
+    // Create sprite with default tex_region [0,0,1,1]
+    world.add_component(&entity, Sprite::new(1)).ok();
+    world.add_component(&entity, Transform2D::new(Vec2::ZERO)).ok();
+
+    // Create animation with specific frame regions
+    let frames = vec![
+        [0.0, 0.0, 0.25, 0.25],  // Frame 0: top-left quarter
+        [0.25, 0.0, 0.25, 0.25], // Frame 1: next quarter
+    ];
+    let mut animation = SpriteAnimation::new(10.0, frames);
+    animation.update(0.15); // Advance to frame 1
+    assert_eq!(animation.current_frame, 1);
+    world.add_component(&entity, animation).ok();
+
+    // Run sprite render system
+    let mut render_system = SpriteRenderSystem::new();
+    render_system.update(&mut world, 0.016);
+
+    // The rendered sprite should use animation frame 1's tex_region
+    let render_data = render_system.render_data();
+    assert_eq!(render_data.sprite_count(), 1);
+
+    let rendered_sprite = &render_data.sprites[0];
+    // Should be frame 1's region [0.25, 0.0, 0.25, 0.25], not sprite default [0,0,1,1]
+    assert_eq!(rendered_sprite.tex_region, [0.25, 0.0, 0.25, 0.25]);
+}
