@@ -10,6 +10,7 @@ ecs_macros = { path = "../ecs_macros" }
 log = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 glam = { workspace = true }
 renderer = { path = "../renderer" }
 
@@ -17,7 +18,6 @@ renderer = { path = "../renderer" }
 pollster = { workspace = true }
 criterion = "0.5"
 ron = { workspace = true }
-serde_json = { workspace = true }
 
 [[bench]]
 name = "ecs_benchmark"

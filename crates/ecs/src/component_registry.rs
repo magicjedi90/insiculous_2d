@@ -3,9 +3,12 @@
 //! This module provides macros and traits for defining components that work
 //! seamlessly with the ECS, scene serialization, and editor inspection.
 
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::OnceLock;
+
+/// Factory function type for creating components from JSON
+pub type ComponentFactoryFn = fn(serde_json::Value) -> Result<Box<dyn Any + Send + Sync>, String>;
 
 /// Metadata about a component type for editor inspection and serialization
 pub trait ComponentMeta: Send + Sync + 'static {
@@ -26,6 +29,7 @@ static COMPONENT_REGISTRY: OnceLock<ComponentRegistry> = OnceLock::new();
 /// Runtime registry for component type lookup by name
 pub struct ComponentRegistry {
     types: HashMap<&'static str, TypeId>,
+    factories: HashMap<&'static str, ComponentFactoryFn>,
 }
 
 impl ComponentRegistry {
@@ -33,12 +37,21 @@ impl ComponentRegistry {
     pub fn new() -> Self {
         Self {
             types: HashMap::new(),
+            factories: HashMap::new(),
         }
     }
 
-    /// Register a component type
-    pub fn register<T: ComponentMeta + 'static>(&mut self) {
-        self.types.insert(T::type_name(), TypeId::of::<T>());
+    /// Register a component type with its factory
+    pub fn register<T: ComponentMeta + for<'de> serde::Deserialize<'de> + Send + Sync + 'static>(
+        &mut self,
+    ) {
+        let name = T::type_name();
+        self.types.insert(name, TypeId::of::<T>());
+        self.factories.insert(name, |json| {
+            serde_json::from_value::<T>(json)
+                .map(|c| Box::new(c) as Box<dyn Any + Send + Sync>)
+                .map_err(|e| e.to_string())
+        });
     }
 
     /// Check if a component type is registered
@@ -54,6 +67,18 @@ impl ComponentRegistry {
     /// Get all registered type names
     pub fn type_names(&self) -> impl Iterator<Item = &&'static str> {
         self.types.keys()
+    }
+
+    /// Create a component by name from JSON
+    pub fn create_component(
+        &self,
+        name: &str,
+        json: serde_json::Value,
+    ) -> Result<Box<dyn Any + Send + Sync>, String> {
+        self.factories
+            .get(name)
+            .ok_or_else(|| format!("Unknown component type: {}", name))
+            .and_then(|factory| factory(json))
     }
 }
 
@@ -190,6 +215,37 @@ mod tests {
 
         let names: Vec<_> = registry.type_names().collect();
         assert!(names.contains(&&"TestComponent"));
+    }
+
+    #[test]
+    fn test_component_factory_creates_from_json() {
+        use serde_json::json;
+
+        let mut registry = ComponentRegistry::new();
+        registry.register::<TestComponent>();
+
+        let json = json!({
+            "value": 42.0,
+            "name": "factory_test"
+        });
+
+        let result = registry.create_component("TestComponent", json);
+        assert!(result.is_ok());
+
+        let component = result.unwrap();
+        let test_component = component.downcast_ref::<TestComponent>();
+        assert!(test_component.is_some());
+        assert_eq!(test_component.unwrap().value, 42.0);
+        assert_eq!(test_component.unwrap().name, "factory_test");
+    }
+
+    #[test]
+    fn test_component_factory_unknown_type() {
+        let registry = ComponentRegistry::new();
+
+        let result = registry.create_component("NonExistent", serde_json::json!({}));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown component type"));
     }
 
     #[test]
