@@ -189,6 +189,21 @@ pub enum ComponentData {
     },
     /// Behavior component - defines how an entity responds to input/events
     Behavior(BehaviorData),
+    /// Dynamic component loaded via component registry
+    ///
+    /// This variant allows loading components by type name without hardcoded
+    /// handling. The component must be registered in the global ComponentRegistry.
+    ///
+    /// Note: Full support requires type-erased component storage in World.
+    /// Currently logs a warning when encountered.
+    Dynamic {
+        /// Component type name (must match registry)
+        #[serde(rename = "type")]
+        component_type: String,
+        /// Component data as JSON
+        #[serde(flatten)]
+        data: serde_json::Value,
+    },
 }
 
 /// Behavior data for serialization
@@ -401,6 +416,9 @@ pub enum SceneLoadError {
 
     #[error("Failed to load texture: {0}")]
     TextureLoadError(String),
+
+    #[error("Component error: {0}")]
+    ComponentError(String),
 }
 
 #[cfg(test)]
