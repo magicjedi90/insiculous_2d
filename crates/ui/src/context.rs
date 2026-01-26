@@ -111,6 +111,15 @@ impl UIContext {
         &mut self.font_manager
     }
 
+    /// Get font metrics for the default font at the given size.
+    ///
+    /// Returns None if no font is loaded or metrics are unavailable.
+    /// Use this for calculating text positions with baseline alignment.
+    pub fn font_metrics(&self, font_size: f32) -> Option<crate::font::FontMetrics> {
+        let font = self.font_manager.default_font()?;
+        self.font_manager.metrics(font, font_size)
+    }
+
     /// Begin a new frame. Call this at the start of each frame.
     pub fn begin_frame(&mut self, input: &InputHandler, window_size: Vec2) {
         self.interaction.begin_frame(input);
@@ -666,5 +675,12 @@ mod tests {
     fn test_text_align_default() {
         let align = TextAlign::default();
         assert_eq!(align, TextAlign::Left);
+    }
+
+    #[test]
+    fn test_ui_context_font_metrics_none_without_font() {
+        let ui = UIContext::new();
+        // No font loaded, should return None
+        assert!(ui.font_metrics(16.0).is_none());
     }
 }
