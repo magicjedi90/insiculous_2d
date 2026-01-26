@@ -189,7 +189,7 @@ pub fn render_ui_commands(
 }
 
 /// Helper to render a single UI rect as a sprite.
-/// 
+///
 /// Converts UI rectangle bounds to sprite position and scale, handling the
 /// coordinate transformation from UI coordinates (top-left origin) to renderer
 /// coordinates (center origin).
@@ -205,4 +205,36 @@ fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &Rect, color: &UIColor, d
         .with_depth(depth);
 
     sprites.add_sprite(&sprite);
+}
+
+/// Convert logical rect to physical pixels for scissor rect.
+///
+/// Used for DPI-aware scissor clipping. Takes a logical UI rect and scale factor,
+/// returns physical pixel coordinates (x, y, width, height) suitable for wgpu scissor rect.
+#[allow(dead_code)]
+pub fn logical_to_physical_rect(rect: &Rect, scale_factor: f64) -> (u32, u32, u32, u32) {
+    (
+        (rect.x as f64 * scale_factor) as u32,
+        (rect.y as f64 * scale_factor) as u32,
+        (rect.width as f64 * scale_factor).max(1.0) as u32,
+        (rect.height as f64 * scale_factor).max(1.0) as u32,
+    )
+}
+
+/// Intersect two rects, returning the overlapping region.
+///
+/// Used for nested clip rects - the effective clip is the intersection of all active clips.
+#[allow(dead_code)]
+pub fn intersect_rects(a: &Rect, b: &Rect) -> Rect {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    let right = (a.x + a.width).min(b.x + b.width);
+    let bottom = (a.y + a.height).min(b.y + b.height);
+
+    Rect::new(
+        x,
+        y,
+        (right - x).max(0.0),
+        (bottom - y).max(0.0),
+    )
 }
