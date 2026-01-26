@@ -306,6 +306,9 @@ impl<G: Game> GameRunner<G> {
             return;
         }
 
+        // Process queued input events FIRST so UI sees fresh mouse/keyboard state
+        self.input.process_queued_events();
+
         // Update all subsystems
         self.update_audio();
         self.update_ui_begin(window_size);
@@ -361,12 +364,8 @@ impl<G: Game> GameRunner<G> {
         self.initialized = true;
     }
 
-    /// Update game logic and process input events
+    /// Update game logic
     fn update_game_logic(&mut self, delta_time: f32, window_size: Vec2) {
-        // Process queued input events before game logic runs
-        // This ensures keyboard/mouse state reflects this frame's events
-        self.input.process_queued_events();
-
         // Update game logic
         let asset_manager = self.asset_manager.as_mut().unwrap();
         let audio_manager = self.audio_manager.as_mut();
