@@ -190,7 +190,7 @@ This design aligns with established game programming patterns:
 - [ ] Adding a new component requires changes to only 1 file (partial - ComponentMeta impl still needed)
 - [x] Editor displays any registered component without code changes (serde-based inspector)
 - [ ] Scene files load components via registry lookup (not yet implemented)
-- [ ] Animation system renders frames correctly (not verified)
+- [x] Animation system renders frames correctly (fixed in commit 7c98289, test added)
 - [x] UI widgets in hello_world.rs work as expected (button text fixed)
 - [x] Gizmo moves entities correctly (coordinate fix applied)
 
