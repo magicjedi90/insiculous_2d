@@ -44,9 +44,9 @@ mod interaction;
 mod style;
 
 // Re-export main types
-pub use context::UIContext;
+pub use context::{TextAlign, UIContext};
 pub use draw::{DrawCommand, DrawList, TextDrawData, GlyphDrawData};
-pub use font::{FontError, FontHandle, FontManager, GlyphInfo, LayoutGlyph, RasterizedGlyph, TextLayout};
+pub use font::{FontError, FontHandle, FontManager, FontMetrics, GlyphInfo, LayoutGlyph, RasterizedGlyph, TextLayout};
 pub use interaction::{
     InputState, InteractionManager, InteractionResult, WidgetId, WidgetPersistentState, WidgetState,
 };

@@ -25,6 +25,22 @@ pub struct FontHandle {
     pub id: u32,
 }
 
+/// Font measurement information for layout calculations.
+///
+/// These metrics are essential for proper text positioning:
+/// - `ascent`: Use to know how much space text needs above the baseline
+/// - `descent`: Use to know how much space text needs below the baseline
+/// - `line_height`: Use for spacing between lines of text
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FontMetrics {
+    /// Distance from baseline to top of tallest glyph (positive value)
+    pub ascent: f32,
+    /// Distance from baseline to bottom of descenders (negative value)
+    pub descent: f32,
+    /// Recommended distance between baselines for line spacing
+    pub line_height: f32,
+}
+
 
 /// Rasterized glyph data ready for rendering.
 #[derive(Debug, Clone)]
@@ -172,6 +188,20 @@ impl FontManager {
     /// Get a font by handle.
     pub fn get_font(&self, handle: FontHandle) -> Option<&Font> {
         self.fonts.get(&handle.id)
+    }
+
+    /// Get font metrics for layout calculations.
+    ///
+    /// Returns None if the font handle is invalid or metrics unavailable.
+    pub fn metrics(&self, handle: FontHandle, font_size: f32) -> Option<FontMetrics> {
+        let font = self.fonts.get(&handle.id)?;
+        let line_metrics = font.horizontal_line_metrics(font_size)?;
+
+        Some(FontMetrics {
+            ascent: line_metrics.ascent,
+            descent: line_metrics.descent,
+            line_height: line_metrics.ascent - line_metrics.descent + line_metrics.line_gap,
+        })
     }
 
     /// Rasterize a single glyph at a specific size.
@@ -364,5 +394,24 @@ mod tests {
         };
         assert_eq!(layout.width, 100.0);
         assert_eq!(layout.height, 16.0);
+    }
+
+    #[test]
+    fn test_font_metrics_struct() {
+        let metrics = FontMetrics {
+            ascent: 14.0,
+            descent: -4.0,
+            line_height: 20.0,
+        };
+        assert_eq!(metrics.ascent, 14.0);
+        assert_eq!(metrics.descent, -4.0);
+        assert_eq!(metrics.line_height, 20.0);
+    }
+
+    #[test]
+    fn test_font_manager_metrics_no_font() {
+        let manager = FontManager::new();
+        let handle = FontHandle { id: 999 };
+        assert!(manager.metrics(handle, 16.0).is_none());
     }
 }

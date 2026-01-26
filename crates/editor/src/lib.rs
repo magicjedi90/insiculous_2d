@@ -34,6 +34,7 @@ mod selection;
 mod toolbar;
 mod viewport;
 mod viewport_input;
+pub mod layout;
 
 // Re-export main types
 pub use context::EditorContext;

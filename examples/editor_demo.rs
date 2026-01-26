@@ -88,6 +88,9 @@ impl Game for EditorDemo {
             self.render_panel_content(ctx, panel_id, bounds);
         }
 
+        // Pop all clip rects (one per panel rendered)
+        self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
+
         // Handle gizmo interaction for selected entity
         if let Some(entity_id) = self.editor.selection.primary() {
             if let Some(scene_bounds) = content_areas.iter()
@@ -207,9 +210,6 @@ impl EditorDemo {
         match panel_id {
             PanelId::SCENE_VIEW => {
                 // Scene view - show grid info
-                ctx.ui.label("Scene View", Vec2::new(content_x, y));
-                y += line_height;
-
                 if self.editor.is_grid_visible() {
                     ctx.ui.label(
                         &format!("Grid: {}px", self.editor.grid_size()),
@@ -236,9 +236,6 @@ impl EditorDemo {
                 // Gizmo is rendered in main update() method for proper transform handling
             }
             PanelId::HIERARCHY => {
-                ctx.ui.label("Hierarchy", Vec2::new(content_x, y));
-                y += line_height * 1.5;
-
                 // List entities
                 for (i, entity_id) in ctx.world.entities().into_iter().enumerate() {
                     let is_selected = self.editor.selection.contains(entity_id);
@@ -274,9 +271,6 @@ impl EditorDemo {
                 }
             }
             PanelId::INSPECTOR => {
-                ctx.ui.label("Inspector", Vec2::new(content_x, y));
-                y += line_height * 1.5;
-
                 if let Some(entity_id) = self.editor.selection.primary() {
                     ctx.ui.label(
                         &format!("Entity: {}", entity_id.value()),
@@ -315,8 +309,6 @@ impl EditorDemo {
                 }
             }
             PanelId::ASSET_BROWSER => {
-                ctx.ui.label("Assets", Vec2::new(content_x, y));
-                y += line_height * 1.5;
                 ctx.ui.label("(Asset browser not yet implemented)", Vec2::new(content_x, y));
             }
             _ => {

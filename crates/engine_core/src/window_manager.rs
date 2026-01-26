@@ -64,12 +64,15 @@ impl WindowConfig {
 /// This struct encapsulates all window-related responsibilities:
 /// - Window creation
 /// - Window size tracking
+/// - DPI scale factor tracking
 /// - Window access
 pub struct WindowManager {
     /// The window instance
     window: Option<Arc<Window>>,
     /// Current window configuration
     config: WindowConfig,
+    /// DPI scale factor (1.0 = standard, 2.0 = HiDPI/Retina)
+    scale_factor: f64,
 }
 
 impl Default for WindowManager {
@@ -84,6 +87,7 @@ impl WindowManager {
         Self {
             window: None,
             config,
+            scale_factor: 1.0,
         }
     }
 
@@ -107,8 +111,9 @@ impl WindowManager {
         match event_loop.create_window(window_attributes) {
             Ok(window) => {
                 let window = Arc::new(window);
+                self.scale_factor = window.scale_factor();
                 self.window = Some(window.clone());
-                log::info!("Window created: {}", self.config.title);
+                log::info!("Window created: {} (scale: {})", self.config.title, self.scale_factor);
                 Ok(window)
             }
             Err(e) => {
@@ -144,6 +149,29 @@ impl WindowManager {
     /// Get the current window size.
     pub fn size(&self) -> (u32, u32) {
         (self.config.width, self.config.height)
+    }
+
+    /// Get the current DPI scale factor.
+    pub fn scale_factor(&self) -> f64 {
+        self.scale_factor
+    }
+
+    /// Update the scale factor (call on ScaleFactorChanged event).
+    pub fn set_scale_factor(&mut self, scale: f64) {
+        self.scale_factor = scale;
+    }
+
+    /// Get logical size (for UI layout).
+    pub fn logical_size(&self) -> (f32, f32) {
+        (self.config.width as f32, self.config.height as f32)
+    }
+
+    /// Get physical size (for wgpu surface).
+    pub fn physical_size(&self) -> (u32, u32) {
+        (
+            (self.config.width as f64 * self.scale_factor) as u32,
+            (self.config.height as f64 * self.scale_factor) as u32,
+        )
     }
 
     /// Get the current window width.
@@ -236,5 +264,26 @@ mod tests {
         let config = WindowConfig::new("My Awesome Game");
         let manager = WindowManager::new(config);
         assert_eq!(manager.title(), "My Awesome Game");
+    }
+
+    #[test]
+    fn test_window_manager_scale_factor() {
+        let config = WindowConfig::default();
+        let mut manager = WindowManager::new(config);
+
+        assert_eq!(manager.scale_factor(), 1.0);
+
+        manager.set_scale_factor(2.0);
+        assert_eq!(manager.scale_factor(), 2.0);
+    }
+
+    #[test]
+    fn test_window_manager_logical_physical_size() {
+        let config = WindowConfig::new("Test").with_size(800, 600);
+        let mut manager = WindowManager::new(config);
+        manager.set_scale_factor(2.0);
+
+        assert_eq!(manager.logical_size(), (800.0, 600.0));
+        assert_eq!(manager.physical_size(), (1600, 1200));
     }
 }

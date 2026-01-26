@@ -6,6 +6,18 @@
 use glam::Vec2;
 use input::InputHandler;
 
+/// Text alignment within a bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlign {
+    /// Align text to the left edge
+    #[default]
+    Left,
+    /// Center text horizontally
+    Center,
+    /// Align text to the right edge
+    Right,
+}
+
 use crate::{
     Color, DrawList, FontError, FontHandle, FontManager, GlyphDrawData, InteractionManager,
     InteractionResult, Rect, TextDrawData, TextLayout, Theme, WidgetId, WidgetState,
@@ -97,6 +109,15 @@ impl UIContext {
     /// Get the font manager mutably.
     pub fn font_manager_mut(&mut self) -> &mut FontManager {
         &mut self.font_manager
+    }
+
+    /// Get font metrics for the default font at the given size.
+    ///
+    /// Returns None if no font is loaded or metrics are unavailable.
+    /// Use this for calculating text positions with baseline alignment.
+    pub fn font_metrics(&self, font_size: f32) -> Option<crate::font::FontMetrics> {
+        let font = self.font_manager.default_font()?;
+        self.font_manager.metrics(font, font_size)
     }
 
     /// Begin a new frame. Call this at the start of each frame.
@@ -232,7 +253,7 @@ impl UIContext {
             if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
                 let text_pos = Vec2::new(
                     bounds.x + (bounds.width - text_size.x) / 2.0,
-                    bounds.y + (bounds.height - text_size.y) / 2.0 + text_size.y * 0.8,
+                    bounds.y + (bounds.height - text_size.y) / 2.0,
                 );
                 if let Ok(layout) = self.font_manager.layout_text(font_handle, label, font_size) {
                     let text_data = Self::layout_to_draw_data(&layout, label, text_pos, text_color, font_size);
@@ -291,6 +312,46 @@ impl UIContext {
         } else {
             self.draw_list.text_placeholder(text, position, color, font_size);
         }
+    }
+
+    /// Draw a label centered within bounds.
+    ///
+    /// This method handles vertical centering automatically using font metrics
+    /// when available, falling back to approximate centering otherwise.
+    /// Use this for text in buttons, headers, and other bounded containers.
+    pub fn label_in_bounds(&mut self, text: &str, bounds: Rect, align: TextAlign) {
+        let font_size = self.theme.text.font_size;
+        let padding = 8.0; // Standard padding
+
+        // Get text dimensions if font is available
+        let text_size = if let Some(font_handle) = self.font_manager.default_font() {
+            self.font_manager.measure_text(font_handle, text, font_size).ok()
+        } else {
+            None
+        };
+
+        // Calculate X position based on alignment
+        let x = if let Some(size) = text_size {
+            match align {
+                TextAlign::Left => bounds.x + padding,
+                TextAlign::Center => bounds.x + (bounds.width - size.x) / 2.0,
+                TextAlign::Right => bounds.x + bounds.width - size.x - padding,
+            }
+        } else {
+            // Fallback: estimate text width
+            let estimated_width = text.len() as f32 * font_size * 0.6;
+            match align {
+                TextAlign::Left => bounds.x + padding,
+                TextAlign::Center => bounds.x + (bounds.width - estimated_width) / 2.0,
+                TextAlign::Right => bounds.x + bounds.width - estimated_width - padding,
+            }
+        };
+
+        // Calculate Y position (top-left) for vertical centering
+        let text_height = text_size.map(|s| s.y).unwrap_or(font_size);
+        let y = bounds.y + (bounds.height - text_height) / 2.0;
+
+        self.label(text, Vec2::new(x, y));
     }
 
     /// Create a panel (container background).
@@ -477,6 +538,21 @@ impl UIContext {
         self.draw_list.line(start, end, color, width);
     }
 
+    /// Begin clipping all subsequent draws to the given bounds.
+    ///
+    /// Use this to prevent content from rendering outside panel boundaries.
+    /// Must be paired with `pop_clip_rect()`. Clip regions can be nested.
+    pub fn push_clip_rect(&mut self, bounds: Rect) {
+        self.draw_list.push_clip_rect(bounds);
+    }
+
+    /// End the current clip region, restoring the previous clip state.
+    ///
+    /// If no clip region is active, this resets to the full viewport.
+    pub fn pop_clip_rect(&mut self) {
+        self.draw_list.pop_clip_rect();
+    }
+
     /// Check if a point is inside a rectangle (for custom hit testing).
     pub fn hit_test(&self, point: Vec2, bounds: Rect) -> bool {
         bounds.contains(point)
@@ -648,5 +724,42 @@ mod tests {
         // but the important fix is that it *retries* the font check every frame
         // instead of being blocked by the static PRINTED flag
         assert!(matches!(&ui.draw_list().commands()[0], DrawCommand::TextPlaceholder { .. }));
+    }
+
+    #[test]
+    fn test_text_align_default() {
+        let align = TextAlign::default();
+        assert_eq!(align, TextAlign::Left);
+    }
+
+    #[test]
+    fn test_ui_context_font_metrics_none_without_font() {
+        let ui = UIContext::new();
+        // No font loaded, should return None
+        assert!(ui.font_metrics(16.0).is_none());
+    }
+
+    #[test]
+    fn test_ui_context_label_in_bounds() {
+        let mut ui = UIContext::new();
+        let bounds = Rect::new(10.0, 10.0, 200.0, 30.0);
+
+        // Should not panic even without font
+        ui.label_in_bounds("Test", bounds, TextAlign::Center);
+
+        // Should generate a draw command (placeholder without font)
+        assert_eq!(ui.draw_list().len(), 1);
+    }
+
+    #[test]
+    fn test_ui_context_clip_rect() {
+        let mut ui = UIContext::new();
+        let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+
+        ui.push_clip_rect(bounds);
+        ui.rect(Rect::new(10.0, 10.0, 50.0, 50.0), Color::RED);
+        ui.pop_clip_rect();
+
+        assert_eq!(ui.draw_list().len(), 3);
     }
 }

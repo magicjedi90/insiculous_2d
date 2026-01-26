@@ -3,8 +3,9 @@
 //! Provides a flexible layout system with dockable panels that can be
 //! positioned at different edges of the window or floated.
 
-use glam::Vec2;
-use ui::{Color, Rect, UIContext, WidgetId};
+use ui::{Color, Rect, TextAlign, UIContext, WidgetId};
+
+use crate::layout::{DEFAULT_PANEL_WIDTH, HEADER_HEIGHT, MIN_PANEL_SIZE, RESIZE_HANDLE_SIZE};
 
 /// Unique identifier for a dock panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -76,8 +77,8 @@ impl DockPanel {
             title: title.into(),
             position,
             bounds: Rect::default(),
-            size: 250.0,
-            min_size: 100.0,
+            size: DEFAULT_PANEL_WIDTH,
+            min_size: MIN_PANEL_SIZE,
             visible: true,
             resizable: true,
         }
@@ -103,7 +104,6 @@ impl DockPanel {
 
     /// Get the content bounds (excluding header).
     pub fn content_bounds(&self) -> Rect {
-        const HEADER_HEIGHT: f32 = 24.0;
         Rect::new(
             self.bounds.x,
             self.bounds.y + HEADER_HEIGHT,
@@ -138,8 +138,8 @@ impl DockArea {
         Self {
             panels: Vec::new(),
             bounds: Rect::default(),
-            header_height: 24.0,
-            resize_handle_size: 4.0,
+            header_height: HEADER_HEIGHT,
+            resize_handle_size: RESIZE_HANDLE_SIZE,
         }
     }
 
@@ -231,8 +231,9 @@ impl DockArea {
 
     /// Render all panels.
     ///
-    /// Returns the content bounds for each visible panel so callers can
-    /// render their content inside.
+    /// Returns the content bounds for each visible panel. The caller should:
+    /// 1. Render content within each bounds
+    /// 2. Call `end_panel_content(ui)` after rendering each panel's content
     pub fn render(&mut self, ui: &mut UIContext) -> Vec<(PanelId, Rect)> {
         let mut content_areas = Vec::new();
 
@@ -253,18 +254,25 @@ impl DockArea {
             );
             ui.rect_rounded(header_bounds, Color::new(0.15, 0.15, 0.15, 1.0), 0.0);
 
-            // Draw panel title
-            let title_pos = Vec2::new(
-                header_bounds.x + 8.0,
-                header_bounds.center().y,
-            );
-            ui.label(&panel.title, title_pos);
+            // Draw panel title - properly centered
+            ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
 
-            // Track content area
-            content_areas.push((panel.id, panel.content_bounds()));
+            // Get content bounds and push clip rect
+            let content = panel.content_bounds();
+            ui.push_clip_rect(content);
+
+            // Track content area (caller will render content, then pop clip)
+            content_areas.push((panel.id, content));
         }
 
         content_areas
+    }
+
+    /// Call after rendering content for each panel to pop the clip rect.
+    pub fn end_panel_content(&self, ui: &mut UIContext, panel_count: usize) {
+        for _ in 0..panel_count {
+            ui.pop_clip_rect();
+        }
     }
 
     /// Handle resize dragging for panels.
