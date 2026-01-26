@@ -1,7 +1,23 @@
-//! Engine application handler using winit.
+//! **DEPRECATED** - Use the Game API instead (see `game.rs`)
 //!
-//! This module provides the `EngineApplication` struct which implements
-//! the winit `ApplicationHandler` trait for running games.
+//! This module provides the lower-level `EngineApplication` struct which
+//! implements the winit `ApplicationHandler` trait. While still functional
+//! for backward compatibility, new code should use the `Game` trait instead.
+//!
+//! # Migration Guide
+//!
+//! Instead of:
+//! ```ignore
+//! let mut app = EngineApplication::with_scene(scene);
+//! // Manual event loop handling
+//! ```
+//!
+//! Use the simpler Game API:
+//! ```ignore
+//! struct MyGame;
+//! impl Game for MyGame { /* ... */ }
+//! run_game(MyGame, GameConfig::default())?;
+//! ```
 
 use std::sync::Arc;
 
@@ -14,6 +30,7 @@ use winit::{
 use renderer::WindowConfig;
 
 use crate::render_manager::RenderManager;
+use crate::scene_manager::SceneManager;
 use crate::{GameLoop, Scene};
 use ecs::SystemRegistry;
 
@@ -22,7 +39,7 @@ use ecs::SystemRegistry;
 /// This struct orchestrates the game loop, delegating specific responsibilities
 /// to focused managers:
 /// - `RenderManager`: Renderer lifecycle and sprite rendering
-/// - Scene stack: Multiple game scenes with lifecycle management
+/// - `SceneManager`: Scene stack management and lifecycle
 /// - Input handling: Keyboard, mouse, and gamepad events
 pub struct EngineApplication {
     /// Window reference for event handling
@@ -31,8 +48,8 @@ pub struct EngineApplication {
     window_config: WindowConfig,
     /// Render management (renderer, sprite pipeline, camera)
     render_manager: RenderManager,
-    /// Stack of scenes (0+ scenes)
-    pub scenes: Vec<Scene>,
+    /// Scene management (scene stack and lifecycle)
+    scene_manager: SceneManager,
     /// Schedule for systems
     pub schedule: SystemRegistry,
     /// Game loop
@@ -50,7 +67,7 @@ impl EngineApplication {
             window: None,
             window_config: WindowConfig::default(),
             render_manager: RenderManager::new(),
-            scenes: vec![scene],
+            scene_manager: SceneManager::with_scene(scene),
             schedule: SystemRegistry::new(),
             game_loop,
             needs_renderer_init: false,
@@ -64,7 +81,7 @@ impl EngineApplication {
             window: None,
             window_config: WindowConfig::default(),
             render_manager: RenderManager::new(),
-            scenes: vec![scene],
+            scene_manager: SceneManager::with_scene(scene),
             schedule: SystemRegistry::new(),
             game_loop: GameLoop::new(crate::GameLoopConfig::default()),
             needs_renderer_init: false,
@@ -74,12 +91,12 @@ impl EngineApplication {
 
     /// Push a scene onto the stack.
     pub fn push_scene(&mut self, scene: Scene) {
-        self.scenes.push(scene);
+        self.scene_manager.push(scene);
     }
 
     /// Pop a scene from the stack.
     pub fn pop_scene(&mut self) -> Option<Scene> {
-        self.scenes.pop()
+        self.scene_manager.pop()
     }
 
     /// Create a new engine application with a custom window configuration.
@@ -115,7 +132,7 @@ impl EngineApplication {
         // Update input state for this frame
         self.input_handler.update();
 
-        if let Some(active) = self.scenes.last_mut() {
+        if let Some(active) = self.scene_manager.active_mut() {
             // Only update if the scene is operational
             if active.is_operational() {
                 active.update_with_schedule(&mut self.schedule, dt)?;
@@ -162,12 +179,12 @@ impl EngineApplication {
 
     /// Get a reference to the active scene (last scene in the stack).
     pub fn active_scene(&self) -> Option<&Scene> {
-        self.scenes.last()
+        self.scene_manager.active()
     }
 
     /// Get a mutable reference to the active scene (last scene in the stack).
     pub fn active_scene_mut(&mut self) -> Option<&mut Scene> {
-        self.scenes.last_mut()
+        self.scene_manager.active_mut()
     }
 
     /// Get a reference to the input handler.
@@ -191,12 +208,12 @@ impl EngineApplication {
     }
 
     /// Get a reference to the 2D camera.
-    pub fn camera_2d(&self) -> &renderer::Camera2D {
+    pub fn camera_2d(&self) -> &renderer::Camera {
         self.render_manager.camera()
     }
 
     /// Get a mutable reference to the 2D camera.
-    pub fn camera_2d_mut(&mut self) -> &mut renderer::Camera2D {
+    pub fn camera_2d_mut(&mut self) -> &mut renderer::Camera {
         self.render_manager.camera_mut()
     }
 

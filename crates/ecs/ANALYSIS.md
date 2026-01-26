@@ -1,9 +1,26 @@
 # ECS (Entity Component System) Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- Archetype-based ECS with scene graph support, lifecycle-aware systems, and sprite-focused components.
+- Public API combines core ECS types with renderer-facing sprite components.
+- Extensive test coverage and documentation already exists.
+
+### Strengths
+- Strong entity generation tracking and hierarchy utilities for gameplay scenes.
+- Re-exported sprite/transform components make engine integration ergonomic.
+- Comprehensive test suite provides confidence in core operations.
+
+### Risks & Follow-ups
+- `renderer` is a direct dependency; consider feature-gating or isolating render-specific components.
+- `world.rs` remains large; continued modularization would improve maintainability.
+- Module visibility in `lib.rs` is mixed; document which modules are intentionally public/private.
+
 ## Current State (Updated: January 2026)
 The ECS crate provides a robust Entity Component System with archetype-based storage for the Insiculous 2D game engine. It includes entity management, component storage, system execution, and advanced features like entity generation tracking, lifecycle management, and scene graph support.
 
-**Test Count: 82 tests** (all passing)
+**Test Count: 84 tests** (all passing)
 
 ---
 
@@ -41,13 +58,9 @@ pub mod hierarchy; // public
 - Hierarchy methods
 - Query methods
 
-#### 4. Some Tests Have Incomplete Assertions
+#### 4. ~~Some Tests Have Incomplete Assertions~~ - FIXED (January 2026)
 **Location**: Various test files
-**Issue**: Some tests use TODO comments instead of actual assertions.
-
-**Example**: Tests that verify creation but not behavior.
-
-**Recommended Fix**: Replace TODO comments with actual assertion logic.
+**Status**: RESOLVED - All TODO comments in test files have been replaced with proper assertions.
 
 ---
 
@@ -141,7 +154,7 @@ transform_system.update(&mut world, delta_time);
 
 ## Test Coverage Analysis
 
-**Total Tests**: 82 (all passing)
+**Total Tests**: 84 (all passing)
 
 ### Test File Breakdown
 ```
@@ -208,25 +221,6 @@ EngineApplication
     ├── Camera Components (Working)
     └── Render Systems (Working)
 ```
-
----
-
-## Recommended Fixes (Priority Order)
-
-### Short-term (Medium Priority)
-1. Remove deprecated `PlayerTag` alias (or document migration path)
-2. Document module visibility rationale in lib.rs
-3. Split World impl blocks by concern for better navigation
-
-### Medium-term
-4. Replace TODO comments in tests with actual assertions
-5. Add edge case tests for component removal
-6. Review and either use or remove dead code
-
-### Long-term
-7. Add system scheduling with dependencies
-8. Add component reflection for runtime introspection
-9. Consider memory pooling for entities/components
 
 ---
 

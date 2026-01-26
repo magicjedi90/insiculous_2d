@@ -20,8 +20,7 @@ struct SoundData {
 /// Active sound playback instance.
 struct ActiveSound {
     sink: Sink,
-    /// Handle for future "stop by handle" functionality.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for future "stop by handle" API
     handle: SoundHandle,
 }
 
@@ -59,7 +58,7 @@ impl AudioManager {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| AudioError::DeviceInitError(e.to_string()))?;
 
-        log::info!("Audio system initialized");
+        log::debug!("Audio system initialized");
 
         Ok(Self {
             _stream: stream,

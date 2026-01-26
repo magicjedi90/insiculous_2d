@@ -22,6 +22,7 @@ Once the feature work is complete:
 ## 5. Update Documentation
 After successful implementation:
 - Update relevant `ANALYSIS.md` files to reflect what was implemented
+- Update relevant `TECH_DEBT.md` files to reflect any fixes or debt
 - Update any affected `README.md` files
 - Mark the task as complete in `PROJECT_ROADMAP.md` and note any follow-up work identified
 

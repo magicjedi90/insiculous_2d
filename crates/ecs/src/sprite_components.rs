@@ -1,16 +1,18 @@
 //! Sprite components for ECS integration
 
+use crate::component_registry::ComponentMeta;
+use ecs_macros::ComponentMeta as DeriveComponentMeta;
 use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 
 // Re-export common types for ECS use
-pub use common::{Transform2D, Camera2D};
+pub use common::{Transform2D, Camera};
 
 // Re-export types from renderer that we need
-use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
+use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
 
 /// Sprite component that defines visual appearance
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct Sprite {
     /// Position offset from entity position
     pub offset: Vec2,
@@ -92,7 +94,7 @@ impl Sprite {
 // This eliminates ~170 lines of duplicated code
 
 /// Sprite animation component
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct SpriteAnimation {
     /// Current frame index
     pub current_frame: usize,
@@ -192,7 +194,28 @@ impl SpriteAnimation {
     }
 }
 
+// Note: Sprite and SpriteAnimation use #[derive(ComponentMeta)]
+// Transform2D and Camera need manual impls since they're from the common crate
 
+impl crate::component_registry::ComponentMeta for Transform2D {
+    fn type_name() -> &'static str {
+        "Transform2D"
+    }
+
+    fn field_names() -> &'static [&'static str] {
+        &["position", "rotation", "scale"]
+    }
+}
+
+impl crate::component_registry::ComponentMeta for Camera {
+    fn type_name() -> &'static str {
+        "Camera"
+    }
+
+    fn field_names() -> &'static [&'static str] {
+        &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]
+    }
+}
 
 /// Sprite renderer system data
 #[derive(Debug, Default)]

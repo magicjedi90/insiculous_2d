@@ -41,7 +41,6 @@ mod context;
 mod draw;
 mod font;
 mod interaction;
-mod rect;
 mod style;
 
 // Re-export main types
@@ -51,7 +50,7 @@ pub use font::{FontError, FontHandle, FontManager, GlyphInfo, LayoutGlyph, Raste
 pub use interaction::{
     InputState, InteractionManager, InteractionResult, WidgetId, WidgetPersistentState, WidgetState,
 };
-pub use rect::Rect;
+pub use common::Rect;
 pub use style::{ButtonStyle, Color, PanelStyle, SliderStyle, TextStyle, Theme};
 
 /// Prelude module for convenient imports.

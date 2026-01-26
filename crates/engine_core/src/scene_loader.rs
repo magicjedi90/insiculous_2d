@@ -8,8 +8,8 @@ use std::path::Path;
 
 use glam::Vec2;
 
-use ecs::sprite_components::{Camera2D, Sprite, SpriteAnimation, Transform2D};
-use ecs::{EntityId, World};
+use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+use ecs::{EntityId, World, WorldHierarchyExt};
 use renderer::TextureHandle;
 
 use crate::assets::AssetManager;
@@ -265,7 +265,7 @@ impl SceneLoader {
     }
 
     /// Get a simple type name for component matching
-    fn component_type_name(component: &ComponentData) -> &'static str {
+    fn component_type_name(component: &ComponentData) -> &str {
         match component {
             ComponentData::Transform2D { .. } => "Transform2D",
             ComponentData::Sprite { .. } => "Sprite",
@@ -274,6 +274,7 @@ impl SceneLoader {
             ComponentData::RigidBody { .. } => "RigidBody",
             ComponentData::Collider { .. } => "Collider",
             ComponentData::Behavior(_) => "Behavior",
+            ComponentData::Dynamic { component_type, .. } => component_type.as_str(),
         }
     }
 
@@ -326,7 +327,7 @@ impl SceneLoader {
                 viewport_size,
                 is_main_camera,
             } => {
-                let camera = Camera2D {
+                let camera = Camera {
                     position: Vec2::new(position.0, position.1),
                     rotation: *rotation,
                     zoom: *zoom,
@@ -454,6 +455,37 @@ impl SceneLoader {
             ComponentData::Behavior(behavior_data) => {
                 let behavior: ecs::behavior::Behavior = behavior_data.into();
                 let _ = world.add_component(&entity_id, behavior);
+            }
+
+            ComponentData::Dynamic { component_type, data } => {
+                // Use the component registry to create the component
+                let registry = ecs::component_registry::global_registry();
+
+                if !registry.is_registered(component_type) {
+                    return Err(SceneLoadError::ComponentError(format!(
+                        "Unknown component type '{}' - not registered in ComponentRegistry",
+                        component_type
+                    )));
+                }
+
+                // Create the component via factory
+                match registry.create_component(component_type, data.clone()) {
+                    Ok(_boxed_component) => {
+                        // TODO: World needs type-erased component addition to fully support this.
+                        // For now, we validate the component can be created but log a warning.
+                        log::warn!(
+                            "Dynamic component '{}' created but World lacks type-erased storage. \
+                             Use explicit ComponentData variants for now.",
+                            component_type
+                        );
+                    }
+                    Err(e) => {
+                        return Err(SceneLoadError::ComponentError(format!(
+                            "Failed to create component '{}': {}",
+                            component_type, e
+                        )));
+                    }
+                }
             }
         }
 

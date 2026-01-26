@@ -189,10 +189,8 @@ impl InteractionManager {
         // Clear hot widget at start of frame (will be set by widgets that are hovered)
         self.hot_widget = None;
 
-        // Handle mouse release - deactivate widget
-        if self.input.mouse_just_released {
-            self.active_widget = None;
-        }
+        // Don't clear active_widget here - let widgets check for clicks first
+        // The active_widget will be cleared in end_frame() after click detection
 
         // Mark all persistent state as not seen
         for state in self.persistent_state.values_mut() {
@@ -202,6 +200,11 @@ impl InteractionManager {
 
     /// End a frame, cleaning up stale state.
     pub fn end_frame(&mut self) {
+        // Clear active widget if mouse was just released (after click detection)
+        if self.input.mouse_just_released {
+            self.active_widget = None;
+        }
+
         // Garbage collect persistent state for widgets not seen this frame
         // Only remove after several frames of not being seen (allows for animation, etc.)
         self.persistent_state.retain(|_, state| state.seen_this_frame);
@@ -286,7 +289,7 @@ impl InteractionManager {
         // Click happens when mouse is released while active AND still over the widget
         let clicked = is_active && self.input.mouse_just_released && mouse_in_bounds;
 
-        let state = if is_active {
+        let state = if is_active && !self.input.mouse_just_released {
             WidgetState::Active
         } else if is_hot {
             WidgetState::Hovered

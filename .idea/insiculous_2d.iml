@@ -21,6 +21,8 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/physics/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/ui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ui/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/editor/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

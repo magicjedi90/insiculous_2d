@@ -3,7 +3,7 @@
 use glam::{Vec2, Vec3, Vec4};
 use ecs::sprite_components::*;
 use ecs::Component;
-use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
+use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
 use renderer::TextureHandle;
 
 #[test]
@@ -99,7 +99,7 @@ fn test_transform2d_inverse_matrix() {
 
 #[test]
 fn test_camera2d_creation() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
         .with_rotation(std::f32::consts::PI)
         .with_zoom(2.0)
         .as_main_camera();
@@ -113,7 +113,7 @@ fn test_camera2d_creation() {
 
 #[test]
 fn test_camera2d_default() {
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     
     assert_eq!(camera.position, Vec2::ZERO);
     assert_eq!(camera.rotation, 0.0);
@@ -124,7 +124,7 @@ fn test_camera2d_default() {
 
 #[test]
 fn test_camera2d_view_matrix() {
-    let camera = Camera2D {
+    let camera = Camera {
         position: Vec2::new(100.0, 200.0),
         rotation: std::f32::consts::FRAC_PI_2, // 90 degrees
         zoom: 2.0,
@@ -147,7 +147,7 @@ fn test_camera2d_view_matrix() {
 
 #[test]
 fn test_camera2d_projection_matrix() {
-    let camera = Camera2D::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
     let proj_matrix = camera.projection_matrix();
     
     // Test that the projection matrix is orthographic
@@ -164,7 +164,7 @@ fn test_camera2d_projection_matrix() {
 
 #[test]
 fn test_camera2d_view_projection_matrix() {
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     let vp_matrix = camera.view_projection_matrix();
     
     // Should be valid matrix
@@ -174,7 +174,7 @@ fn test_camera2d_view_projection_matrix() {
 
 #[test]
 fn test_camera2d_screen_to_world() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
     
     // Test center of screen
     let _screen_center = Vec2::new(400.0, 300.0);
@@ -188,7 +188,7 @@ fn test_camera2d_screen_to_world() {
 
 #[test]
 fn test_camera2d_world_to_screen() {
-    let camera = Camera2D::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
+    let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(800.0, 600.0));
     
     // Test camera position
     // Note: world_to_screen method doesn't exist in ecs::Camera2D, testing matrix instead
@@ -354,7 +354,7 @@ fn test_component_trait() {
     // Test that all sprite components implement the Component trait
     let sprite = Sprite::default();
     let transform = Transform2D::default();
-    let camera = Camera2D::default();
+    let camera = Camera::default();
     let animation = SpriteAnimation::default();
     
     // These should compile if the types implement Component
@@ -364,4 +364,76 @@ fn test_component_trait() {
     assert_component(&transform);
     assert_component(&camera);
     assert_component(&animation);
+}
+
+#[test]
+fn test_sprite_render_system_applies_animation_frame() {
+    use ecs::{World, System};
+    use ecs::sprite_system::SpriteRenderSystem;
+
+    let mut world = World::new();
+    let entity = world.create_entity();
+
+    // Create sprite with default tex_region [0,0,1,1]
+    world.add_component(&entity, Sprite::new(1)).ok();
+    world.add_component(&entity, Transform2D::new(Vec2::ZERO)).ok();
+
+    // Create animation with specific frame regions
+    let frames = vec![
+        [0.0, 0.0, 0.25, 0.25],  // Frame 0: top-left quarter
+        [0.25, 0.0, 0.25, 0.25], // Frame 1: next quarter
+    ];
+    let mut animation = SpriteAnimation::new(10.0, frames);
+    animation.update(0.15); // Advance to frame 1
+    assert_eq!(animation.current_frame, 1);
+    world.add_component(&entity, animation).ok();
+
+    // Run sprite render system
+    let mut render_system = SpriteRenderSystem::new();
+    render_system.update(&mut world, 0.016);
+
+    // The rendered sprite should use animation frame 1's tex_region
+    let render_data = render_system.render_data();
+    assert_eq!(render_data.sprite_count(), 1);
+
+    let rendered_sprite = &render_data.sprites[0];
+    // Should be frame 1's region [0.25, 0.0, 0.25, 0.25], not sprite default [0,0,1,1]
+    assert_eq!(rendered_sprite.tex_region, [0.25, 0.0, 0.25, 0.25]);
+}
+
+#[test]
+fn test_sprite_animation_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<SpriteAnimation as ComponentMeta>::type_name(), "SpriteAnimation");
+
+    let fields = <SpriteAnimation as ComponentMeta>::field_names();
+    assert_eq!(fields, &["current_frame", "fps", "playing", "loop_animation", "time_accumulator", "frames"]);
+}
+
+#[test]
+fn test_sprite_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Sprite as ComponentMeta>::type_name(), "Sprite");
+    let fields = <Sprite as ComponentMeta>::field_names();
+    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "texture_handle"]);
+}
+
+#[test]
+fn test_transform2d_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Transform2D as ComponentMeta>::type_name(), "Transform2D");
+    let fields = <Transform2D as ComponentMeta>::field_names();
+    assert_eq!(fields, &["position", "rotation", "scale"]);
+}
+
+#[test]
+fn test_camera_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Camera as ComponentMeta>::type_name(), "Camera");
+    let fields = <Camera as ComponentMeta>::field_names();
+    assert_eq!(fields, &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]);
 }

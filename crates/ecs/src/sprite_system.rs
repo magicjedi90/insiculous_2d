@@ -1,10 +1,10 @@
 //! Sprite rendering system for ECS integration
 
 use glam::Vec2;
-use renderer::{Sprite as RendererSprite, Camera2D as RendererCamera2D};
+use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
 use crate::{
     World, System, EntityId,
-    sprite_components::{Sprite, Transform2D, Camera2D, SpriteAnimation, SpriteRenderData},
+    sprite_components::{Sprite, Transform2D, Camera, SpriteAnimation, SpriteRenderData},
 };
 
 /// System that updates sprite animations
@@ -51,7 +51,7 @@ impl SpriteRenderSystem {
     /// Find the main camera entity
     fn find_main_camera(&self, world: &World) -> Option<EntityId> {
         for entity_id in world.entities() {
-            if let Some(camera) = world.get::<Camera2D>(entity_id) {
+            if let Some(camera) = world.get::<Camera>(entity_id) {
                 if camera.is_main_camera {
                     return Some(entity_id);
                 }
@@ -65,11 +65,16 @@ impl SpriteRenderSystem {
         &self,
         entity_transform: &Transform2D,
         sprite: &Sprite,
-        _animation: Option<&SpriteAnimation>,
+        animation: Option<&SpriteAnimation>,
     ) -> RendererSprite {
         let world_position = entity_transform.position + entity_transform.transform_point(sprite.offset);
         let world_rotation = entity_transform.rotation + sprite.rotation;
         let world_scale = entity_transform.scale * sprite.scale;
+
+        // Use animation frame's tex_region if animation exists, otherwise use sprite's tex_region
+        let tex_region = animation
+            .map(|anim| anim.current_frame_region())
+            .unwrap_or(sprite.tex_region);
 
         // Create renderer sprite using builder pattern
         RendererSprite::new(renderer::TextureHandle { id: sprite.texture_handle })
@@ -78,6 +83,7 @@ impl SpriteRenderSystem {
             .with_scale(world_scale * 80.0) // Default size
             .with_color(sprite.color)
             .with_depth(sprite.depth)
+            .with_tex_region(tex_region[0], tex_region[1], tex_region[2], tex_region[3])
     }
 }
 
@@ -94,7 +100,7 @@ impl System for SpriteRenderSystem {
 
         // Find main camera
         if let Some(camera_entity) = self.find_main_camera(world) {
-            if let Some(camera) = world.get::<Camera2D>(camera_entity) {
+            if let Some(camera) = world.get::<Camera>(camera_entity) {
                 let renderer_camera = RendererCamera2D {
                     position: camera.position,
                     rotation: camera.rotation,
@@ -180,7 +186,7 @@ pub mod sprite_utils {
     ) -> EntityId {
         let entity = world.create_entity();
 
-        let mut camera = Camera2D::new(position, viewport_size);
+        let mut camera = Camera::new(position, viewport_size);
         if is_main {
             camera.is_main_camera = true;
         }
@@ -205,7 +211,7 @@ pub mod sprite_utils {
     pub fn get_camera_entities(world: &World) -> Vec<EntityId> {
         world.entities()
             .into_iter()
-            .filter(|entity_id| world.get::<Camera2D>(*entity_id).is_some())
+            .filter(|entity_id| world.get::<Camera>(*entity_id).is_some())
             .collect()
     }
 }

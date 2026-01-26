@@ -23,6 +23,7 @@
 
 use engine_core::prelude::*;
 use ecs::hierarchy_system::TransformHierarchySystem;
+use ecs::WorldHierarchyExt;
 use std::path::Path;
 
 /// Our game state - simplified with BehaviorRunner handling player movement
@@ -34,7 +35,7 @@ struct HelloWorld {
     scene_instance: Option<SceneInstance>,
     /// Transform hierarchy system for parent-child relationships
     transform_hierarchy: TransformHierarchySystem,
-    /// Jump sound effect handle (if loaded)
+    /// The jump sound effect handle (if loaded)
     jump_sound: Option<SoundHandle>,
     /// Whether music is currently playing
     music_playing: bool,
@@ -62,7 +63,7 @@ impl HelloWorld {
     }
 
     fn reset_player(&mut self, ctx: &mut GameContext) {
-        // Get player entity from scene instance
+        // Get player entity from a scene instance
         let player = self.scene_instance.as_ref()
             .and_then(|scene| scene.get_entity("player"));
 
@@ -85,7 +86,7 @@ impl HelloWorld {
 }
 
 impl Game for HelloWorld {
-    /// Called once at startup - load scene from file
+    /// Called once at startup - loads a scene from a .scene.ron file
     fn init(&mut self, ctx: &mut GameContext) {
         // Set asset base path to examples directory
         ctx.assets.set_base_path("examples");
@@ -97,10 +98,10 @@ impl Game for HelloWorld {
             Ok(instance) => {
                 println!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
 
-                // Set named entities on behavior runner (for FollowEntity and other reference-based behaviors)
+                // Set named entities on the behavior runner (for FollowEntity and other reference-based behaviors)
                 self.behaviors.set_named_entities(instance.named_entities.clone());
 
-                // Create physics system from scene settings
+                // Create a physics system from scene settings
                 let physics_config = if let Some(settings) = &instance.physics {
                     PhysicsConfig::new(Vec2::new(settings.gravity.0, settings.gravity.1))
                         .with_scale(settings.pixels_per_meter)
@@ -115,7 +116,7 @@ impl Game for HelloWorld {
                 println!("Failed to load scene: {}", e);
                 println!("Creating entities programmatically as fallback...");
 
-                // Fallback: create entities manually with Behavior component
+                // Fallback: create entities manually with a Behavior component
                 use ecs::behavior::Behavior;
                 let player = ctx.world.create_entity();
                 ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
@@ -315,7 +316,7 @@ impl Game for HelloWorld {
             ctx.ui.label("Volume:", Vec2::new(20.0, 55.0));
             let slider_rect = UIRect::new(20.0, 70.0, 190.0, 20.0);
             let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
-            if (new_volume - self.volume).abs() > 0.01 {
+            if new_volume != self.volume {
                 self.volume = new_volume;
                 ctx.audio.set_master_volume(self.volume);
             }

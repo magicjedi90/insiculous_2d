@@ -12,7 +12,6 @@ fn test_component_trait() {
     // Create an instance of the component
     let component = TestComponent { value: 42 };
 
-    // TODO: Assert that the component's type_name is correct
     assert_eq!(
         component.type_name(),
         std::any::type_name::<TestComponent>()
@@ -40,13 +39,11 @@ fn test_component_in_world() {
     // Check if the entity has the component
     let has_component = world.has_component::<TestComponent>(&entity_id).unwrap();
 
-    // TODO: Assert that the entity has the component
     assert!(has_component);
 
     // Get the component (this is a bit tricky since we need to downcast)
     let _component = world.get_component::<TestComponent>(&entity_id).unwrap();
 
-    // TODO: Assert that the component has the expected value
     // Note: We can't directly access the value since we get a &dyn Component
     // In a real test, we would need to implement methods on TestComponent to access its value
 }
@@ -90,7 +87,6 @@ fn test_multiple_components() {
         .has_component::<VelocityComponent>(&entity_id)
         .unwrap();
 
-    // TODO: Assert that the entity has both components
     assert!(has_position);
     assert!(has_velocity);
 }

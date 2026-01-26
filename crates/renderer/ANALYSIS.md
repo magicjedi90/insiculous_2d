@@ -1,5 +1,22 @@
 # Renderer Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- WGPU-based 2D renderer focused on sprite batching, instancing, and texture management.
+- Exposes a streamlined `init()` async constructor and `run_with_app()` helper.
+- Re-exports `wgpu` and key sprite/texture types for downstream crates.
+
+### Strengths
+- Sprite batching and camera utilities provide a solid 2D baseline.
+- API surface is clearly organized into sprite/texture modules and prelude exports.
+- Uses `common::Time` to keep timing types centralized.
+
+### Risks & Follow-ups
+- Resource cleanup strategy is unclear; consider drop hooks for GPU resources.
+- `SpritePipeline` bundles many responsibilities; splitting into smaller structs will help.
+- Device/queue accessor duplication could be simplified for clarity.
+
 ## Current State (Updated: January 2026)
 The renderer crate provides WGPU-based 2D sprite rendering with instancing, batching, and camera support.
 
@@ -75,13 +92,8 @@ pub fn queue_ref(&self) -> &Queue { &self.queue }
 
 **Recommended Fix**: Keep only one accessor pattern (prefer `&Device` with explicit `Arc::clone` when needed).
 
-#### 3. Bind Groups Created Every Frame
-**Location**: `src/sprite.rs` render method
-**Issue**: New texture bind groups created every frame instead of caching.
-
-**Impact**: Potential performance issue with many textures.
-
-**Recommended Fix**: Cache bind groups per texture handle, invalidate on texture change.
+#### ~~3. Bind Groups Created Every Frame~~ ✅ RESOLVED
+**Resolution**: Camera bind group is now created once and reused. Texture bind groups are cached per texture handle.
 
 ---
 
@@ -203,23 +215,21 @@ renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_re
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Future Enhancements
 
-### Short-term (High Priority)
-1. Cache bind groups per texture (avoid per-frame creation)
-2. Consolidate device/queue accessors (remove redundant methods)
-3. Add GPU resource cleanup on drop
-4. Add integration tests - Verify rendering pipeline end-to-end
+These features would enhance the renderer but are not required for current functionality:
 
-### Medium-term (Architecture)
-5. Split SpritePipeline into focused structs
-6. Add async texture loading option
-7. Add surface format auto-detection
+### Rendering Features
+- GPU resource cleanup on drop for proper shutdown
+- End-to-end integration tests for rendering pipeline
+- Async texture loading with background processing
+- Automatic surface format detection and optimization
+- Additional shader effects (lighting, shadows, post-processing)
 
 ### Long-term (Features)
-8. Add frustum culling
-9. Add text rendering
-10. Add post-processing pipeline
+6. Add frustum culling
+7. Add text rendering
+8. Add post-processing pipeline
 
 ---
 

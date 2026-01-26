@@ -5,9 +5,20 @@ fn test_input_handler_creation() {
     // Test creating a new input handler
     let _input_handler = InputHandler::new();
 
-    // TODO: Assert that the input handler is properly initialized
+    // Assert that the input handler is properly initialized
     // Since the input handler just contains default-initialized states,
-    // there's not much to assert here directly.
+    // we can verify it was created successfully by checking its components
+    let input_handler = InputHandler::new();
+    
+    // Verify keyboard starts with no keys pressed
+    assert!(!input_handler.keyboard().is_key_pressed(KeyCode::KeyA));
+    
+    // Verify mouse starts at origin
+    assert_eq!(input_handler.mouse().position().x, 0.0);
+    assert_eq!(input_handler.mouse().position().y, 0.0);
+    
+    // Verify no gamepads are connected initially
+    assert!(input_handler.gamepads().get_gamepad(0).is_none());
 }
 
 #[test]
@@ -18,8 +29,11 @@ fn test_keyboard_access() {
     // Get immutable reference to keyboard state
     let _keyboard = input_handler.keyboard();
 
-    // TODO: Assert that we can access keyboard state
-    // We can't directly test much here since the keyboard starts with no keys pressed
+    // Assert that we can access keyboard state
+    // We can verify the keyboard state is accessible and starts with no keys pressed
+    let keyboard = input_handler.keyboard();
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyA));
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA));
 
     // Get mutable reference to keyboard state
     let keyboard_mut = input_handler.keyboard_mut();
@@ -27,7 +41,7 @@ fn test_keyboard_access() {
     // Simulate a key press
     keyboard_mut.handle_key_press(KeyCode::KeyA);
 
-    // TODO: Assert that the key press was registered
+    // Assert that the key press was registered
     assert!(keyboard_mut.is_key_pressed(KeyCode::KeyA));
     assert!(keyboard_mut.is_key_just_pressed(KeyCode::KeyA));
 }
@@ -40,10 +54,12 @@ fn test_mouse_access() {
     // Get immutable reference to mouse state
     let mouse = input_handler.mouse();
 
-    // TODO: Assert that we can access mouse state
+    // Assert that we can access mouse state
     // Initial position should be (0, 0)
     assert_eq!(mouse.position().x, 0.0);
     assert_eq!(mouse.position().y, 0.0);
+    assert_eq!(mouse.wheel_delta(), 0.0);
+    assert!(!mouse.is_button_pressed(MouseButton::Left));
 
     // Get mutable reference to mouse state
     let mouse_mut = input_handler.mouse_mut();
@@ -51,9 +67,11 @@ fn test_mouse_access() {
     // Update mouse position
     mouse_mut.update_position(10.0, 20.0);
 
-    // TODO: Assert that the position was updated
+    // Assert that the position was updated
     assert_eq!(mouse_mut.position().x, 10.0);
     assert_eq!(mouse_mut.position().y, 20.0);
+    assert_eq!(mouse_mut.previous_position().x, 0.0);
+    assert_eq!(mouse_mut.previous_position().y, 0.0);
 }
 
 #[test]
@@ -64,8 +82,10 @@ fn test_gamepad_access() {
     // Get immutable reference to gamepad manager
     let _gamepads = input_handler.gamepads();
 
-    // TODO: Assert that we can access gamepad manager
+    // Assert that we can access gamepad manager
     // Initially there should be no gamepads
+    assert!(input_handler.gamepads().get_gamepad(0).is_none());
+    assert!(input_handler.gamepads().get_gamepad(1).is_none());
 
     // Get mutable reference to gamepad manager
     let gamepads_mut = input_handler.gamepads_mut();
@@ -73,8 +93,13 @@ fn test_gamepad_access() {
     // Register a gamepad
     gamepads_mut.register_gamepad(0);
 
-    // TODO: Assert that the gamepad was registered
+    // Assert that the gamepad was registered
     assert!(gamepads_mut.get_gamepad(0).is_some());
+    
+    // Verify the gamepad has default state
+    let gamepad = gamepads_mut.get_gamepad(0).unwrap();
+    assert!(!gamepad.is_button_pressed(GamepadButton::A));
+    assert_eq!(gamepad.axis_value(GamepadAxis::LeftStickX), 0.0);
 }
 
 #[test]
@@ -97,11 +122,15 @@ fn test_input_handler_update() {
     // Update the input handler
     input_handler.update();
 
-    // TODO: Assert that the "just pressed" states were cleared
+    // Assert that the "just pressed" states were cleared
     assert!(!input_handler.keyboard().is_key_just_pressed(KeyCode::KeyA));
     assert!(!input_handler
         .mouse()
         .is_button_just_pressed(MouseButton::Left));
+    
+    // Also verify that the regular pressed states are maintained
+    assert!(input_handler.keyboard().is_key_pressed(KeyCode::KeyA));
+    assert!(input_handler.mouse().is_button_pressed(MouseButton::Left));
 
     // But the keys should still be considered pressed
     assert!(input_handler.keyboard().is_key_pressed(KeyCode::KeyA));

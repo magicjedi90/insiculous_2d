@@ -6,8 +6,8 @@ use std::sync::Arc;
 use wgpu::{Device, Queue, RenderPipeline, PipelineLayout, BindGroupLayout, Buffer, Sampler, TextureView, CommandEncoder};
 use wgpu::util::DeviceExt;
 
-use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera2D, CameraUniform, TextureResource, DynamicBuffer};
-use crate::texture::TextureHandle;
+use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera, CameraUniform, TextureResource, DynamicBuffer};
+use crate::texture::{TextureHandle, SamplerConfig};
 
 /// A single sprite to be rendered
 #[derive(Debug, Clone)]
@@ -161,7 +161,7 @@ impl SpriteBatch {
 /// Sprite batcher for efficient rendering
 pub struct SpriteBatcher {
     batches: HashMap<TextureHandle, SpriteBatch>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for future batch splitting optimization
     max_sprites_per_batch: usize,
 }
 
@@ -225,12 +225,11 @@ impl SpriteBatcher {
 pub struct SpritePipeline {
     /// The render pipeline
     pipeline: RenderPipeline,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Keep for potential pipeline recreation
     /// The pipeline layout
     layout: PipelineLayout,
     /// Vertex buffer for quad geometry
     vertex_buffer: Buffer,
-    #[allow(dead_code)]
     /// Instance buffer for sprite data
     instance_buffer: DynamicBuffer<SpriteInstance>,
     /// Index buffer for quad geometry
@@ -241,7 +240,11 @@ pub struct SpritePipeline {
     texture_bind_group_layout: BindGroupLayout,
     /// Camera bind group layout
     camera_bind_group_layout: BindGroupLayout,
-    #[allow(dead_code)]
+    /// Cached camera bind group (created once, updated via buffer writes)
+    camera_bind_group: wgpu::BindGroup,
+    /// Cached texture bind groups (keyed by TextureHandle)
+    texture_bind_group_cache: HashMap<TextureHandle, wgpu::BindGroup>,
+    #[allow(dead_code)] // Kept for potential future use (e.g., default sampler fallback)
     /// Sampler for textures
     sampler: Sampler,
     /// Maximum sprites per batch
@@ -305,17 +308,8 @@ impl SpritePipeline {
             ..Default::default()
         });
 
-        // Create sampler
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Sprite Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
+        // Create sampler using shared configuration
+        let sampler = SamplerConfig::default().create_sampler(device, Some("Sprite Sampler"));
 
         // Create quad vertices (full texture coordinates)
         let vertices = [
@@ -357,8 +351,18 @@ impl SpritePipeline {
         // Create camera uniform buffer
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite Camera Buffer"),
-            contents: bytemuck::cast_slice(&[CameraUniform::from_camera(&Camera2D::default())]),
+            contents: bytemuck::cast_slice(&[CameraUniform::from_camera(&Camera::default())]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Create camera bind group once (will be reused, buffer updated via write_buffer)
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Sprite Camera Bind Group"),
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
         });
 
         // Create shader module
@@ -416,6 +420,8 @@ impl SpritePipeline {
             camera_buffer,
             texture_bind_group_layout,
             camera_bind_group_layout,
+            camera_bind_group,
+            texture_bind_group_cache: HashMap::new(),
             sampler,
             max_sprites_per_batch,
             device: device_arc,
@@ -423,7 +429,7 @@ impl SpritePipeline {
     }
 
     /// Update camera uniform
-    pub fn update_camera(&self, queue: &Queue, camera: &Camera2D) {
+    pub fn update_camera(&self, queue: &Queue, camera: &Camera) {
         let uniform = CameraUniform::from_camera(camera);
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
@@ -442,17 +448,78 @@ impl SpritePipeline {
         instance_count
     }
 
+    /// Update texture bind group cache for new textures
+    ///
+    /// Call this when new textures are loaded to create and cache their bind groups.
+    /// This avoids creating bind groups during the render loop.
+    pub fn cache_texture_bind_groups(&mut self, texture_resources: &HashMap<TextureHandle, TextureResource>) {
+        for (handle, resource) in texture_resources {
+            // Skip if already cached
+            if self.texture_bind_group_cache.contains_key(handle) {
+                continue;
+            }
+
+            // Create and cache the bind group
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("Cached Texture Bind Group {:?}", handle)),
+                layout: &self.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&resource.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&resource.sampler),
+                    },
+                ],
+            });
+
+            self.texture_bind_group_cache.insert(*handle, bind_group);
+            log::debug!("Cached bind group for texture {:?}", handle);
+        }
+    }
+
+    /// Clear a texture from the bind group cache (e.g., when texture is unloaded)
+    pub fn invalidate_texture_cache(&mut self, handle: &TextureHandle) {
+        self.texture_bind_group_cache.remove(handle);
+    }
+
+    /// Clear all cached texture bind groups
+    pub fn clear_texture_cache(&mut self) {
+        self.texture_bind_group_cache.clear();
+    }
+
     /// Draw sprites using this pipeline
+    ///
+    /// Uses cached bind groups for improved performance. Call `cache_texture_bind_groups`
+    /// before drawing if new textures have been loaded.
     pub fn draw(
-        &self,
+        &mut self,
         encoder: &mut CommandEncoder,
-        _camera: &Camera2D,
+        _camera: &Camera,
         texture_resources: &HashMap<TextureHandle, TextureResource>,
         batches: &[&SpriteBatch],
         target: &TextureView,
         clear_color: wgpu::Color,
     ) {
-        log::info!("SPRITE DRAW: batches={}, clear_color={:?}", batches.len(), clear_color);
+        log::debug!("SPRITE DRAW: batches={}, clear_color={:?}", batches.len(), clear_color);
+
+        // Ensure all textures have cached bind groups
+        self.cache_texture_bind_groups(texture_resources);
+
+        // Warn about missing textures (texture handle not found in provided resources)
+        for batch in batches {
+            if !batch.is_empty() && !texture_resources.contains_key(&batch.texture_handle) {
+                log::warn!(
+                    "Missing texture: handle {:?} referenced by {} sprite(s) not found in texture resources. \
+                     Sprites will not render. Ensure the texture is loaded via AssetManager.",
+                    batch.texture_handle,
+                    batch.len()
+                );
+            }
+        }
+
         // Begin render pass with clearing
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sprite Render Pass"),
@@ -473,26 +540,13 @@ impl SpritePipeline {
 
         // Set pipeline
         render_pass.set_pipeline(&self.pipeline);
-        log::info!("✓ Pipeline set");
 
         // Set vertex buffers
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice());
-        log::info!("✓ Vertex buffers set: vertex_buffer_size={}, instance_buffer_size={}", 
-                   self.vertex_buffer.size(), self.instance_buffer.buffer().size());
 
-        // Create camera bind group
-        let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Sprite Camera Bind Group"),
-            layout: &self.camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: self.camera_buffer.as_entire_binding(),
-            }],
-        });
-
-        // Set camera bind group (set 0)
-        render_pass.set_bind_group(0, &camera_bind_group, &[]);
+        // Use cached camera bind group (set 0)
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
         // Draw each batch
         let mut instance_offset = 0u32;
@@ -501,42 +555,26 @@ impl SpritePipeline {
                 continue;
             }
 
-            // Get texture resource - the renderer should have provided a white texture for colored sprites
-            let texture_bind_group = if let Some(texture_resource) = texture_resources.get(&batch.texture_handle) {
-                // Use provided texture resource (should include white texture for colored sprites)
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Sprite Texture Bind Group"),
-                    layout: &self.texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&texture_resource.view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&texture_resource.sampler),
-                        },
-                    ],
-                })
+            // Get cached texture bind group or create fallback
+            let texture_bind_group = if let Some(cached) = self.texture_bind_group_cache.get(&batch.texture_handle) {
+                cached
             } else {
-                // This should not happen if the renderer is working correctly
-                log::warn!("No texture resource found for texture handle {:?}, sprite may not render correctly", batch.texture_handle);
-                
-                // Create a fallback bind group - this is a last resort
-                self.create_fallback_texture_bind_group()
+                // This should not happen since we called cache_texture_bind_groups above
+                log::warn!("No cached bind group for texture handle {:?}, sprite may not render correctly", batch.texture_handle);
+                continue;
             };
 
             // Set texture bind group (set 1)
-            render_pass.set_bind_group(1, &texture_bind_group, &[]);
+            render_pass.set_bind_group(1, texture_bind_group, &[]);
 
             // Draw the instances for this batch
             let instance_count = batch.len() as u32;
-            
+
             // Draw indexed triangles with instancing
             // 6 indices per quad (2 triangles), draw instances from instance_offset to instance_offset + instance_count
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..6, 0, instance_offset..(instance_offset + instance_count));
-            
+
             // Update offset for next batch
             instance_offset += instance_count;
         }
@@ -560,54 +598,6 @@ impl SpritePipeline {
     /// Get the texture bind group layout
     pub fn texture_bind_group_layout(&self) -> &BindGroupLayout {
         &self.texture_bind_group_layout
-    }
-
-    /// Create a fallback texture bind group for emergency cases
-    /// This should rarely be used if the renderer is working correctly
-    fn create_fallback_texture_bind_group(&self) -> wgpu::BindGroup {
-        // Create a simple 1x1 texture as a last resort
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Fallback Texture"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Fallback Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
-
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Fallback Texture Bind Group"),
-            layout: &self.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        })
     }
 
     /// Prepare sprite data for rendering by updating instance buffer and creating batches
@@ -656,17 +646,7 @@ impl TextureAtlas {
         }));
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture Atlas Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = SamplerConfig::default().create_sampler(device, Some("Texture Atlas Sampler"));
 
         Self {
             texture,

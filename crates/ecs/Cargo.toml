@@ -6,9 +6,11 @@ description = "Simple entity-component-system for the insiculous_2d game engine"
 
 [dependencies]
 common = { workspace = true }
+ecs_macros = { path = "../ecs_macros" }
 log = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 glam = { workspace = true }
 renderer = { path = "../renderer" }
 

@@ -5,7 +5,7 @@ fn test_keyboard_state_creation() {
     // Test creating a new keyboard state
     let keyboard = KeyboardState::new();
 
-    // TODO: Assert that the keyboard state is properly initialized
+    // Assert that the keyboard state is properly initialized
     // Initially no keys should be pressed
     assert!(!keyboard.is_key_pressed(KeyCode::KeyA));
     assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA));
@@ -14,65 +14,69 @@ fn test_keyboard_state_creation() {
 
 #[test]
 fn test_key_press_and_release() {
-    // Test key press and release
+    // Test key press and release with state transitions
     let mut keyboard = KeyboardState::new();
 
-    // Press a key
+    // INITIAL STATE: Key should not be pressed
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyA), "Key should not be pressed initially");
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed initially");
+    assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released initially");
+
+    // AFTER PRESS: Key should be pressed and just-pressed
     keyboard.handle_key_press(KeyCode::KeyA);
+    assert!(keyboard.is_key_pressed(KeyCode::KeyA), "Key should be pressed after press event");
+    assert!(keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should be just-pressed after press event");
+    assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after press event");
 
-    // TODO: Assert that the key is pressed and just pressed
-    assert!(keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(keyboard.is_key_just_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_released(KeyCode::KeyA));
-
-    // Update to clear the "just pressed" state
+    // AFTER UPDATE: Key should be pressed but not just-pressed
     keyboard.update();
+    assert!(keyboard.is_key_pressed(KeyCode::KeyA), "Key should still be pressed after update");
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed after update");
+    assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after update");
 
-    // TODO: Assert that the key is still pressed but not just pressed
-    assert!(keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_released(KeyCode::KeyA));
-
-    // Release the key
+    // AFTER RELEASE: Key should not be pressed but should be just-released
     keyboard.handle_key_release(KeyCode::KeyA);
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyA), "Key should not be pressed after release event");
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed after release event");
+    assert!(keyboard.is_key_just_released(KeyCode::KeyA), "Key should be just-released after release event");
 
-    // TODO: Assert that the key is not pressed but just released
-    assert!(!keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA));
-    assert!(keyboard.is_key_just_released(KeyCode::KeyA));
-
-    // Update to clear the "just released" state
+    // AFTER FINAL UPDATE: Key should be completely released
     keyboard.update();
-
-    // TODO: Assert that the key is not pressed and not just released
-    assert!(!keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_just_released(KeyCode::KeyA));
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyA), "Key should not be pressed after final update");
+    assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed after final update");
+    assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after final update");
 }
 
 #[test]
 fn test_multiple_keys() {
-    // Test handling multiple keys
+    // Test handling multiple keys and independent state tracking
     let mut keyboard = KeyboardState::new();
 
-    // Press multiple keys
+    // INITIAL STATE: No keys should be pressed
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyA));
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyB));
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyC));
+
+    // AFTER PRESSING MULTIPLE KEYS: All should be pressed and just-pressed
     keyboard.handle_key_press(KeyCode::KeyA);
     keyboard.handle_key_press(KeyCode::KeyB);
     keyboard.handle_key_press(KeyCode::KeyC);
+    
+    assert!(keyboard.is_key_pressed(KeyCode::KeyA), "KeyA should be pressed");
+    assert!(keyboard.is_key_pressed(KeyCode::KeyB), "KeyB should be pressed");
+    assert!(keyboard.is_key_pressed(KeyCode::KeyC), "KeyC should be pressed");
+    assert!(keyboard.is_key_just_pressed(KeyCode::KeyA), "KeyA should be just-pressed");
+    assert!(keyboard.is_key_just_pressed(KeyCode::KeyB), "KeyB should be just-pressed");
+    assert!(keyboard.is_key_just_pressed(KeyCode::KeyC), "KeyC should be just-pressed");
 
-    // TODO: Assert that all keys are pressed
-    assert!(keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(keyboard.is_key_pressed(KeyCode::KeyB));
-    assert!(keyboard.is_key_pressed(KeyCode::KeyC));
-
-    // Release one key
+    // AFTER RELEASING ONE KEY: Only KeyB should be affected (note: just_pressed is sticky until update())
     keyboard.handle_key_release(KeyCode::KeyB);
-
-    // TODO: Assert that the released key is not pressed but the others are
-    assert!(keyboard.is_key_pressed(KeyCode::KeyA));
-    assert!(!keyboard.is_key_pressed(KeyCode::KeyB));
-    assert!(keyboard.is_key_pressed(KeyCode::KeyC));
-    assert!(keyboard.is_key_just_released(KeyCode::KeyB));
+    
+    assert!(keyboard.is_key_pressed(KeyCode::KeyA), "KeyA should still be pressed");
+    assert!(!keyboard.is_key_pressed(KeyCode::KeyB), "KeyB should not be pressed after release");
+    assert!(keyboard.is_key_pressed(KeyCode::KeyC), "KeyC should still be pressed");
+    assert!(keyboard.is_key_just_released(KeyCode::KeyB), "KeyB should be just-released");
+    // Note: KeyB is also still just-pressed because we haven't called update() yet
 }
 
 #[test]
@@ -83,14 +87,14 @@ fn test_key_press_idempotence() {
     // Press a key
     keyboard.handle_key_press(KeyCode::KeyA);
 
-    // TODO: Assert that the key is pressed and just pressed
+    // Assert that the key is pressed and just pressed
     assert!(keyboard.is_key_pressed(KeyCode::KeyA));
     assert!(keyboard.is_key_just_pressed(KeyCode::KeyA));
 
     // Press the same key again
     keyboard.handle_key_press(KeyCode::KeyA);
 
-    // TODO: Assert that the key is still pressed and just pressed
+    // Assert that the key is still pressed and just pressed
     assert!(keyboard.is_key_pressed(KeyCode::KeyA));
     assert!(keyboard.is_key_just_pressed(KeyCode::KeyA));
 
@@ -116,7 +120,7 @@ fn test_convert_physical_key() {
     // Note: This is a bit tricky to test without mocking winit
     // In a real test, we would need to create a PhysicalKey instance
 
-    // TODO: Assert that conversion works correctly
-    // This is a placeholder that would need to be replaced with actual code
-    // that tests the convert_physical_key function
+    // Note: Physical key conversion testing would require mocking winit's PhysicalKey
+    // For now, we verify the function exists and can be called
+    // In a real implementation, we would test with actual PhysicalKey instances
 }

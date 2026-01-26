@@ -38,7 +38,36 @@ impl ArchetypeId {
     }
 }
 
-/// Dense storage for components of a specific type within an archetype
+/// Dense storage for components of a specific type within an archetype.
+///
+/// # Safety Invariants
+///
+/// This struct uses raw byte storage and pointer arithmetic for performance.
+/// The following invariants must be maintained:
+///
+/// 1. **Element size correctness**: `element_size` must match the actual size of the
+///    component type being stored. This is enforced by creating columns via `Archetype`
+///    which uses `std::mem::size_of::<T>()`.
+///
+/// 2. **Index bounds**: All index-based access (`get`, `get_mut`, `swap_remove`) checks
+///    bounds against `len` before performing pointer arithmetic.
+///
+/// 3. **Capacity invariant**: `len <= capacity` and `data.len() >= capacity * element_size`.
+///    The `grow()` method maintains this by doubling capacity as needed.
+///
+/// 4. **Type safety at boundary**: Raw pointers returned by `get`/`get_mut` are cast to
+///    the correct component type by the caller (`ArchetypeComponentStorage`) which
+///    tracks the `TypeId` -> column mapping.
+///
+/// # Why Unsafe?
+///
+/// ECS systems commonly use raw byte storage for components because:
+/// - Enables dense, cache-friendly storage of heterogeneous component types
+/// - Allows efficient iteration over components without virtual dispatch
+/// - Provides O(1) component access by index within an archetype
+///
+/// Safe alternatives (like `Vec<Box<dyn Component>>`) would add indirection and
+/// vtable overhead, negating the performance benefits of archetype-based storage.
 pub struct ComponentColumn {
     /// The component data stored as raw bytes
     data: Vec<u8>,
@@ -71,30 +100,56 @@ impl ComponentColumn {
         self.len == 0
     }
 
-    /// Get a pointer to the component at the given index
+    /// Get a pointer to the component at the given index.
+    ///
+    /// Returns `None` if `index >= len`.
+    ///
+    /// # Safety
+    ///
+    /// The returned pointer is valid for reads of `element_size` bytes.
+    /// The caller must cast to the correct component type (tracked via `TypeId`).
     pub fn get(&self, index: usize) -> Option<*const u8> {
         if index < self.len {
+            // SAFETY: index < len, and data.len() >= len * element_size (capacity invariant)
             Some(unsafe { self.data.as_ptr().add(index * self.element_size) })
         } else {
             None
         }
     }
 
-    /// Get a mutable pointer to the component at the given index
+    /// Get a mutable pointer to the component at the given index.
+    ///
+    /// Returns `None` if `index >= len`.
+    ///
+    /// # Safety
+    ///
+    /// The returned pointer is valid for reads and writes of `element_size` bytes.
+    /// The caller must cast to the correct component type (tracked via `TypeId`).
     pub fn get_mut(&mut self, index: usize) -> Option<*mut u8> {
         if index < self.len {
+            // SAFETY: index < len, and data.len() >= len * element_size (capacity invariant)
             Some(unsafe { self.data.as_mut_ptr().add(index * self.element_size) })
         } else {
             None
         }
     }
 
-    /// Push a new component to the end of the column
+    /// Push a new component to the end of the column.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure `component` is of the correct type for this column
+    /// (matching the `element_size` used at construction).
     pub fn push(&mut self, component: &dyn Component) {
         if self.len >= self.capacity {
             self.grow();
         }
 
+        // SAFETY: After grow(), capacity > len, so dest is within bounds.
+        // copy_nonoverlapping is safe because:
+        // - src (component) is valid for element_size bytes (caller ensures correct type)
+        // - dest is properly aligned within data buffer
+        // - regions don't overlap (dest is in our buffer, src is the caller's component)
         let dest = unsafe { self.data.as_mut_ptr().add(self.len * self.element_size) };
         unsafe {
             std::ptr::copy_nonoverlapping(component as *const dyn Component as *const u8, dest, self.element_size);
@@ -102,13 +157,18 @@ impl ComponentColumn {
         self.len += 1;
     }
 
-    /// Remove the component at the given index and swap with the last element
+    /// Remove the component at the given index by swapping with the last element.
+    ///
+    /// This is O(1) removal that maintains dense storage but changes indices.
+    /// Returns early if `index >= len`.
     pub fn swap_remove(&mut self, index: usize) {
         if index >= self.len {
             return;
         }
 
         if index != self.len - 1 {
+            // SAFETY: Both index and len-1 are < len, so both pointers are within bounds.
+            // copy_nonoverlapping is safe because src != dest when index != len-1.
             let src = unsafe { self.data.as_ptr().add((self.len - 1) * self.element_size) };
             let dest = unsafe { self.data.as_mut_ptr().add(index * self.element_size) };
             unsafe {
@@ -233,14 +293,7 @@ impl Archetype {
     }
 }
 
-/// Type-safe query for entities with specific component types
-pub struct Query<T: QueryTypes> {
-    #[allow(dead_code)]
-    archetypes: Vec<ArchetypeId>,
-    _phantom: PhantomData<T>,
-}
-
-/// Trait for defining query types
+/// Trait for defining query types used by `World::query_entities()`
 pub trait QueryTypes {
     /// Get the component types required by this query
     fn component_types() -> Vec<TypeId>;
@@ -288,8 +341,10 @@ mod tests {
         value: i32,
     }
 
+    /// Test component used for TypeId in archetype tests.
+    /// Fields are unused because only the TypeId matters for archetype testing.
     #[derive(Debug, Clone)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Fields unused - struct used only for its TypeId
     struct OtherComponent {
         name: String,
     }

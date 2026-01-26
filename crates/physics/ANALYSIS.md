@@ -1,5 +1,22 @@
 # Physics Crate Analysis
 
+## Review (January 19, 2026)
+
+### Summary
+- Rapier2D-backed physics system with ECS components, presets, and fixed timestep updates.
+- Exposes `PhysicsWorld`, `PhysicsSystem`, and helpers for common body/collider setups.
+- Integrates through `engine_core` as a default feature.
+
+### Strengths
+- Clear component API with presets for platformer/top-down workflows.
+- In-crate tests validate base integration and simulation flow.
+- Coordinate conversion helpers are part of the public API.
+
+### Risks & Follow-ups
+- Extend tests for friction/restitution, kinematic bodies, and sensor triggers.
+- Document the 100 px/m scale and ensure configurability remains visible.
+- Consider feature-gating heavy debug utilities if added later.
+
 ## Current State (Updated: January 2026)
 The physics crate provides 2D physics simulation for the Insiculous 2D game engine using rapier2d as the underlying physics engine.
 
@@ -230,17 +247,16 @@ physics.apply_force(player, Vec2::new(force_x, 0.0));
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Future Enhancements
 
-### Immediate (High Priority)
-1. Add friction/restitution tests
-2. Add kinematic body tests
-3. Add sensor trigger tests
+These features would enhance the physics system but are not required for current functionality:
 
-### Short-term (Medium Priority)
-4. Review and remove/use dead code in world.rs
-5. Add collision response validation tests
-6. Add high-speed (tunneling) edge case tests
+### Physics Features
+- Comprehensive friction and restitution material system
+- Kinematic body support for animated platforms
+- Physics sensor/trigger volumes (non-solid colliders)
+- Collision response validation and debugging
+- High-speed movement edge case testing (tunneling prevention)
 
 ### Long-term (Features)
 7. Debug visualization for colliders

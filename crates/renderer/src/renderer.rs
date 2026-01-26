@@ -1,4 +1,24 @@
 //! WGPU renderer implementation.
+//!
+//! # Design Decisions
+//!
+//! The [`Renderer`] struct handles both initialization and rendering. While this
+//! could be split into separate concerns (initialization vs rendering), the current
+//! design is intentional:
+//!
+//! - **Initialization** (`new()`) creates the WGPU context (instance, surface, adapter,
+//!   device, queue) which is inherently tied to the renderer's lifetime.
+//! - **Rendering** (`render()`, `render_with_sprites()`) uses those resources.
+//! - These concerns are tightly coupled in WGPU - the surface, device, and queue are
+//!   all needed together and share lifetimes.
+//!
+//! Splitting them would add complexity without clear benefit for a 2D game engine.
+//!
+//! # Static Method: `run_with_app`
+//!
+//! The [`Renderer::run_with_app`] static method exists for legacy compatibility.
+//! New code should use the [`Game`](engine_core::Game) trait and [`run_game()`](engine_core::run_game)
+//! function which handle window/event loop management internally.
 
 use std::sync::Arc;
 use wgpu::{
@@ -27,17 +47,19 @@ pub struct Renderer {
 
 impl Renderer {
     /// Create a new renderer with an existing window
-    /// 
-    /// This method now properly manages the surface lifetime by:
+    ///
+    /// This method properly manages the surface lifetime by:
     /// 1. Creating the instance and surface first
-    /// 2. Then moving the surface into the renderer with 'static lifetime
-    /// 3. The surface is tied to the window's lifetime, which is Arc<Window>
+    /// 2. The surface gets `'static` lifetime because `Arc<Window>` is `'static`
+    /// 3. WGPU 28.0.0 supports `Arc<Window>` -> `Surface<'static>` conversion
     pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
         // Create a WGPU instance
         let instance = wgpu::Instance::default();
 
-        // Create a surface - this is safe because window is Arc<Window>
-        let surface = instance
+        // Create a surface with 'static lifetime
+        // Arc<Window> implements Into<SurfaceTarget<'static>> because Arc<T> is 'static when T: 'static
+        // This is safe and doesn't require unsafe code - WGPU 28.0.0 handles this correctly
+        let surface: Surface<'static> = instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::SurfaceCreationError(e.to_string()))?;
 
@@ -100,8 +122,7 @@ impl Renderer {
 
         Ok(Self {
             window,
-            // Safe because window has 'static lifetime
-            surface: unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface) },
+            surface,
             adapter,
             device,
             queue,
@@ -121,24 +142,37 @@ impl Renderer {
         self.clear_color = wgpu::Color { r, g, b, a };
     }
 
-    /// Render a frame
-    pub fn render(&self) -> Result<(), RendererError> {
-        // Get a frame
-        let frame = match self.surface.get_current_texture() {
-            Ok(frame) => frame,
+    /// Acquire the current surface texture for rendering.
+    ///
+    /// Returns:
+    /// - `Ok(Some(frame))` - Successfully acquired frame, proceed with rendering
+    /// - `Ok(None)` - Transient error, skip this frame
+    /// - `Err(_)` - Fatal or recoverable error that needs handling
+    fn acquire_frame(&self) -> Result<Option<wgpu::SurfaceTexture>, RendererError> {
+        match self.surface.get_current_texture() {
+            Ok(frame) => Ok(Some(frame)),
             Err(wgpu::SurfaceError::Lost) => {
                 // Surface was lost, return error so caller can recreate it
-                return Err(RendererError::SurfaceError("Surface lost".to_string()));
+                Err(RendererError::SurfaceError("Surface lost".to_string()))
             }
             Err(wgpu::SurfaceError::OutOfMemory) => {
                 // Fatal error, we can't recover
-                return Err(RendererError::RenderingError("Out of memory".to_string()));
+                Err(RendererError::RenderingError("Out of memory".to_string()))
             }
             Err(e) => {
-                // Other errors can be logged and ignored
+                // Other errors (Timeout, Outdated) can be logged and skipped
                 log::warn!("Surface error: {:?}, skipping frame", e);
-                return Ok(());
+                Ok(None)
             }
+        }
+    }
+
+    /// Render a frame
+    pub fn render(&self) -> Result<(), RendererError> {
+        // Get a frame (returns None if we should skip this frame)
+        let frame = match self.acquire_frame()? {
+            Some(frame) => frame,
+            None => return Ok(()),
         };
 
         // Create a view
@@ -188,7 +222,7 @@ impl Renderer {
     pub fn render_with_sprites(
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
-        camera: &crate::sprite_data::Camera2D,
+        camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
@@ -211,26 +245,14 @@ impl Renderer {
     fn render_with_sprites_internal(
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
-        camera: &crate::sprite_data::Camera2D,
+        camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
-        // Get a frame
-        let frame = match self.surface.get_current_texture() {
-            Ok(frame) => frame,
-            Err(wgpu::SurfaceError::Lost) => {
-                // Surface was lost, return error so caller can recreate it
-                return Err(RendererError::SurfaceError("Surface lost".to_string()));
-            }
-            Err(wgpu::SurfaceError::OutOfMemory) => {
-                // Fatal error, we can't recover
-                return Err(RendererError::RenderingError("Out of memory".to_string()));
-            }
-            Err(e) => {
-                // Other errors can be logged and ignored
-                log::warn!("Surface error: {:?}, skipping frame", e);
-                return Ok(());
-            }
+        // Get a frame (returns None if we should skip this frame)
+        let frame = match self.acquire_frame()? {
+            Some(frame) => frame,
+            None => return Ok(()),
         };
 
         // Create a view
@@ -265,22 +287,34 @@ impl Renderer {
         &self.window
     }
 
-    /// Get a reference to the device
+    /// Get a shared reference to the device (clones the Arc).
+    ///
+    /// Use this when you need to store the device or pass ownership to another struct.
+    /// For temporary usage within a function, prefer `device_ref()` instead.
     pub fn device(&self) -> Arc<Device> {
         Arc::clone(&self.device)
     }
 
-    /// Get a reference to the queue
+    /// Get a shared reference to the queue (clones the Arc).
+    ///
+    /// Use this when you need to store the queue or pass ownership to another struct.
+    /// For temporary usage within a function, prefer `queue_ref()` instead.
     pub fn queue(&self) -> Arc<Queue> {
         Arc::clone(&self.queue)
     }
 
-    /// Get a reference to the device (borrowed)
+    /// Get a borrowed reference to the device.
+    ///
+    /// Use this for temporary access within a function without cloning the Arc.
+    /// For storing or sharing ownership, use `device()` instead.
     pub fn device_ref(&self) -> &Device {
         &self.device
     }
 
-    /// Get a reference to the queue (borrowed)
+    /// Get a borrowed reference to the queue.
+    ///
+    /// Use this for temporary access within a function without cloning the Arc.
+    /// For storing or sharing ownership, use `queue()` instead.
     pub fn queue_ref(&self) -> &Queue {
         &self.queue
     }

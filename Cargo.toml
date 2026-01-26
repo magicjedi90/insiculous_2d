@@ -10,10 +10,12 @@ members = [
     "crates/engine_core",
     "crates/renderer",
     "crates/ecs",
+    "crates/ecs_macros",
     "crates/input",
     "crates/physics",
     "crates/audio",
     "crates/ui",
+    "crates/editor",
 ]
 
 [workspace.dependencies]
@@ -28,29 +30,29 @@ winit = "0.30"
 thiserror = "2.0"
 pollster = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-ron = "0.9"
-glam = { version = "0.29", features = ["serde"] }
+serde_json = "1.0"
+toml = "0.9.11+spec-1.1.0"
+ron = "0.12.0"
+glam = { version = "0.30.10", features = ["serde"] }
 bytemuck = { version = "1.21", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
 
 [dependencies]
 engine_core = { path = "crates/engine_core" }
-renderer = { path = "crates/renderer" }
 ecs = { path = "crates/ecs" }
-input = { path = "crates/input" }
-physics = { path = "crates/physics" }
-audio = { path = "crates/audio" }
+editor = { path = "crates/editor" }
 ui = { path = "crates/ui" }
-log = { workspace = true }
-env_logger = { workspace = true }
+common = { path = "crates/common" }
 glam = { workspace = true }
-wgpu = { workspace = true }
 winit = { workspace = true }
-pollster = { workspace = true }
-bytemuck = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
 
 # Examples
 [[example]]
 name = "hello_world"
 path = "examples/hello_world.rs"
+
+[[example]]
+name = "editor_demo"
+path = "examples/editor_demo.rs"
