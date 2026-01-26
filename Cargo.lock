@@ -804,6 +804,8 @@ dependencies = [
  "input",
  "log",
  "renderer",
+ "serde",
+ "serde_json",
  "ui",
  "winit",
 ]

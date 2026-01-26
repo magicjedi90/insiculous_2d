@@ -246,25 +246,31 @@ impl EditorDemo {
                     );
                     y += line_height;
 
-                    // Show transform if available
+                    // Use generic inspector for all components
+                    let style = InspectorStyle::default();
+
+                    // Inspect Transform2D if present
                     if let Some(transform) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
                         y += line_height * 0.5;
-                        ctx.ui.label("Transform2D", Vec2::new(content_x, y));
-                        y += line_height;
-                        ctx.ui.label(
-                            &format!("  Position: ({:.1}, {:.1})", transform.position.x, transform.position.y),
-                            Vec2::new(content_x, y),
-                        );
-                        y += line_height;
-                        ctx.ui.label(
-                            &format!("  Rotation: {:.1}°", transform.rotation.to_degrees()),
-                            Vec2::new(content_x, y),
-                        );
-                        y += line_height;
-                        ctx.ui.label(
-                            &format!("  Scale: ({:.2}, {:.2})", transform.scale.x, transform.scale.y),
-                            Vec2::new(content_x, y),
-                        );
+                        y = inspect_component(ctx.ui, "Transform2D", &*transform, content_x, y, &style);
+                    }
+
+                    // Inspect Sprite if present
+                    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
+                        y += line_height * 0.5;
+                        y = inspect_component(ctx.ui, "Sprite", &*sprite, content_x, y, &style);
+                    }
+
+                    // Inspect Camera if present
+                    if let Some(camera) = ctx.world.get::<ecs::sprite_components::Camera>(entity_id) {
+                        y += line_height * 0.5;
+                        y = inspect_component(ctx.ui, "Camera", &*camera, content_x, y, &style);
+                    }
+
+                    // Inspect SpriteAnimation if present
+                    if let Some(animation) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
+                        y += line_height * 0.5;
+                        let _ = inspect_component(ctx.ui, "SpriteAnimation", &*animation, content_x, y, &style);
                     }
                 } else {
                     ctx.ui.label("No selection", Vec2::new(content_x, y));
