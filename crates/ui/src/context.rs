@@ -314,6 +314,49 @@ impl UIContext {
         }
     }
 
+    /// Draw a label centered within bounds.
+    ///
+    /// This method handles vertical centering automatically using font metrics
+    /// when available, falling back to approximate centering otherwise.
+    /// Use this for text in buttons, headers, and other bounded containers.
+    pub fn label_in_bounds(&mut self, text: &str, bounds: Rect, align: TextAlign) {
+        let font_size = self.theme.text.font_size;
+        let padding = 8.0; // Standard padding
+
+        // Calculate X position based on alignment
+        let x = if let Some(font_handle) = self.font_manager.default_font() {
+            if let Ok(text_size) = self.font_manager.measure_text(font_handle, text, font_size) {
+                match align {
+                    TextAlign::Left => bounds.x + padding,
+                    TextAlign::Center => bounds.x + (bounds.width - text_size.x) / 2.0,
+                    TextAlign::Right => bounds.x + bounds.width - text_size.x - padding,
+                }
+            } else {
+                bounds.x + padding
+            }
+        } else {
+            // Fallback: estimate text width
+            let estimated_width = text.len() as f32 * font_size * 0.6;
+            match align {
+                TextAlign::Left => bounds.x + padding,
+                TextAlign::Center => bounds.x + (bounds.width - estimated_width) / 2.0,
+                TextAlign::Right => bounds.x + bounds.width - estimated_width - padding,
+            }
+        };
+
+        // Calculate Y position (baseline) for vertical centering
+        let baseline_y = if let Some(metrics) = self.font_metrics(font_size) {
+            // Proper centering: baseline positioned so text is visually centered
+            // ascent is positive (above baseline), descent is negative (below baseline)
+            bounds.y + (bounds.height + metrics.ascent + metrics.descent) / 2.0
+        } else {
+            // Fallback: approximate center (treats position as top-left)
+            bounds.y + bounds.height / 2.0 + font_size * 0.35
+        };
+
+        self.label(text, Vec2::new(x, baseline_y));
+    }
+
     /// Create a panel (container background).
     pub fn panel(&mut self, bounds: Rect) {
         let style = &self.theme.panel;
@@ -682,5 +725,17 @@ mod tests {
         let ui = UIContext::new();
         // No font loaded, should return None
         assert!(ui.font_metrics(16.0).is_none());
+    }
+
+    #[test]
+    fn test_ui_context_label_in_bounds() {
+        let mut ui = UIContext::new();
+        let bounds = Rect::new(10.0, 10.0, 200.0, 30.0);
+
+        // Should not panic even without font
+        ui.label_in_bounds("Test", bounds, TextAlign::Center);
+
+        // Should generate a draw command (placeholder without font)
+        assert_eq!(ui.draw_list().len(), 1);
     }
 }
