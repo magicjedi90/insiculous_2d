@@ -80,7 +80,7 @@ impl EditorContext {
         Self {
             selection: Selection::new(),
             gizmo: Gizmo::new(),
-            toolbar: Toolbar::new().with_position(Vec2::new(220.0, 34.0)), // Below menu, after hierarchy
+            toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)), // Inside scene view, below panel header
             menu_bar: MenuBar::editor_default(),
             dock_area,
             viewport: SceneViewport::new(),

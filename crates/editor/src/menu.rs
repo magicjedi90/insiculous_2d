@@ -260,8 +260,8 @@ impl MenuBar {
         for index in 0..self.menus.len() {
             let menu = &mut self.menus[index];
 
-            // Calculate menu title bounds
-            let title_width = menu.title.len() as f32 * 8.0 + self.item_padding * 2.0;
+            // Calculate menu title bounds (wider for better readability)
+            let title_width = menu.title.len() as f32 * 10.0 + self.item_padding * 3.0;
             let menu_bounds = Rect::new(x, 0.0, title_width, height);
             menu.bounds = menu_bounds;
 
