@@ -58,7 +58,7 @@ impl AudioManager {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| AudioError::DeviceInitError(e.to_string()))?;
 
-        log::info!("Audio system initialized");
+        log::debug!("Audio system initialized");
 
         Ok(Self {
             _stream: stream,

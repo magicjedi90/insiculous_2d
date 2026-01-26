@@ -83,8 +83,51 @@ impl Game for EditorDemo {
         self.editor.dock_area.handle_resize(ctx.ui);
 
         // Render content in each panel
-        for (panel_id, bounds) in content_areas {
+        for (panel_id, bounds) in content_areas.clone() {
             self.render_panel_content(ctx, panel_id, bounds);
+        }
+
+        // Handle gizmo interaction for selected entity
+        if let Some(entity_id) = self.editor.selection.primary() {
+            if let Some(scene_bounds) = content_areas.iter()
+                .find(|(id, _)| *id == PanelId::SCENE_VIEW)
+                .map(|(_, b)| *b)
+            {
+                // Get entity position (clone to release borrow)
+                let entity_pos = ctx.world
+                    .get::<ecs::sprite_components::Transform2D>(entity_id)
+                    .map(|t| t.position);
+
+                if let Some(entity_pos) = entity_pos {
+                    // Convert world position to screen position (simple viewport mapping)
+                    let viewport_center = scene_bounds.center();
+                    let zoom = self.editor.camera_zoom();
+                    let camera_offset = self.editor.camera_offset();
+
+                    // Screen position = viewport_center + (world_pos - camera_offset) * zoom
+                    let screen_pos = viewport_center + (entity_pos - camera_offset) * zoom;
+
+                    // Render gizmo and get interaction
+                    let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
+
+                    // Apply gizmo delta to entity transform
+                    if interaction.handle.is_some() && interaction.delta != Vec2::ZERO {
+                        // Convert screen delta to world delta
+                        let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
+                        let snap_enabled = self.editor.is_snap_to_grid();
+
+                        // Apply to entity
+                        if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                            transform.position += world_delta;
+
+                            // Apply grid snapping if enabled
+                            if snap_enabled {
+                                transform.position = self.editor.snap_position(transform.position);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Handle keyboard shortcuts for tools
@@ -162,7 +205,7 @@ impl EditorDemo {
 
         match panel_id {
             PanelId::SCENE_VIEW => {
-                // Scene view - show grid info and gizmo
+                // Scene view - show grid info
                 ctx.ui.label("Scene View", Vec2::new(content_x, y));
                 y += line_height;
 
@@ -173,11 +216,9 @@ impl EditorDemo {
                     );
                 }
 
-                // Draw a simple representation of the scene
+                // Draw viewport origin crosshair
                 let center = bounds.center();
                 ctx.ui.circle(center, 5.0, ui::Color::new(0.3, 0.3, 0.3, 1.0));
-
-                // Draw crosshair at center
                 ctx.ui.line(
                     Vec2::new(center.x - 20.0, center.y),
                     Vec2::new(center.x + 20.0, center.y),
@@ -191,11 +232,7 @@ impl EditorDemo {
                     1.0,
                 );
 
-                // Render gizmo if we have a selection and appropriate tool
-                if self.editor.selection.primary().is_some() {
-                    self.editor.gizmo.set_position(center);
-                    let _interaction = self.editor.gizmo.render(ctx.ui, center);
-                }
+                // Gizmo is rendered in main update() method for proper transform handling
             }
             PanelId::HIERARCHY => {
                 ctx.ui.label("Hierarchy", Vec2::new(content_x, y));
