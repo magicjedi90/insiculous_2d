@@ -421,7 +421,7 @@ assert!(registry.is_registered("Sprite"));
 - Glyph texture cache includes color in key (memory waste)
 - ~~First-frame UI placeholder flicker~~ ✅ FIXED: Font rendering bug fixed
 - ~~40+ allocations per frame in behavior system~~ ✅ FIXED: Behaviors accessed by reference
-- ~25 #[allow(dead_code)] suppressions remain (all documented)
+- Component registration still requires separate ComponentMeta impl (macro only handles struct definition)
 
 **All tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
 
