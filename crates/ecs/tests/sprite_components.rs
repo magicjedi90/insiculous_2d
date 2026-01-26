@@ -408,7 +408,32 @@ fn test_sprite_animation_component_meta() {
     assert_eq!(<SpriteAnimation as ComponentMeta>::type_name(), "SpriteAnimation");
 
     let fields = <SpriteAnimation as ComponentMeta>::field_names();
-    assert!(fields.contains(&"fps"));
-    assert!(fields.contains(&"frames"));
-    assert!(fields.contains(&"playing"));
+    assert_eq!(fields, &["current_frame", "fps", "playing", "loop_animation", "time_accumulator", "frames"]);
+}
+
+#[test]
+fn test_sprite_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Sprite as ComponentMeta>::type_name(), "Sprite");
+    let fields = <Sprite as ComponentMeta>::field_names();
+    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "texture_handle"]);
+}
+
+#[test]
+fn test_transform2d_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Transform2D as ComponentMeta>::type_name(), "Transform2D");
+    let fields = <Transform2D as ComponentMeta>::field_names();
+    assert_eq!(fields, &["position", "rotation", "scale"]);
+}
+
+#[test]
+fn test_camera_component_meta() {
+    use ecs::ComponentMeta;
+
+    assert_eq!(<Camera as ComponentMeta>::type_name(), "Camera");
+    let fields = <Camera as ComponentMeta>::field_names();
+    assert_eq!(fields, &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]);
 }

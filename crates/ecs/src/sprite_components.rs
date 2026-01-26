@@ -202,6 +202,36 @@ impl crate::component_registry::ComponentMeta for SpriteAnimation {
     }
 }
 
+impl crate::component_registry::ComponentMeta for Sprite {
+    fn type_name() -> &'static str {
+        "Sprite"
+    }
+
+    fn field_names() -> &'static [&'static str] {
+        &["offset", "rotation", "scale", "tex_region", "color", "depth", "texture_handle"]
+    }
+}
+
+impl crate::component_registry::ComponentMeta for Transform2D {
+    fn type_name() -> &'static str {
+        "Transform2D"
+    }
+
+    fn field_names() -> &'static [&'static str] {
+        &["position", "rotation", "scale"]
+    }
+}
+
+impl crate::component_registry::ComponentMeta for Camera {
+    fn type_name() -> &'static str {
+        "Camera"
+    }
+
+    fn field_names() -> &'static [&'static str] {
+        &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]
+    }
+}
+
 /// Sprite renderer system data
 #[derive(Debug, Default)]
 pub struct SpriteRenderData {
