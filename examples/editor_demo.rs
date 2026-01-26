@@ -88,6 +88,9 @@ impl Game for EditorDemo {
             self.render_panel_content(ctx, panel_id, bounds);
         }
 
+        // Pop all clip rects (one per panel rendered)
+        self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
+
         // Handle gizmo interaction for selected entity
         if let Some(entity_id) = self.editor.selection.primary() {
             if let Some(scene_bounds) = content_areas.iter()
