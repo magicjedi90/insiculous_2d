@@ -224,12 +224,24 @@
 
 ## Technical Debt (Remaining - January 2026)
 
-**Overall Status:** 50 total items (59 completed, 50 remaining - 54% resolution rate)
+**Overall Status:** 52 total items (59 completed, 52 remaining - 53% resolution rate)
 
 **Priority Order:** Address the biggest risks first (stability, architecture, and data loss) before lower-impact improvements.
 
-### High Priority (0 items) ✅
-All high priority technical debt has been resolved.
+### High Priority (2 items) ⚠️
+
+**ecs (2 items):**
+- [ ] **PATTERN-001: ECS archetype storage uses trait-object interface** - Violates archetype pattern principles
+  - Location: `ecs/src/component.rs:240`, `ecs/src/archetype.rs:235`
+  - Issue: Components boxed as `Box<dyn Component>` before storage, requiring runtime downcasting via `as_any()`. Negates cache locality benefits of archetype storage.
+  - Fix: Store components as raw bytes directly from concrete types; remove `Box<dyn Component>` from archetype interface
+  - See: `crates/ecs/TECH_DEBT.md` Pattern Drift section
+  
+- [ ] **PATTERN-002: ECS defaults to Legacy storage despite archetype claims** - API contract violation
+  - Location: `ecs/src/world.rs:27`, `ecs/src/component.rs:390`
+  - Issue: `World::default()` uses `LegacyComponentStorage` (HashMap) despite docs claiming "archetype-based ECS". Users must explicitly call `World::new_optimized()`.
+  - Fix: Make `use_archetype_storage: true` the default, or rename methods to reflect actual behavior
+  - See: `crates/ecs/TECH_DEBT.md` Pattern Drift section
 
 ### Medium Priority (12 items)
 
@@ -266,7 +278,19 @@ All high priority technical debt has been resolved.
   - Location: `ui/src/font.rs:100-315`
   - Fix: Split into FontLoader, GlyphCache, TextLayoutEngine
 
-**ecs (2 items):**
+**ecs (4 items):**
+- [ ] **PATTERN-001: ECS archetype storage uses trait-object interface** - Violates archetype pattern principles
+  - Location: `ecs/src/component.rs:240`, `ecs/src/archetype.rs:235`
+  - Issue: Components boxed as `Box<dyn Component>` before storage, requiring runtime downcasting via `as_any()`. Negates cache locality benefits.
+  - Fix: Store components as raw bytes directly from concrete types
+  - Priority: **HIGH** - See `crates/ecs/TECH_DEBT.md`
+  
+- [ ] **PATTERN-002: ECS defaults to Legacy storage despite archetype claims** - API contract violation
+  - Location: `ecs/src/world.rs:27`
+  - Issue: `World::default()` uses HashMap storage despite "archetype-based" docs
+  - Fix: Make archetype storage the default
+  - Priority: **HIGH** - See `crates/ecs/TECH_DEBT.md`
+  
 - [ ] **SRP-002: ComponentStorage enum handles both storage types** - Single enum for two storage strategies
   - Location: `ecs/src/component.rs`
   - Fix: Consider trait objects or separate types for Legacy vs Archetype
