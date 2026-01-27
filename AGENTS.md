@@ -34,11 +34,12 @@ See `PROJECT_ROADMAP.md` Technical Debt section for prioritized list
 - Extracted 7 focused methods (5-25 lines each, pure orchestration)
 - **STATUS**: game.rs SRP refactoring COMPLETE (Phases 1-3)
 
-**Managers Extracted** (4 managers, 15 tests):
-- `GameLoopManager` - Frame timing (4 tests)
-- `UIManager` - UI lifecycle (2 tests) 
-- `RenderManager` - Renderer/sprites (4 tests)
-- `WindowManager` - Window management (5 tests)
+**Managers Extracted** (5 managers):
+- `GameLoopManager` - Frame timing
+- `UIManager` - UI lifecycle
+- `RenderManager` - Renderer/sprites
+- `WindowManager` - Window management
+- `SceneManager` - Scene loading and management
 
 **Files Extracted** (5 modules, 674 lines, 12 tests):
 - `game_config.rs` (92 lines, 2 tests) - Game configuration

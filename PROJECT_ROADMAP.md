@@ -7,18 +7,19 @@
 ### Test Coverage
 | System | Tests | Status |
 |--------|-------|--------|
-| ECS | 99 | ✅ 100% pass |
+| ECS | 113 | ✅ 100% pass |
 | Input | 56 | ✅ 100% pass |
-| Engine Core | 53 | ✅ 100% pass |
+| Engine Core | 68 | ✅ 100% pass |
 | Physics | 28 | ✅ 100% pass |
 | Renderer | 62 | ✅ 100% pass |
-| Scene Graph | 12 | ✅ 100% pass |
-| Audio | 7 | ✅ 100% pass |
-| UI | 42 + 7 new | ✅ 100% pass |
-| Editor | 64 | ✅ 100% pass |
+| Audio | 3 | ✅ 100% pass |
+| UI | 53 | ✅ 100% pass |
+| Editor | 121 | ✅ 100% pass |
+| ECS Macros | 3 | ✅ 100% pass |
+| Common | 26 | ✅ 100% pass |
 
-**Total:** 422/422 tests passing (100% success rate)
-**Code Quality:** 0 TODOs, 155+ assertions, 18 ignored (GPU/window only)
+**Total:** 533/533 tests passing (100% success rate)
+**Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Features
 - ✅ Simple Game API (`Game` trait, `run_game()`)
@@ -224,7 +225,7 @@
 
 ## Technical Debt (Remaining - January 2026)
 
-**Overall Status:** 52 total items (59 completed, 52 remaining - 53% resolution rate)
+**Overall Status:** 52 total items (3 completed, 49 remaining - 6% resolution rate this update)
 
 **Priority Order:** Address the biggest risks first (stability, architecture, and data loss) before lower-impact improvements.
 
@@ -243,23 +244,21 @@
   - Fix: Make `use_archetype_storage: true` the default, or rename methods to reflect actual behavior
   - See: `crates/ecs/TECH_DEBT.md` Pattern Drift section
 
-### Medium Priority (12 items)
+### Medium Priority (10 items)
 
-**engine_core (6 items):**
+**engine_core (3 items remaining, 3 completed):**
 - [ ] **EngineApplication cleanup** - Reduce from 346 to ~150 lines
   - Location: `engine_core/src/application.rs`
   - Note: This is deprecated code, migrate to Game API
-- [ ] **DRY-001: Duplicate AudioManager placeholder pattern** - Asset and game loops both create fallback
-  - Location: Multiple `GameContext` creation sites
-  - Fix: Extract `ensure_audio()` helper method
-- [ ] **DRY-003: Duplicate GameContext creation pattern** - Init and update both build contexts
-  - Location: `game.rs: GameRunner` initialization and update
-  - Fix: Extract `create_game_context()` helper
-- [ ] **SRP-001: GameRunner still has multiple responsibilities** - Audio update, initialization check, etc.
-  - Location: `game.rs: update_and_render()` calls 7 methods but still orchestrates
-  - Fix: Extract `AudioManager`, `SceneManager` from orchestration logic
+- [x] **DRY-001: Duplicate AudioManager placeholder pattern** - ✅ COMPLETED
+  - Fixed: AudioManager properly integrated through GameContext
+- [x] **DRY-003: Duplicate GameContext creation pattern** - ✅ COMPLETED  
+  - Fixed: GameContext creation consolidated in GameRunner
+- [x] **SRP-001: GameRunner still has multiple responsibilities** - ✅ COMPLETED
+  - Fixed: Extracted 5 managers (GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager)
+  - game.rs reduced from 862 → 555 lines (-36%)
 - [ ] **SRP-003: EngineApplication duplicates GameRunner functionality** - Both manage game lifecycle
-  - Location: `application.rs:346 lines` vs `game.rs:553 lines`
+  - Location: `application.rs:346 lines` vs `game.rs:555 lines`
   - Fix: Deprecate EngineApplication fully, migrate to Game API
 - [ ] **ARCH-001: Dual API pattern creates confusion** - Both EngineApplication and GameRunner exist
   - Location: Throughout engine_core
@@ -278,19 +277,7 @@
   - Location: `ui/src/font.rs:100-315`
   - Fix: Split into FontLoader, GlyphCache, TextLayoutEngine
 
-**ecs (4 items):**
-- [ ] **PATTERN-001: ECS archetype storage uses trait-object interface** - Violates archetype pattern principles
-  - Location: `ecs/src/component.rs:240`, `ecs/src/archetype.rs:235`
-  - Issue: Components boxed as `Box<dyn Component>` before storage, requiring runtime downcasting via `as_any()`. Negates cache locality benefits.
-  - Fix: Store components as raw bytes directly from concrete types
-  - Priority: **HIGH** - See `crates/ecs/TECH_DEBT.md`
-  
-- [ ] **PATTERN-002: ECS defaults to Legacy storage despite archetype claims** - API contract violation
-  - Location: `ecs/src/world.rs:27`
-  - Issue: `World::default()` uses HashMap storage despite "archetype-based" docs
-  - Fix: Make archetype storage the default
-  - Priority: **HIGH** - See `crates/ecs/TECH_DEBT.md`
-  
+**ecs (2 items):**
 - [ ] **SRP-002: ComponentStorage enum handles both storage types** - Single enum for two storage strategies
   - Location: `ecs/src/component.rs`
   - Fix: Consider trait objects or separate types for Legacy vs Archetype
@@ -372,14 +359,7 @@
 - [ ] **ARCH-001: Reduce coupling** - Event bus or message system for cross-crate communication
 - [ ] **ARCH-002: Configuration system** - Centralized config management
 
-**Total Remaining:** 50 items (vs 101 originally - 50% reduction ✓)
-</thinking>
-
-Now I'll update the PROJECT_ROADMAP.md with the comprehensive technical debt list:
-
-<function=StrReplaceFile>
-<parameter=path>/home/jedi/RustroverProjects/insiculous_2d/PROJECT_ROADMAP.md</parameter>
-<parameter=edit>{
+**Total Remaining:** 49 items
 
 ---
 
@@ -494,9 +474,9 @@ cargo apk build --release
 - SRP refactoring (game.rs: 862→553 lines, -36%)
 
 **Technical Debt Resolved:**
-- 66 issues identified → 8 remaining (88% reduction)
-- 0 high priority issues remaining
-- All SRP refactorings complete
+- Managers extracted: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager
+- Files extracted: game_config.rs, contexts.rs, ui_integration.rs, scene_manager.rs, behavior_runner.rs
+- SRP refactoring: game.rs reduced from 862 → 555 lines (-36%)
 - Test quality: 0 TODOs, 155+ assertions
 
 </details>
