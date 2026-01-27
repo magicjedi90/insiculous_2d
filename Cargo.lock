@@ -813,6 +813,7 @@ dependencies = [
  "glam",
  "input",
  "log",
+ "physics",
  "renderer",
  "serde",
  "serde_json",

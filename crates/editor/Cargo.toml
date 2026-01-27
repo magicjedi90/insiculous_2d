@@ -13,6 +13,7 @@ ui = { path = "../ui" }
 input = { path = "../input" }
 renderer = { path = "../renderer" }
 engine_core = { path = "../engine_core" }
+physics = { path = "../physics" }
 
 # External dependencies
 glam = { workspace = true }

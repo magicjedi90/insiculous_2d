@@ -14,11 +14,11 @@
 | Renderer | 62 | ✅ 100% pass |
 | Audio | 3 | ✅ 100% pass |
 | UI | 53 | ✅ 100% pass |
-| Editor | 121 | ✅ 100% pass |
+| Editor | 136 | ✅ 100% pass |
 | ECS Macros | 3 | ✅ 100% pass |
 | Common | 26 | ✅ 100% pass |
 
-**Total:** 533/533 tests passing (100% success rate)
+**Total:** 549/549 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Features
@@ -52,9 +52,11 @@
   - Grid overlay and alignment guides
   - Camera pan/zoom controls
   - Selection rectangle and transform gizmos
-- [ ] **Entity Inspector** - Edit component properties
+- [x] **Entity Inspector** - Edit component properties ✅ COMPLETE
   - Automatic UI generation for component fields
   - Support for: Transform2D, Sprite, RigidBody, Collider, AudioSource
+  - Editable field types: f32 slider, Vec2 input, bool checkbox, Vec4 color picker
+  - 15 new tests for editable inspector and component editors
 - [ ] **Hierarchy Panel** - Tree view of parent-child relationships
   - Drag-and-drop reparenting
   - Expand/collapse entity trees
@@ -70,6 +72,11 @@
 - `Gizmo` struct - Transform handles (translate, rotate, scale)
 
 **Milestone:** Edit `hello_world.scene.ron` visually, move platforms, adjust physics
+
+**Status Update (January 27, 2026):**
+- Scene Viewport: ✅ Complete (45 tests - camera pan/zoom, grid overlay, coordinate conversion)
+- Entity Inspector: ✅ Complete (15 new tests - editable fields for all component types)
+- Next: Hierarchy Panel, Scene Saving/Loading
 
 ---
 
