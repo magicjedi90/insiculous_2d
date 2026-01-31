@@ -4,11 +4,13 @@
 
 use engine_core::prelude::*;
 use editor::prelude::*;
+use ecs::System;
 use glam::Vec2;
 
 struct EditorDemo {
     editor: EditorContext,
     font_loaded: bool,
+    transform_system: ecs::TransformHierarchySystem,
 }
 
 impl Default for EditorDemo {
@@ -16,6 +18,7 @@ impl Default for EditorDemo {
         Self {
             editor: EditorContext::new(),
             font_loaded: false,
+            transform_system: ecs::TransformHierarchySystem::new(),
         }
     }
 }
@@ -47,21 +50,60 @@ impl Game for EditorDemo {
             log::warn!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
         }
 
-        // Create some test entities to edit
-        let entity1 = ctx.world.create_entity();
-        ctx.world.add_component(&entity1, ecs::sprite_components::Transform2D::new(Vec2::new(-100.0, 0.0))).ok();
+        // Create test entities with a hierarchy to demonstrate the tree view
+        use ecs::{GlobalTransform2D, Name, WorldHierarchyExt};
 
-        let entity2 = ctx.world.create_entity();
-        ctx.world.add_component(&entity2, ecs::sprite_components::Transform2D::new(Vec2::new(100.0, 50.0))).ok();
+        // Root entity: "Player" with Name component
+        let player = ctx.world.create_entity();
+        ctx.world.add_component(&player, Name::new("Player")).ok();
+        ctx.world.add_component(&player, ecs::sprite_components::Transform2D::new(Vec2::new(-100.0, 0.0))).ok();
+        ctx.world.add_component(&player, GlobalTransform2D::default()).ok();
 
-        let entity3 = ctx.world.create_entity();
-        ctx.world.add_component(&entity3, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -100.0))).ok();
+        // Child of Player: "Weapon"
+        let weapon = ctx.world.create_entity();
+        ctx.world.add_component(&weapon, Name::new("Weapon")).ok();
+        ctx.world.add_component(&weapon, ecs::sprite_components::Transform2D::new(Vec2::new(20.0, 0.0))).ok();
+        ctx.world.add_component(&weapon, GlobalTransform2D::default()).ok();
+        ctx.world.set_parent(weapon, player).ok();
 
-        log::info!("Editor demo initialized with 3 test entities");
+        // Grandchild of Player: "Muzzle Flash" (child of Weapon)
+        let muzzle = ctx.world.create_entity();
+        ctx.world.add_component(&muzzle, Name::new("Muzzle Flash")).ok();
+        ctx.world.add_component(&muzzle, ecs::sprite_components::Transform2D::new(Vec2::new(10.0, 0.0))).ok();
+        ctx.world.add_component(&muzzle, GlobalTransform2D::default()).ok();
+        ctx.world.set_parent(muzzle, weapon).ok();
+
+        // Another root: entity with Sprite component (no Name - tests fallback)
+        let sprite_entity = ctx.world.create_entity();
+        ctx.world.add_component(&sprite_entity, ecs::sprite_components::Transform2D::new(Vec2::new(100.0, 50.0))).ok();
+        ctx.world.add_component(&sprite_entity, ecs::Sprite::new(0)).ok();
+        ctx.world.add_component(&sprite_entity, GlobalTransform2D::default()).ok();
+
+        // Child of sprite_entity (no Name, no Sprite - tests Entity ID fallback)
+        let child_entity = ctx.world.create_entity();
+        ctx.world.add_component(&child_entity, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -30.0))).ok();
+        ctx.world.add_component(&child_entity, GlobalTransform2D::default()).ok();
+        ctx.world.set_parent(child_entity, sprite_entity).ok();
+
+        // Standalone root entity with just Transform
+        let standalone = ctx.world.create_entity();
+        ctx.world.add_component(&standalone, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -100.0))).ok();
+        ctx.world.add_component(&standalone, GlobalTransform2D::default()).ok();
+
+        log::info!("Editor demo initialized with 6 entities in hierarchy:");
+        log::info!("  Player (root)");
+        log::info!("    └─ Weapon (child)");
+        log::info!("       └─ Muzzle Flash (grandchild)");
+        log::info!("  Sprite (root, no Name)");
+        log::info!("    └─ Entity (child, no Name/Sprite)");
+        log::info!("  Entity (root, standalone)");
     }
 
     fn update(&mut self, ctx: &mut GameContext) {
         let window_size = ctx.window_size;
+
+        // Update transform hierarchy (propagate parent transforms to children)
+        self.transform_system.update(&mut ctx.world, ctx.delta_time);
 
         // Update editor layout
         self.editor.update_layout(window_size);
@@ -93,23 +135,15 @@ impl Game for EditorDemo {
 
         // Handle gizmo interaction for selected entity
         if let Some(entity_id) = self.editor.selection.primary() {
-            if let Some(scene_bounds) = content_areas.iter()
-                .find(|(id, _)| *id == PanelId::SCENE_VIEW)
-                .map(|(_, b)| *b)
-            {
-                // Get entity position (clone to release borrow)
+            if content_areas.iter().any(|(id, _)| *id == PanelId::SCENE_VIEW) {
+                // Get entity's global position (includes parent transforms)
                 let entity_pos = ctx.world
-                    .get::<ecs::sprite_components::Transform2D>(entity_id)
+                    .get::<ecs::GlobalTransform2D>(entity_id)
                     .map(|t| t.position);
 
                 if let Some(entity_pos) = entity_pos {
-                    // Convert world position to screen position (simple viewport mapping)
-                    let viewport_center = scene_bounds.center();
-                    let zoom = self.editor.camera_zoom();
-                    let camera_offset = self.editor.camera_offset();
-
-                    // Screen position = viewport_center + (world_pos - camera_offset) * zoom
-                    let screen_pos = viewport_center + (entity_pos - camera_offset) * zoom;
+                    // Convert world position to screen position using viewport (handles Y-flip)
+                    let screen_pos = self.editor.world_to_screen(entity_pos);
 
                     // Render gizmo and get interaction
                     let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
@@ -236,38 +270,25 @@ impl EditorDemo {
                 // Gizmo is rendered in main update() method for proper transform handling
             }
             PanelId::HIERARCHY => {
-                // List entities
-                for (i, entity_id) in ctx.world.entities().into_iter().enumerate() {
-                    let is_selected = self.editor.selection.contains(entity_id);
-                    let prefix = if is_selected { "> " } else { "  " };
-                    let label = format!("{}Entity {}", prefix, entity_id.value());
+                // Use the HierarchyPanel to render the entity tree
+                let clicked = self.editor.hierarchy.render(
+                    ctx.ui,
+                    &ctx.world,
+                    &mut self.editor.selection,
+                    bounds,
+                );
 
-                    let item_bounds = common::Rect::new(
-                        content_x,
-                        y,
-                        bounds.width - padding * 2.0,
-                        line_height,
+                // Handle clicked entities - select them
+                for entity_id in clicked {
+                    if ctx.input.keyboard().is_key_pressed(winit::keyboard::KeyCode::ControlLeft) {
+                        self.editor.selection.toggle(entity_id);
+                    } else {
+                        self.editor.selection.select(entity_id);
+                    }
+                    log::info!("Selected entity: {} ({})",
+                        HierarchyPanel::entity_display_name(&ctx.world, entity_id),
+                        entity_id.value()
                     );
-
-                    // Highlight selected
-                    if is_selected {
-                        ctx.ui.rect(item_bounds, ui::Color::new(0.2, 0.3, 0.5, 0.5));
-                    }
-
-                    let id = format!("hierarchy_entity_{}", i);
-                    if ctx.ui.button(id.as_str(), &label, item_bounds) {
-                        if ctx.input.keyboard().is_key_pressed(winit::keyboard::KeyCode::ControlLeft) {
-                            self.editor.selection.toggle(entity_id);
-                        } else {
-                            self.editor.selection.select(entity_id);
-                        }
-                        log::info!("Selected entity: {}", entity_id.value());
-                    }
-
-                    y += line_height;
-                    if y > bounds.y + bounds.height - padding {
-                        break;
-                    }
                 }
             }
             PanelId::INSPECTOR => {

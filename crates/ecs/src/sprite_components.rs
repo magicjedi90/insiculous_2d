@@ -6,7 +6,38 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 
 // Re-export common types for ECS use
-pub use common::{Transform2D, Camera};
+pub use common::{Camera, Transform2D};
+
+/// Name component for identifying entities in the editor hierarchy.
+///
+/// Entities with a Name component will display this name in the hierarchy panel
+/// instead of a generic "Entity {id}" label.
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta, Default)]
+pub struct Name(pub String);
+
+impl Name {
+    /// Create a new Name component with the given name.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    /// Get the name as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for Name {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<String> for Name {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
 
 // Re-export types from renderer that we need
 use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};

@@ -29,6 +29,7 @@ mod editable_inspector;
 mod editor_input;
 mod gizmo;
 mod grid;
+mod hierarchy;
 mod inspector;
 mod menu;
 mod picking;
@@ -52,6 +53,7 @@ pub use editable_inspector::{
 };
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
 pub use gizmo::{Gizmo, GizmoMode};
+pub use hierarchy::HierarchyPanel;
 pub use grid::{GridColors, GridConfig, GridRenderer};
 pub use inspector::{inspect_component, InspectorStyle};
 pub use menu::{Menu, MenuBar, MenuItem};
@@ -69,8 +71,9 @@ pub mod prelude {
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
         DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState, EditorTool,
         EditableFieldStyle, EditableInspector, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode,
-        GridRenderer, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity,
-        RigidBodyEditResult, SceneViewport, Selection, SelectionRect, SpriteEditResult, Toolbar,
-        TransformEditResult, ViewportInputConfig, ViewportInputHandler, ViewportInputResult, AABB,
+        GridRenderer, HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
+        PickableEntity, RigidBodyEditResult, SceneViewport, Selection, SelectionRect,
+        SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig, ViewportInputHandler,
+        ViewportInputResult, AABB,
     };
 }

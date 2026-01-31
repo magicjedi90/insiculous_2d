@@ -8,6 +8,7 @@ use glam::Vec2;
 use crate::{
     editor_input::EditorInputMapping,
     grid::GridRenderer,
+    hierarchy::HierarchyPanel,
     picking::EntityPicker,
     viewport::SceneViewport,
     viewport_input::ViewportInputHandler,
@@ -38,6 +39,8 @@ pub struct EditorContext {
     pub viewport_input: ViewportInputHandler,
     /// Editor input mapping
     pub input_mapping: EditorInputMapping,
+    /// Hierarchy panel for entity tree view
+    pub hierarchy: HierarchyPanel,
     /// Snap to grid enabled
     snap_to_grid: bool,
     /// Whether the editor is in play mode (running the game)
@@ -88,6 +91,7 @@ impl EditorContext {
             picker: EntityPicker::new(),
             viewport_input: ViewportInputHandler::new(),
             input_mapping: EditorInputMapping::new(),
+            hierarchy: HierarchyPanel::new(),
             snap_to_grid: false,
             play_mode: false,
         }
@@ -337,11 +341,12 @@ impl EditorContext {
     /// Convert a gizmo delta from screen space to world space.
     ///
     /// The gizmo returns deltas in screen pixels. This converts them
-    /// to world units accounting for camera zoom.
+    /// to world units accounting for camera zoom and Y-axis inversion
+    /// (screen Y increases downward, world Y increases upward).
     pub fn gizmo_delta_to_world(&self, screen_delta: Vec2) -> Vec2 {
         Vec2::new(
             screen_delta.x / self.viewport.camera_zoom(),
-            screen_delta.y / self.viewport.camera_zoom(),
+            -screen_delta.y / self.viewport.camera_zoom(), // Negate Y for world coords
         )
     }
 
@@ -541,15 +546,15 @@ mod tests {
     fn test_gizmo_delta_to_world() {
         let mut ctx = EditorContext::new();
 
-        // At zoom 1.0, delta is unchanged
+        // At zoom 1.0, X unchanged but Y inverted (screen down = world up)
         let delta = Vec2::new(100.0, 50.0);
         let world_delta = ctx.gizmo_delta_to_world(delta);
-        assert_eq!(world_delta, delta);
+        assert_eq!(world_delta, Vec2::new(100.0, -50.0));
 
-        // At zoom 2.0, delta is halved
+        // At zoom 2.0, delta is halved and Y inverted
         ctx.set_camera_zoom(2.0);
         let world_delta = ctx.gizmo_delta_to_world(delta);
-        assert_eq!(world_delta, Vec2::new(50.0, 25.0));
+        assert_eq!(world_delta, Vec2::new(50.0, -25.0));
     }
 
     #[test]

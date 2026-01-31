@@ -14,11 +14,11 @@
 | Renderer | 62 | ✅ 100% pass |
 | Audio | 3 | ✅ 100% pass |
 | UI | 53 | ✅ 100% pass |
-| Editor | 136 | ✅ 100% pass |
+| Editor | 148 | ✅ 100% pass |
 | ECS Macros | 3 | ✅ 100% pass |
 | Common | 26 | ✅ 100% pass |
 
-**Total:** 549/549 tests passing (100% success rate)
+**Total:** 560/560 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Features
@@ -48,7 +48,7 @@
   - Based on existing immediate-mode UI system
   - Panel types: Scene view, Inspector, Hierarchy, Asset browser
   - 64 tests, DockArea/DockPanel, MenuBar, Toolbar components
-- [ ] **Scene Viewport** - Render game world with editor overlay
+- [x] **Scene Viewport** - Render game world with editor overlay ✅ COMPLETE
   - Grid overlay and alignment guides
   - Camera pan/zoom controls
   - Selection rectangle and transform gizmos
@@ -57,9 +57,13 @@
   - Support for: Transform2D, Sprite, RigidBody, Collider, AudioSource
   - Editable field types: f32 slider, Vec2 input, bool checkbox, Vec4 color picker
   - 15 new tests for editable inspector and component editors
-- [ ] **Hierarchy Panel** - Tree view of parent-child relationships
-  - Drag-and-drop reparenting
-  - Expand/collapse entity trees
+- [x] **Hierarchy Panel** - Tree view of parent-child relationships ✅ COMPLETE
+  - Tree view with expand/collapse (all expanded by default)
+  - Bidirectional selection sync with viewport
+  - Name component support for entity display names
+  - Name resolution: Name component → Sprite → RigidBody → Entity ID
+  - 13 new tests for hierarchy panel
+  - ⚠️ Drag-and-drop reparenting deferred to future iteration
 - [ ] **Scene Saving/Loading** - Editor-specific format
   - Preserve editor state (camera position, selection)
   - Backward compatibility with runtime scenes
@@ -70,13 +74,15 @@
 - `EditorTool` enum - Select, Move, Rotate, Scale
 - `Selection` struct - Track selected entities
 - `Gizmo` struct - Transform handles (translate, rotate, scale)
+- `HierarchyPanel` struct - Entity tree view with expand/collapse
 
 **Milestone:** Edit `hello_world.scene.ron` visually, move platforms, adjust physics
 
-**Status Update (January 27, 2026):**
+**Status Update (January 31, 2026):**
 - Scene Viewport: ✅ Complete (45 tests - camera pan/zoom, grid overlay, coordinate conversion)
 - Entity Inspector: ✅ Complete (15 new tests - editable fields for all component types)
-- Next: Hierarchy Panel, Scene Saving/Loading
+- Hierarchy Panel: ✅ Complete (13 new tests - tree view, expand/collapse, name resolution)
+- Next: Scene Saving/Loading
 
 ---
 
