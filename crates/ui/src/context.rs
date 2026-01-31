@@ -251,9 +251,16 @@ impl UIContext {
         if let Some(font_handle) = self.font_manager.default_font() {
             // Measure text to center it properly
             if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
+                // Position text so it's centered vertically
+                let text_top = bounds.y + (bounds.height - text_size.y) / 2.0;
+                // Get font metrics to find the baseline
+                let metrics = self.font_manager.metrics(font_handle, font_size);
+                let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
+                // The baseline is 'ascent' pixels below the text top
+                let baseline_y = text_top + ascent;
                 let text_pos = Vec2::new(
                     bounds.x + (bounds.width - text_size.x) / 2.0,
-                    bounds.y + (bounds.height - text_size.y) / 2.0,
+                    baseline_y,
                 );
                 if let Ok(layout) = self.font_manager.layout_text(font_handle, label, font_size) {
                     let text_data = Self::layout_to_draw_data(&layout, label, text_pos, text_color, font_size);
@@ -274,6 +281,7 @@ impl UIContext {
     /// Create a text label.
     ///
     /// If a font has been loaded, renders with actual glyphs. Otherwise falls back to placeholder.
+    /// The position specifies where the baseline of the text should be placed.
     pub fn label(&mut self, text: &str, position: Vec2) {
         self.label_styled(text, position, self.theme.text.color, self.theme.text.font_size);
     }
@@ -281,6 +289,7 @@ impl UIContext {
     /// Create a text label with custom styling.
     ///
     /// If a font has been loaded, renders with actual glyphs. Otherwise falls back to placeholder.
+    /// The position specifies where the baseline of the text should be placed.
     pub fn label_styled(&mut self, text: &str, position: Vec2, color: Color, font_size: f32) {
         // Try to render with font if available
         if let Some(font_handle) = self.font_manager.default_font() {
@@ -324,10 +333,12 @@ impl UIContext {
         let padding = 8.0; // Standard padding
 
         // Get text dimensions if font is available
-        let text_size = if let Some(font_handle) = self.font_manager.default_font() {
-            self.font_manager.measure_text(font_handle, text, font_size).ok()
+        let (text_size, metrics) = if let Some(font_handle) = self.font_manager.default_font() {
+            let size = self.font_manager.measure_text(font_handle, text, font_size).ok();
+            let m = self.font_manager.metrics(font_handle, font_size);
+            (size, m)
         } else {
-            None
+            (None, None)
         };
 
         // Calculate X position based on alignment
@@ -347,11 +358,14 @@ impl UIContext {
             }
         };
 
-        // Calculate Y position (top-left) for vertical centering
+        // Calculate Y baseline position for vertical centering
+        // The text origin is at the baseline, so we need to offset by ascent
+        let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
         let text_height = text_size.map(|s| s.y).unwrap_or(font_size);
-        let y = bounds.y + (bounds.height - text_height) / 2.0;
+        let text_top = bounds.y + (bounds.height - text_height) / 2.0;
+        let baseline_y = text_top + ascent;
 
-        self.label(text, Vec2::new(x, y));
+        self.label(text, Vec2::new(x, baseline_y));
     }
 
     /// Create a panel (container background).

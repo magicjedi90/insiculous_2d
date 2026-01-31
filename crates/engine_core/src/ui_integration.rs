@@ -91,7 +91,16 @@ pub fn render_ui_commands(
                         }
 
                         // Calculate glyph position in world coordinates
-                        // glyph.x and glyph.y are offsets from the text origin
+                        // - data.position is at the BASELINE of the text
+                        // - glyph.x is horizontal offset from text start
+                        // - glyph.y is vertical offset from baseline to glyph top (negative = above baseline)
+                        // 
+                        // UI to world conversion:
+                        // - UI Y increases downward, world Y increases upward
+                        // - glyph_y_ui = data.position.y + glyph.y (UI position of glyph top)
+                        // - world_y = window_size.y/2 - glyph_y_ui (flip and center)
+                        // 
+                        // We add height/2 to get the center of the glyph for sprite rendering
                         let glyph_x = data.position.x + glyph.x + glyph.width as f32 / 2.0 - window_size.x / 2.0;
                         let glyph_y = window_size.y / 2.0 - (data.position.y + glyph.y + glyph.height as f32 / 2.0);
 
