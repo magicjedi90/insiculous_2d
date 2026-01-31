@@ -7,6 +7,17 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// Editor-specific settings persisted with the scene
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct EditorSettings {
+    /// Camera position when scene was last saved
+    #[serde(default)]
+    pub camera_position: (f32, f32),
+    /// Camera zoom level when scene was last saved
+    #[serde(default = "default_zoom")]
+    pub camera_zoom: f32,
+}
+
 /// Root structure for a scene file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneData {
@@ -15,6 +26,9 @@ pub struct SceneData {
     /// Physics settings for this scene
     #[serde(default)]
     pub physics: Option<PhysicsSettings>,
+    /// Editor settings (camera position, zoom) - optional for backward compatibility
+    #[serde(default)]
+    pub editor: Option<EditorSettings>,
     /// Prefab definitions (reusable entity templates)
     #[serde(default)]
     pub prefabs: HashMap<String, PrefabData>,
@@ -28,6 +42,7 @@ impl Default for SceneData {
         Self {
             name: "Untitled".to_string(),
             physics: None,
+            editor: None,
             prefabs: HashMap::new(),
             entities: Vec::new(),
         }
@@ -426,10 +441,63 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_editor_settings_serialization() {
+        let settings = EditorSettings {
+            camera_position: (150.0, -200.0),
+            camera_zoom: 1.5,
+        };
+
+        let ron_str = ron::ser::to_string_pretty(&settings, ron::ser::PrettyConfig::default())
+            .expect("Failed to serialize");
+
+        let parsed: EditorSettings = ron::from_str(&ron_str).expect("Failed to parse");
+        assert_eq!(parsed.camera_position, (150.0, -200.0));
+        assert_eq!(parsed.camera_zoom, 1.5);
+    }
+
+    #[test]
+    fn test_scene_data_with_editor_settings() {
+        let scene = SceneData {
+            name: "Test".to_string(),
+            editor: Some(EditorSettings {
+                camera_position: (100.0, 50.0),
+                camera_zoom: 2.0,
+            }),
+            ..Default::default()
+        };
+
+        let config = ron::ser::PrettyConfig::default().struct_names(true);
+        let ron_str = ron::ser::to_string_pretty(&scene, config)
+            .expect("Failed to serialize");
+
+        // RON serializes with struct names when struct_names(true) is set
+        assert!(ron_str.contains("camera_position"));
+
+        let parsed: SceneData = ron::from_str(&ron_str).expect("Failed to parse");
+        assert!(parsed.editor.is_some());
+        assert_eq!(parsed.editor.unwrap().camera_zoom, 2.0);
+    }
+
+    #[test]
+    fn test_scene_data_without_editor_settings_backward_compat() {
+        // Old scene format without editor field
+        let scene_ron = r#"
+            SceneData(
+                name: "Old Scene",
+                entities: [],
+            )
+        "#;
+
+        let parsed: SceneData = ron::from_str(scene_ron).expect("Failed to parse");
+        assert!(parsed.editor.is_none());
+    }
+
+    #[test]
     fn test_scene_data_serialization() {
         let scene = SceneData {
             name: "Test Scene".to_string(),
             physics: Some(PhysicsSettings::default()),
+            editor: None,
             prefabs: HashMap::new(),
             entities: vec![EntityData {
                 name: Some("player".to_string()),
@@ -468,6 +536,7 @@ mod tests {
         let scene = SceneData {
             name: "Prefab Test".to_string(),
             physics: None,
+            editor: None,
             prefabs: {
                 let mut map = HashMap::new();
                 map.insert(
