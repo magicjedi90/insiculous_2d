@@ -230,7 +230,10 @@ impl FontManager {
                 width: metrics.width as u32,
                 height: metrics.height as u32,
                 offset_x: metrics.xmin as f32,
-                offset_y: metrics.ymin as f32,
+                // Convert from fontdue coords (ymin = bottom of glyph, +Y = up)
+                // to UI coords (offset_y = top of glyph relative to baseline, +Y = down)
+                // Top in fontdue = ymin + height, flip sign for UI = -(ymin + height)
+                offset_y: -(metrics.ymin as f32 + metrics.height as f32),
                 advance: metrics.advance_width,
             },
             character,
@@ -247,6 +250,11 @@ impl FontManager {
     /// already been rendered at the same font/size combination. The CPU bitmap cache here
     /// works in tandem with engine_core's GPU texture cache - this caches the rasterized
     /// bitmaps, while engine_core caches the GPU textures created from those bitmaps.
+    ///
+    /// Coordinate system:
+    /// - The text origin (position.y) is at the BASELINE
+    /// - glyph.y is the offset from baseline to glyph top (negative = above baseline)
+    /// - The rendering code subtracts glyph.y from position.y to place the glyph correctly
     pub fn layout_text(
         &mut self,
         handle: FontHandle,
@@ -259,15 +267,19 @@ impl FontManager {
         }
 
         // Get line metrics (need font reference)
-        let line_height = {
+        let line_metrics = {
             let font = self.fonts.get(&handle.id).unwrap();
-            let line_metrics = font.horizontal_line_metrics(font_size);
-            line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2)
+            font.horizontal_line_metrics(font_size).unwrap_or_else(|| fontdue::LineMetrics {
+                ascent: font_size * 0.8,
+                descent: font_size * -0.2,
+                line_gap: 0.0,
+                new_line_size: font_size * 1.2,
+            })
         };
 
         let mut glyphs = Vec::new();
         let mut cursor_x = 0.0f32;
-        let mut max_height = 0.0f32;
+        let mut max_descent = 0.0f32;
 
         for character in text.chars() {
             // Handle special characters
@@ -283,15 +295,21 @@ impl FontManager {
             let advance = glyph_info.rasterized.advance;
 
             if character != ' ' && glyph_info.rasterized.width > 0 {
-                let glyph_height = glyph_info.rasterized.height as f32;
-                if glyph_height > max_height {
-                    max_height = glyph_height;
+                // glyph.y is the offset from baseline to glyph top
+                // offset_y (ymin) from fontdue is already this: negative = above baseline
+                let glyph_y = glyph_info.rasterized.offset_y;
+                
+                // Track max descent to calculate total text height
+                // Descent is how far below baseline the glyph extends
+                let glyph_bottom_from_baseline = glyph_y + glyph_info.rasterized.height as f32;
+                if glyph_bottom_from_baseline > max_descent {
+                    max_descent = glyph_bottom_from_baseline;
                 }
 
                 glyphs.push(LayoutGlyph {
                     character,
                     x: cursor_x + glyph_info.rasterized.offset_x,
-                    y: glyph_info.rasterized.offset_y,
+                    y: glyph_y,  // Offset from baseline (negative = above baseline)
                     info: glyph_info.clone(),
                 });
             }
@@ -299,9 +317,14 @@ impl FontManager {
             cursor_x += advance;
         }
 
+        // Text height is from top of highest ascender to bottom of lowest descender
+        // ascent = distance from baseline to top of line
+        // max_descent = distance from baseline to bottom of lowest glyph
+        let text_height = line_metrics.ascent + max_descent.max(-line_metrics.descent);
+
         Ok(TextLayout {
             width: cursor_x,
-            height: max_height.max(line_height),
+            height: text_height.max(line_metrics.new_line_size),
             glyphs,
         })
     }

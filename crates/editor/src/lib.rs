@@ -22,8 +22,10 @@
 //! }
 //! ```
 
+mod component_editors;
 mod context;
 mod dock;
+mod editable_inspector;
 mod editor_input;
 mod gizmo;
 mod grid;
@@ -37,8 +39,17 @@ mod viewport_input;
 pub mod layout;
 
 // Re-export main types
+pub use component_editors::{
+    edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
+    AudioSourceEditResult, ColliderEditResult, RigidBodyEditResult, SpriteEditResult,
+    TransformEditResult,
+};
 pub use context::EditorContext;
 pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
+pub use editable_inspector::{
+    component_header, display_u32, edit_bool, edit_color, edit_f32, edit_normalized_f32, edit_vec2,
+    EditableFieldStyle, EditableInspector, EditResult, FieldId,
+};
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
 pub use gizmo::{Gizmo, GizmoMode};
 pub use grid::{GridColors, GridConfig, GridRenderer};
@@ -53,10 +64,13 @@ pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInpu
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
-        inspect_component, DockArea, DockPanel, DockPosition, EditorAction, EditorContext,
-        EditorInputMapping, EditorInputState, EditorTool, EntityPicker, Gizmo, GizmoMode,
-        GridRenderer, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
-        PickableEntity, SceneViewport, Selection, SelectionRect, Toolbar, ViewportInputConfig,
-        ViewportInputHandler, ViewportInputResult, AABB,
+        component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
+        edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
+        inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
+        DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState, EditorTool,
+        EditableFieldStyle, EditableInspector, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode,
+        GridRenderer, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity,
+        RigidBodyEditResult, SceneViewport, Selection, SelectionRect, SpriteEditResult, Toolbar,
+        TransformEditResult, ViewportInputConfig, ViewportInputHandler, ViewportInputResult, AABB,
     };
 }

@@ -7,6 +7,7 @@ Last audited: January 2026
 - SRP violations: 3 (1 resolved)
 - KISS violations: 2 (2 resolved)
 - Architecture issues: 4 (3 resolved)
+- **Pattern drift: 2 (0 resolved) - HIGH PRIORITY**
 
 ## January 2026 Fixes
 - ✅ **SRP-001**: Extracted hierarchy methods to `WorldHierarchyExt` extension trait (~150 lines moved, 11 tests)
@@ -14,6 +15,10 @@ Last audited: January 2026
 - ✅ **ARCH-001**: Module visibility strategy documented in `lib.rs` - private modules for core infrastructure, public modules for domain-specific concerns
 - ✅ **ARCH-002**: Cycle detection added to `set_parent()` (implemented in `WorldHierarchyExt`)
 - ✅ **DRY-002**: Extracted `set_global_transform()` helper in `hierarchy_system.rs` to eliminate duplicate update-or-add pattern
+
+## January 2026 Pattern Drift Audit (Robert Nystrom Patterns)
+- ⚠️ **PATTERN-001**: ECS archetype storage uses trait-object interface (violates archetype principles)
+- ⚠️ **PATTERN-002**: ECS defaults to Legacy storage despite archetype claims (API contract violation)
 
 ---
 
@@ -115,6 +120,46 @@ Last audited: January 2026
 
 ---
 
+## Pattern Drift Issues (Robert Nystrom Patterns Audit - January 2026)
+
+### [PATTERN-001] ECS Component Pattern: Archetype scaffolding with trait-object interface
+- **File:** `component.rs`, `archetype.rs`
+- **Lines:** `component.rs:240`, `archetype.rs:235`
+- **Issue:** The codebase claims "archetype-based ECS" but components are boxed as `Box<dyn Component>` before storage:
+  ```rust
+  let components = vec![Box::new(component) as Box<dyn Component>];
+  archetype.add_entity(entity_id, components);
+  ```
+  This adds vtable indirection and requires runtime downcasting via `as_any().downcast_ref::<T>()`.
+  
+  **Violation of archetype principles:**
+  - Expected: Dense columnar arrays (`Vec<T>`) with compile-time type safety
+  - Actual: Raw bytes with `Box<dyn Component>` interface requiring runtime downcasting
+  - The `Component` trait forces `as_any()` / `as_any_mut()` methods for downcasting
+  
+- **Impact:** Negates cache locality benefits of archetype storage; adds vtable overhead per component access
+- **Suggested fix:** 
+  1. Remove `Box<dyn Component>` from archetype storage interface
+  2. Store components as raw bytes directly from concrete types at API boundary
+  3. Use `std::mem::size_of::<T>()` and `std::ptr::copy_nonoverlapping` in public methods
+  4. Make archetype storage the default (currently defaults to `LegacyComponentStorage`)
+- **Priority:** **High** (Performance-critical ECS core)
+
+### [PATTERN-002] ECS Default Storage: Legacy mode contradicts archetype claims
+- **File:** `world.rs`, `component.rs`
+- **Lines:** `world.rs:27`, `component.rs:390`
+- **Issue:** Despite claiming "archetype-based ECS" in documentation, `World::default()` uses `LegacyComponentStorage` (HashMap-based):
+  ```rust
+  // WorldConfig::default()
+  use_archetype_storage: false,  // Default to legacy!
+  ```
+  Users must explicitly call `World::new_optimized()` to get archetype storage.
+- **Impact:** Most users get HashMap storage despite archetype marketing; confusing API
+- **Suggested fix:** Make `use_archetype_storage: true` the default, or rename methods to reflect actual behavior
+- **Priority:** **High** (API contract violation)
+
+---
+
 ## Architecture Issues
 
 ### ~~[ARCH-001] Inconsistent module visibility~~ ✅ RESOLVED
@@ -181,7 +226,7 @@ These issues from ANALYSIS.md have been resolved:
 | Total lines | ~2,700 |
 | Test coverage | 84 tests (100% pass rate) |
 | `#[allow(dead_code)]` | 5 instances |
-| High priority issues | 0 |
+| High priority issues | 2 (Pattern Drift) |
 | Medium priority issues | 6 |
 | Low priority issues | 7 |
 
@@ -196,6 +241,54 @@ These issues from ANALYSIS.md have been resolved:
 ### Short-term Improvements
 3. **Fix SRP-001** - Split World hierarchy methods into separate trait/module
 4. **Fix KISS-001** - Either implement QueryIterator or remove scaffolding
+5. **Fix DRY-002** - Extract GlobalTransform update helper
+
+### Technical Debt Backlog
+- ARCH-004: Decide on storage system (keep one, remove other)
+- ARCH-001: Standardize module visibility pattern
+- ARCH-003: Remove dead code
+
+---
+
+## Cross-Reference with PROJECT_ROADMAP.md
+
+| This Report | PROJECT_ROADMAP.md / ANALYSIS.md | Status |
+|-------------|----------------------------------|--------|
+| SRP-001: World too many responsibilities | "Split World impl blocks by concern" | Known, unresolved |
+| ARCH-001: Module visibility | "Document visibility rationale" | Known, unresolved |
+| ARCH-003: Dead code | "Review and either use or remove" | Known, unresolved |
+| ARCH-002: Hierarchy cycles | Tracked | ✅ Resolved |
+| KISS-002: Unsafe ComponentColumn | Tracked | ✅ Resolved - Comprehensive safety docs added |
+| ARCH-004: Dual storage systems | Not tracked | New finding |
+
+**New issues to add to PROJECT_ROADMAP.md:**
+- ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
+- ~~KISS-002: ComponentColumn uses unsafe code without demonstrated need~~ ✅ RESOLVED - Comprehensive safety documentation added
+- ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden
+- **PATTERN-001: ECS archetype storage uses trait-object interface (violates archetype principles)**
+- **PATTERN-002: ECS defaults to Legacy storage despite archetype claims**
+
+---
+
+## Future Enhancements (Not Technical Debt)
+
+These features would enhance the ECS but are not required for current functionality:
+
+### System Scheduling
+- Add system dependency graph for automatic execution ordering
+- Parallel system execution for multi-core optimization
+- System groups for organizing related systems
+
+### Component Introspection
+- Component reflection for runtime type information
+- Dynamic component addition/removal based on string names
+- Editor integration for visual component editing
+
+### Performance Optimizations  
+- Memory pooling for entity and component allocations
+- Component pack optimization for cache locality
+- Archetype fragmentation reduction strategies
+ISS-001** - Either implement QueryIterator or remove scaffolding
 5. **Fix DRY-002** - Extract GlobalTransform update helper
 
 ### Technical Debt Backlog
