@@ -80,7 +80,140 @@
 
 ---
 
-### Phase 2: Sprite Animation System 🎯 PRIORITY
+### Phase 2: Scripted Behaviors (Script Components) 🎯 PRIORITY
+
+**Goal:** Unity/Godot-style script components - attach behavior scripts to entities with hot-reload support
+
+**Philosophy:** Engine transparency - developers write Rust code that feels as natural as Unity C# or GDScript, with immediate iteration via hot-reload
+
+**Core Features:**
+- [ ] **Script Trait System** - Rust-native script components
+  - `Script` trait with lifecycle hooks (`on_start`, `on_update`, `on_physics`, `on_destroy`)
+  - Clear separation: `on_update` for visual/frame logic, `on_physics` for physics/movement (avoids Unity's confusing update/fixed_update overlap)
+  - Automatic component registration with ECS
+  - Access to `ScriptContext` (entity, world queries, delta time, input)
+- [ ] **Hot-Reload Support** - Iterate without recompiling the game
+  - Scripts compiled as dynamic libraries (.so/.dll)
+  - File watcher detects changes and reloads automatically
+  - State preservation across reloads (optional serialization)
+  - Graceful error handling - script errors don't crash the game
+- [ ] **Inspector Integration** - Automatic UI for script fields
+  - `#[inspectable]` attribute for field customization
+  - Auto-generated editors for: f32 (sliders), Vec2/Vec3, bool, enums, String
+  - Live editing - changes reflect immediately in running game
+  - Component ordering in inspector (priority attribute)
+- [ ] **Script API** - Developer-friendly interfaces
+  - `self.entity()` - Get owning entity ID
+  - `self.get_component::<T>()` / `self.set_component()` - Component access
+  - `self.spawn_entity()` / `self.destroy_entity()` - Entity lifecycle
+  - `self.query::<T>()` - World queries from scripts
+  - Event system: `self.on_collision_enter()`, `self.on_trigger_stay()`, etc.
+- [ ] **Editor Scripting Workflow** - First-class IDE experience
+  - New script template generation (via editor or CLI)
+  - Script debugging support (breakpoints in hot-reloaded code)
+  - Script dependency management (use other scripts as fields)
+  - Built-in script documentation from doc comments
+
+**Technical Implementation:**
+- `crates/scripting/` - Scripting system crate (NEW)
+  - `Script` trait - Core interface for all scripts
+  - `ScriptManager` - Hot-reload, compilation, lifecycle
+  - `ScriptContext` - Safe API for scripts to interact with world
+  - `ScriptHost` - Dynamic library loading via `libloading`
+- `engine_core/src/localization/` - Localization system (integrated)
+  - `LocalizationManager` - String lookup, locale management
+  - `FontMapping` - Language-to-font configuration
+- `editor/src/inspector/script_inspector.rs` - Auto-generated UI for script fields
+- **Dynamic library loading** via `libloading` crate
+
+**Behavior Migration (ECS Cleanup):**
+- **Current Issue:** Hard-coded behaviors (`PlayerPlatformer`, `ChaseTagged`, etc.) in `ecs` crate are inflexible and overlap with scripting
+- **Migration Path:**
+  1. Move existing behaviors to `scripting/src/builtins/` as reference script implementations
+  2. `ecs` crate keeps only the `Behavior` marker trait (minimal footprint)
+  3. `ecs` crate deprecates `behavior.rs` module (moved to `scripting`)
+  4. Built-in behaviors become pre-compiled script examples
+- **Result:** Single source of truth for behavior logic - everything is a script
+
+**Example Developer Experience:**
+```rust
+// hello_scripts.rs
+#[derive(Script, Default)]
+pub struct PlayerController {
+    #[inspectable(slider(0.0..200.0))]
+    speed: f32,
+    jump_force: f32,
+}
+
+impl Script for PlayerController {
+    fn on_start(&mut self, ctx: &mut ScriptContext) {
+        ctx.log("Player ready!");
+    }
+    
+    fn on_update(&mut self, ctx: &mut ScriptContext) {
+        // Visual/frame logic (animations, input reading)
+        if ctx.input.is_key_pressed(KeyCode::Space) {
+            self.jump(ctx);
+        }
+    }
+    
+    fn on_physics(&mut self, ctx: &mut ScriptContext) {
+        // Physics logic (forces, velocities)
+        let move_input = ctx.input.axis(Axis::Horizontal);
+        ctx.physics.apply_force(Vec2::new(move_input * self.speed, 0.0));
+    }
+}
+```
+
+**Milestone:** Create a script, attach to entity, edit fields in inspector, modify code and see changes immediately without restart
+
+---
+
+### Phase 3: Localization System (i18n) 🎯 PRIORITY
+
+**Goal:** Support multiple languages for gameplay and editor UI
+
+**Supported Languages:**
+- **English (US)** - `Futureworld-AZwJ.ttf` font
+- **Pirate** - `BlackSamsGold-ej5e.ttf` font
+
+**Localization Features:**
+- [ ] **String Table System** - Key-value localization storage
+  - JSON/RON format for translation files
+  - Namespaced keys (e.g., `gameplay.ui.start`, `editor.menu.file`)
+  - Hot-reload support for translation files
+  - Fallback to English when translation missing
+- [ ] **Font Mapping** - Language-to-font configuration
+  - Per-language font asset assignment
+  - Font fallback chain for missing glyphs
+  - Dynamic font loading based on active language
+- [ ] **Runtime Language Switching** - Change language without restart
+  - Editor language preference persistence
+  - In-game language selection UI
+  - Immediate UI text refresh on language change
+- [ ] **Text Rendering Integration** - UI and renderer support
+  - UILabel auto-translation from keys
+  - Text component locale-aware rendering
+  - Right-to-left (RTL) text support (future)
+- [ ] **Editor Localization** - Full editor UI translation
+  - Menu labels, tooltips, panel headers
+  - Inspector property names and descriptions
+  - Error messages and notifications
+
+**Technical Implementation:**
+- `engine_core/src/localization/` - Integrated localization (KISS/DRY)
+  - `LocalizationManager` - Active locale and string lookup
+  - `string_table.rs` - Key-value storage with hot-reload
+  - `font_mapping.rs` - Language-to-font asset resolution
+- `ui/src/components/localized_label.rs` - `LocalizedLabel` component for auto-translation
+- Translation files: `assets/i18n/en-US.json`, `assets/i18n/pirate.json`
+- **Why integrated?** Localization is configuration/data, similar to scenes/assets which `engine_core` already manages. Avoids a separate crate just for JSON loading.
+
+**Milestone:** Toggle between English and Pirate in editor; same text renders with different fonts
+
+---
+
+### Phase 4: Sprite Animation System 🎯 PRIORITY
 
 **Goal:** Build comprehensive 2D animation tools
 
@@ -117,7 +250,7 @@
 
 ---
 
-### Phase 3: Asset Pipeline & Management
+### Phase 4: Asset Pipeline & Management
 
 **Goal:** Professional-grade asset workflow
 
@@ -154,7 +287,7 @@
 
 ---
 
-### Phase 4: Advanced Editor Features
+### Phase 5: Advanced Editor Features
 
 **Goal:** Professional-grade development environment
 
@@ -196,7 +329,7 @@
 
 ---
 
-### Phase 5: Platform & Deployment
+### Phase 6: Platform & Deployment
 
 **Goal:** Multi-platform support and distribution
 
@@ -232,7 +365,7 @@
 
 ## Technical Debt (Remaining - January 2026)
 
-**Overall Status:** 52 total items (3 completed, 49 remaining - 6% resolution rate this update)
+**Overall Status:** 53 total items (3 completed, 50 remaining - 6% resolution rate this update)
 
 **Priority Order:** Address the biggest risks first (stability, architecture, and data loss) before lower-impact improvements.
 
@@ -284,7 +417,12 @@
   - Location: `ui/src/font.rs:100-315`
   - Fix: Split into FontLoader, GlyphCache, TextLayoutEngine
 
-**ecs (2 items):**
+**ecs (3 items):**
+- [ ] **ARCH-004: Hard-coded behaviors should move to scripting crate** - Behaviors overlap with Script system
+  - Location: `ecs/src/behavior.rs` (PlayerPlatformer, ChaseTagged, etc.)
+  - Issue: Hard-coded behaviors are inflexible; Scripting system replaces them
+  - Fix: Migrate behaviors to `scripting/src/builtins/`, keep only marker trait in ECS
+  - See: Phase 2 Scripted Behaviors in roadmap
 - [ ] **SRP-002: ComponentStorage enum handles both storage types** - Single enum for two storage strategies
   - Location: `ecs/src/component.rs`
   - Fix: Consider trait objects or separate types for Legacy vs Archetype
@@ -366,7 +504,7 @@
 - [ ] **ARCH-001: Reduce coupling** - Event bus or message system for cross-crate communication
 - [ ] **ARCH-002: Configuration system** - Centralized config management
 
-**Total Remaining:** 49 items
+**Total Remaining:** 50 items
 
 ---
 
@@ -377,22 +515,35 @@
 - Zero manual RON editing required
 - Visual feedback for all operations
 
-### Phase 2 (Animation)
+### Phase 2 (Scripted Behaviors)
+- Script hot-reload in < 500ms on change
+- Zero boilerplate for simple scripts (just impl Script)
+- All public fields show in inspector automatically
+- Script errors are caught and logged, game continues running
+- Can prototype a simple game without recompiling the engine
+
+### Phase 3 (Localization)
+- Switch languages in < 100ms without restart
+- 100% of editor UI strings externalized
+- Pirate translation coverage for all core features
+- Font fallback works for missing glyphs
+
+### Phase 4 (Animation)
 - Support 100+ frame animations at 60 FPS
 - < 16ms frame time with animated sprites
 - Seamless animation transitions
 
-### Phase 3 (Asset Pipeline)
+### Phase 4 (Asset Pipeline)
 - Import 50+ assets in < 5 minutes
 - Automatic atlas packing with < 10% wasted space
 - Real-time thumbnail generation
 
-### Phase 4 (Advanced Tools)
+### Phase 5 (Advanced Tools)
 - Visual scripts run at 95% of native code speed
 - Particle systems with 1000+ particles at 60 FPS
 - < 5ms overhead for physics debug rendering
 
-### Phase 5 (Platform Support)
+### Phase 6 (Platform Support)
 - Web: Load and start in < 5 seconds
 - Mobile: 60 FPS on mid-range devices (2022+)
 - Desktop: Package and deploy in < 1 minute
@@ -408,6 +559,21 @@
 4. **Game preview mode** - Run game inside editor viewport
 5. **Asset hot-reloading** - Immediate feedback on changes
 
+### Scripted Behaviors
+1. **Scripts are just Rust** - No DSL, no magic - pure Rust structs implementing a trait
+2. **Hot-reload is essential** - Developer iteration speed > all other concerns
+3. **Clear lifecycle naming** - `on_update` vs `on_physics` (not confusing update/fixed_update)
+4. **Zero-cost abstractions** - Script API compiles to direct ECS calls, no overhead
+5. **Inspector as documentation** - Script fields document themselves via attributes
+6. **Fail gracefully** - Script errors are caught and logged, never crash the game
+
+### Localization
+1. **Key-based strings** - Never hardcode display text, always use keys
+2. **Context comments** - Include translator context in source files
+3. **Font per locale** - Each language defines its primary font
+4. **Fallback chain** - Missing translation → English → key name
+5. **Editor-first** - Editor UI must be fully localizable
+
 ### Sprite Animation
 1. **Data-driven** - Animations are assets, not code
 2. **ECS integration** - Components reference animation assets
@@ -421,6 +587,59 @@
 3. **Verified** - Import validation and error reporting
 4. **Versioned** - Asset metadata and versioning
 5. **Distributed** - Support for team collaboration
+
+---
+
+## New Feature Crate Structure
+
+### Phase 2: Scripted Behaviors
+```
+crates/scripting/              (NEW - separate crate)
+├── src/
+│   ├── lib.rs                 # Script trait, exports
+│   ├── script_manager.rs      # Hot-reload, compilation
+│   ├── script_context.rs      # Safe world API for scripts
+│   ├── script_host.rs         # Dynamic lib loading
+│   ├── inspector.rs           # Script field UI generation
+│   └── builtins/              # Reference implementations
+│       ├── player_platformer.rs
+│       ├── chase_tagged.rs
+│       └── ...
+└── Cargo.toml
+
+crates/ecs/src/                (CLEANUP - remove behaviors)
+├── lib.rs                     # Remove behavior module re-export
+├── component.rs               # Keep: Behavior marker trait only
+└── behavior.rs                # DEPRECATED - migrate to scripting crate
+
+crates/editor/src/
+├── inspector/
+│   ├── mod.rs
+│   └── script_inspector.rs    # Script field rendering
+```
+
+### Phase 3: Localization
+```
+crates/engine_core/src/        (INTEGRATED - not separate crate)
+├── localization/
+│   ├── mod.rs                 # LocalizationManager
+│   ├── string_table.rs        # Key-value storage
+│   └── font_mapping.rs        # Language -> Font
+├── lib.rs                     # Re-export LocalizationManager
+
+assets/i18n/
+├── en-US.json                 # English strings
+└── pirate.json                # Pirate strings
+
+crates/ui/src/
+└── components/
+    └── localized_label.rs     # LocalizedLabel component
+```
+
+**Why this structure?**
+- **Scripting = New Crate**: Hot-reload is complex (dynamic libs, file watching). Clean separation, games opt-in.
+- **Localization = Integrated**: It's configuration/data (like scenes). `engine_core` already manages assets/scenes.
+- **Behaviors = Migrated**: Hard-coded behaviors move from `ecs` to `scripting/builtins/`. Single source of truth.
 
 ---
 
