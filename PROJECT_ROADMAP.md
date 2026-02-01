@@ -18,8 +18,8 @@
 | ECS Macros | 3 | ✅ 100% pass |
 | Common | 26 | ✅ 100% pass |
 
-**Total:** 560/560 tests passing (100% success rate)
-**Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
+**Total:** 585/585 tests passing (100% success rate)
+**Code Quality:** 0 TODOs, 175+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Features
 - ✅ Simple Game API (`Game` trait, `run_game()`)
@@ -64,9 +64,11 @@
   - Name resolution: Name component → Sprite → RigidBody → Entity ID
   - 13 new tests for hierarchy panel
   - ⚠️ Drag-and-drop reparenting deferred to future iteration
-- [ ] **Scene Saving/Loading** - Editor-specific format
-  - Preserve editor state (camera position, selection)
-  - Backward compatibility with runtime scenes
+- [x] **Scene Saving/Loading** - Editor-specific format ✅ COMPLETE
+  - SceneSaver extracts World → SceneData
+  - EditorSettings preserves camera position/zoom
+  - Backward compatible with existing scenes
+  - ~20 new tests
 
 **Technical Implementation:** ✅ COMPLETE
 - Created `crates/editor/` - Editor-specific code
