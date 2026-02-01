@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use ecs::sprite_components::{Sprite, Transform2D};
+use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
 use ecs::{EntityId, Name, World, WorldHierarchyExt};
 
 use crate::assets::AssetManager;
@@ -99,6 +99,27 @@ impl SceneSaver {
             });
         }
 
+        // Camera
+        if let Some(c) = world.get::<Camera>(entity) {
+            components.push(ComponentData::Camera2D {
+                position: (c.position.x, c.position.y),
+                rotation: c.rotation,
+                zoom: c.zoom,
+                viewport_size: (c.viewport_size.x, c.viewport_size.y),
+                is_main_camera: c.is_main_camera,
+            });
+        }
+
+        // SpriteAnimation
+        if let Some(a) = world.get::<SpriteAnimation>(entity) {
+            components.push(ComponentData::SpriteAnimation {
+                fps: a.fps,
+                frames: a.frames.iter().map(|f| (f[0], f[1], f[2], f[3])).collect(),
+                playing: a.playing,
+                loop_animation: a.loop_animation,
+            });
+        }
+
         components
     }
 
@@ -110,7 +131,7 @@ impl SceneSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ecs::sprite_components::{Sprite, Transform2D};
+    use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
     use glam::{Vec2, Vec4};
 
     #[test]
@@ -198,6 +219,80 @@ mod tests {
                 assert_eq!(*depth, 5.0);
             }
             _ => panic!("Expected Sprite"),
+        }
+    }
+
+    #[test]
+    fn test_extract_entity_with_camera() {
+        let mut world = World::default();
+        let entity = world.create_entity();
+        world
+            .add_component(
+                &entity,
+                Camera {
+                    position: Vec2::new(50.0, 75.0),
+                    rotation: 0.25,
+                    zoom: 1.5,
+                    viewport_size: Vec2::new(1920.0, 1080.0),
+                    is_main_camera: true,
+                    near: -1000.0,
+                    far: 1000.0,
+                },
+            )
+            .unwrap();
+
+        let scene = SceneSaver::extract_from_world(&world, None, "Test");
+
+        assert_eq!(scene.entities.len(), 1);
+        match &scene.entities[0].components[0] {
+            ComponentData::Camera2D {
+                position,
+                zoom,
+                is_main_camera,
+                ..
+            } => {
+                assert_eq!(*position, (50.0, 75.0));
+                assert_eq!(*zoom, 1.5);
+                assert!(*is_main_camera);
+            }
+            _ => panic!("Expected Camera2D"),
+        }
+    }
+
+    #[test]
+    fn test_extract_entity_with_animation() {
+        let mut world = World::default();
+        let entity = world.create_entity();
+        world
+            .add_component(
+                &entity,
+                SpriteAnimation {
+                    fps: 12.0,
+                    frames: vec![[0.0, 0.0, 0.25, 0.25], [0.25, 0.0, 0.5, 0.25]],
+                    playing: true,
+                    loop_animation: false,
+                    current_frame: 0,
+                    time_accumulator: 0.0,
+                },
+            )
+            .unwrap();
+
+        let scene = SceneSaver::extract_from_world(&world, None, "Test");
+
+        assert_eq!(scene.entities.len(), 1);
+        match &scene.entities[0].components[0] {
+            ComponentData::SpriteAnimation {
+                fps,
+                frames,
+                playing,
+                loop_animation,
+            } => {
+                assert_eq!(*fps, 12.0);
+                assert_eq!(frames.len(), 2);
+                assert!(*playing);
+                assert!(!*loop_animation);
+            }
+            _ => panic!("Expected SpriteAnimation"),
         }
     }
 }
