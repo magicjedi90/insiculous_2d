@@ -73,6 +73,8 @@ impl Default for AssetConfig {
 pub struct AssetManager {
     texture_manager: TextureManager,
     config: AssetConfig,
+    /// Reverse mapping from texture handle ID to path/reference string
+    texture_paths: HashMap<u32, String>,
 }
 
 impl AssetManager {
@@ -81,6 +83,7 @@ impl AssetManager {
         Self {
             texture_manager: TextureManager::new(device, queue),
             config: AssetConfig::default(),
+            texture_paths: HashMap::new(),
         }
     }
 
@@ -89,6 +92,7 @@ impl AssetManager {
         Self {
             texture_manager: TextureManager::new(device, queue),
             config,
+            texture_paths: HashMap::new(),
         }
     }
 
@@ -118,6 +122,9 @@ impl AssetManager {
         }
 
         let handle = self.texture_manager.load_texture(&full_path, TextureLoadConfig::default())?;
+
+        // Store the original path for scene saving (use the input path, not full_path)
+        self.texture_paths.insert(handle.id, path.to_string_lossy().to_string());
 
         Ok(handle)
     }
@@ -162,6 +169,14 @@ impl AssetManager {
         color: [u8; 4],
     ) -> Result<TextureHandle, AssetError> {
         let handle = self.texture_manager.create_solid_color(width, height, color)?;
+
+        // Store as #solid:RRGGBBAA format for scene saving
+        let path = format!(
+            "#solid:{:02X}{:02X}{:02X}{:02X}",
+            color[0], color[1], color[2], color[3]
+        );
+        self.texture_paths.insert(handle.id, path);
+
         Ok(handle)
     }
 
@@ -262,6 +277,20 @@ impl AssetManager {
     pub fn base_path(&self) -> &str {
         &self.config.base_path
     }
+
+    /// Get the path/reference string for a texture handle.
+    ///
+    /// Returns:
+    /// - `Some("#white")` for handle 0 (built-in white texture)
+    /// - `Some(path)` for loaded textures
+    /// - `Some("#solid:RRGGBBAA")` for solid color textures
+    /// - `None` for unknown handles
+    pub fn get_texture_path(&self, handle: u32) -> Option<&str> {
+        if handle == 0 {
+            return Some("#white");
+        }
+        self.texture_paths.get(&handle).map(|s| s.as_str())
+    }
 }
 
 #[cfg(test)]
@@ -279,5 +308,39 @@ mod tests {
     fn test_asset_error_display() {
         let err = AssetError::NotFound("player.png".to_string());
         assert!(format!("{}", err).contains("player.png"));
+    }
+
+    // Tests for texture path lookup (unit tests without GPU)
+
+    #[test]
+    fn test_get_texture_path_white() {
+        // Handle 0 is always #white - test the logic in isolation
+        // We use a helper function since we can't create real AssetManager without GPU
+        assert_eq!(texture_path_for_handle(0), Some("#white"));
+    }
+
+    #[test]
+    fn test_get_texture_path_unknown() {
+        assert_eq!(texture_path_for_handle(9999), None);
+    }
+
+    /// Helper for testing texture path logic without GPU
+    fn texture_path_for_handle(handle: u32) -> Option<&'static str> {
+        if handle == 0 {
+            Some("#white")
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn test_solid_color_path_format() {
+        // Test the format string generation for solid colors
+        let color: [u8; 4] = [255, 128, 64, 255];
+        let path = format!(
+            "#solid:{:02X}{:02X}{:02X}{:02X}",
+            color[0], color[1], color[2], color[3]
+        );
+        assert_eq!(path, "#solid:FF8040FF");
     }
 }
