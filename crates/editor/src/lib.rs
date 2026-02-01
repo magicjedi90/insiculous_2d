@@ -27,6 +27,7 @@ mod context;
 mod dock;
 mod editable_inspector;
 mod editor_input;
+pub mod file_operations;
 mod gizmo;
 mod grid;
 mod hierarchy;
@@ -52,6 +53,9 @@ pub use editable_inspector::{
     EditableFieldStyle, EditableInspector, EditResult, FieldId,
 };
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
+pub use file_operations::{
+    load_scene, new_scene, save_scene, save_scene_as, FileOperationError,
+};
 pub use gizmo::{Gizmo, GizmoMode};
 pub use hierarchy::HierarchyPanel;
 pub use grid::{GridColors, GridConfig, GridRenderer};

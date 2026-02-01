@@ -3,6 +3,9 @@
 //! The EditorContext wraps a GameContext and adds editor-specific state
 //! like selection, gizmos, and editor camera.
 
+use std::path::{Path, PathBuf};
+
+use engine_core::scene_data::EditorSettings;
 use glam::Vec2;
 
 use crate::{
@@ -45,6 +48,10 @@ pub struct EditorContext {
     snap_to_grid: bool,
     /// Whether the editor is in play mode (running the game)
     play_mode: bool,
+    /// Path to currently loaded scene (None = unsaved new scene)
+    current_scene_path: Option<PathBuf>,
+    /// Scene name for display
+    scene_name: String,
 }
 
 impl Default for EditorContext {
@@ -94,6 +101,8 @@ impl EditorContext {
             hierarchy: HierarchyPanel::new(),
             snap_to_grid: false,
             play_mode: false,
+            current_scene_path: None,
+            scene_name: "Untitled".to_string(),
         }
     }
 
@@ -243,6 +252,38 @@ impl EditorContext {
     /// Toggle play mode.
     pub fn toggle_play_mode(&mut self) {
         self.play_mode = !self.play_mode;
+    }
+
+    // ================== Scene Methods ==================
+
+    /// Get the path to the currently loaded scene.
+    pub fn current_scene_path(&self) -> Option<&Path> {
+        self.current_scene_path.as_deref()
+    }
+
+    /// Set the current scene path and name.
+    pub fn set_current_scene(&mut self, path: Option<PathBuf>, name: String) {
+        self.current_scene_path = path;
+        self.scene_name = name;
+    }
+
+    /// Get the current scene name.
+    pub fn scene_name(&self) -> &str {
+        &self.scene_name
+    }
+
+    /// Create EditorSettings from current editor state.
+    pub fn to_editor_settings(&self) -> EditorSettings {
+        EditorSettings {
+            camera_position: (self.camera_offset().x, self.camera_offset().y),
+            camera_zoom: self.camera_zoom(),
+        }
+    }
+
+    /// Apply EditorSettings to restore camera state.
+    pub fn apply_editor_settings(&mut self, settings: &EditorSettings) {
+        self.set_camera_offset(Vec2::new(settings.camera_position.0, settings.camera_position.1));
+        self.set_camera_zoom(settings.camera_zoom);
     }
 
     // ================== Layout Methods ==================
@@ -624,5 +665,53 @@ mod tests {
         let viewport_center = ctx.viewport.viewport_center();
         assert!((screen_pos.x - viewport_center.x).abs() < 0.01);
         assert!((screen_pos.y - viewport_center.y).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_editor_context_scene_tracking() {
+        let mut ctx = EditorContext::new();
+
+        // Initially no scene
+        assert!(ctx.current_scene_path().is_none());
+        assert_eq!(ctx.scene_name(), "Untitled");
+
+        // Set a scene
+        ctx.set_current_scene(
+            Some(std::path::PathBuf::from("/test/scene.ron")),
+            "My Scene".to_string(),
+        );
+
+        assert_eq!(
+            ctx.current_scene_path(),
+            Some(std::path::Path::new("/test/scene.ron"))
+        );
+        assert_eq!(ctx.scene_name(), "My Scene");
+    }
+
+    #[test]
+    fn test_editor_settings_conversion() {
+        let mut ctx = EditorContext::new();
+        ctx.set_camera_offset(Vec2::new(150.0, -200.0));
+        ctx.set_camera_zoom(1.5);
+
+        let settings = ctx.to_editor_settings();
+
+        assert_eq!(settings.camera_position, (150.0, -200.0));
+        assert_eq!(settings.camera_zoom, 1.5);
+    }
+
+    #[test]
+    fn test_apply_editor_settings() {
+        let mut ctx = EditorContext::new();
+
+        let settings = engine_core::scene_data::EditorSettings {
+            camera_position: (100.0, 50.0),
+            camera_zoom: 2.0,
+        };
+
+        ctx.apply_editor_settings(&settings);
+
+        assert_eq!(ctx.camera_offset(), Vec2::new(100.0, 50.0));
+        assert_eq!(ctx.camera_zoom(), 2.0);
     }
 }
