@@ -120,6 +120,59 @@ impl SceneSaver {
             });
         }
 
+        // RigidBody (physics feature)
+        #[cfg(feature = "physics")]
+        if let Some(rb) = world.get::<physics::components::RigidBody>(entity) {
+            use crate::scene_data::RigidBodyTypeData;
+
+            let body_type = match rb.body_type {
+                physics::components::RigidBodyType::Dynamic => RigidBodyTypeData::Dynamic,
+                physics::components::RigidBodyType::Static => RigidBodyTypeData::Static,
+                physics::components::RigidBodyType::Kinematic => RigidBodyTypeData::Kinematic,
+            };
+
+            components.push(ComponentData::RigidBody {
+                body_type,
+                velocity: (rb.velocity.x, rb.velocity.y),
+                angular_velocity: rb.angular_velocity,
+                gravity_scale: rb.gravity_scale,
+                linear_damping: rb.linear_damping,
+                angular_damping: rb.angular_damping,
+                can_rotate: rb.can_rotate,
+                ccd_enabled: rb.ccd_enabled,
+            });
+        }
+
+        // Collider (physics feature)
+        #[cfg(feature = "physics")]
+        if let Some(col) = world.get::<physics::components::Collider>(entity) {
+            use crate::scene_data::ColliderShapeData;
+            use physics::components::ColliderShape;
+
+            let shape = match &col.shape {
+                ColliderShape::Box { half_extents } => ColliderShapeData::Box {
+                    half_extents: (half_extents.x, half_extents.y),
+                },
+                ColliderShape::Circle { radius } => ColliderShapeData::Circle { radius: *radius },
+                ColliderShape::CapsuleY { half_height, radius } => ColliderShapeData::CapsuleY {
+                    half_height: *half_height,
+                    radius: *radius,
+                },
+                ColliderShape::CapsuleX { half_height, radius } => ColliderShapeData::CapsuleX {
+                    half_height: *half_height,
+                    radius: *radius,
+                },
+            };
+
+            components.push(ComponentData::Collider {
+                shape,
+                offset: (col.offset.x, col.offset.y),
+                is_sensor: col.is_sensor,
+                friction: col.friction,
+                restitution: col.restitution,
+            });
+        }
+
         components
     }
 
@@ -293,6 +346,80 @@ mod tests {
                 assert!(!*loop_animation);
             }
             _ => panic!("Expected SpriteAnimation"),
+        }
+    }
+
+    #[cfg(feature = "physics")]
+    #[test]
+    fn test_extract_entity_with_rigidbody() {
+        use crate::scene_data::RigidBodyTypeData;
+        use physics::components::RigidBody;
+
+        let mut world = World::default();
+        let entity = world.create_entity();
+
+        let mut rb = RigidBody::new_dynamic();
+        rb.velocity = Vec2::new(10.0, 20.0);
+        rb.gravity_scale = 0.5;
+        rb.linear_damping = 2.0;
+        world.add_component(&entity, rb).unwrap();
+
+        let scene = SceneSaver::extract_from_world(&world, None, "Test");
+
+        assert_eq!(scene.entities.len(), 1);
+        match &scene.entities[0].components[0] {
+            ComponentData::RigidBody {
+                body_type,
+                velocity,
+                gravity_scale,
+                linear_damping,
+                ..
+            } => {
+                assert_eq!(*body_type, RigidBodyTypeData::Dynamic);
+                assert_eq!(*velocity, (10.0, 20.0));
+                assert_eq!(*gravity_scale, 0.5);
+                assert_eq!(*linear_damping, 2.0);
+            }
+            _ => panic!("Expected RigidBody"),
+        }
+    }
+
+    #[cfg(feature = "physics")]
+    #[test]
+    fn test_extract_entity_with_collider() {
+        use crate::scene_data::ColliderShapeData;
+        use physics::components::{Collider, ColliderShape};
+
+        let mut world = World::default();
+        let entity = world.create_entity();
+
+        let mut collider = Collider::new(ColliderShape::Box {
+            half_extents: Vec2::new(32.0, 16.0),
+        });
+        collider.friction = 0.8;
+        collider.restitution = 0.2;
+        world.add_component(&entity, collider).unwrap();
+
+        let scene = SceneSaver::extract_from_world(&world, None, "Test");
+
+        assert_eq!(scene.entities.len(), 1);
+        match &scene.entities[0].components[0] {
+            ComponentData::Collider {
+                shape,
+                friction,
+                restitution,
+                ..
+            } => {
+                match shape {
+                    ColliderShapeData::Box { half_extents } => {
+                        assert_eq!(*half_extents, (32.0, 16.0));
+                    }
+                    _ => panic!("Expected Box shape"),
+                }
+                assert_eq!(*friction, 0.8);
+                assert_eq!(*restitution, 0.2);
+            }
+            _ => panic!("Expected Collider"),
         }
     }
 }
