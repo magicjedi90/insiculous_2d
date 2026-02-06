@@ -6,6 +6,11 @@
 use glam::Vec2;
 use ui::{Color, Rect, UIContext};
 
+/// Menu dropdown layout constants
+const DROPDOWN_ITEM_HEIGHT: f32 = 24.0;
+const DROPDOWN_ITEM_PADDING: f32 = 8.0;
+const DROPDOWN_WIDTH: f32 = 200.0;
+
 /// A single menu item (can be an action or separator).
 #[derive(Debug, Clone)]
 pub enum MenuItem {
@@ -303,12 +308,8 @@ impl MenuBar {
 
     /// Render a dropdown menu (static method to avoid borrow issues).
     fn render_dropdown_static(ui: &mut UIContext, menu: &Menu, anchor: Rect) -> Option<String> {
-        const ITEM_HEIGHT: f32 = 24.0;
-        const ITEM_PADDING: f32 = 8.0;
-        const DROPDOWN_WIDTH: f32 = 200.0;
-
         let item_count = menu.items.len();
-        let dropdown_height = item_count as f32 * ITEM_HEIGHT + 8.0;
+        let dropdown_height = item_count as f32 * DROPDOWN_ITEM_HEIGHT + 8.0;
         let dropdown_bounds = Rect::new(
             anchor.x,
             anchor.y + anchor.height,
@@ -328,7 +329,7 @@ impl MenuBar {
                         dropdown_bounds.x + 4.0,
                         y,
                         dropdown_bounds.width - 8.0,
-                        ITEM_HEIGHT,
+                        DROPDOWN_ITEM_HEIGHT,
                     );
 
                     let id = format!("menu_item_{}_{}", menu.title, i);
@@ -340,23 +341,23 @@ impl MenuBar {
                     // Draw shortcut if present
                     if let Some(shortcut) = shortcut {
                         let shortcut_pos = Vec2::new(
-                            item_bounds.x + item_bounds.width - ITEM_PADDING - shortcut.len() as f32 * 6.0,
+                            item_bounds.x + item_bounds.width - DROPDOWN_ITEM_PADDING - shortcut.len() as f32 * 6.0,
                             item_bounds.center().y,
                         );
                         ui.label_styled(shortcut, shortcut_pos, Color::new(0.5, 0.5, 0.5, 1.0), 12.0);
                     }
 
-                    y += ITEM_HEIGHT;
+                    y += DROPDOWN_ITEM_HEIGHT;
                 }
                 MenuItem::Separator => {
-                    let sep_y = y + ITEM_HEIGHT / 2.0;
+                    let sep_y = y + DROPDOWN_ITEM_HEIGHT / 2.0;
                     ui.line(
                         Vec2::new(dropdown_bounds.x + 8.0, sep_y),
                         Vec2::new(dropdown_bounds.x + dropdown_bounds.width - 8.0, sep_y),
                         Color::new(0.3, 0.3, 0.3, 1.0),
                         1.0,
                     );
-                    y += ITEM_HEIGHT;
+                    y += DROPDOWN_ITEM_HEIGHT;
                 }
                 MenuItem::Submenu { label, .. } => {
                     // For now, just render the label with an arrow indicator
@@ -364,12 +365,12 @@ impl MenuBar {
                         dropdown_bounds.x + 4.0,
                         y,
                         dropdown_bounds.width - 8.0,
-                        ITEM_HEIGHT,
+                        DROPDOWN_ITEM_HEIGHT,
                     );
 
                     let id = format!("menu_submenu_{}_{}", menu.title, i);
                     ui.button(id.as_str(), &format!("{} >", label), item_bounds);
-                    y += ITEM_HEIGHT;
+                    y += DROPDOWN_ITEM_HEIGHT;
                 }
             }
         }
