@@ -329,7 +329,10 @@ impl FontManager {
         })
     }
 
-    /// Measure the size of a text string without fully rasterizing.
+    /// Measure the size of a text string without rasterizing.
+    ///
+    /// Uses `font.metrics()` instead of `font.rasterize()` to get advance widths
+    /// without the expensive bitmap generation step.
     pub fn measure_text(
         &self,
         handle: FontHandle,
@@ -344,7 +347,7 @@ impl FontManager {
         let height = line_metrics.map(|m| m.new_line_size).unwrap_or(font_size * 1.2);
 
         for character in text.chars() {
-            let (metrics, _) = font.rasterize(character, font_size);
+            let metrics = font.metrics(character, font_size);
             width += metrics.advance_width;
         }
 
