@@ -138,6 +138,13 @@ impl DrawList {
         }
     }
 
+    /// Calculate the depth for the next draw command.
+    /// Each command gets slightly increasing depth to maintain draw order.
+    #[inline]
+    fn next_depth(&self) -> f32 {
+        self.base_depth + self.commands.len() as f32 * 0.001
+    }
+
     /// Clear all draw commands.
     pub fn clear(&mut self) {
         self.commands.clear();
@@ -169,7 +176,7 @@ impl DrawList {
             bounds,
             color,
             corner_radius,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -185,7 +192,7 @@ impl DrawList {
             color,
             width,
             corner_radius,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -196,7 +203,7 @@ impl DrawList {
             position,
             color,
             font_size,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -204,7 +211,7 @@ impl DrawList {
     pub fn text(&mut self, data: TextDrawData) {
         self.commands.push(DrawCommand::Text {
             data,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -224,7 +231,7 @@ impl DrawList {
                 height: font_size,
                 glyphs: Vec::new(), // Empty - will be rendered as placeholder if no glyphs
             },
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -234,7 +241,7 @@ impl DrawList {
             center,
             radius,
             color,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
@@ -245,7 +252,7 @@ impl DrawList {
             end,
             color,
             width,
-            depth: self.base_depth + self.commands.len() as f32 * 0.001,
+            depth: self.next_depth(),
         });
     }
 
