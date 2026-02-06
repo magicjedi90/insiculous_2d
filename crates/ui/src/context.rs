@@ -159,6 +159,14 @@ impl UIContext {
 
     // ================== Widget Helpers ==================
 
+    /// Calculate the baseline Y position for vertically centered text.
+    fn baseline_y(&self, text_top: f32, font_size: f32, font_handle: FontHandle) -> f32 {
+        let ascent = self.font_manager.metrics(font_handle, font_size)
+            .map(|m| m.ascent)
+            .unwrap_or(font_size * 0.8);
+        text_top + ascent
+    }
+
     /// Get the background color for a widget based on its state and the button style
     fn widget_background_color(&self, state: WidgetState) -> Color {
         let style = &self.theme.button;
@@ -253,11 +261,8 @@ impl UIContext {
             if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
                 // Position text so it's centered vertically
                 let text_top = bounds.y + (bounds.height - text_size.y) / 2.0;
-                // Get font metrics to find the baseline
-                let metrics = self.font_manager.metrics(font_handle, font_size);
-                let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
                 // The baseline is 'ascent' pixels below the text top
-                let baseline_y = text_top + ascent;
+                let baseline_y = self.baseline_y(text_top, font_size, font_handle);
                 let text_pos = Vec2::new(
                     bounds.x + (bounds.width - text_size.x) / 2.0,
                     baseline_y,
@@ -332,14 +337,11 @@ impl UIContext {
         let font_size = self.theme.text.font_size;
         let padding = 8.0; // Standard padding
 
-        // Get text dimensions if font is available
-        let (text_size, metrics) = if let Some(font_handle) = self.font_manager.default_font() {
-            let size = self.font_manager.measure_text(font_handle, text, font_size).ok();
-            let m = self.font_manager.metrics(font_handle, font_size);
-            (size, m)
-        } else {
-            (None, None)
-        };
+        // Get text dimensions and font handle if available
+        let font_handle = self.font_manager.default_font();
+        let text_size = font_handle.and_then(|fh| {
+            self.font_manager.measure_text(fh, text, font_size).ok()
+        });
 
         // Calculate X position based on alignment
         let x = if let Some(size) = text_size {
@@ -359,11 +361,13 @@ impl UIContext {
         };
 
         // Calculate Y baseline position for vertical centering
-        // The text origin is at the baseline, so we need to offset by ascent
-        let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
         let text_height = text_size.map(|s| s.y).unwrap_or(font_size);
         let text_top = bounds.y + (bounds.height - text_height) / 2.0;
-        let baseline_y = text_top + ascent;
+        let baseline_y = if let Some(fh) = font_handle {
+            self.baseline_y(text_top, font_size, fh)
+        } else {
+            text_top + font_size * 0.8
+        };
 
         self.label(text, Vec2::new(x, baseline_y));
     }
