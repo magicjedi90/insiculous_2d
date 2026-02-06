@@ -23,16 +23,10 @@ Last audited: January 2026
 - **Suggested fix:** Extract into a helper method `get_audio_manager_or_placeholder()` or refactor to handle optional audio in a single place.
 - **Priority:** Medium
 
-### [DRY-002] Duplicate coordinate transformation logic in ui_integration.rs
+### ~~[DRY-002] Duplicate coordinate transformation logic in ui_integration.rs~~ ✅ RESOLVED
 - **File:** `ui_integration.rs`
-- **Lines:** 39-41, 75-76, 93-96, 130-131, 143-144, 161-162, 184-185
-- **Issue:** The coordinate transformation from screen space to world space is repeated 7 times:
-  ```rust
-  let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
-  let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
-  ```
-- **Suggested fix:** Extract to a helper function `screen_to_world_coords(x, y, width, height, window_size) -> Vec2`.
-- **Priority:** Medium
+- **Resolution:** Extracted two helper functions: `screen_rect_center_to_world(bounds, window_size)` and `screen_point_to_world(x, y, window_size)`. All 7 instances of inline coordinate math replaced.
+- **Resolved:** February 2026
 
 ### [DRY-003] Duplicate GameContext creation pattern
 - **File:** `game.rs`
@@ -41,32 +35,15 @@ Last audited: January 2026
 - **Suggested fix:** Create a factory method `create_game_context()` or use a builder pattern.
 - **Priority:** Low (refactoring was started but this remains)
 
-### [DRY-004] Repeated hex color parsing error handling
+### ~~[DRY-004] Repeated hex color parsing error handling~~ ✅ RESOLVED
 - **File:** `scene_loader.rs`
-- **Lines:** 497-503, 505-511
-- **Issue:** The hex color parsing error handling pattern is duplicated twice for 6-char and 8-char cases:
-  ```rust
-  .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?
-  ```
-- **Suggested fix:** Extract to a helper function `parse_hex_byte(hex, start, end)` that handles the error mapping.
-- **Priority:** Low
+- **Resolution:** Extracted `parse_hex_byte(hex, start) -> Result<u8, SceneLoadError>` helper function. Both 6-char and 8-char hex color parsing branches now use this helper.
+- **Resolved:** February 2026
 
-### [DRY-005] Duplicate surface error recovery pattern
+### ~~[DRY-005] Duplicate surface error recovery pattern~~ ✅ RESOLVED
 - **File:** `render_manager.rs`
-- **Lines:** 131-138, 168-175
-- **Issue:** The surface recreation logic after a surface error is duplicated:
-  ```rust
-  Err(RendererError::SurfaceError(_)) => {
-      if let Err(e) = renderer.recreate_surface() {
-          log::error!("Failed to recreate surface: {}", e);
-          return Err(e);
-      }
-      log::debug!("Surface recreated after loss");
-      Ok(())
-  }
-  ```
-- **Suggested fix:** Extract to a helper method `handle_surface_error(&mut self)` on RenderManager.
-- **Priority:** Low
+- **Resolution:** Extracted `handle_render_error(renderer, error) -> Result<(), RendererError>` helper method. Both `render()` and `render_basic()` now delegate to this helper for error handling.
+- **Resolved:** February 2026
 
 ---
 

@@ -204,23 +204,20 @@ The identified issues are mostly minor DRY violations and architectural consider
 
 4 new issues (0 High, 1 Medium, 3 Low)
 
-### [PERF-001] measure_text() re-rasterizes glyphs bypassing cache
+### ~~[PERF-001] measure_text() re-rasterizes glyphs bypassing cache~~ ✅ RESOLVED
 - **File:** `src/font.rs:332-352`
-- **Issue:** Calls font.rasterize() directly instead of rasterize_glyph() which uses cache
-- **Suggested fix:** Use rasterize_glyph() (requires &mut self)
-- **Priority:** Medium | **Effort:** Small
+- **Resolution:** Replaced `font.rasterize()` with `font.metrics()` which returns advance width without performing bitmap rasterization. No signature change needed.
+- **Resolved:** February 2026
 
-### [DRY-005] Depth calculation repeated 8x in DrawList
-- **File:** `src/draw.rs:162-249`
-- **Issue:** `self.base_depth + self.commands.len() as f32 * 0.001` in 8 methods
-- **Suggested fix:** Extract `fn next_depth(&self) -> f32` helper
-- **Priority:** Low | **Effort:** Small
+### ~~[DRY-005] Depth calculation repeated 8x in DrawList~~ ✅ RESOLVED
+- **File:** `src/draw.rs`
+- **Resolution:** Extracted `next_depth(&self) -> f32` helper method. All 7 occurrences replaced with calls to the helper.
+- **Resolved:** February 2026
 
-### [DRY-006] Text baseline positioning duplicated
-- **File:** `src/context.rs:252-265, 335-368`
-- **Issue:** Identical ascent + baseline calculation in button rendering and label_in_bounds
-- **Suggested fix:** Extract `calculate_baseline_y()` helper
-- **Priority:** Low | **Effort:** Small
+### ~~[DRY-006] Text baseline positioning duplicated~~ ✅ RESOLVED
+- **File:** `src/context.rs`
+- **Resolution:** Extracted `baseline_y(&self, text_top, font_size, font_handle) -> f32` helper method. Both `button_styled()` and `label_in_bounds()` now use this helper.
+- **Resolved:** February 2026
 
 ### [DRY-007] Theme color hex values scattered
 - **File:** `src/style.rs:34-72`

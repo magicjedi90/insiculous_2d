@@ -86,23 +86,15 @@ None required - all issues are low priority and the code functions correctly.
 
 8 new issues found (0 High, 4 Medium, 4 Low)
 
-### DRY-001: Repeated vec-like detection in inspector.rs
-- **File:** `src/inspector.rs:178-202`
-- **Issue:** Three separate if-statements for Vec2/Vec3/Vec4 with nearly identical logic
-- **Suggested fix:** Generalize into `has_exact_keys(map, &["x","y","z","w"])` helper
-- **Priority:** Low | **Effort:** Small
+### ~~DRY-001: Repeated vec-like detection in inspector.rs~~ ✅ RESOLVED
+- **File:** `src/inspector.rs`
+- **Resolution:** Extracted `has_exact_keys(map, keys)` helper. `is_vec_like()` simplified from 25 lines to 3 lines with 3 calls to the helper.
+- **Resolved:** February 2026
 
-### SRP-001: EditorInputMapping handles both binding storage and action queries
-- **File:** `src/editor_input.rs:113-260`
-- **Issue:** Two responsibilities: key binding management and action state querying. Action checking duplicated across 3 methods.
-- **Suggested fix:** Extract generic `check_action_with<F>()` method
-- **Priority:** Medium | **Effort:** Small
-
-### DRY-002: Input action state checking tripled
-- **File:** `src/editor_input.rs:201-260`
-- **Issue:** is_action_pressed, is_action_just_pressed, is_action_just_released have identical match structures
-- **Suggested fix:** Generic action checker with predicate closure
-- **Priority:** Medium | **Effort:** Small
+### ~~SRP-001/DRY-002: EditorInputMapping action checking tripled~~ ✅ RESOLVED
+- **File:** `src/editor_input.rs`
+- **Resolution:** Extracted `check_action_with()` generic helper using closure predicates. All 3 methods (`is_action_pressed`, `is_action_just_pressed`, `is_action_just_released`) now delegate to this helper, reducing ~50 lines to ~20.
+- **Resolved:** February 2026
 
 ### SRP-002: MenuBar.render() mixes layout, interaction, and rendering
 - **File:** `src/menu.rs:246-302`
@@ -110,17 +102,15 @@ None required - all issues are low priority and the code functions correctly.
 - **Suggested fix:** Split into update_menu_layout(), render_menu_titles(), handle_menu_interactions()
 - **Priority:** Medium | **Effort:** Medium
 
-### DRY-003: Menu dropdown hardcoded constants
-- **File:** `src/menu.rs:305-378`
-- **Issue:** ITEM_HEIGHT, ITEM_PADDING, DROPDOWN_WIDTH as local consts in function body
-- **Suggested fix:** Module-level constants or MenuStyle struct
-- **Priority:** Low | **Effort:** Small
+### ~~DRY-003: Menu dropdown hardcoded constants~~ ✅ RESOLVED
+- **File:** `src/menu.rs`
+- **Resolution:** Promoted `ITEM_HEIGHT`, `ITEM_PADDING`, `DROPDOWN_WIDTH` to module-level constants as `DROPDOWN_ITEM_HEIGHT`, `DROPDOWN_ITEM_PADDING`, `DROPDOWN_WIDTH`. All references updated.
+- **Resolved:** February 2026
 
-### DRY-004: Gizmo arrow head bounds calculation repeated 4+ times
-- **File:** `src/gizmo.rs:206-229`
-- **Issue:** `Rect::new(end.x - handle_size/2.0, ...)` pattern repeated across gizmo modes
-- **Suggested fix:** Extract `create_handle_bounds(center, size)` helper
-- **Priority:** Low | **Effort:** Small
+### ~~DRY-004: Gizmo arrow head bounds calculation repeated 4+ times~~ ✅ RESOLVED
+- **File:** `src/gizmo.rs`
+- **Resolution:** Extracted `centered_handle_rect(&self, center) -> Rect` helper method. All 5 occurrences of centered rect creation now use this helper.
+- **Resolved:** February 2026
 
 ### ARCH-001: Gizmo render_translate() is 95 lines
 - **File:** `src/gizmo.rs:197-291`

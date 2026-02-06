@@ -48,20 +48,10 @@ Last audited: January 2026
   ```
 - **Resolved:** January 2026
 
-### [DRY-003] Repeated unbind logic in input_mapping.rs
+### ~~[DRY-003] Repeated unbind logic in input_mapping.rs~~ ✅ RESOLVED
 - **File:** `input_mapping.rs`
-- **Lines:** 104-118, 122-138
-- **Issue:** The logic to remove an existing binding and clean up `action_bindings` is duplicated in `bind_input()` and `bind_input_to_multiple_actions()`:
-  ```rust
-  if let Some(old_action) = self.bindings.remove(&input) {
-      if let Some(sources) = self.action_bindings.get_mut(&old_action) {
-          sources.retain(|&s| s != input);
-          ...
-      }
-  }
-  ```
-- **Suggested fix:** Extract to `fn remove_existing_binding(&mut self, input: &InputSource)`.
-- **Priority:** Low
+- **Resolution:** Extracted `remove_existing_binding(&mut self, input: &InputSource)` helper method. Used in both `bind_input()` and `bind_input_to_multiple_actions()`. Also fixed inconsistency where `bind_input_to_multiple_actions` didn't clean up empty action entries.
+- **Resolved:** February 2026
 
 ---
 
