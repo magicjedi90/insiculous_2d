@@ -105,6 +105,24 @@ impl RenderManager {
         }
     }
 
+    /// Handle a render error, attempting surface recreation on surface loss.
+    fn handle_render_error(renderer: &mut Renderer, error: RendererError) -> Result<(), RendererError> {
+        match error {
+            RendererError::SurfaceError(_) => {
+                if let Err(e) = renderer.recreate_surface() {
+                    log::error!("Failed to recreate surface: {}", e);
+                    return Err(e);
+                }
+                log::debug!("Surface recreated after loss");
+                Ok(())
+            }
+            e => {
+                log::error!("Render error: {}", e);
+                Err(e)
+            }
+        }
+    }
+
     /// Render sprites using the provided batcher and textures.
     ///
     /// # Arguments
@@ -128,19 +146,7 @@ impl RenderManager {
 
         match renderer.render_with_sprites(pipeline, &self.camera, textures, batches) {
             Ok(_) => Ok(()),
-            Err(RendererError::SurfaceError(_)) => {
-                // Try to recreate the surface
-                if let Err(e) = renderer.recreate_surface() {
-                    log::error!("Failed to recreate surface: {}", e);
-                    return Err(e);
-                }
-                log::debug!("Surface recreated after loss");
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("Render error: {}", e);
-                Err(e)
-            }
+            Err(e) => Self::handle_render_error(renderer, e),
         }
     }
 
@@ -165,18 +171,7 @@ impl RenderManager {
 
         match renderer.render() {
             Ok(_) => Ok(()),
-            Err(RendererError::SurfaceError(_)) => {
-                if let Err(e) = renderer.recreate_surface() {
-                    log::error!("Failed to recreate surface: {}", e);
-                    return Err(e);
-                }
-                log::debug!("Surface recreated after loss");
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("Render error: {}", e);
-                Err(e)
-            }
+            Err(e) => Self::handle_render_error(renderer, e),
         }
     }
 
