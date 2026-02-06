@@ -526,23 +526,9 @@ impl SceneLoader {
         let hex = hex.trim_start_matches('#');
 
         if hex.len() == 6 {
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            Ok([r, g, b, 255])
+            Ok([parse_hex_byte(hex, 0)?, parse_hex_byte(hex, 2)?, parse_hex_byte(hex, 4)?, 255])
         } else if hex.len() == 8 {
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            let a = u8::from_str_radix(&hex[6..8], 16)
-                .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?;
-            Ok([r, g, b, a])
+            Ok([parse_hex_byte(hex, 0)?, parse_hex_byte(hex, 2)?, parse_hex_byte(hex, 4)?, parse_hex_byte(hex, 6)?])
         } else {
             Err(SceneLoadError::InvalidTextureRef(format!(
                 "Hex color must be 6 or 8 characters: {}",
@@ -550,6 +536,12 @@ impl SceneLoader {
             )))
         }
     }
+}
+
+/// Parse a 2-character hex byte from a string at the given offset.
+fn parse_hex_byte(hex: &str, start: usize) -> Result<u8, SceneLoadError> {
+    u8::from_str_radix(&hex[start..start + 2], 16)
+        .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))
 }
 
 #[cfg(test)]
