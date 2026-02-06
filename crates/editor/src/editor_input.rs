@@ -197,65 +197,49 @@ impl EditorInputMapping {
         self.bindings.get(&action).map(|v| v.as_slice()).unwrap_or(&[])
     }
 
+    /// Check if any binding for an action satisfies the given predicates.
+    fn check_action_with(
+        &self,
+        action: EditorAction,
+        input: &InputHandler,
+        key_check: impl Fn(&InputHandler, KeyCode) -> bool,
+        mouse_check: impl Fn(&InputHandler, MouseButton) -> bool,
+    ) -> bool {
+        self.get_bindings(action).iter().any(|source| match source {
+            InputSource::Keyboard(key) => key_check(input, *key),
+            InputSource::Mouse(button) => mouse_check(input, *button),
+            InputSource::Gamepad(_, _) => false,
+        })
+    }
+
     /// Check if an action is currently active (any bound input pressed).
     pub fn is_action_pressed(&self, action: EditorAction, input: &InputHandler) -> bool {
-        for source in self.get_bindings(action) {
-            match source {
-                InputSource::Keyboard(key) => {
-                    if input.is_key_pressed(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(button) => {
-                    if input.is_mouse_button_pressed(*button) {
-                        return true;
-                    }
-                }
-                InputSource::Gamepad(_, _) => {
-                    // Not typically used in editor, but could be supported
-                }
-            }
-        }
-        false
+        self.check_action_with(
+            action,
+            input,
+            |i, key| i.is_key_pressed(key),
+            |i, btn| i.is_mouse_button_pressed(btn),
+        )
     }
 
     /// Check if an action was just pressed this frame.
     pub fn is_action_just_pressed(&self, action: EditorAction, input: &InputHandler) -> bool {
-        for source in self.get_bindings(action) {
-            match source {
-                InputSource::Keyboard(key) => {
-                    if input.is_key_just_pressed(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(button) => {
-                    if input.is_mouse_button_just_pressed(*button) {
-                        return true;
-                    }
-                }
-                InputSource::Gamepad(_, _) => {}
-            }
-        }
-        false
+        self.check_action_with(
+            action,
+            input,
+            |i, key| i.is_key_just_pressed(key),
+            |i, btn| i.is_mouse_button_just_pressed(btn),
+        )
     }
 
     /// Check if an action was just released this frame.
     pub fn is_action_just_released(&self, action: EditorAction, input: &InputHandler) -> bool {
-        for source in self.get_bindings(action) {
-            match source {
-                InputSource::Keyboard(key) => {
-                    if input.is_key_just_released(*key) {
-                        return true;
-                    }
-                }
-                InputSource::Mouse(_button) => {
-                    // InputHandler doesn't have is_mouse_button_just_released
-                    // This would need to be added to the input crate
-                }
-                InputSource::Gamepad(_, _) => {}
-            }
-        }
-        false
+        self.check_action_with(
+            action,
+            input,
+            |i, key| i.is_key_just_released(key),
+            |_i, _btn| false, // Mouse button release not yet supported
+        )
     }
 
     /// Update input state from InputHandler.
