@@ -174,31 +174,16 @@ fn render_field(
     current_y
 }
 
+/// Check if a JSON map has exactly the given keys (no more, no less).
+fn has_exact_keys(map: &serde_json::Map<String, Value>, keys: &[&str]) -> bool {
+    map.len() == keys.len() && keys.iter().all(|k| map.contains_key(*k))
+}
+
 /// Check if a JSON object looks like a vector (has x, y or x, y, z, w keys).
 fn is_vec_like(map: &serde_json::Map<String, Value>) -> bool {
-    let keys: Vec<&String> = map.keys().collect();
-
-    // Vec2 pattern
-    if keys.len() == 2 && map.contains_key("x") && map.contains_key("y") {
-        return true;
-    }
-
-    // Vec3 pattern
-    if keys.len() == 3 && map.contains_key("x") && map.contains_key("y") && map.contains_key("z") {
-        return true;
-    }
-
-    // Vec4 pattern
-    if keys.len() == 4
-        && map.contains_key("x")
-        && map.contains_key("y")
-        && map.contains_key("z")
-        && map.contains_key("w")
-    {
-        return true;
-    }
-
-    false
+    has_exact_keys(map, &["x", "y"])
+        || has_exact_keys(map, &["x", "y", "z"])
+        || has_exact_keys(map, &["x", "y", "z", "w"])
 }
 
 /// Format a vec-like object as (x, y) or (x, y, z) or (x, y, z, w).
