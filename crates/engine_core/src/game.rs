@@ -312,8 +312,7 @@ impl<G: Game> GameRunner<G> {
         // Update all subsystems
         self.update_audio();
         self.update_ui_begin(window_size);
-        self.initialize_if_needed(delta_time, window_size);
-        self.update_game_logic(delta_time, window_size);
+        self.initialize_and_update(delta_time, window_size);
         let ui_commands = self.update_ui_end();
         self.update_input_end();
 
@@ -335,13 +334,9 @@ impl<G: Game> GameRunner<G> {
         self.ui_manager.begin_frame(&self.input, window_size);
     }
 
-    /// Initialize game on first frame
-    fn initialize_if_needed(&mut self, delta_time: f32, window_size: Vec2) {
-        if self.initialized {
-            return;
-        }
-
-        // Get mutable references to managers
+    /// Initialize game on first frame, then update game logic.
+    /// Combined to eliminate duplicated GameContext construction and placeholder audio patterns.
+    fn initialize_and_update(&mut self, delta_time: f32, window_size: Vec2) {
         let asset_manager = self.asset_manager.as_mut().unwrap();
         let audio_manager = self.audio_manager.as_mut();
 
@@ -355,35 +350,19 @@ impl<G: Game> GameRunner<G> {
                 world: &mut self.scene.world,
                 assets: asset_manager,
                 audio,
-                ui: &mut self.ui_manager.ui_context(),
+                ui: self.ui_manager.ui_context(),
                 delta_time,
                 window_size,
             };
-            self.game.init(&mut ctx);
-        }
-        self.initialized = true;
-    }
 
-    /// Update game logic
-    fn update_game_logic(&mut self, delta_time: f32, window_size: Vec2) {
-        // Update game logic
-        let asset_manager = self.asset_manager.as_mut().unwrap();
-        let audio_manager = self.audio_manager.as_mut();
+            if !self.initialized {
+                self.game.init(&mut ctx);
+                self.initialized = true;
+            }
 
-        let mut placeholder_audio = AudioManager::new().ok();
-        let audio = audio_manager.or(placeholder_audio.as_mut());
-
-        if let Some(audio) = audio {
-            let mut ctx = GameContext {
-                input: &self.input,
-                world: &mut self.scene.world,
-                assets: asset_manager,
-                audio,
-                ui: &mut self.ui_manager.ui_context(),
-                delta_time,
-                window_size,
-            };
             self.game.update(&mut ctx);
+        } else if !self.initialized {
+            self.initialized = true;
         }
     }
 
@@ -421,9 +400,9 @@ impl<G: Game> GameRunner<G> {
         let mut batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
         // Sort batches by their minimum depth (ascending for back-to-front rendering)
         batches.sort_by(|a, b| {
-            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
-            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
-            a_min.partial_cmp(&b_min).unwrap()
+            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            a_min.total_cmp(&b_min)
         });
         let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
 

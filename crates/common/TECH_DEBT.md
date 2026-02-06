@@ -145,3 +145,21 @@ Used by:
 ```
 
 The common crate correctly sits at the bottom of the dependency hierarchy with no engine crate dependencies.
+
+---
+
+## New Findings (February 2026 Audit)
+
+2 new issues (0 High, 1 Medium, 1 Low)
+
+### [KISS-002] Unused thiserror dependency
+- **File:** `Cargo.toml:11`
+- **Issue:** thiserror listed but no error types defined in crate
+- **Suggested fix:** Remove thiserror from dependencies
+- **Priority:** Low | **Effort:** Small
+
+### [DRY-002] Volume clamping duplicated cross-crate
+- **File:** (cross-crate: ecs/audio_components.rs, audio/manager.rs)
+- **Issue:** Volume clamping pattern duplicated in audio and ecs crates
+- **Suggested fix:** Create `clamp_volume()` utility in common crate
+- **Priority:** Medium | **Effort:** Small

@@ -239,3 +239,40 @@ These features would enhance the engine but are not required for current functio
 - Visual debugger for entity/component state
 - Performance profiler integration
 - Hot-reloading for assets and scenes
+
+---
+
+## New Findings (February 2026 Audit)
+
+3 issues found and FIXED during this audit. 4 remaining new issues documented below.
+
+### Recently Fixed (This Audit)
+- ✅ **LOGIC-001**: `partial_cmp().unwrap()` crash risk in depth sorting → Fixed: replaced with `total_cmp()`
+- ✅ **DRY-006 + DRY-007**: GameContext construction + placeholder audio duplicated 3x → Fixed: consolidated into `initialize_and_update()`
+- ✅ **ARCH-004**: Duplicate UIManager methods (context_mut + ui_context) → Fixed: consolidated to single `ui_context()`
+
+### Remaining New Issues
+
+### LOGIC-002: Unsafe unwrap() on asset_manager outside guard scope
+- **File:** `src/game.rs:345, 370` (now consolidated)
+- **Issue:** `asset_manager.as_mut().unwrap()` outside explicit guard; relies on caller check
+- **Suggested fix:** Use `.ok_or()` or add local guard
+- **Priority:** Medium | **Effort:** Small
+
+### SRP-004: GameRunner glyph texture caching crosses concerns
+- **File:** `src/game.rs:221-267`
+- **Issue:** prepare_glyph_textures mixes UI iteration, texture creation, and caching
+- **Suggested fix:** Move to UIManager or create GlyphTextureCache struct
+- **Priority:** Medium | **Effort:** Medium
+
+### LOGIC-003: Lifecycle manager uses unwrap() on 12 lock operations
+- **File:** `src/lifecycle.rs`
+- **Issue:** All RwLock/Mutex operations use `.unwrap()` - panics on poison
+- **Suggested fix:** Use `.map_err()` or switch to `parking_lot::Mutex`
+- **Priority:** Medium | **Effort:** Medium
+
+### KISS-003: Over-engineered sync in LifecycleManager
+- **File:** `src/lifecycle.rs:74-77`
+- **Issue:** Clone creates independent RwLock instances rather than sharing state
+- **Suggested fix:** Document Clone behavior or simplify threading model
+- **Priority:** Medium | **Effort:** Small

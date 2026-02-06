@@ -79,3 +79,57 @@ None required - all issues are low priority and the code functions correctly.
 1. **MAGIC-001** - Extract field ranges to configuration when adding per-project customization
 2. **MAGIC-002** - Increase ID multipliers if adding components with many fields
 3. **MAGIC-003** - Add layout dimensions to EditableFieldStyle if UI customization needed
+
+---
+
+## New Findings (February 2026 Audit)
+
+8 new issues found (0 High, 4 Medium, 4 Low)
+
+### DRY-001: Repeated vec-like detection in inspector.rs
+- **File:** `src/inspector.rs:178-202`
+- **Issue:** Three separate if-statements for Vec2/Vec3/Vec4 with nearly identical logic
+- **Suggested fix:** Generalize into `has_exact_keys(map, &["x","y","z","w"])` helper
+- **Priority:** Low | **Effort:** Small
+
+### SRP-001: EditorInputMapping handles both binding storage and action queries
+- **File:** `src/editor_input.rs:113-260`
+- **Issue:** Two responsibilities: key binding management and action state querying. Action checking duplicated across 3 methods.
+- **Suggested fix:** Extract generic `check_action_with<F>()` method
+- **Priority:** Medium | **Effort:** Small
+
+### DRY-002: Input action state checking tripled
+- **File:** `src/editor_input.rs:201-260`
+- **Issue:** is_action_pressed, is_action_just_pressed, is_action_just_released have identical match structures
+- **Suggested fix:** Generic action checker with predicate closure
+- **Priority:** Medium | **Effort:** Small
+
+### SRP-002: MenuBar.render() mixes layout, interaction, and rendering
+- **File:** `src/menu.rs:246-302`
+- **Issue:** 57-line method handles bounds calculation, click detection, state management, AND dropdown rendering
+- **Suggested fix:** Split into update_menu_layout(), render_menu_titles(), handle_menu_interactions()
+- **Priority:** Medium | **Effort:** Medium
+
+### DRY-003: Menu dropdown hardcoded constants
+- **File:** `src/menu.rs:305-378`
+- **Issue:** ITEM_HEIGHT, ITEM_PADDING, DROPDOWN_WIDTH as local consts in function body
+- **Suggested fix:** Module-level constants or MenuStyle struct
+- **Priority:** Low | **Effort:** Small
+
+### DRY-004: Gizmo arrow head bounds calculation repeated 4+ times
+- **File:** `src/gizmo.rs:206-229`
+- **Issue:** `Rect::new(end.x - handle_size/2.0, ...)` pattern repeated across gizmo modes
+- **Suggested fix:** Extract `create_handle_bounds(center, size)` helper
+- **Priority:** Low | **Effort:** Small
+
+### ARCH-001: Gizmo render_translate() is 95 lines
+- **File:** `src/gizmo.rs:197-291`
+- **Issue:** Large method with repeated handle rendering pattern
+- **Suggested fix:** Extract `render_gizmo_handle()` helper
+- **Priority:** Low | **Effort:** Medium
+
+### ARCH-002: Component edit result structs have 26-33 fields each
+- **File:** `src/component_editors.rs`
+- **Issue:** TransformEditResult, SpriteEditResult, etc. have per-field boolean flags creating boilerplate
+- **Suggested fix:** Use change mask pattern or generic EditResult<T>
+- **Priority:** Medium | **Effort:** Large

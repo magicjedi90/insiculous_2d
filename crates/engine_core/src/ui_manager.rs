@@ -23,8 +23,8 @@ impl UIManager {
         self.ui_context.begin_frame(input, window_size);
     }
 
-    /// Get mutable access to the UI context for building UI
-    pub fn context_mut(&mut self) -> &mut UIContext {
+    /// Get mutable access to the UI context
+    pub fn ui_context(&mut self) -> &mut UIContext {
         &mut self.ui_context
     }
 
@@ -32,11 +32,6 @@ impl UIManager {
     pub fn end_frame(&mut self) -> Vec<DrawCommand> {
         self.ui_context.end_frame();
         self.ui_context.draw_list().commands().to_vec()
-    }
-
-    /// Get the UI context mutably (for convenience in game trait)
-    pub fn ui_context(&mut self) -> &mut UIContext {
-        &mut self.ui_context
     }
 }
 
@@ -63,7 +58,7 @@ mod tests {
         let window_size = glam::Vec2::new(800.0, 600.0);
 
         manager.begin_frame(&input, window_size);
-        let ctx = manager.context_mut();
+        let ctx = manager.ui_context();
         ctx.label("Test", glam::Vec2::new(10.0, 10.0));
         let commands = manager.end_frame();
 

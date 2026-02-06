@@ -197,3 +197,27 @@ These are **feature gaps**, not technical debt:
 - The crate correctly re-exports winit types in prelude for convenience
 - Default bindings are sensible and well-organized
 - Event flow is well-documented in ANALYSIS.md
+
+---
+
+## New Findings (February 2026 Audit)
+
+3 new issues (0 High, 1 Medium, 2 Low)
+
+### [DRY-002] 28 identical wrapper methods in ThreadSafeInputHandler
+- **File:** `src/thread_safe.rs:66-149`
+- **Issue:** Each method follows identical lock-call-wrap pattern
+- **Suggested fix:** Use a macro to generate wrapper methods
+- **Priority:** Medium | **Effort:** Medium
+
+### [ARCH-002] State getters clone large structures silently
+- **File:** `src/thread_safe.rs:133-148`
+- **Issue:** keyboard_state(), mouse_state(), gamepad_manager() return clones with no mutation persistence
+- **Suggested fix:** Document snapshot semantics; consider returning references
+- **Priority:** Low | **Effort:** Medium
+
+### [DEAD-001] Unused OperationError variant in InputThreadError
+- **File:** `src/thread_safe.rs:157-158`
+- **Issue:** OperationError variant never constructed or matched
+- **Suggested fix:** Remove unused variant
+- **Priority:** Low | **Effort:** Trivial

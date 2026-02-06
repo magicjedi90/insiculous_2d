@@ -197,3 +197,33 @@ The ui crate is well-designed overall:
 - Theme system is flexible with dark/light presets
 
 The identified issues are mostly minor DRY violations and architectural considerations rather than fundamental problems.
+
+---
+
+## New Findings (February 2026 Audit)
+
+4 new issues (0 High, 1 Medium, 3 Low)
+
+### [PERF-001] measure_text() re-rasterizes glyphs bypassing cache
+- **File:** `src/font.rs:332-352`
+- **Issue:** Calls font.rasterize() directly instead of rasterize_glyph() which uses cache
+- **Suggested fix:** Use rasterize_glyph() (requires &mut self)
+- **Priority:** Medium | **Effort:** Small
+
+### [DRY-005] Depth calculation repeated 8x in DrawList
+- **File:** `src/draw.rs:162-249`
+- **Issue:** `self.base_depth + self.commands.len() as f32 * 0.001` in 8 methods
+- **Suggested fix:** Extract `fn next_depth(&self) -> f32` helper
+- **Priority:** Low | **Effort:** Small
+
+### [DRY-006] Text baseline positioning duplicated
+- **File:** `src/context.rs:252-265, 335-368`
+- **Issue:** Identical ascent + baseline calculation in button rendering and label_in_bounds
+- **Suggested fix:** Extract `calculate_baseline_y()` helper
+- **Priority:** Low | **Effort:** Small
+
+### [DRY-007] Theme color hex values scattered
+- **File:** `src/style.rs:34-72`
+- **Issue:** Color constants duplicated between ButtonStyle, PanelStyle, and light theme defaults
+- **Suggested fix:** Define theme_colors constants module
+- **Priority:** Low | **Effort:** Small

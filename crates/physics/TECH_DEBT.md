@@ -187,3 +187,33 @@ None required - all high/medium priority issues resolved.
 - `presets.rs` extends existing structs with `impl Collider {}` blocks - clean pattern
 - Coordinate conversion (100 px/m) is well-documented
 - Raycasting is properly implemented with query pipeline
+
+---
+
+## New Findings (February 2026 Audit)
+
+4 new issues (0 High, 1 Medium, 3 Low)
+
+### MISSING-001: No validation for degenerate physics values
+- **File:** `src/physics_world.rs`, `src/components.rs`
+- **Issue:** pixels_per_meter can be 0 (divide-by-zero), gravity can be NaN, negative collider dimensions accepted
+- **Suggested fix:** Add `validate()` methods to PhysicsConfig, RigidBody, Collider
+- **Priority:** Medium | **Effort:** Medium
+
+### API-001: Missing getter methods for PhysicsSystem timing config
+- **File:** `src/physics_system.rs:43-47`
+- **Issue:** No public getters for fixed_timestep, max_delta_time, time_accumulator
+- **Suggested fix:** Add getter methods
+- **Priority:** Low | **Effort:** Trivial
+
+### DRY-003: Repeated builder setup in add_rigid_body
+- **File:** `src/physics_world.rs:220-248`
+- **Issue:** translation/rotation setup duplicated across 3 body type branches
+- **Suggested fix:** Extract common builder setup before match
+- **Priority:** Low | **Effort:** Small
+
+### SRP-002: Collider clamping inconsistent with builder pattern
+- **File:** `src/components.rs:267-276`
+- **Issue:** friction/restitution clamped but shape dimensions not validated
+- **Suggested fix:** Centralize validation in validate() method
+- **Priority:** Low | **Effort:** Small

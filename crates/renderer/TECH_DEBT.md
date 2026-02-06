@@ -228,3 +228,33 @@ These issues have been resolved:
 | DRY-002: Sampler creation | Not tracked | ✅ RESOLVED (SamplerConfig::create_sampler) |
 | KISS-002: Unsafe transmute | Not tracked | ✅ RESOLVED |
 | ARCH-002: Time misplaced | Not tracked | ✅ RESOLVED (moved to common crate)
+
+---
+
+## New Findings (February 2026 Audit)
+
+4 new issues (0 High, 0 Medium, 4 Low)
+
+### KISS-002: RenderPipelineInspector is 435 lines of unused dead code
+- **File:** `src/render_pipeline_inspector.rs`
+- **Issue:** Never instantiated or exported. Not in lib.rs or prelude.rs.
+- **Suggested fix:** Remove entirely or integrate with instrumentation hooks
+- **Priority:** Low | **Effort:** Medium
+
+### DRY-005: Redundant HashMap clone in render_with_sprites
+- **File:** `src/renderer.rs:230`
+- **Issue:** `texture_resources.clone()` every frame just to insert white texture
+- **Suggested fix:** Pass textures and white texture separately
+- **Priority:** Low | **Effort:** Small
+
+### ARCH-004: Window module visibility inconsistency
+- **File:** `src/window.rs`, `src/lib.rs`
+- **Issue:** Private module with public items re-exported via prelude
+- **Suggested fix:** Make module public or move re-exports internal
+- **Priority:** Low | **Effort:** Small
+
+### ARCH-005: TextureAtlas/TextureAtlasBuilder split across modules
+- **File:** `src/sprite.rs`, `src/texture.rs`
+- **Issue:** Related atlas types in different modules
+- **Suggested fix:** Colocate in texture.rs
+- **Priority:** Low | **Effort:** Medium
