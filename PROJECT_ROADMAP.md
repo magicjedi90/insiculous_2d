@@ -15,13 +15,13 @@
 | Renderer | 62 | 100% pass |
 | Audio | 3 | 100% pass |
 | UI | 60 | 100% pass |
-| Editor | 148 | 100% pass |
-| Editor Integration | 14 | 100% pass |
+| Editor | 162 | 100% pass |
+| Editor Integration | 17 | 100% pass |
 | ECS Macros | 3 | 100% pass |
 | Common | 26 | 100% pass |
 
-**Total:** 578/578 tests passing (100% success rate)
-**Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
+**Total:** 598/598 tests passing (100% success rate)
+**Code Quality:** 0 TODOs, 155+ assertions, 29 ignored (GPU/window only)
 
 ### Completed Engine Features
 - Simple Game API (`Game` trait, `run_game()`)
@@ -95,23 +95,39 @@ The editable inspector widgets exist but aren't connected. Inspector changes mus
   - Rotate gizmo: circular handle, angle delta applied to `Transform2D.rotation`
   - Scale gizmo: corner handles, scale delta applied to `Transform2D.scale` (clamped to min 0.01)
 
-#### 1C. Play / Pause / Stop
+#### 1C. Play / Pause / Stop ✅ COMPLETE (February 2026)
 Run the game inside the editor, pause to inspect state, stop to reset to the saved scene.
 
-- [ ] **Editor play states** - `EditorPlayState` enum: `Editing`, `Playing`, `Paused`
+- [x] **Editor play states** - `EditorPlayState` enum: `Editing`, `Playing`, `Paused`
   - Play button: Snapshot current scene state, begin running game logic (behaviors, physics, scripts)
   - Pause button: Freeze game logic, allow inspection and property editing
   - Stop button: Restore scene to pre-play snapshot, return to Editing state
-- [ ] **Scene snapshot/restore** - Serialize entire world state before play, deserialize on stop
-  - Must capture all component data, hierarchy relationships, physics state
-  - Fast path: clone world rather than serialize/deserialize if possible
-- [ ] **Visual play state indicator** - Clear UI showing current mode
+- [x] **Scene snapshot/restore** - Clone-based `WorldSnapshot` captures all known component types
+  - Captures Transform2D, Sprite, RigidBody, Collider, AudioSource, Camera, Name, etc.
+  - `World::clear()` + `World::create_entity_with_id()` for faithful restoration
+  - Known limitation: custom component types not in the known list are lost on restore
+- [x] **Visual play state indicator** - Clear UI showing current mode
   - Tinted viewport border (blue = editing, green = playing, yellow = paused)
-  - Play/Pause/Stop buttons in toolbar
-  - Keyboard shortcuts: Ctrl+P (play/pause toggle), Ctrl+Shift+P (stop)
-- [ ] **Input routing** - Game receives input only during Playing state
+  - Play/Pause/Stop buttons rendered to right of toolbar
+  - Keyboard shortcuts: Ctrl+P (play/pause toggle), Ctrl+Shift+P (stop), F5 (play/resume)
+- [x] **Input routing** - Game receives input only during Playing state
   - Editing/Paused: Input goes to editor (pan, select, gizmo, etc.)
   - Playing: Input goes to game, editor hotkeys still work (Ctrl+P to pause)
+  - Tool shortcuts (Q/W/E/R) and gizmo disabled during play
+- [x] **Read-only inspector during play** - Inspector shows component values but disables editing during Playing state
+
+#### 1C½. Viewport Entity Picking (Not Yet Wired)
+All building blocks exist (`EntityPicker`, `ViewportInputHandler`, `screen_to_world()`) but are not yet connected in `EditorGame::update()`. Clicking entities in the scene view should select them in the hierarchy and inspector.
+
+- [ ] **Wire up viewport click-to-select** - Call `viewport_input.handle_input_simple()` and `picker.pick_at_screen_pos()` in `EditorGame::update()`
+  - Convert screen click position to world coordinates via `screen_to_world()`
+  - Build `PickableEntity` list from entities with `GlobalTransform2D` + `Sprite`
+  - Set `editor.selection` primary entity on pick result
+  - Hierarchy panel should highlight the selected entity
+  - Inspector should show selected entity's components
+- [ ] **Rectangle selection** - Drag in viewport to select multiple entities
+  - `SelectionRect` already implemented in `picking.rs`
+  - Needs viewport input integration for drag start/end
 
 #### 1D. Entity Operations
 Create, delete, duplicate, and reparent entities from the editor UI.

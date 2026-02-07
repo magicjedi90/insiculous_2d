@@ -353,6 +353,28 @@ impl World {
             .collect()
     }
 
+    /// Remove all entities and components from the world.
+    ///
+    /// Clears entities, generations, and component storage. Does not
+    /// affect systems, initialization state, or configuration.
+    pub fn clear(&mut self) {
+        self.entities.clear();
+        self.entity_generations.clear();
+        self.components.shutdown().ok();
+    }
+
+    /// Create an entity with a specific ID (for snapshot restoration).
+    ///
+    /// Inserts the entity and its generation into the world. If an entity
+    /// with the same ID already exists, it will be overwritten.
+    pub fn create_entity_with_id(&mut self, id: EntityId) -> EntityId {
+        let entity = Entity::with_id(id);
+        let generation = EntityGeneration::with_generation(id.generation());
+        self.entity_generations.insert(id, generation);
+        self.entities.insert(id, entity);
+        id
+    }
+
     /// Get world configuration
     pub fn config(&self) -> &WorldConfig {
         &self.config

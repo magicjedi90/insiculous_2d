@@ -2,14 +2,15 @@
 //!
 //! `EditorGame<G>` transparently wraps any `Game` implementation, intercepting
 //! all trait methods to weave in editor UI orchestration (menu bar, toolbar,
-//! dock panels, hierarchy, inspector, gizmo, tool shortcuts) and delegating
-//! to the inner game.
+//! dock panels, hierarchy, inspector, gizmo, tool shortcuts, play/pause/stop)
+//! and delegating to the inner game.
 
 use glam::Vec2;
 use winit::keyboard::KeyCode;
 
 use ecs::System;
-use editor::{EditorContext, EditorTool, PanelId};
+use editor::{EditorContext, EditorPlayState, EditorTool, PanelId, PlayControlAction};
+use editor::world_snapshot::WorldSnapshot;
 use engine_core::contexts::{GameContext, RenderContext};
 use engine_core::Game;
 use engine_core::GameConfig;
@@ -22,6 +23,8 @@ struct EditorGame<G: Game> {
     editor: EditorContext,
     transform_system: ecs::TransformHierarchySystem,
     font_loaded: bool,
+    /// Snapshot of the world state captured when entering play mode.
+    world_snapshot: Option<WorldSnapshot>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -31,6 +34,7 @@ impl<G: Game> EditorGame<G> {
             editor: EditorContext::new(),
             transform_system: ecs::TransformHierarchySystem::new(),
             font_loaded: false,
+            world_snapshot: None,
         }
     }
 
@@ -62,6 +66,40 @@ impl<G: Game> EditorGame<G> {
             self.editor.set_tool(EditorTool::Rotate);
         } else if kb.is_key_just_pressed(KeyCode::KeyR) {
             self.editor.set_tool(EditorTool::Scale);
+        }
+    }
+
+    /// Handle a play control action (Play, Pause, Stop).
+    fn handle_play_action(&mut self, action: PlayControlAction, world: &mut ecs::World) {
+        match action {
+            PlayControlAction::Play => {
+                if self.editor.is_editing() {
+                    // Starting a new play session — capture snapshot
+                    self.world_snapshot = Some(WorldSnapshot::capture(world));
+                    self.editor.set_play_state(EditorPlayState::Playing);
+                    log::info!("Play: snapshot captured, entering play mode");
+                } else if self.editor.is_paused() {
+                    // Resuming from pause
+                    self.editor.set_play_state(EditorPlayState::Playing);
+                    log::info!("Play: resumed from pause");
+                }
+            }
+            PlayControlAction::Pause => {
+                if self.editor.is_playing() {
+                    self.editor.set_play_state(EditorPlayState::Paused);
+                    log::info!("Paused");
+                }
+            }
+            PlayControlAction::Stop => {
+                if self.editor.in_play_session() {
+                    // Restore world from snapshot
+                    if let Some(snapshot) = self.world_snapshot.take() {
+                        snapshot.restore(world);
+                        log::info!("Stop: world restored from snapshot");
+                    }
+                    self.editor.set_play_state(EditorPlayState::Editing);
+                }
+            }
         }
     }
 }
@@ -116,55 +154,72 @@ impl<G: Game> Game for EditorGame<G> {
             log::info!("Tool changed: {:?}", tool);
         }
 
+        // 4b. Play controls (rendered to the right of the toolbar)
+        {
+            let toolbar_bounds = self.editor.toolbar.bounds();
+            self.editor.play_controls.position = Vec2::new(
+                toolbar_bounds.x + toolbar_bounds.width + self.editor.play_controls.spacing * 4.0,
+                toolbar_bounds.y,
+            );
+            let play_state = self.editor.play_state();
+            if let Some(action) = self.editor.play_controls.render(ctx.ui, play_state) {
+                self.handle_play_action(action, ctx.world);
+            }
+        }
+
         // 5. Dock panel frames + resize handles
         let content_areas = self.editor.dock_area.render(ctx.ui);
         self.editor.dock_area.handle_resize(ctx.ui);
 
         // 6. Panel content
         for (panel_id, bounds) in content_areas.clone() {
-            panel_renderer::render_panel_content(&mut self.editor, ctx, panel_id, bounds);
+            panel_renderer::render_panel_content(
+                &mut self.editor, ctx, panel_id, bounds,
+            );
         }
 
         // 7. Pop clip rects
         self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
 
-        // 8. Gizmo interaction for selected entity
-        if let Some(entity_id) = self.editor.selection.primary() {
-            if content_areas.iter().any(|(id, _)| *id == PanelId::SCENE_VIEW) {
-                let entity_pos = ctx.world
-                    .get::<ecs::GlobalTransform2D>(entity_id)
-                    .map(|t| t.position);
+        // 8. Gizmo interaction for selected entity (skip during play)
+        if !self.editor.is_playing() {
+            if let Some(entity_id) = self.editor.selection.primary() {
+                if content_areas.iter().any(|(id, _)| *id == PanelId::SCENE_VIEW) {
+                    let entity_pos = ctx.world
+                        .get::<ecs::GlobalTransform2D>(entity_id)
+                        .map(|t| t.position);
 
-                if let Some(entity_pos) = entity_pos {
-                    let screen_pos = self.editor.world_to_screen(entity_pos);
-                    let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
+                    if let Some(entity_pos) = entity_pos {
+                        let screen_pos = self.editor.world_to_screen(entity_pos);
+                        let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
 
-                    if interaction.handle.is_some() {
-                        // Translation
-                        if interaction.delta != Vec2::ZERO {
-                            let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
-                            let snap_enabled = self.editor.is_snap_to_grid();
+                        if interaction.handle.is_some() {
+                            // Translation
+                            if interaction.delta != Vec2::ZERO {
+                                let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
+                                let snap_enabled = self.editor.is_snap_to_grid();
 
-                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                                transform.position += world_delta;
-                                if snap_enabled {
-                                    transform.position = self.editor.snap_position(transform.position);
+                                if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                    transform.position += world_delta;
+                                    if snap_enabled {
+                                        transform.position = self.editor.snap_position(transform.position);
+                                    }
                                 }
                             }
-                        }
 
-                        // Rotation
-                        if interaction.rotation_delta != 0.0 {
-                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                                transform.rotation += interaction.rotation_delta;
+                            // Rotation
+                            if interaction.rotation_delta != 0.0 {
+                                if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                    transform.rotation += interaction.rotation_delta;
+                                }
                             }
-                        }
 
-                        // Scale
-                        if interaction.scale_delta != Vec2::ZERO {
-                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                                transform.scale += interaction.scale_delta;
-                                transform.scale = transform.scale.max(Vec2::splat(0.01));
+                            // Scale
+                            if interaction.scale_delta != Vec2::ZERO {
+                                if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                    transform.scale += interaction.scale_delta;
+                                    transform.scale = transform.scale.max(Vec2::splat(0.01));
+                                }
                             }
                         }
                     }
@@ -172,21 +227,26 @@ impl<G: Game> Game for EditorGame<G> {
             }
         }
 
-        // 9. Tool keyboard shortcuts
-        self.handle_tool_shortcuts(ctx);
+        // 9. Tool keyboard shortcuts (skip during play)
+        if !self.editor.is_playing() {
+            self.handle_tool_shortcuts(ctx);
+        }
 
-        // 10. Delegate to inner game
-        self.inner.update(ctx);
+        // 10. Delegate to inner game (only when Playing)
+        if self.editor.is_playing() {
+            self.inner.update(ctx);
+        }
 
-        // 11. Status bar
+        // 11. Status bar (includes play state)
         let info_y = window_size.y - 30.0;
         ctx.ui.label(
             &format!(
-                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x",
+                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {}",
                 self.editor.current_tool(),
                 if self.editor.is_grid_visible() { "ON" } else { "OFF" },
                 if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
-                self.editor.camera_zoom()
+                self.editor.camera_zoom(),
+                self.editor.play_state().label(),
             ),
             Vec2::new(10.0, info_y),
         );
@@ -197,15 +257,46 @@ impl<G: Game> Game for EditorGame<G> {
     }
 
     fn on_key_pressed(&mut self, key: KeyCode, ctx: &mut GameContext) {
+        let ctrl = ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft)
+            || ctx.input.keyboard().is_key_pressed(KeyCode::ControlRight);
+        let shift = ctx.input.keyboard().is_key_pressed(KeyCode::ShiftLeft)
+            || ctx.input.keyboard().is_key_pressed(KeyCode::ShiftRight);
+
+        // Play state shortcuts (always intercepted)
+        if key == KeyCode::KeyP && ctrl && shift {
+            // Ctrl+Shift+P → Stop
+            self.handle_play_action(PlayControlAction::Stop, ctx.world);
+            return;
+        }
+        if key == KeyCode::KeyP && ctrl {
+            // Ctrl+P → Play/Pause toggle
+            if self.editor.is_playing() {
+                self.handle_play_action(PlayControlAction::Pause, ctx.world);
+            } else {
+                self.handle_play_action(PlayControlAction::Play, ctx.world);
+            }
+            return;
+        }
+
+        // During play mode, forward keys to inner game (skip editor shortcuts)
+        if self.editor.is_playing() {
+            self.inner.on_key_pressed(key, ctx);
+            return;
+        }
+
+        // Editor shortcuts (only during Editing/Paused)
         match key {
             KeyCode::KeyG => self.editor.toggle_grid(),
-            KeyCode::KeyS if ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft) => {
+            KeyCode::KeyS if ctrl => {
                 log::info!("Save scene (Ctrl+S)");
             }
             KeyCode::Equal => self.editor.zoom_camera(1.1),
             KeyCode::Minus => self.editor.zoom_camera(0.9),
             KeyCode::Digit0 => self.editor.reset_camera(),
-            KeyCode::F5 => self.editor.toggle_play_mode(),
+            KeyCode::F5 => {
+                // F5 → Start/Resume play (only from Editing or Paused)
+                self.handle_play_action(PlayControlAction::Play, ctx.world);
+            }
             _ => self.inner.on_key_pressed(key, ctx),
         }
     }
@@ -227,7 +318,7 @@ impl<G: Game> Game for EditorGame<G> {
 ///
 /// This wraps the given game in `EditorGame`, which intercepts all `Game` trait
 /// methods to add editor chrome (menu bar, toolbar, dock panels, hierarchy,
-/// inspector, gizmo, tool shortcuts) around the user's game.
+/// inspector, gizmo, tool shortcuts, play/pause/stop) around the user's game.
 ///
 /// # Minimum window size
 /// The editor needs at least 1024x720 to be usable. If the provided config
@@ -260,6 +351,8 @@ mod tests {
         assert!(!editor.font_loaded);
         assert!(editor.editor.selection.is_empty());
         assert_eq!(editor.editor.current_tool(), EditorTool::Select);
+        assert!(editor.world_snapshot.is_none());
+        assert!(editor.editor.is_editing());
     }
 
     #[test]
@@ -286,5 +379,65 @@ mod tests {
         if adjusted.height < 720 { adjusted.height = 720; }
         assert_eq!(adjusted.width, 1920);
         assert_eq!(adjusted.height, 1080);
+    }
+
+    #[test]
+    fn test_play_action_captures_snapshot() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(glam::Vec2::new(10.0, 20.0))).ok();
+
+        // Play → snapshot captured
+        editor.handle_play_action(PlayControlAction::Play, &mut world);
+        assert!(editor.editor.is_playing());
+        assert!(editor.world_snapshot.is_some());
+    }
+
+    #[test]
+    fn test_play_pause_resume_stop_cycle() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(glam::Vec2::ZERO)).ok();
+
+        // Play
+        editor.handle_play_action(PlayControlAction::Play, &mut world);
+        assert!(editor.editor.is_playing());
+
+        // Pause
+        editor.handle_play_action(PlayControlAction::Pause, &mut world);
+        assert!(editor.editor.is_paused());
+
+        // Resume
+        editor.handle_play_action(PlayControlAction::Play, &mut world);
+        assert!(editor.editor.is_playing());
+
+        // Stop
+        editor.handle_play_action(PlayControlAction::Stop, &mut world);
+        assert!(editor.editor.is_editing());
+        assert!(editor.world_snapshot.is_none());
+    }
+
+    #[test]
+    fn test_stop_restores_world_state() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(glam::Vec2::new(10.0, 20.0))).ok();
+
+        // Play
+        editor.handle_play_action(PlayControlAction::Play, &mut world);
+
+        // Simulate game modification
+        if let Some(t) = world.get_mut::<common::Transform2D>(entity) {
+            t.position = glam::Vec2::new(999.0, 999.0);
+        }
+
+        // Stop → should restore original position
+        editor.handle_play_action(PlayControlAction::Stop, &mut world);
+
+        let t = world.get::<common::Transform2D>(entity).unwrap();
+        assert_eq!(t.position, glam::Vec2::new(10.0, 20.0));
     }
 }

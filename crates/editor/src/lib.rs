@@ -33,11 +33,14 @@ mod hierarchy;
 mod inspector;
 mod menu;
 mod picking;
+mod play_controls;
+mod play_state;
 mod selection;
 mod toolbar;
 mod viewport;
 mod viewport_input;
 pub mod layout;
+pub mod world_snapshot;
 
 // Re-export main types
 pub use component_editors::{
@@ -58,6 +61,8 @@ pub use grid::{GridColors, GridConfig, GridRenderer};
 pub use inspector::{inspect_component, InspectorStyle};
 pub use menu::{Menu, MenuBar, MenuItem};
 pub use picking::{EntityPicker, PickResult, PickableEntity, SelectionRect, AABB};
+pub use play_controls::{PlayControlAction, PlayControls};
+pub use play_state::EditorPlayState;
 pub use selection::Selection;
 pub use toolbar::{EditorTool, Toolbar};
 pub use viewport::SceneViewport;
@@ -69,10 +74,11 @@ pub mod prelude {
         component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
-        DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState, EditorTool,
-        EditableFieldStyle, EditableInspector, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode,
-        GridRenderer, HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
-        PickableEntity, RigidBodyEditResult, SceneViewport, Selection, SelectionRect,
+        DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
+        EditorPlayState, EditorTool, EditableFieldStyle, EditableInspector, EditResult,
+        EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer, HierarchyPanel, InspectorStyle,
+        Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity, PlayControlAction,
+        PlayControls, RigidBodyEditResult, SceneViewport, Selection, SelectionRect,
         SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig, ViewportInputHandler,
         ViewportInputResult, AABB,
     };

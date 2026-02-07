@@ -15,19 +15,17 @@
 - **Input**: Event-based, 56 tests, action mapping
 - **Audio**: Rodio backend, 3 tests, spatial audio
 - **Engine Core**: Game API, managers, 67 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 148 tests
-- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback, 14 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, 162 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop, 17 tests
 
 ### Key Metrics
-- **Total Tests**: 578/578 passing (100% success rate)
+- **Total Tests**: 598/598 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
-- **Code Quality**: 30 ignored tests (GPU/window), 0 failures
+- **Code Quality**: 29 ignored tests (GPU/window), 0 failures
 
 ### Current Priority
 **Phase 1: Functional Editor** - See `PROJECT_ROADMAP.md` for full details.
-The editor foundation (UI, viewport, inspector, hierarchy) is built. Now wiring it up:
-dev mode integration, property editing writeback, play/pause/stop, entity CRUD,
-undo/redo, scene save/load, hierarchy drag-and-drop reparenting.
+The editor foundation (UI, viewport, inspector, hierarchy) is built. Phases 1A (dev mode), 1B (property writeback), and 1C (play/pause/stop) are complete. Next: viewport entity picking, entity CRUD, undo/redo, scene save/load.
 
 ### Technical Debt (Tracked in PROJECT_ROADMAP.md)
 See `PROJECT_ROADMAP.md` Technical Debt section for prioritized list
@@ -105,16 +103,23 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
 insiculous_2d (root) ──→ editor_integration (optional, behind "editor" feature)
 ```
 
+**Phase 1C (Play/Pause/Stop):**
+- `EditorPlayState` enum (`Editing`, `Playing`, `Paused`) with visual border tint
+- `WorldSnapshot` capture/restore via typed clone (no serialization)
+- `PlayControls` widget with Play/Pause/Stop buttons + keyboard shortcuts (Ctrl+P, Ctrl+Shift+P, F5)
+- Conditional `inner.update()` — game logic only runs during Playing
+- Read-only inspector during play, editable during Editing/Paused
+
 **Other changes:**
 - Hard-coded Escape exit removed from `GameRunner` — Escape now flows to `Game::on_key_pressed()`
-- `editor_demo.rs` simplified from 351 → 66 lines via `run_game_with_editor()`
+- `editor_demo.rs` uses full PlatformerGame (synced with hello_world.rs) via `run_game_with_editor()`
 
 ## Quick Reference
 
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 578 tests
+cargo test --workspace               # Run all 598 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -135,7 +140,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 578/578 (100%)
-ignored: 30 (GPU/window)
+passed: 598/598 (100%)
+ignored: 29 (GPU/window)
 failed: 0
 ```

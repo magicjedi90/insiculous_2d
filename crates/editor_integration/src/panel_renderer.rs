@@ -6,9 +6,10 @@
 use glam::Vec2;
 
 use editor::{
-    EditorContext, HierarchyPanel, PanelId,
+    EditorContext, HierarchyPanel, InspectorStyle, PanelId,
     EditableInspector,
     edit_transform2d, edit_sprite, edit_rigid_body, edit_collider, edit_audio_source,
+    inspect_component,
 };
 use engine_core::contexts::GameContext;
 
@@ -32,7 +33,7 @@ pub fn render_panel_content(
     }
 }
 
-/// Scene view — grid info and viewport origin crosshair.
+/// Scene view — grid info, viewport origin crosshair, and play-state border.
 fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: common::Rect) {
     let padding = 8.0;
     let content_x = bounds.x + padding;
@@ -60,6 +61,35 @@ fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: comm
         ui::Color::new(0.4, 0.4, 0.4, 1.0),
         1.0,
     );
+
+    // Play-state border tint
+    let border_color = editor.play_state().border_color();
+    let w = if editor.in_play_session() { 3.0 } else { 1.0 };
+
+    // Top
+    ctx.ui.line(
+        Vec2::new(bounds.x, bounds.y),
+        Vec2::new(bounds.x + bounds.width, bounds.y),
+        border_color, w,
+    );
+    // Bottom
+    ctx.ui.line(
+        Vec2::new(bounds.x, bounds.y + bounds.height),
+        Vec2::new(bounds.x + bounds.width, bounds.y + bounds.height),
+        border_color, w,
+    );
+    // Left
+    ctx.ui.line(
+        Vec2::new(bounds.x, bounds.y),
+        Vec2::new(bounds.x, bounds.y + bounds.height),
+        border_color, w,
+    );
+    // Right
+    ctx.ui.line(
+        Vec2::new(bounds.x + bounds.width, bounds.y),
+        Vec2::new(bounds.x + bounds.width, bounds.y + bounds.height),
+        border_color, w,
+    );
 }
 
 /// Hierarchy — tree view with click-to-select and Ctrl toggle.
@@ -85,10 +115,10 @@ fn render_hierarchy(editor: &mut EditorContext, ctx: &mut GameContext, bounds: c
     }
 }
 
-/// Inspector — editable component inspection for the selected entity.
+/// Inspector — component inspection for the selected entity.
 ///
-/// Renders editable fields for each component on the selected entity.
-/// Changes are written back to the ECS world immediately (live preview).
+/// During Editing/Paused: renders editable fields with live writeback.
+/// During Playing: renders read-only view via `inspect_component()`.
 fn render_inspector(editor: &EditorContext, ctx: &mut GameContext, content_x: f32, mut y: f32) {
     let line_height = 20.0;
 
@@ -106,7 +136,53 @@ fn render_inspector(editor: &EditorContext, ctx: &mut GameContext, content_x: f3
     );
     y += line_height;
 
-    // Component index tracks which component we're editing (for unique widget IDs).
+    if editor.is_playing() {
+        render_inspector_readonly(ctx, entity_id, content_x, y);
+    } else {
+        render_inspector_editable(ctx, entity_id, content_x, y);
+    }
+}
+
+/// Read-only inspector using `inspect_component()` (used during Playing).
+fn render_inspector_readonly(
+    ctx: &mut GameContext,
+    entity_id: ecs::EntityId,
+    content_x: f32,
+    mut y: f32,
+) {
+    let style = InspectorStyle::default();
+    let line_height = 20.0;
+
+    if let Some(transform) = ctx.world.get::<common::Transform2D>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "Transform2D", transform, content_x, y, &style);
+    }
+    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "Sprite", sprite, content_x, y, &style);
+    }
+    if let Some(body) = ctx.world.get::<physics::components::RigidBody>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "RigidBody", body, content_x, y, &style);
+    }
+    if let Some(collider) = ctx.world.get::<physics::components::Collider>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "Collider", collider, content_x, y, &style);
+    }
+    if let Some(source) = ctx.world.get::<ecs::audio_components::AudioSource>(entity_id) {
+        y += line_height * 0.5;
+        let _ = inspect_component(ctx.ui, "AudioSource", source, content_x, y, &style);
+    }
+}
+
+/// Editable inspector with live writeback (used during Editing/Paused).
+fn render_inspector_editable(
+    ctx: &mut GameContext,
+    entity_id: ecs::EntityId,
+    content_x: f32,
+    mut y: f32,
+) {
+    let line_height = 20.0;
     let mut component_index: usize = 0;
 
     // --- Transform2D ---

@@ -10,6 +10,8 @@ use crate::{
     grid::GridRenderer,
     hierarchy::HierarchyPanel,
     picking::EntityPicker,
+    play_controls::PlayControls,
+    play_state::EditorPlayState,
     viewport::SceneViewport,
     viewport_input::ViewportInputHandler,
     DockArea, DockPanel, DockPosition, EditorTool, Gizmo, GizmoMode, MenuBar, PanelId, Selection,
@@ -43,8 +45,10 @@ pub struct EditorContext {
     pub hierarchy: HierarchyPanel,
     /// Snap to grid enabled
     snap_to_grid: bool,
-    /// Whether the editor is in play mode (running the game)
-    play_mode: bool,
+    /// Current play state (Editing / Playing / Paused)
+    play_state: EditorPlayState,
+    /// Play / Pause / Stop controls widget
+    pub play_controls: PlayControls,
 }
 
 impl Default for EditorContext {
@@ -93,7 +97,8 @@ impl EditorContext {
             input_mapping: EditorInputMapping::new(),
             hierarchy: HierarchyPanel::new(),
             snap_to_grid: false,
-            play_mode: false,
+            play_state: EditorPlayState::default(),
+            play_controls: PlayControls::new(),
         }
     }
 
@@ -223,26 +228,60 @@ impl EditorContext {
         }
     }
 
-    // ================== Play Mode Methods ==================
+    // ================== Play State Methods ==================
 
-    /// Check if the editor is in play mode.
+    /// Get the current play state.
+    pub fn play_state(&self) -> EditorPlayState {
+        self.play_state
+    }
+
+    /// Set the play state.
+    pub fn set_play_state(&mut self, state: EditorPlayState) {
+        self.play_state = state;
+    }
+
+    /// Whether the editor is in normal editing mode.
+    pub fn is_editing(&self) -> bool {
+        self.play_state.is_editing()
+    }
+
+    /// Whether the game simulation is actively running.
+    pub fn is_playing(&self) -> bool {
+        self.play_state.is_playing()
+    }
+
+    /// Whether the game is paused.
+    pub fn is_paused(&self) -> bool {
+        self.play_state.is_paused()
+    }
+
+    /// Whether a play session is active (Playing or Paused).
+    pub fn in_play_session(&self) -> bool {
+        self.play_state.in_play_session()
+    }
+
+    /// Check if the editor is in play mode (alias for `in_play_session()`).
     pub fn is_play_mode(&self) -> bool {
-        self.play_mode
+        self.in_play_session()
     }
 
-    /// Enter play mode.
+    /// Enter play mode (sets state to Playing).
     pub fn enter_play_mode(&mut self) {
-        self.play_mode = true;
+        self.play_state = EditorPlayState::Playing;
     }
 
-    /// Exit play mode.
+    /// Exit play mode (sets state to Editing).
     pub fn exit_play_mode(&mut self) {
-        self.play_mode = false;
+        self.play_state = EditorPlayState::Editing;
     }
 
-    /// Toggle play mode.
+    /// Toggle between Editing and Playing.
     pub fn toggle_play_mode(&mut self) {
-        self.play_mode = !self.play_mode;
+        self.play_state = if self.play_state.is_editing() {
+            EditorPlayState::Playing
+        } else {
+            EditorPlayState::Editing
+        };
     }
 
     // ================== Layout Methods ==================
@@ -502,16 +541,39 @@ mod tests {
     }
 
     #[test]
-    fn test_editor_context_play_mode() {
+    fn test_editor_context_play_state() {
         let mut ctx = EditorContext::new();
 
+        // Default is editing
+        assert!(ctx.is_editing());
         assert!(!ctx.is_play_mode());
+        assert_eq!(ctx.play_state(), EditorPlayState::Editing);
+
+        // Enter play mode
         ctx.enter_play_mode();
+        assert!(ctx.is_playing());
         assert!(ctx.is_play_mode());
+        assert!(ctx.in_play_session());
+
+        // Exit play mode
         ctx.exit_play_mode();
+        assert!(ctx.is_editing());
         assert!(!ctx.is_play_mode());
+        assert!(!ctx.in_play_session());
+
+        // Toggle into playing
         ctx.toggle_play_mode();
-        assert!(ctx.is_play_mode());
+        assert!(ctx.is_playing());
+
+        // Toggle back to editing
+        ctx.toggle_play_mode();
+        assert!(ctx.is_editing());
+
+        // Set paused state directly
+        ctx.set_play_state(EditorPlayState::Paused);
+        assert!(ctx.is_paused());
+        assert!(ctx.in_play_session());
+        assert!(ctx.is_play_mode()); // alias for in_play_session
     }
 
     #[test]
