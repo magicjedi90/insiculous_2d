@@ -1,14 +1,14 @@
 //! Simple entity-component-system for the insiculous_2d game engine.
 //!
-//! This crate provides a minimal ECS implementation with archetype-based
-//! component storage for optimal performance.
+//! This crate provides a minimal ECS implementation with HashMap-based
+//! per-type component storage.
 //!
 //! # Module Visibility Strategy
 //!
 //! This crate uses two visibility patterns intentionally:
 //!
 //! - **Private modules** (`mod` + `pub use *`): Core infrastructure types like
-//!   [`EntityId`], [`Component`], [`World`], and archetypes. These are re-exported
+//!   [`EntityId`], [`Component`], [`World`], and query types. These are re-exported
 //!   at the crate root for convenient access while keeping implementation details hidden.
 //!
 //! - **Public modules** (`pub mod` + `pub use *`): Domain-specific modules like
@@ -18,9 +18,9 @@
 //! All public types are accessible from the crate root: `use ecs::EntityId;`
 
 // Core infrastructure - private modules, re-exported at crate root
-mod archetype;
 mod component;
 mod entity;
+mod query;
 mod world;
 
 // Domain modules - public for documentation, also re-exported at crate root
@@ -38,7 +38,7 @@ pub mod system;
 pub mod prelude;
 
 // Re-export all public items at crate root for convenient access
-pub use archetype::*;
+pub use query::*;
 pub use audio_components::*;
 pub use behavior::*;
 pub use component::*;

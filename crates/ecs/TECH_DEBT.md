@@ -1,13 +1,20 @@
 # Technical Debt: ecs
 
-Last audited: January 2026
+Last audited: February 2026
 
 ## Summary
 - DRY violations: 4 (1 resolved)
-- SRP violations: 3 (1 resolved)
+- SRP violations: 3 (2 resolved)
 - KISS violations: 2 (2 resolved)
-- Architecture issues: 4 (3 resolved)
-- **Pattern drift: 2 (0 resolved) - HIGH PRIORITY**
+- Architecture issues: 4 (4 resolved)
+- Pattern drift: 2 (2 resolved)
+
+## February 2026 Fixes
+- ✅ **PATTERN-001**: Broken archetype storage removed entirely. ECS now uses single HashMap-based per-type storage. Proper archetype storage deferred as future ground-up rewrite.
+- ✅ **PATTERN-002**: Dual-storage system removed. `World::new_optimized()`, `ComponentStorage` enum, `ArchetypeStorage`, and `archetype.rs` deleted. Single storage path via `ComponentRegistry` → `ComponentStore`.
+- ✅ **SRP-002**: `ComponentStorage` enum removed. Single `ComponentStore` type (no delegation/match arms).
+- ✅ **ARCH-003**: Archetype dead code removed (`archetype.rs` deleted, query types extracted to `query.rs`).
+- ✅ **ARCH-004**: Dual storage systems removed. Single HashMap-based storage path.
 
 ## January 2026 Fixes
 - ✅ **SRP-001**: Extracted hierarchy methods to `WorldHierarchyExt` extension trait (~150 lines moved, 11 tests)
@@ -15,10 +22,6 @@ Last audited: January 2026
 - ✅ **ARCH-001**: Module visibility strategy documented in `lib.rs` - private modules for core infrastructure, public modules for domain-specific concerns
 - ✅ **ARCH-002**: Cycle detection added to `set_parent()` (implemented in `WorldHierarchyExt`)
 - ✅ **DRY-002**: Extracted `set_global_transform()` helper in `hierarchy_system.rs` to eliminate duplicate update-or-add pattern
-
-## January 2026 Pattern Drift Audit (Robert Nystrom Patterns)
-- ⚠️ **PATTERN-001**: ECS archetype storage uses trait-object interface (violates archetype principles)
-- ⚠️ **PATTERN-002**: ECS defaults to Legacy storage despite archetype claims (API contract violation)
 
 ---
 
@@ -73,12 +76,10 @@ Last audited: January 2026
   Hierarchy methods available via `use ecs::WorldHierarchyExt;`
 - **Resolved:** January 2026
 
-### [SRP-002] ComponentStorage enum handles both storage types
+### ~~[SRP-002] ComponentStorage enum handles both storage types~~ ✅ RESOLVED
 - **File:** `component.rs`
-- **Lines:** 38-136
-- **Issue:** `ComponentStorage` is an enum that delegates every method to either `LegacyComponentStorage` or `ArchetypeStorage`. This creates maintenance burden when adding new methods.
-- **Suggested fix:** Use a trait `Storage` with implementations for Legacy and Archetype storage, then World holds `Box<dyn Storage>`.
-- **Priority:** Low (working but could be cleaner)
+- **Resolution:** `ComponentStorage` enum deleted along with `ArchetypeStorage` and `LegacyComponentStorage`. Single `ComponentStore` type now used directly by `ComponentRegistry`. No delegation or match arms.
+- **Resolved:** February 2026
 
 ### [SRP-003] TransformHierarchySystem does double iteration
 - **File:** `hierarchy_system.rs`
@@ -108,55 +109,22 @@ Last audited: January 2026
 - **Resolved:** January 2026
 
 ### ~~[KISS-002] Over-engineered ComponentColumn raw pointer manipulation~~ ✅ RESOLVED
-- **File:** `archetype.rs`, `component.rs`
-- **Resolution:** Added comprehensive safety documentation throughout:
-  - `ComponentColumn` struct: Documented 4 safety invariants (element size correctness, index bounds, capacity invariant, type safety at boundary) and explained why unsafe is necessary for ECS performance
-  - `get()` and `get_mut()`: Documented that pointers are valid for `element_size` bytes
-  - `push()`: Documented caller responsibility and copy_nonoverlapping safety
-  - `swap_remove()`: Documented bounds checking and non-overlapping regions
-  - `ArchetypeComponentStorage::get()` and `get_mut()`: Documented the safety chain (TypeId lookup ensures correct column)
-
-  The unsafe code is intentional for cache-friendly component storage, a common ECS pattern.
+- **File:** `archetype.rs` (now deleted)
+- **Resolution:** Originally resolved with safety documentation (January 2026). The entire `archetype.rs` file including `ComponentColumn`, `Archetype`, and `ArchetypeStorage` was deleted in February 2026 as part of the dual-storage removal. The unsafe raw pointer code is no longer in the codebase.
 
 ---
 
 ## Pattern Drift Issues (Robert Nystrom Patterns Audit - January 2026)
 
-### [PATTERN-001] ECS Component Pattern: Archetype scaffolding with trait-object interface
-- **File:** `component.rs`, `archetype.rs`
-- **Lines:** `component.rs:240`, `archetype.rs:235`
-- **Issue:** The codebase claims "archetype-based ECS" but components are boxed as `Box<dyn Component>` before storage:
-  ```rust
-  let components = vec![Box::new(component) as Box<dyn Component>];
-  archetype.add_entity(entity_id, components);
-  ```
-  This adds vtable indirection and requires runtime downcasting via `as_any().downcast_ref::<T>()`.
-  
-  **Violation of archetype principles:**
-  - Expected: Dense columnar arrays (`Vec<T>`) with compile-time type safety
-  - Actual: Raw bytes with `Box<dyn Component>` interface requiring runtime downcasting
-  - The `Component` trait forces `as_any()` / `as_any_mut()` methods for downcasting
-  
-- **Impact:** Negates cache locality benefits of archetype storage; adds vtable overhead per component access
-- **Suggested fix:** 
-  1. Remove `Box<dyn Component>` from archetype storage interface
-  2. Store components as raw bytes directly from concrete types at API boundary
-  3. Use `std::mem::size_of::<T>()` and `std::ptr::copy_nonoverlapping` in public methods
-  4. Make archetype storage the default (currently defaults to `LegacyComponentStorage`)
-- **Priority:** **High** (Performance-critical ECS core)
+### ~~[PATTERN-001] ECS Component Pattern: Archetype scaffolding with trait-object interface~~ ✅ RESOLVED
+- **File:** `component.rs` (formerly also `archetype.rs`)
+- **Resolution:** Broken archetype storage code removed entirely (`archetype.rs` deleted, `ArchetypeStorage` and `ComponentColumn` removed from `component.rs`). ECS now honestly uses HashMap-based per-type storage via `ComponentStore`. The `Component` trait still requires `as_any()` for downcasting — this is inherent to HashMap-based storage with `Box<dyn Component>` and will only be removable when a proper archetype storage is built from scratch (future work).
+- **Resolved:** February 2026
 
-### [PATTERN-002] ECS Default Storage: Legacy mode contradicts archetype claims
+### ~~[PATTERN-002] ECS Default Storage: Legacy mode contradicts archetype claims~~ ✅ RESOLVED
 - **File:** `world.rs`, `component.rs`
-- **Lines:** `world.rs:27`, `component.rs:390`
-- **Issue:** Despite claiming "archetype-based ECS" in documentation, `World::default()` uses `LegacyComponentStorage` (HashMap-based):
-  ```rust
-  // WorldConfig::default()
-  use_archetype_storage: false,  // Default to legacy!
-  ```
-  Users must explicitly call `World::new_optimized()` to get archetype storage.
-- **Impact:** Most users get HashMap storage despite archetype marketing; confusing API
-- **Suggested fix:** Make `use_archetype_storage: true` the default, or rename methods to reflect actual behavior
-- **Priority:** **High** (API contract violation)
+- **Resolution:** Dual-storage system removed. `WorldConfig::use_archetype_storage` field deleted, `World::new_optimized()` method deleted, `ComponentStorage` enum deleted. Single storage path: `World::new()` → `ComponentRegistry::new()` → `HashMap<TypeId, ComponentStore>`. Documentation updated from "archetype-based" to "HashMap-based per-type storage".
+- **Resolved:** February 2026
 
 ---
 
@@ -181,26 +149,15 @@ Last audited: January 2026
   Tests added: `test_hierarchy_cycle_detection`, `test_hierarchy_self_parent_rejected`
 - **Resolved:** January 2026
 
-### [ARCH-003] Dead code marked but not removed
-- **Files:** Multiple
-- **Issue:** Several `#[allow(dead_code)]` annotations exist:
-  - `world.rs:542-549`: QueryIterator fields
-  - `archetype.rs:239`: Query struct field
-  - `archetype.rs:294`: Test component field
+### ~~[ARCH-003] Dead code marked but not removed~~ ✅ RESOLVED
+- **Files:** `archetype.rs` (deleted), `world.rs`
+- **Resolution:** `archetype.rs` deleted entirely (contained most dead code). Query types extracted to `query.rs`. Dead code annotations in `world.rs` for archetype-related fields removed along with the fields themselves.
+- **Resolved:** February 2026
 
-  Per ANALYSIS.md: "Either use these methods or remove them."
-- **Suggested fix:** Remove unused code or implement the features.
-- **Priority:** Low
-
-### [ARCH-004] Dual storage systems add complexity
+### ~~[ARCH-004] Dual storage systems add complexity~~ ✅ RESOLVED
 - **Files:** `component.rs`, `world.rs`
-- **Issue:** The crate maintains two parallel storage systems:
-  1. `LegacyComponentStorage` (HashMap-based, default)
-  2. `ArchetypeStorage` (performance-optimized, opt-in via `World::new_optimized()`)
-
-  This doubles the code surface for storage operations and the archetype system appears incomplete (see KISS-002).
-- **Suggested fix:** Either complete the archetype system or remove it. Having two half-complete systems is worse than one complete one.
-- **Priority:** Medium
+- **Resolution:** Dual storage system removed. `ArchetypeStorage`, `LegacyComponentStorage`, and `ComponentStorage` enum all deleted. Single `ComponentStore` (HashMap-based) used by `ComponentRegistry`. `World::new_optimized()` removed.
+- **Resolved:** February 2026
 
 ---
 
@@ -222,31 +179,32 @@ These issues from ANALYSIS.md have been resolved:
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 14 |
-| Total lines | ~2,700 |
-| Test coverage | 84 tests (100% pass rate) |
-| `#[allow(dead_code)]` | 5 instances |
-| High priority issues | 2 (Pattern Drift) |
-| Medium priority issues | 6 |
-| Low priority issues | 7 |
+| Total source files | 13 |
+| Total lines | ~2,100 |
+| Test coverage | 110 tests (100% pass rate) |
+| `#[allow(dead_code)]` | 0 instances |
+| High priority issues | 0 |
+| Medium priority issues | 3 |
+| Low priority issues | 5 |
 
 ---
 
 ## Recommendations
 
-### Immediate Actions
-1. ~~**Fix KISS-002** - Review unsafe code in ComponentColumn for safety~~ ✅ DONE - Comprehensive safety docs added
+### All Immediate Actions Resolved
+1. ~~**Fix KISS-002** - Review unsafe code in ComponentColumn for safety~~ ✅ DONE
 2. ~~**Fix ARCH-002** - Add cycle detection to prevent hierarchy corruption~~ ✅ DONE
+3. ~~**Fix SRP-001** - Split World hierarchy methods into separate trait/module~~ ✅ DONE
+4. ~~**Fix KISS-001** - Either implement QueryIterator or remove scaffolding~~ ✅ DONE
+5. ~~**Fix DRY-002** - Extract GlobalTransform update helper~~ ✅ DONE
+6. ~~**ARCH-004** - Decide on storage system~~ ✅ DONE - Dual storage removed
+7. ~~**ARCH-003** - Remove dead code~~ ✅ DONE - archetype.rs deleted
 
-### Short-term Improvements
-3. **Fix SRP-001** - Split World hierarchy methods into separate trait/module
-4. **Fix KISS-001** - Either implement QueryIterator or remove scaffolding
-5. **Fix DRY-002** - Extract GlobalTransform update helper
-
-### Technical Debt Backlog
-- ARCH-004: Decide on storage system (keep one, remove other)
-- ARCH-001: Standardize module visibility pattern
-- ARCH-003: Remove dead code
+### Remaining Technical Debt
+- SRP-003: TransformHierarchySystem double iteration
+- DRY-001: Repeated entity existence checks
+- DRY-003: Duplicate matrix computation in GlobalTransform2D
+- DRY-004: Repeated builder pattern in audio_components.rs
 
 ---
 
@@ -254,25 +212,27 @@ These issues from ANALYSIS.md have been resolved:
 
 | This Report | PROJECT_ROADMAP.md / ANALYSIS.md | Status |
 |-------------|----------------------------------|--------|
-| SRP-001: World too many responsibilities | "Split World impl blocks by concern" | Known, unresolved |
-| ARCH-001: Module visibility | "Document visibility rationale" | Known, unresolved |
-| ARCH-003: Dead code | "Review and either use or remove" | Known, unresolved |
+| SRP-001: World too many responsibilities | "Split World impl blocks by concern" | ✅ Resolved |
+| ARCH-001: Module visibility | "Document visibility rationale" | ✅ Resolved |
+| ARCH-003: Dead code | "Review and either use or remove" | ✅ Resolved |
 | ARCH-002: Hierarchy cycles | Tracked | ✅ Resolved |
-| KISS-002: Unsafe ComponentColumn | Tracked | ✅ Resolved - Comprehensive safety docs added |
-| ARCH-004: Dual storage systems | Not tracked | New finding |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
-- ~~KISS-002: ComponentColumn uses unsafe code without demonstrated need~~ ✅ RESOLVED - Comprehensive safety documentation added
-- ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden
-- **PATTERN-001: ECS archetype storage uses trait-object interface (violates archetype principles)**
-- **PATTERN-002: ECS defaults to Legacy storage despite archetype claims**
+| KISS-002: Unsafe ComponentColumn | Tracked | ✅ Resolved (code deleted) |
+| ARCH-004: Dual storage systems | Tracked | ✅ Resolved |
+| PATTERN-001: Archetype trait-object interface | Tracked | ✅ Resolved (code deleted) |
+| PATTERN-002: Legacy storage default | Tracked | ✅ Resolved (single storage) |
 
 ---
 
 ## Future Enhancements (Not Technical Debt)
 
 These features would enhance the ECS but are not required for current functionality:
+
+### Proper Archetype Storage (Ground-Up Rewrite)
+- Single shared `ArchetypeStorage` replacing `ComponentRegistry`
+- Typed `push<T>`/`get<T>` without `Box<dyn Component>`
+- Proper Drop handling via stored drop functions
+- Archetype migration on component add/remove
+- Dense columnar arrays (`Vec<T>`) with cache locality
 
 ### System Scheduling
 - Add system dependency graph for automatic execution ordering
@@ -284,53 +244,6 @@ These features would enhance the ECS but are not required for current functional
 - Dynamic component addition/removal based on string names
 - Editor integration for visual component editing
 
-### Performance Optimizations  
+### Performance Optimizations
 - Memory pooling for entity and component allocations
 - Component pack optimization for cache locality
-- Archetype fragmentation reduction strategies
-ISS-001** - Either implement QueryIterator or remove scaffolding
-5. **Fix DRY-002** - Extract GlobalTransform update helper
-
-### Technical Debt Backlog
-- ARCH-004: Decide on storage system (keep one, remove other)
-- ARCH-001: Standardize module visibility pattern
-- ARCH-003: Remove dead code
-
----
-
-## Cross-Reference with PROJECT_ROADMAP.md
-
-| This Report | PROJECT_ROADMAP.md / ANALYSIS.md | Status |
-|-------------|----------------------------------|--------|
-| SRP-001: World too many responsibilities | "Split World impl blocks by concern" | Known, unresolved |
-| ARCH-001: Module visibility | "Document visibility rationale" | Known, unresolved |
-| ARCH-003: Dead code | "Review and either use or remove" | Known, unresolved |
-| ARCH-002: Hierarchy cycles | Tracked | ✅ Resolved |
-| KISS-002: Unsafe ComponentColumn | Tracked | ✅ Resolved - Comprehensive safety docs added |
-| ARCH-004: Dual storage systems | Not tracked | New finding |
-
-**New issues to add to PROJECT_ROADMAP.md:**
-- ~~ARCH-002: Hierarchy cycle detection needed in `set_parent()`~~ ✅ RESOLVED
-- ~~KISS-002: ComponentColumn uses unsafe code without demonstrated need~~ ✅ RESOLVED - Comprehensive safety documentation added
-- ARCH-004: Dual storage systems (Legacy vs Archetype) create maintenance burden
-
----
-
-## Future Enhancements (Not Technical Debt)
-
-These features would enhance the ECS but are not required for current functionality:
-
-### System Scheduling
-- Add system dependency graph for automatic execution ordering
-- Parallel system execution for multi-core optimization
-- System groups for organizing related systems
-
-### Component Introspection
-- Component reflection for runtime type information
-- Dynamic component addition/removal based on string names
-- Editor integration for visual component editing
-
-### Performance Optimizations  
-- Memory pooling for entity and component allocations
-- Component pack optimization for cache locality
-- Archetype fragmentation reduction strategies

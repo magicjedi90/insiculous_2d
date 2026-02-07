@@ -22,7 +22,6 @@
 //! }
 //! ```
 
-mod application;
 pub mod behavior_runner;
 mod game;
 mod game_loop;
@@ -44,11 +43,6 @@ pub mod ui_integration;
 pub mod prelude;
 
 // Re-export for convenience
-#[deprecated(
-    since = "0.2.0",
-    note = "Use the Game trait and run_game() instead (see game.rs)"
-)]
-pub use application::EngineApplication;
 pub use behavior_runner::*;
 pub use game::*;
 pub use game_loop::*;

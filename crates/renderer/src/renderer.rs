@@ -111,7 +111,7 @@ impl Renderer {
         // This is safe because:
         // 1. The surface is tied to the window (Arc<Window>)
         // 2. The window outlives the renderer
-        // 3. We control the renderer's lifetime through the EngineApplication
+        // 3. We control the renderer's lifetime through the game runner
         
         // Wrap device and queue in Arc for sharing
         let device = Arc::new(device);

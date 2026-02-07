@@ -6,15 +6,12 @@ use crate::component::{Component, ComponentRegistry};
 use crate::entity::{Entity, EntityId};
 use crate::generation::EntityGeneration;
 use crate::system::SystemRegistry;
-use crate::archetype::QueryTypes;
-use crate::ArchetypeStorage;
+use crate::query::QueryTypes;
 use crate::EcsError;
 
 /// Configuration for the ECS world
 #[derive(Debug, Clone)]
 pub struct WorldConfig {
-    /// Whether to use archetype-based component storage for better performance
-    pub use_archetype_storage: bool,
     /// Initial capacity for entity storage
     pub entity_capacity: usize,
     /// Initial capacity for component storage
@@ -24,7 +21,6 @@ pub struct WorldConfig {
 impl Default for WorldConfig {
     fn default() -> Self {
         Self {
-            use_archetype_storage: false, // Default to legacy for backward compatibility
             entity_capacity: 1024,
             component_capacity: 4096,
         }
@@ -41,13 +37,6 @@ pub struct World {
     components: ComponentRegistry,
     /// The system registry
     systems: SystemRegistry,
-    /// Archetype storage for optimized component access.
-    ///
-    /// Currently created when `use_archetype_storage` is enabled but not yet used for queries.
-    /// This is scaffolding for future archetype-based query optimization. The field is retained
-    /// to avoid breaking the `World::new_optimized()` API contract.
-    #[allow(dead_code)] // Scaffolding: stored for future archetype query implementation
-    archetype_storage: Option<ArchetypeStorage>,
     /// Whether the world is initialized
     initialized: bool,
     /// Whether the world is running
@@ -64,36 +53,15 @@ impl World {
 
     /// Create a new world with custom configuration
     pub fn with_config(config: WorldConfig) -> Self {
-        let components = if config.use_archetype_storage {
-            ComponentRegistry::new_archetype_based()
-        } else {
-            ComponentRegistry::new()
-        };
-
-        let archetype_storage = if config.use_archetype_storage {
-            Some(ArchetypeStorage::new())
-        } else {
-            None
-        };
-
         Self {
             entities: HashMap::with_capacity(config.entity_capacity),
             entity_generations: HashMap::with_capacity(config.entity_capacity),
-            components,
+            components: ComponentRegistry::new(),
             systems: SystemRegistry::new(),
-            archetype_storage,
             initialized: false,
             running: false,
             config,
         }
-    }
-
-    /// Create a new world with archetype-based storage for optimal performance
-    pub fn new_optimized() -> Self {
-        Self::with_config(WorldConfig {
-            use_archetype_storage: true,
-            ..WorldConfig::default()
-        })
     }
 
     /// Initialize the world
@@ -106,7 +74,7 @@ impl World {
         self.systems.initialize()?;
 
         self.initialized = true;
-        log::info!("World initialized with {} entities and {} systems", 
+        log::info!("World initialized with {} entities and {} systems",
                   self.entities.len(), self.systems.len());
         Ok(())
     }
@@ -167,12 +135,12 @@ impl World {
     pub fn create_entity(&mut self) -> EntityId {
         let entity = Entity::new();
         let id = entity.id();
-        
+
         // Track the entity generation
         let generation = EntityGeneration::with_generation(id.generation());
         self.entity_generations.insert(id, generation);
         self.entities.insert(id, entity);
-        
+
         log::trace!("Created entity {} with generation {}", id.value(), id.generation());
         id
     }
@@ -309,13 +277,13 @@ impl World {
         // Extract systems into a temporary variable to avoid borrowing conflicts
         let mut temp_systems = SystemRegistry::new();
         std::mem::swap(&mut self.systems, &mut temp_systems);
-        
+
         // Update systems with the world
         temp_systems.update_all(self, delta_time);
-        
+
         // Move systems back
         std::mem::swap(&mut self.systems, &mut temp_systems);
-        
+
         Ok(())
     }
 
@@ -361,8 +329,6 @@ impl World {
     /// Query for entities with specific component types.
     ///
     /// Returns a vector of entity IDs that have all required component types.
-    /// This is a simple implementation that iterates through all entities
-    /// and checks if they have the required components.
     ///
     /// # Example
     /// ```ignore
@@ -390,11 +356,6 @@ impl World {
     /// Get world configuration
     pub fn config(&self) -> &WorldConfig {
         &self.config
-    }
-
-    /// Check if using archetype storage
-    pub fn uses_archetype_storage(&self) -> bool {
-        self.config.use_archetype_storage
     }
 }
 

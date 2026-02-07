@@ -1,12 +1,12 @@
 # Technical Debt: engine_core
 
-Last audited: January 2026
+Last audited: February 2026
 
 ## Summary
 - DRY violations: 5
-- SRP violations: 3
+- SRP violations: 3 (1 resolved)
 - KISS violations: 1 (1 resolved)
-- Architecture issues: 3
+- Architecture issues: 3 (1 resolved)
 
 ---
 
@@ -69,12 +69,10 @@ Last audited: January 2026
 - **Suggested fix:** Extract each behavior into separate handler methods or a trait-based pattern.
 - **Priority:** Medium (readability concern, performance is already optimized)
 
-### [SRP-003] EngineApplication duplicates GameRunner functionality
-- **File:** `application.rs`
-- **Lines:** 28-311
-- **Issue:** `EngineApplication` provides similar functionality to `GameRunner` but with a different API pattern (scene-based vs trait-based). This creates parallel code paths.
-- **Suggested fix:** Consider deprecating `EngineApplication` in favor of the simpler `Game` trait API, or clearly document the use cases for each.
-- **Priority:** Low (documented as "deprecated" in training.md but code still active)
+### ~~[SRP-003] EngineApplication duplicates GameRunner functionality~~ ✅ RESOLVED
+- **File:** `application.rs` (deleted)
+- **Resolution:** `EngineApplication` deleted entirely. `application.rs` removed, deprecated re-export removed from `lib.rs`, reference removed from `prelude.rs`. Game API (`Game` trait + `run_game()`) is the only API.
+- **Resolved:** February 2026
 
 ---
 
@@ -95,17 +93,10 @@ Last audited: January 2026
 
 ## Architecture Issues
 
-### [ARCH-001] Dual API pattern creates confusion
-- **Files:** `game.rs`, `application.rs`
-- **Issue:** Two parallel APIs exist:
-  1. `Game` trait + `run_game()` (recommended, simpler)
-  2. `EngineApplication` (older, more complex)
-  Both are fully exported and documented, which may confuse users.
-- **Suggested fix:**
-  - Clearly mark `EngineApplication` as deprecated in code
-  - Move it to a `legacy` module
-  - Update lib.rs to not re-export it by default
-- **Priority:** Medium
+### ~~[ARCH-001] Dual API pattern creates confusion~~ ✅ RESOLVED
+- **Files:** `game.rs` (kept), `application.rs` (deleted)
+- **Resolution:** `EngineApplication` deleted entirely. Only `Game` trait + `run_game()` API exists. No dual API confusion.
+- **Resolved:** February 2026
 
 ### [ARCH-002] Timer vs GameLoopManager overlap
 - **Files:** `timing.rs` (Timer), `game_loop_manager.rs` (GameLoopManager)
@@ -147,11 +138,11 @@ These issues from ANALYSIS.md have been resolved:
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 20 |
-| Total lines | ~3,200 |
-| Test coverage | 53 tests (100% pass rate) |
-| High priority issues | 1 |
-| Medium priority issues | 5 |
+| Total source files | 19 |
+| Total lines | ~2,900 |
+| Test coverage | 67 tests (100% pass rate) |
+| High priority issues | 0 |
+| Medium priority issues | 4 |
 | Low priority issues | 7 |
 
 ---
@@ -163,7 +154,7 @@ These issues from ANALYSIS.md have been resolved:
 
 ### Short-term Improvements
 2. **Fix DRY-001 and DRY-002** - Common patterns that could be extracted
-3. **Address ARCH-001** - Deprecate EngineApplication to reduce confusion
+3. ~~**Address ARCH-001** - Deprecate EngineApplication to reduce confusion~~ ✅ DONE - EngineApplication deleted
 
 ### Technical Debt Backlog
 - SRP-001: Extract glyph caching from GameRunner
@@ -178,13 +169,12 @@ These issues from ANALYSIS.md have been resolved:
 |-------------|-------------------|--------|
 | KISS-001: Glyph cache color | Medium: "Glyph texture key collision" | Known, unresolved |
 | SRP-001: GameRunner | Completed "SRP refactoring" | Partially resolved, more extraction possible |
-| ARCH-001: Dual API | Not tracked | New finding |
+| ARCH-001: Dual API | Tracked | ✅ Resolved - EngineApplication deleted |
 | DRY-002: Coord transform | Not tracked | New finding |
 | ARCH-002: Timer overlap | Not tracked | New finding |
 
 **New issues to add to PROJECT_ROADMAP.md:**
-- DRY-002: Coordinate transformation duplication in ui_integration.rs
-- ARCH-001: EngineApplication deprecation needed
+- ~~ARCH-001: EngineApplication deprecation needed~~ ✅ RESOLVED - Deleted entirely
 - ARCH-002: Timer/GameLoopManager consolidation
 
 ---

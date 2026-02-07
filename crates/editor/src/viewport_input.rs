@@ -282,6 +282,7 @@ impl ViewportInputHandler {
 }
 
 /// Calculate zoom factor for a scroll delta.
+#[allow(dead_code)] // Will be used when editor viewport input is wired up
 pub fn calculate_zoom_factor(scroll_delta: f32, base_factor: f32, invert: bool) -> f32 {
     let factor = if scroll_delta > 0.0 {
         base_factor
@@ -297,6 +298,7 @@ pub fn calculate_zoom_factor(scroll_delta: f32, base_factor: f32, invert: bool) 
 }
 
 /// Convert screen delta to world delta for panning.
+#[allow(dead_code)] // Will be used when editor viewport input is wired up
 pub fn screen_to_world_delta(screen_delta: Vec2, camera_zoom: f32) -> Vec2 {
     Vec2::new(
         -screen_delta.x / camera_zoom,

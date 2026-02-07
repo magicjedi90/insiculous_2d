@@ -183,6 +183,7 @@ impl Gizmo {
 
     /// Convert world position to screen position.
     /// For now, this is a simple offset. A real implementation would use camera transform.
+    #[allow(dead_code)] // Will be used when editor gizmo rendering is wired to viewport
     fn world_to_screen(&self, world_pos: Vec2, camera_offset: Vec2, camera_zoom: f32) -> Vec2 {
         (world_pos - camera_offset) * camera_zoom
     }

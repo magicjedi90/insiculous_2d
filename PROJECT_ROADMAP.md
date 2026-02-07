@@ -1,149 +1,314 @@
 # Insiculous 2D - Project Roadmap
 
-## Current Status (January 2026) - PRODUCTION READY ✅
+## Current Status (February 2026) - PRODUCTION READY
 
 **Engine Status:** Core systems complete, production-ready for 2D games
+**Editor Status:** Foundation complete (UI framework, viewport, read-only inspector, hierarchy), needs functional integration
 
 ### Test Coverage
 | System | Tests | Status |
 |--------|-------|--------|
-| ECS | 113 | ✅ 100% pass |
-| Input | 56 | ✅ 100% pass |
-| Engine Core | 68 | ✅ 100% pass |
-| Physics | 28 | ✅ 100% pass |
-| Renderer | 62 | ✅ 100% pass |
-| Audio | 3 | ✅ 100% pass |
-| UI | 53 | ✅ 100% pass |
-| Editor | 148 | ✅ 100% pass |
-| ECS Macros | 3 | ✅ 100% pass |
-| Common | 26 | ✅ 100% pass |
+| ECS | 110 | 100% pass |
+| Input | 56 | 100% pass |
+| Engine Core | 67 | 100% pass |
+| Physics | 28 | 100% pass |
+| Renderer | 62 | 100% pass |
+| Audio | 3 | 100% pass |
+| UI | 53 | 100% pass |
+| Editor | 148 | 100% pass |
+| ECS Macros | 3 | 100% pass |
+| Common | 26 | 100% pass |
 
-**Total:** 560/560 tests passing (100% success rate)
+**Total:** 557/557 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
-### Completed Features
-- ✅ Simple Game API (`Game` trait, `run_game()`)
-- ✅ ECS with archetype storage and type-safe queries
-- ✅ WGPU 28.0.0 sprite rendering with batching
-- ✅ Rapier2d physics with presets (platformer, top-down, etc.)
-- ✅ Scene serialization (RON format) with prefabs
-- ✅ Scene graph hierarchy with transform propagation
-- ✅ Immediate-mode UI framework (buttons, sliders, panels)
-- ✅ Event-based input system (keyboard, mouse, gamepad)
-- ✅ Spatial audio with rodio backend
-- ✅ Asset manager with texture loading
+### Completed Engine Features
+- Simple Game API (`Game` trait, `run_game()`)
+- ECS with HashMap-based per-type storage and type-safe queries
+- WGPU 28.0.0 sprite rendering with batching
+- Rapier2d physics with presets (platformer, top-down, etc.)
+- Scene serialization (RON format) with prefabs
+- Scene graph hierarchy with transform propagation
+- Immediate-mode UI framework (buttons, sliders, panels)
+- Event-based input system (keyboard, mouse, gamepad)
+- Spatial audio with rodio backend
+- Asset manager with texture loading
 
-**Verification:** `cargo run --example hello_world` - Full platformer demo with physics, UI, audio
+### Completed Editor Foundation
+- Dockable panel system (Scene View, Hierarchy, Inspector, Asset Browser, Console)
+- Menu bar with dropdowns (File, Edit, View, Entity)
+- Toolbar with tool selection (Select, Move, Rotate, Scale + keyboard shortcuts)
+- Scene viewport with camera pan/zoom and grid overlay
+- Entity picking (click-to-select, rectangle selection, depth sorting)
+- Transform gizmos (translate mode with world-space delta)
+- Read-only component inspector (generic serde-based field display)
+- Editable field widgets (sliders, Vec2 inputs, checkboxes, color pickers) - **not yet wired up**
+- Component editor result types (TransformEditResult, SpriteEditResult, etc.) - **not yet wired up**
+- Hierarchy panel with tree view, expand/collapse, name resolution
+- Selection system (single, multi, toggle, primary entity)
 
----
-
-## NEW ROADMAP: Editor & Tooling Focus
-
-### Phase 1: Scene Editor Foundation 🎯 PRIORITY
-
-**Goal:** Create a visual scene editor for building game worlds
-
-**Core Editor Features:**
-- [x] **Editor UI Framework** - Dockable panels, toolbar, menus ✅ COMPLETE
-  - Based on existing immediate-mode UI system
-  - Panel types: Scene view, Inspector, Hierarchy, Asset browser
-  - 64 tests, DockArea/DockPanel, MenuBar, Toolbar components
-- [x] **Scene Viewport** - Render game world with editor overlay ✅ COMPLETE
-  - Grid overlay and alignment guides
-  - Camera pan/zoom controls
-  - Selection rectangle and transform gizmos
-- [x] **Entity Inspector** - Edit component properties ✅ COMPLETE
-  - Automatic UI generation for component fields
-  - Support for: Transform2D, Sprite, RigidBody, Collider, AudioSource
-  - Editable field types: f32 slider, Vec2 input, bool checkbox, Vec4 color picker
-  - 15 new tests for editable inspector and component editors
-- [x] **Hierarchy Panel** - Tree view of parent-child relationships ✅ COMPLETE
-  - Tree view with expand/collapse (all expanded by default)
-  - Bidirectional selection sync with viewport
-  - Name component support for entity display names
-  - Name resolution: Name component → Sprite → RigidBody → Entity ID
-  - 13 new tests for hierarchy panel
-  - ⚠️ Drag-and-drop reparenting deferred to future iteration
-- [ ] **Scene Saving/Loading** - Editor-specific format
-  - Preserve editor state (camera position, selection)
-  - Backward compatibility with runtime scenes
-
-**Technical Implementation:** ✅ COMPLETE
-- Created `crates/editor/` - Editor-specific code
-- `EditorContext` - Extends `GameContext` with editor state
-- `EditorTool` enum - Select, Move, Rotate, Scale
-- `Selection` struct - Track selected entities
-- `Gizmo` struct - Transform handles (translate, rotate, scale)
-- `HierarchyPanel` struct - Entity tree view with expand/collapse
-
-**Milestone:** Edit `hello_world.scene.ron` visually, move platforms, adjust physics
-
-**Status Update (January 31, 2026):**
-- Scene Viewport: ✅ Complete (45 tests - camera pan/zoom, grid overlay, coordinate conversion)
-- Entity Inspector: ✅ Complete (15 new tests - editable fields for all component types)
-- Hierarchy Panel: ✅ Complete (13 new tests - tree view, expand/collapse, name resolution)
-- Next: Scene Saving/Loading
+**Verification:** `cargo run --example hello_world` (platformer demo), `cargo run --example editor_demo` (editor UI)
 
 ---
 
-### Phase 2: Scripted Behaviors (Script Components) 🎯 PRIORITY
+## Roadmap: Editor-First Development
 
-**Goal:** Unity/Godot-style script components - attach behavior scripts to entities with hot-reload support
+**Philosophy:** A game engine is only as good as its editor. The priority is making the editor a functional, productive tool for building games - on par with what developers expect from Unity and Godot. Scripting, animation, and platform support come after the editor is usable.
 
-**Philosophy:** Engine transparency - developers write Rust code that feels as natural as Unity C# or GDScript, with immediate iteration via hot-reload
+---
 
-**Core Features:**
-- [ ] **Script Trait System** - Rust-native script components
+### Phase 1: Functional Editor 🎯 CURRENT PRIORITY
+
+**Goal:** An editor you can actually build a game scene in. Select entities, edit their properties, see changes live, save your work.
+
+#### 1A. Dev Mode Integration
+The editor should be a mode of the engine, not a separate example binary. When developing a game, you run with editor enabled and get the full editor UI overlaid on your game.
+
+- [ ] **Editor cargo feature** - `cargo run --features editor` activates editor mode
+  - Feature flag on `engine_core` that pulls in `editor` crate
+  - `GameConfig::with_editor(true)` runtime toggle
+  - Editor panels render on top of the game viewport
+  - Editor-only code compiles out in release builds
+- [ ] **Editor integration in GameRunner** - Editor lifecycle hooks in the game loop
+  - `GameRunner` detects editor feature and initializes `EditorContext`
+  - Editor gets its own update pass (before/after game update depending on play state)
+  - Editor input handling takes priority over game input when panels are focused
+  - Editor camera separate from game camera
+- [ ] **Migrate editor_demo.rs to integration test** - Remove example, replace with `cargo run --features editor`
+
+#### 1B. Property Editing with Writeback
+The editable inspector widgets exist but aren't connected. Inspector changes must actually modify ECS components.
+
+- [ ] **Wire up component editors** - Connect existing `edit_transform2d()`, `edit_sprite()`, etc. to ECS writeback
+  - Inspector panel calls component-specific editors instead of read-only `inspect_component()`
+  - Edit results (`TransformEditResult`, `SpriteEditResult`, etc.) applied via `world.get_mut::<T>()`
+  - Changes visible immediately in viewport (live preview)
+- [ ] **RigidBody and Collider editing** - Wire up `edit_rigid_body()` and `edit_collider()` with physics sync
+  - Physics world must be notified of property changes (body type, damping, friction, etc.)
+  - Collider shape changes require rebuilding the physics body
+- [ ] **AudioSource editing** - Wire up `edit_audio_source()` for volume, pitch, spatial settings
+- [ ] **Rotate and Scale gizmos** - Currently only translate gizmo writes back
+  - Rotate gizmo: circular handle, angle delta applied to `Transform2D.rotation`
+  - Scale gizmo: corner handles, scale delta applied to `Transform2D.scale`
+
+#### 1C. Play / Pause / Stop
+Run the game inside the editor, pause to inspect state, stop to reset to the saved scene.
+
+- [ ] **Editor play states** - `EditorPlayState` enum: `Editing`, `Playing`, `Paused`
+  - Play button: Snapshot current scene state, begin running game logic (behaviors, physics, scripts)
+  - Pause button: Freeze game logic, allow inspection and property editing
+  - Stop button: Restore scene to pre-play snapshot, return to Editing state
+- [ ] **Scene snapshot/restore** - Serialize entire world state before play, deserialize on stop
+  - Must capture all component data, hierarchy relationships, physics state
+  - Fast path: clone world rather than serialize/deserialize if possible
+- [ ] **Visual play state indicator** - Clear UI showing current mode
+  - Tinted viewport border (blue = editing, green = playing, yellow = paused)
+  - Play/Pause/Stop buttons in toolbar
+  - Keyboard shortcuts: Ctrl+P (play/pause toggle), Ctrl+Shift+P (stop)
+- [ ] **Input routing** - Game receives input only during Playing state
+  - Editing/Paused: Input goes to editor (pan, select, gizmo, etc.)
+  - Playing: Input goes to game, editor hotkeys still work (Ctrl+P to pause)
+
+#### 1D. Entity Operations
+Create, delete, duplicate, and reparent entities from the editor UI.
+
+- [ ] **Create entity** - Wire up Entity menu items
+  - Create Empty: new entity with Transform2D at viewport center
+  - Create with Sprite: entity + Transform2D + Sprite
+  - Create physics bodies: entity + Transform2D + RigidBody + Collider (with presets)
+  - New entity selected automatically after creation
+- [ ] **Delete entity** - Delete key or menu action
+  - Remove entity and all components from world
+  - Remove from physics world if has RigidBody/Collider
+  - Reparent children to deleted entity's parent (or make them roots)
+  - Clear from selection
+- [ ] **Duplicate entity** - Ctrl+D
+  - Deep copy all components
+  - Offset position slightly so duplicate is visible
+  - Duplicate children recursively (preserve hierarchy)
+  - Select the duplicate
+- [ ] **Hierarchy drag-and-drop reparenting** - Drag entities in hierarchy to change parent
+  - Visual drop target indicator (above, below, as child)
+  - Reparent updates transform hierarchy (recalculate local transform from global)
+  - Prevent circular reparenting (can't parent to own descendant)
+  - Drop at root level to unparent
+
+#### 1E. Component Add/Remove
+Attach and detach components on selected entities.
+
+- [ ] **Add Component button** - In inspector panel below existing components
+  - Dropdown/searchable list of available component types
+  - Component added with default values
+  - Uses ComponentRegistry for available types
+- [ ] **Remove Component button** - Per-component header with remove (X) button
+  - Confirmation for components with dependencies (e.g., removing RigidBody also removes Collider)
+  - Physics bodies cleaned up when physics components removed
+
+#### 1F. Undo/Redo
+Every editor operation must be reversible.
+
+- [ ] **Command pattern** - `EditorCommand` trait with `execute()` and `undo()` methods
+  - `CommandHistory` struct with undo/redo stacks
+  - Commands: `SetComponentField`, `CreateEntity`, `DeleteEntity`, `DuplicateEntity`, `ReparentEntity`, `AddComponent`, `RemoveComponent`, `TransformGizmo`
+- [ ] **Command merging** - Continuous gizmo drags merge into single command
+  - Slider drags merge while mouse is held
+  - Gizmo movements merge while actively dragging
+- [ ] **Undo/Redo UI** - Ctrl+Z / Ctrl+Shift+Z, Edit menu items
+  - Display current command name in status bar
+
+#### 1G. Scene Save/Load
+Persist scene changes to disk and reload them.
+
+- [ ] **Save scene** - Ctrl+S serializes world to RON file
+  - Serialize all entities with components
+  - Preserve hierarchy relationships
+  - Compatible with existing `SceneData` format from `scene_loader.rs`
+  - Dirty flag tracking (unsaved changes indicator in title bar)
+- [ ] **Load scene** - File > Open loads RON scene into editor
+  - Clear current world, load new scene
+  - Reset editor state (selection, camera position)
+  - Recent files list
+- [ ] **Editor state persistence** - Save/restore editor preferences
+  - Camera position and zoom
+  - Panel layout and sizes
+  - Last opened scene path
+  - Stored separately from scene data (e.g., `.editor_state.json`)
+
+**Phase 1 Milestone:** Open `hello_world.scene.ron` in the editor, move platforms with gizmos, edit physics properties in inspector, press Play to test, Stop to reset, Save changes to disk.
+
+**Success Metrics:**
+- Build a complete level in 30 minutes (vs 2 hours editing RON manually)
+- Zero manual RON editing required for scene authoring
+- All property changes visible immediately in viewport
+- Undo any operation with Ctrl+Z
+- Play/Stop cycle in < 500ms
+
+---
+
+### Phase 2: Productive Editor
+
+**Goal:** Quality-of-life features that make the editor efficient for daily use. Asset management, multi-editing, prefabs, and a console.
+
+#### 2A. Asset Browser
+- [ ] **Asset panel implementation** - Visual browser for project assets
+  - Grid/list view toggle for asset display
+  - Thumbnail generation for textures and sprites
+  - Search bar with filtering by type (textures, scenes, audio, fonts)
+  - Folder navigation with breadcrumb path
+- [ ] **Drag-and-drop asset assignment** - Drag texture onto Sprite component in inspector
+  - Drag texture onto entity in viewport to assign sprite
+  - Drag scene file to load
+  - Drag audio file onto AudioSource component
+- [ ] **Asset import** - Drop files into asset browser to import
+  - Copy to project assets directory
+  - Auto-detect type and apply default import settings
+  - Watch for external changes and re-import
+
+#### 2B. Multi-Object Editing
+- [ ] **Shared property editing** - Select multiple entities, edit common properties
+  - Inspector shows fields shared across all selected entities
+  - Mixed values shown as "--" or indeterminate state
+  - Edits applied to all selected entities simultaneously
+- [ ] **Multi-transform** - Gizmo operates on all selected entities
+  - Move: all selected entities translate by same delta
+  - Rotate: all selected entities rotate around selection center
+  - Scale: all selected entities scale relative to selection center
+
+#### 2C. Copy/Paste
+- [ ] **Copy/Cut/Paste entities** - Ctrl+C, Ctrl+X, Ctrl+V
+  - Clipboard holds serialized entity data
+  - Paste at mouse position or viewport center
+  - Paste preserves component values and hierarchy
+  - Cut = Copy + Delete
+
+#### 2D. Prefab System
+- [ ] **Prefab creation** - Save entity (with children) as reusable template
+  - Right-click entity > Create Prefab
+  - Prefab stored as RON file in assets
+  - Prefab instances track overrides (like Unity prefab variants)
+- [ ] **Prefab instantiation** - Drag prefab from asset browser to create instance
+  - Instance linked to source prefab
+  - Override individual properties per instance
+  - Apply instance changes back to prefab
+- [ ] **Prefab updates** - Modify prefab, all instances update
+  - Only non-overridden fields update
+  - Visual indicator for overridden properties in inspector
+
+#### 2E. Console Panel
+- [ ] **Log output** - Display engine log messages in Console panel
+  - Color-coded by level: Info (white), Warn (yellow), Error (red), Debug (gray)
+  - Scrollable with auto-scroll to bottom
+  - Clear button
+  - Log level filter dropdown
+- [ ] **Search and filter** - Filter log messages by text or source
+  - Regex support for advanced filtering
+  - Collapse repeated messages with count
+
+#### 2F. Hierarchy Improvements
+- [ ] **Search/filter** - Search bar in hierarchy panel
+  - Filter entities by name, component type, or tag
+  - Highlight matches, collapse non-matching branches
+- [ ] **Context menu** - Right-click entity for actions
+  - Create Child, Duplicate, Delete, Rename
+  - Copy/Cut/Paste
+  - Create Prefab
+  - Focus in Viewport
+
+#### 2G. Localization System (i18n)
+- [ ] **String table system** - Key-value localization storage
+  - JSON/RON format for translation files
+  - Namespaced keys (e.g., `gameplay.ui.start`, `editor.menu.file`)
+  - Hot-reload support for translation files
+  - Fallback to English when translation missing
+- [ ] **Font mapping** - Per-language font assignment
+  - Supported: English (Futureworld-AZwJ.ttf), Pirate (BlackSamsGold-ej5e.ttf)
+  - Font fallback chain for missing glyphs
+- [ ] **Runtime language switching** - Change language without restart
+  - Editor language preference persistence
+  - Immediate UI text refresh on language change
+- [ ] **Editor UI localization** - All editor strings externalized
+  - Menu labels, tooltips, panel headers
+  - Inspector property names and descriptions
+
+**Phase 2 Milestone:** Import sprites through asset browser, create prefab templates, edit multiple entities at once, view logs in console, switch editor language to Pirate.
+
+**Success Metrics:**
+- Import 50+ assets in < 5 minutes with drag-and-drop
+- Edit shared properties across 10 selected entities simultaneously
+- Prefab changes propagate to all instances instantly
+- Switch languages in < 100ms without restart
+
+---
+
+### Phase 3: Scripting & Animation
+
+**Goal:** Runtime behaviors via scripts and 2D animation tooling. These depend on a functional editor for inspector integration and workflow.
+
+#### 3A. Scripted Behaviors (Script Components)
+Unity/Godot-style script components - attach behavior scripts to entities with hot-reload support.
+
+- [ ] **Script trait system** - Rust-native script components
   - `Script` trait with lifecycle hooks (`on_start`, `on_update`, `on_physics`, `on_destroy`)
-  - Clear separation: `on_update` for visual/frame logic, `on_physics` for physics/movement (avoids Unity's confusing update/fixed_update overlap)
+  - Clear separation: `on_update` for visual/frame logic, `on_physics` for physics/movement
   - Automatic component registration with ECS
   - Access to `ScriptContext` (entity, world queries, delta time, input)
-- [ ] **Hot-Reload Support** - Iterate without recompiling the game
+- [ ] **Hot-reload support** - Iterate without recompiling the game
   - Scripts compiled as dynamic libraries (.so/.dll)
   - File watcher detects changes and reloads automatically
   - State preservation across reloads (optional serialization)
   - Graceful error handling - script errors don't crash the game
-- [ ] **Inspector Integration** - Automatic UI for script fields
+- [ ] **Inspector integration** - Automatic UI for script fields
   - `#[inspectable]` attribute for field customization
   - Auto-generated editors for: f32 (sliders), Vec2/Vec3, bool, enums, String
   - Live editing - changes reflect immediately in running game
-  - Component ordering in inspector (priority attribute)
 - [ ] **Script API** - Developer-friendly interfaces
-  - `self.entity()` - Get owning entity ID
-  - `self.get_component::<T>()` / `self.set_component()` - Component access
-  - `self.spawn_entity()` / `self.destroy_entity()` - Entity lifecycle
-  - `self.query::<T>()` - World queries from scripts
-  - Event system: `self.on_collision_enter()`, `self.on_trigger_stay()`, etc.
-- [ ] **Editor Scripting Workflow** - First-class IDE experience
-  - New script template generation (via editor or CLI)
-  - Script debugging support (breakpoints in hot-reloaded code)
-  - Script dependency management (use other scripts as fields)
-  - Built-in script documentation from doc comments
+  - `self.entity()`, `self.get_component::<T>()`, `self.set_component()`
+  - `self.spawn_entity()`, `self.destroy_entity()`
+  - `self.query::<T>()`, event system (`on_collision_enter`, etc.)
 
-**Technical Implementation:**
-- `crates/scripting/` - Scripting system crate (NEW)
-  - `Script` trait - Core interface for all scripts
-  - `ScriptManager` - Hot-reload, compilation, lifecycle
-  - `ScriptContext` - Safe API for scripts to interact with world
-  - `ScriptHost` - Dynamic library loading via `libloading`
-- `engine_core/src/localization/` - Localization system (integrated)
-  - `LocalizationManager` - String lookup, locale management
-  - `FontMapping` - Language-to-font configuration
-- `editor/src/inspector/script_inspector.rs` - Auto-generated UI for script fields
-- **Dynamic library loading** via `libloading` crate
+**Behavior migration:** Hard-coded behaviors (`PlayerPlatformer`, `ChaseTagged`, etc.) move from `ecs` crate to `scripting/src/builtins/` as reference script implementations. ECS crate keeps only the `Behavior` marker trait.
 
-**Behavior Migration (ECS Cleanup):**
-- **Current Issue:** Hard-coded behaviors (`PlayerPlatformer`, `ChaseTagged`, etc.) in `ecs` crate are inflexible and overlap with scripting
-- **Migration Path:**
-  1. Move existing behaviors to `scripting/src/builtins/` as reference script implementations
-  2. `ecs` crate keeps only the `Behavior` marker trait (minimal footprint)
-  3. `ecs` crate deprecates `behavior.rs` module (moved to `scripting`)
-  4. Built-in behaviors become pre-compiled script examples
-- **Result:** Single source of truth for behavior logic - everything is a script
-
-**Example Developer Experience:**
 ```rust
-// hello_scripts.rs
 #[derive(Script, Default)]
 pub struct PlayerController {
     #[inspectable(slider(0.0..200.0))]
@@ -152,270 +317,186 @@ pub struct PlayerController {
 }
 
 impl Script for PlayerController {
-    fn on_start(&mut self, ctx: &mut ScriptContext) {
-        ctx.log("Player ready!");
-    }
-    
     fn on_update(&mut self, ctx: &mut ScriptContext) {
-        // Visual/frame logic (animations, input reading)
         if ctx.input.is_key_pressed(KeyCode::Space) {
             self.jump(ctx);
         }
     }
-    
+
     fn on_physics(&mut self, ctx: &mut ScriptContext) {
-        // Physics logic (forces, velocities)
         let move_input = ctx.input.axis(Axis::Horizontal);
         ctx.physics.apply_force(Vec2::new(move_input * self.speed, 0.0));
     }
 }
 ```
 
-**Milestone:** Create a script, attach to entity, edit fields in inspector, modify code and see changes immediately without restart
-
----
-
-### Phase 3: Localization System (i18n) 🎯 PRIORITY
-
-**Goal:** Support multiple languages for gameplay and editor UI
-
-**Supported Languages:**
-- **English (US)** - `Futureworld-AZwJ.ttf` font
-- **Pirate** - `BlackSamsGold-ej5e.ttf` font
-
-**Localization Features:**
-- [ ] **String Table System** - Key-value localization storage
-  - JSON/RON format for translation files
-  - Namespaced keys (e.g., `gameplay.ui.start`, `editor.menu.file`)
-  - Hot-reload support for translation files
-  - Fallback to English when translation missing
-- [ ] **Font Mapping** - Language-to-font configuration
-  - Per-language font asset assignment
-  - Font fallback chain for missing glyphs
-  - Dynamic font loading based on active language
-- [ ] **Runtime Language Switching** - Change language without restart
-  - Editor language preference persistence
-  - In-game language selection UI
-  - Immediate UI text refresh on language change
-- [ ] **Text Rendering Integration** - UI and renderer support
-  - UILabel auto-translation from keys
-  - Text component locale-aware rendering
-  - Right-to-left (RTL) text support (future)
-- [ ] **Editor Localization** - Full editor UI translation
-  - Menu labels, tooltips, panel headers
-  - Inspector property names and descriptions
-  - Error messages and notifications
-
-**Technical Implementation:**
-- `engine_core/src/localization/` - Integrated localization (KISS/DRY)
-  - `LocalizationManager` - Active locale and string lookup
-  - `string_table.rs` - Key-value storage with hot-reload
-  - `font_mapping.rs` - Language-to-font asset resolution
-- `ui/src/components/localized_label.rs` - `LocalizedLabel` component for auto-translation
-- Translation files: `assets/i18n/en-US.json`, `assets/i18n/pirate.json`
-- **Why integrated?** Localization is configuration/data, similar to scenes/assets which `engine_core` already manages. Avoids a separate crate just for JSON loading.
-
-**Milestone:** Toggle between English and Pirate in editor; same text renders with different fonts
-
----
-
-### Phase 4: Sprite Animation System 🎯 PRIORITY
-
-**Goal:** Build comprehensive 2D animation tools
-
-**Animation Features:**
-- [ ] **Sprite Sheet Importer** - Import and slice sprite sheets
+#### 3B. Sprite Animation System
+- [ ] **Sprite sheet importer** - Import and slice sprite sheets
   - Automatic grid-based slicing
   - Manual frame definition with visual editor
   - Support for: PNG, Aseprite files (.ase/.aseprite)
-- [ ] **Animation Timeline Editor** - Keyframe-based animation
+- [ ] **Animation timeline editor** - Keyframe-based animation
   - Dopesheet view for frame timing
   - Curve editor for tweening/easing
   - Preview window with playback controls
-- [ ] **Animation Controller** - State machine for animations
+- [ ] **Animation controller** - State machine for animations
   - Animation states (Idle, Run, Jump, Attack)
   - Transitions with conditions (parameters, triggers)
   - Blend trees for smooth transitions
-- [ ] **Bone/Skeletal Animation** - 2D skeletal deformation
-  - Bone hierarchy creation
-  - Weight painting tool
-  - Mesh deformation
-- [ ] **Animation Components** - ECS integration
+- [ ] **Animation components** - ECS integration
   - `AnimationPlayer` - Play animations on entities
   - `Animator` - State machine controller
   - `SpriteSheet` - Reference to sprite sheet asset
 
-**Technical Implementation:**
-- `crates/animation/` - Animation system
-- `AnimationClip` - Sequence of frames with timing
-- `AnimationController` - State machine asset
-- `SpriteSheetAsset` - Texture atlas with metadata
-- Integration with existing `Sprite` component
+**Technical implementation:**
+```
+crates/scripting/              (NEW - separate crate)
+├── src/
+│   ├── lib.rs                 # Script trait, exports
+│   ├── script_manager.rs      # Hot-reload, compilation
+│   ├── script_context.rs      # Safe world API for scripts
+│   ├── script_host.rs         # Dynamic lib loading
+│   └── builtins/              # Migrated behaviors
+│       ├── player_platformer.rs
+│       └── chase_tagged.rs
 
-**Milestone:** Animate a character with idle, run, jump animations controlled by physics
+crates/animation/              (NEW - separate crate)
+├── src/
+│   ├── lib.rs                 # Animation system
+│   ├── clip.rs                # AnimationClip
+│   ├── controller.rs          # State machine
+│   └── sprite_sheet.rs        # Sprite sheet asset
+```
 
----
+**Phase 3 Milestone:** Create a script, attach to entity, edit fields in inspector, hot-reload on save. Animate a character with idle/run/jump controlled by physics.
 
-### Phase 4: Asset Pipeline & Management
-
-**Goal:** Professional-grade asset workflow
-
-**Asset Pipeline:**
-- [ ] **Asset Browser** - Visual browser for all game assets
-  - Thumbnail generation for textures, sprites, scenes
-  - Search and filter capabilities
-  - Folder organization with drag-and-drop
-- [ ] **Sprite Atlas Generator** - Automatic texture packing
-  - Bin packing algorithms (MaxRects, Shelf)
-  - Automatic sprite referencing updates
-  - Padding and extrusion options
-- [ ] **Asset Import Pipeline** - Automated import with caching
-  - Watch folders for auto-import
-  - Import presets for common asset types
-  - Background import with progress tracking
-- [ ] **Font Asset Support** - Visual font preview and configuration
-  - Font preview with size adjustment
-  - Character range selection
-  - Distance field font generation
-- [ ] **Audio Asset Manager** - Waveform preview and editing
-  - Waveform visualization
-  - Trim and loop point editing
-  - Format conversion (WAV ↔ OGG)
-
-**Technical Implementation:**
-- Extend `crates/engine_core/src/assets.rs`
-- `AssetDatabase` - Track all assets with metadata
-- `AssetProcessor` - Import and process assets
-- `AssetWatcher` - File system watching
-- Thumbnail cache system
-
-**Milestone:** Import assets via drag-and-drop, auto-atlas generation, visual browsing
+**Success Metrics:**
+- Script hot-reload in < 500ms on change
+- Zero boilerplate for simple scripts (just impl Script)
+- Script errors caught and logged, game continues running
+- 100+ frame animations at 60 FPS
+- Seamless animation transitions
 
 ---
 
-### Phase 5: Advanced Editor Features
+### Phase 4: Advanced Editor Tools
 
-**Goal:** Professional-grade development environment
+**Goal:** Professional-grade development tools built on top of the functional editor.
 
-**Advanced Tools:**
-- [ ] **Visual Scripting** - Node-based game logic
+#### 4A. Physics Debugger
+- [ ] **Collider wireframe rendering** - Overlay physics shapes on viewport
+  - Box, circle, capsule outlines
+  - Color-coded by body type (dynamic = blue, static = green, kinematic = yellow)
+- [ ] **Velocity vector visualization** - Arrow showing body velocity
+- [ ] **Collision point highlighting** - Flash on contact points
+- [ ] **Toggle overlay** - Quick on/off for physics debug rendering
+
+#### 4B. Profiler Integration
+- [ ] **Frame time graph** - Real-time graph with 16.6ms target line
+- [ ] **System timing breakdown** - ECS, Physics, Render, UI time per frame
+- [ ] **Draw call and batch count** - Rendering statistics
+- [ ] **Memory usage tracking** - Per-system allocation tracking
+
+#### 4C. Tilemap Editor
+- [ ] **Paintbrush and fill tools** - Paint tiles in viewport
+- [ ] **Multiple layers** - Background, foreground, collision layers
+- [ ] **Autotiling support** - Automatic tile neighbor matching
+- [ ] **Tile property editing** - Per-tile collision, metadata
+
+#### 4D. Particle System Editor
+- [ ] **Emitter configuration** - Rate, shape, burst settings
+- [ ] **Particle properties** - Lifetime, size, color, velocity curves
+- [ ] **Curve editors** - Visual curve editing for property animation
+- [ ] **Real-time preview** - Live particle preview in viewport
+
+#### 4E. Visual Scripting
+- [ ] **Node graph editor** - Visual programming interface
   - Event nodes (OnStart, OnUpdate, OnCollision)
   - Action nodes (PlaySound, SetPosition, SpawnEntity)
   - Flow control (Branch, Sequence, Loop)
   - Variable system (local, global, blackboard)
-- [ ] **Particle System Editor** - Visual particle effect creation
-  - Emitter configuration (rate, shape, burst)
-  - Particle properties (lifetime, size, color, velocity)
-  - Curve editors for property animation
-  - Real-time preview
-- [ ] **Physics Debugger** - Visual physics debugging
-  - Collider wireframe rendering
-  - Velocity vector visualization
-  - Collision point highlighting
-  - AABB tree visualization
-- [ ] **Profiler Integration** - Performance analysis tools
-  - Frame time graph (16.6ms target line)
-  - System timing breakdown (ECS, Physics, Render, UI)
-  - Draw call and batch count
-  - Memory usage tracking
-- [ ] **Tilemap Editor** - Grid-based level editing
-  - Paintbrush and fill tools
-  - Multiple layers (background, foreground, collision)
-  - Autotiling support
-  - Tile property editing
 
-**Technical Implementation:**
-- `crates/editor/src/tools/` - Editor tool system
-- `VisualScriptGraph` - Node graph asset
-- `ParticleEmitter` - GPU particle system
-- `PhysicsDebugRenderer` - Debug draw integration
-- `EditorProfiler` - Performance capture and analysis
+#### 4F. Asset Pipeline
+- [ ] **Sprite atlas generator** - Automatic texture packing
+  - Bin packing algorithms (MaxRects, Shelf)
+  - Automatic sprite referencing updates
+- [ ] **Asset import pipeline** - Automated import with caching
+  - Watch folders for auto-import
+  - Import presets for common asset types
+  - Background import with progress tracking
+- [ ] **Audio asset manager** - Waveform preview and editing
 
-**Milestone:** Create particle effects, debug physics collisions, optimize performance bottlenecks
+**Phase 4 Milestone:** Debug physics collisions visually, profile frame time, create tilemaps and particle effects.
+
+**Success Metrics:**
+- < 5ms overhead for physics debug rendering
+- Particle systems with 1000+ particles at 60 FPS
+- Automatic atlas packing with < 10% wasted space
 
 ---
 
-### Phase 6: Platform & Deployment
+### Phase 5: Platform & Deployment
 
-**Goal:** Multi-platform support and distribution
+**Goal:** Ship games to multiple platforms.
 
-**Platform Support:**
-- [ ] **Web (WASM) Export** - Browser-based games
+- [ ] **Web (WASM) export** - Browser-based games
   - WASM build pipeline
   - WebGL2 rendering backend
   - Touch input mapping
   - Asset loading via HTTP/fetch
-- [ ] **Mobile Export** - iOS and Android
+- [ ] **Mobile export** - iOS and Android
   - Touch gesture support (tap, drag, pinch)
   - Mobile-optimized UI scaling
   - App bundle generation
-  - Performance optimizations (batching, texture compression)
-- [ ] **Desktop Optimization** - Windows, macOS, Linux
+- [ ] **Desktop optimization** - Windows, macOS, Linux
   - Build scripts and installers
   - Steam/Epic integration
   - Controller mapping database
-- [ ] **Hot Reloading** - Live asset and code reloading
+- [ ] **Hot reloading** - Live asset and code reloading
   - Texture hot-reload
   - Scene hot-reload
-  - Script hot-reload (future: Rust scripting)
+  - Script hot-reload
 
-**Technical Implementation:**
-- Build scripts in `build/`
-- Platform abstraction layer
-- Mobile app templates
-- Hot-reload file watching
+**Phase 5 Milestone:** Deploy `hello_world.rs` to Web, mobile, and desktop.
 
-**Milestone:** Deploy `hello_world.rs` to Web, mobile, and desktop
+**Success Metrics:**
+- Web: Load and start in < 5 seconds
+- Mobile: 60 FPS on mid-range devices (2022+)
+- Desktop: Package and deploy in < 1 minute
 
 ---
 
-## Technical Debt (Remaining - January 2026)
+## Technical Debt (Remaining)
 
-**Overall Status:** 53 total items (3 completed, 50 remaining - 6% resolution rate this update)
+**Overall Status:** 53 total items (8 completed, 45 remaining)
 
 **Priority Order:** Address the biggest risks first (stability, architecture, and data loss) before lower-impact improvements.
 
-### High Priority (2 items) ⚠️
+### High Priority (0 items — all resolved)
 
-**ecs (2 items):**
-- [ ] **PATTERN-001: ECS archetype storage uses trait-object interface** - Violates archetype pattern principles
-  - Location: `ecs/src/component.rs:240`, `ecs/src/archetype.rs:235`
-  - Issue: Components boxed as `Box<dyn Component>` before storage, requiring runtime downcasting via `as_any()`. Negates cache locality benefits of archetype storage.
-  - Fix: Store components as raw bytes directly from concrete types; remove `Box<dyn Component>` from archetype interface
-  - See: `crates/ecs/TECH_DEBT.md` Pattern Drift section
-  
-- [ ] **PATTERN-002: ECS defaults to Legacy storage despite archetype claims** - API contract violation
-  - Location: `ecs/src/world.rs:27`, `ecs/src/component.rs:390`
-  - Issue: `World::default()` uses `LegacyComponentStorage` (HashMap) despite docs claiming "archetype-based ECS". Users must explicitly call `World::new_optimized()`.
-  - Fix: Make `use_archetype_storage: true` the default, or rename methods to reflect actual behavior
-  - See: `crates/ecs/TECH_DEBT.md` Pattern Drift section
+**ecs (2 items resolved):**
+- [x] **PATTERN-001: ECS archetype storage uses trait-object interface** - RESOLVED (February 2026)
+  - Resolution: Broken archetype storage code removed entirely. ECS now uses single HashMap-based per-type storage (`ComponentStore`). Proper archetype storage is deferred as a future ground-up rewrite.
+- [x] **PATTERN-002: ECS defaults to Legacy storage despite archetype claims** - RESOLVED (February 2026)
+  - Resolution: Dual-storage system removed. `World::new_optimized()` and `ComponentStorage` enum deleted. Single storage path via `ComponentRegistry` → `ComponentStore` (HashMap-based). Documentation updated to reflect actual storage.
 
-### Medium Priority (10 items)
+### Medium Priority (7 items)
 
-**engine_core (3 items remaining, 3 completed):**
-- [ ] **EngineApplication cleanup** - Reduce from 346 to ~150 lines
-  - Location: `engine_core/src/application.rs`
-  - Note: This is deprecated code, migrate to Game API
-- [x] **DRY-001: Duplicate AudioManager placeholder pattern** - ✅ COMPLETED
-  - Fixed: AudioManager properly integrated through GameContext
-- [x] **DRY-003: Duplicate GameContext creation pattern** - ✅ COMPLETED  
-  - Fixed: GameContext creation consolidated in GameRunner
-- [x] **SRP-001: GameRunner still has multiple responsibilities** - ✅ COMPLETED
-  - Fixed: Extracted 5 managers (GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager)
-  - game.rs reduced from 862 → 555 lines (-36%)
-- [ ] **SRP-003: EngineApplication duplicates GameRunner functionality** - Both manage game lifecycle
-  - Location: `application.rs:346 lines` vs `game.rs:555 lines`
-  - Fix: Deprecate EngineApplication fully, migrate to Game API
-- [ ] **ARCH-001: Dual API pattern creates confusion** - Both EngineApplication and GameRunner exist
-  - Location: Throughout engine_core
-  - Fix: Consolidate on Game API, mark EngineApplication as deprecated
+**engine_core (0 items remaining, 6 completed):**
+- [x] **DRY-001: Duplicate AudioManager placeholder pattern** - COMPLETED
+- [x] **DRY-003: Duplicate GameContext creation pattern** - COMPLETED
+- [x] **SRP-001: GameRunner still has multiple responsibilities** - COMPLETED
+- [x] **SRP-003: EngineApplication duplicates GameRunner functionality** - RESOLVED (February 2026)
+  - Resolution: `EngineApplication` deleted entirely (`application.rs` removed). Game API is the only API.
+- [x] **ARCH-001: Dual API pattern creates confusion** - RESOLVED (February 2026)
+  - Resolution: `EngineApplication` deleted, deprecated re-export removed from `lib.rs` and `prelude.rs`.
 
 **renderer (2 items):**
 - [ ] **SRP-001: SpritePipeline holds too many GPU resources** - Manages 13 resources in one struct
   - Location: `renderer/src/sprite.rs:225-254`
   - Fix: Split into PipelineResources, BufferManager, CameraManager, TextureBindGroupManager
 - [ ] **ARCH-003: Dead code with #[allow(dead_code)] suppressions** - 4 documented but unused items
-  - Location: `sprite.rs`, `sprite_data.rs`, `texture.rs` 
+  - Location: `sprite.rs`, `sprite_data.rs`, `texture.rs`
   - Fix: Use fields or remove them if truly unnecessary
 
 **ui (1 item):**
@@ -423,15 +504,13 @@ impl Script for PlayerController {
   - Location: `ui/src/font.rs:100-315`
   - Fix: Split into FontLoader, GlyphCache, TextLayoutEngine
 
-**ecs (3 items):**
+**ecs (1 item remaining, 2 resolved):**
 - [ ] **ARCH-004: Hard-coded behaviors should move to scripting crate** - Behaviors overlap with Script system
   - Location: `ecs/src/behavior.rs` (PlayerPlatformer, ChaseTagged, etc.)
-  - Issue: Hard-coded behaviors are inflexible; Scripting system replaces them
   - Fix: Migrate behaviors to `scripting/src/builtins/`, keep only marker trait in ECS
-  - See: Phase 2 Scripted Behaviors in roadmap
-- [ ] **SRP-002: ComponentStorage enum handles both storage types** - Single enum for two storage strategies
-  - Location: `ecs/src/component.rs`
-  - Fix: Consider trait objects or separate types for Legacy vs Archetype
+  - See: Phase 3A Scripted Behaviors
+- [x] **SRP-002: ComponentStorage enum handles both storage types** - RESOLVED (February 2026)
+  - Resolution: `ComponentStorage` enum deleted. Single `ComponentStore` (HashMap-based) is the only storage type.
 - [ ] **SRP-003: TransformHierarchySystem does double iteration** - Separate root and child passes
   - Location: `ecs/src/hierarchy_system.rs:87-118`
   - Fix: Reorganize to single pass with better data flow
@@ -455,115 +534,85 @@ impl Script for PlayerController {
 ### Low Priority (38 items)
 
 **engine_core (6 items):**
-- [ ] **DRY-002: Duplicate coordinate transformation logic in ui_integration.rs** - UI-to-world code repeated
-- [ ] **DRY-004: Repeated hex color parsing error handling** - Multiple .parse().expect() calls
-- [ ] **DRY-005: Duplicate surface error recovery pattern** - Error handling in renderer and surface creation
-- [ ] **SRP-002: BehaviorRunner handles multiple behavior types inline** - Large match statement with duplicated logic
-- [ ] **KISS-002: Over-engineered lifecycle state machine** - 8 states in EngineApplication, simplify to 3
-- [ ] **ARCH-002: Timer vs GameLoopManager overlap** - Both track frame timing
-  - Location: `timing.rs` and `game_loop_manager.rs`
-  - Fix: Consolidate timing logic
+- [ ] DRY-002: Duplicate coordinate transformation logic in ui_integration.rs
+- [ ] DRY-004: Repeated hex color parsing error handling
+- [ ] DRY-005: Duplicate surface error recovery pattern
+- [ ] SRP-002: BehaviorRunner handles multiple behavior types inline
+- [ ] KISS-002: Over-engineered lifecycle state machine (8 states, simplify to 3)
+- [ ] ARCH-002: Timer vs GameLoopManager overlap
 
-**ecs (5 items):**
-- [ ] **DRY-001: Repeated entity existence checks** - 7+ duplicate patterns in world.rs
-- [ ] **DRY-003: Duplicate matrix computation in GlobalTransform2D** - Sin/cos calculated multiple times
-- [ ] **DRY-004: Repeated builder pattern in audio_components.rs** - Identical `with_volume()` methods
-- [ ] **ARCH-003: Dead code marked but not removed** - Several #[allow(dead_code)] suppressions
-- [ ] **ARCH-004: Dual storage systems add complexity** - Legacy and Archetype both maintained
+**ecs (4 items, 1 resolved):**
+- [ ] DRY-001: Repeated entity existence checks (7+ duplicate patterns)
+- [ ] DRY-003: Duplicate matrix computation in GlobalTransform2D
+- [ ] DRY-004: Repeated builder pattern in audio_components.rs
+- [x] ARCH-003: Dead code marked but not removed — RESOLVED (February 2026): archetype dead code removed
+- [x] ARCH-004: Dual storage systems add complexity — RESOLVED (February 2026): single storage path
 
 **renderer (7 items):**
-- [ ] **DRY-001: Duplicate surface error handling in renderer.rs** - Pattern repeated in multiple methods
-- [ ] **DRY-003: Duplicate render pass descriptor in sprite.rs** - Similar render pass setup
-- [ ] **DRY-004: Duplicate texture descriptor creation** - Texture upload code patterns
-- [ ] **SRP-003: RenderPipelineInspector mixes logging with operation wrapping** - Debug utils mixed with pipeline logic
-- [ ] **KISS-001: RenderPipelineInspector is over-engineered** - Complex debug infrastructure
-- [ ] **ARCH-001: Redundant device/queue accessors** - Both device() and gpu_device() methods exist
-- [ ] **ARCH-002: Time struct in renderer crate is misplaced** - Should be in common crate
+- [ ] DRY-001: Duplicate surface error handling in renderer.rs
+- [ ] DRY-003: Duplicate render pass descriptor in sprite.rs
+- [ ] DRY-004: Duplicate texture descriptor creation
+- [ ] SRP-003: RenderPipelineInspector mixes logging with operation wrapping
+- [ ] KISS-001: RenderPipelineInspector is over-engineered
+- [ ] ARCH-001: Redundant device/queue accessors
+- [ ] ARCH-002: Time struct in renderer crate is misplaced
 
 **ui (4 items):**
-- [ ] **DRY-004: Repeated font check and placeholder fallback** - Font loading check repeated in label methods
-- [ ] **SRP-002: UIContext has large widget methods** - button(), slider() are 40+ lines each
-- [ ] **KISS-001: WidgetPersistentState has unused flexibility** - String field rarely used
-- [ ] **ARCH-003: TextDrawData duplicates GlyphDrawData info** - Text field overlaps with glyphs vector
+- [ ] DRY-004: Repeated font check and placeholder fallback
+- [ ] SRP-002: UIContext has large widget methods (button/slider 40+ lines each)
+- [ ] KISS-001: WidgetPersistentState has unused flexibility
+- [ ] ARCH-003: TextDrawData duplicates GlyphDrawData info
 
 **audio (2 items):**
-- [ ] **DOC-001: Spatial audio limitations undocumented** - Attenuation-only behavior not explicit in API docs
-- [ ] **FEATURE-001: Music mixing/bus support** - Track need for multi-track music or mixing buses
+- [ ] DOC-001: Spatial audio limitations undocumented
+- [ ] FEATURE-001: Music mixing/bus support
 
 **physics (2 items):**
-- [ ] **DRY-002: Repeated body builder pattern in add_rigid_body** - Similar builder code for body types
-- [ ] **SRP-001: PhysicsWorld handles too many rapier types** - Direct exposure of rapier internals
+- [ ] DRY-002: Repeated body builder pattern in add_rigid_body
+- [ ] SRP-001: PhysicsWorld handles too many rapier types
 
 **input (2 items):**
-- [ ] **DRY-001: Repeated input state tracking pattern** - Keyboard/mouse/gamepad similar structure
-- [ ] **DRY-003: Repeated unbind logic in input_mapping.rs** - Unbinding has duplicate patterns
+- [ ] DRY-001: Repeated input state tracking pattern
+- [ ] DRY-003: Repeated unbind logic in input_mapping.rs
 
-**common (1 item):**
-- [ ] **DOC-001: Macros module usage is undocumented** - Clarify intended consumers and examples
+**common (3 items):**
+- [ ] DOC-001: Macros module usage undocumented
+- [ ] DRY-001: Duplicate matrix construction pattern in transform.rs
+- [ ] ARCH-002: Camera2D vs renderer sprite_data Camera2D
 
-**common (2 items):**
-- [ ] **DRY-001: Duplicate matrix construction pattern in transform.rs** - Similar to GlobalTransform2D pattern
-- [ ] **ARCH-002: Camera2D vs renderer sprite_data Camera2D** - Verify Camera2D is canonical source
+**Cross-Crate (3 items):**
+- [ ] DRY-002: Duplicate error variants across crates
+- [ ] ARCH-001: Reduce coupling (event bus for cross-crate communication)
+- [ ] ARCH-002: Configuration system (centralized config management)
 
-**Cross-Crate/System (3 items):**
-- [ ] **ecs: DRY-002: Duplicate error variants** - Consolidate error types across crates
-- [ ] **ARCH-001: Reduce coupling** - Event bus or message system for cross-crate communication
-- [ ] **ARCH-002: Configuration system** - Centralized config management
+**editor (3 items):**
+- [ ] MAGIC-001: Hardcoded slider ranges in component_editors.rs (13 locations)
+- [ ] MAGIC-002: Widget ID formula constants in editable_inspector.rs (fragile multipliers)
+- [ ] MAGIC-003: Layout dimensions in editable_inspector.rs (hardcoded widths/heights)
 
-**Total Remaining:** 50 items
-
----
-
-## Success Metrics
-
-### Phase 1 (Scene Editor)
-- Create a complete level in 30 minutes (vs 2 hours manually)
-- Zero manual RON editing required
-- Visual feedback for all operations
-
-### Phase 2 (Scripted Behaviors)
-- Script hot-reload in < 500ms on change
-- Zero boilerplate for simple scripts (just impl Script)
-- All public fields show in inspector automatically
-- Script errors are caught and logged, game continues running
-- Can prototype a simple game without recompiling the engine
-
-### Phase 3 (Localization)
-- Switch languages in < 100ms without restart
-- 100% of editor UI strings externalized
-- Pirate translation coverage for all core features
-- Font fallback works for missing glyphs
-
-### Phase 4 (Animation)
-- Support 100+ frame animations at 60 FPS
-- < 16ms frame time with animated sprites
-- Seamless animation transitions
-
-### Phase 4 (Asset Pipeline)
-- Import 50+ assets in < 5 minutes
-- Automatic atlas packing with < 10% wasted space
-- Real-time thumbnail generation
-
-### Phase 5 (Advanced Tools)
-- Visual scripts run at 95% of native code speed
-- Particle systems with 1000+ particles at 60 FPS
-- < 5ms overhead for physics debug rendering
-
-### Phase 6 (Platform Support)
-- Web: Load and start in < 5 seconds
-- Mobile: 60 FPS on mid-range devices (2022+)
-- Desktop: Package and deploy in < 1 minute
+**Total Remaining:** 45 items
 
 ---
 
 ## Development Guidelines
 
+### AI-Friendly Development
+This engine is built for AI-assisted development. Every feature must be verifiable from the command line:
+1. **CLI-testable** - All logic testable without GPU/window. `cargo test --workspace` validates everything.
+2. **No manual testing** - If a feature can't be verified by `cargo test`, it needs a test. AI can't click buttons.
+3. **Small, focused files** - Files over 600 lines should be split. AI context windows are limited.
+4. **Explicit over implicit** - No magic numbers, hidden side effects, or clever tricks.
+5. **Strong typing** - Enums over strings, newtypes over primitives. Compiler catches what AI might miss.
+6. **Consistent patterns** - Use established patterns so AI can predict structure.
+7. **Verify before claiming** - Always run `cargo test --workspace` before claiming work is done.
+
 ### Editor Architecture
-1. **Separate editor from runtime** - Editor is a separate binary
+1. **Feature-gated** - Editor code compiles out in release builds
 2. **Use existing systems** - Leverage UI, ECS, and rendering
 3. **Modular tools** - Each tool is a separate module
 4. **Game preview mode** - Run game inside editor viewport
-5. **Asset hot-reloading** - Immediate feedback on changes
+5. **Command pattern** - All operations undoable
+6. **Live editing** - Property changes visible immediately
 
 ### Scripted Behaviors
 1. **Scripts are just Rust** - No DSL, no magic - pure Rust structs implementing a trait
@@ -573,100 +622,23 @@ impl Script for PlayerController {
 5. **Inspector as documentation** - Script fields document themselves via attributes
 6. **Fail gracefully** - Script errors are caught and logged, never crash the game
 
-### Localization
-1. **Key-based strings** - Never hardcode display text, always use keys
-2. **Context comments** - Include translator context in source files
-3. **Font per locale** - Each language defines its primary font
-4. **Fallback chain** - Missing translation → English → key name
-5. **Editor-first** - Editor UI must be fully localizable
-
-### Sprite Animation
-1. **Data-driven** - Animations are assets, not code
-2. **ECS integration** - Components reference animation assets
-3. **GPU-friendly** - Sprite sheets + UV animation
-4. **Extensible** - Support for frame-based and skeletal
-5. **Tool-first** - Visual editor is primary workflow
-
-### Asset Pipeline
-1. **Automated** - Minimal manual steps
-2. **Cached** - Only reprocess changed assets
-3. **Verified** - Import validation and error reporting
-4. **Versioned** - Asset metadata and versioning
-5. **Distributed** - Support for team collaboration
-
----
-
-## New Feature Crate Structure
-
-### Phase 2: Scripted Behaviors
-```
-crates/scripting/              (NEW - separate crate)
-├── src/
-│   ├── lib.rs                 # Script trait, exports
-│   ├── script_manager.rs      # Hot-reload, compilation
-│   ├── script_context.rs      # Safe world API for scripts
-│   ├── script_host.rs         # Dynamic lib loading
-│   ├── inspector.rs           # Script field UI generation
-│   └── builtins/              # Reference implementations
-│       ├── player_platformer.rs
-│       ├── chase_tagged.rs
-│       └── ...
-└── Cargo.toml
-
-crates/ecs/src/                (CLEANUP - remove behaviors)
-├── lib.rs                     # Remove behavior module re-export
-├── component.rs               # Keep: Behavior marker trait only
-└── behavior.rs                # DEPRECATED - migrate to scripting crate
-
-crates/editor/src/
-├── inspector/
-│   ├── mod.rs
-│   └── script_inspector.rs    # Script field rendering
-```
-
-### Phase 3: Localization
-```
-crates/engine_core/src/        (INTEGRATED - not separate crate)
-├── localization/
-│   ├── mod.rs                 # LocalizationManager
-│   ├── string_table.rs        # Key-value storage
-│   └── font_mapping.rs        # Language -> Font
-├── lib.rs                     # Re-export LocalizationManager
-
-assets/i18n/
-├── en-US.json                 # English strings
-└── pirate.json                # Pirate strings
-
-crates/ui/src/
-└── components/
-    └── localized_label.rs     # LocalizedLabel component
-```
-
-**Why this structure?**
-- **Scripting = New Crate**: Hot-reload is complex (dynamic libs, file watching). Clean separation, games opt-in.
-- **Localization = Integrated**: It's configuration/data (like scenes). `engine_core` already manages assets/scenes.
-- **Behaviors = Migrated**: Hard-coded behaviors move from `ecs` to `scripting/builtins/`. Single source of truth.
-
 ---
 
 ## Quick Reference
 
 **Commands:**
 ```bash
-# Run tests
+# Run all tests
 cargo test --workspace
 
-# Run demo
+# Run game demo
 cargo run --example hello_world
 
-# Future: Run editor
-cargo run --bin editor
+# Run with editor (Phase 1A target)
+cargo run --example hello_world --features editor
 
-# Future: Build for web
-cargo build --target wasm32-unknown-unknown --release
-
-# Future: Build for mobile
-cargo apk build --release
+# Current editor demo (will be replaced)
+cargo run --example editor_demo
 ```
 
 **Key Files:**
@@ -675,6 +647,7 @@ cargo apk build --release
 - `PROJECT_ROADMAP.md` - This file (single source of truth)
 - `crates/*/TECH_DEBT.md` - Per-crate technical debt
 - `examples/hello_world.rs` - Reference implementation
+- `examples/editor_demo.rs` - Editor demo (to be replaced by feature flag)
 
 ---
 
@@ -683,32 +656,41 @@ cargo apk build --release
 <details>
 <summary>Click to expand completed work</summary>
 
-### Phase 1: Stabilization - COMPLETE ✅
+### Phase 1: Stabilization - COMPLETE
 **Goal:** Make the engine safe and functional.
 - Memory safety & lifetime issues resolved
 - Thread-safe input handling with event queue
 - Panic-safe system registry
 
-### Phase 2: Core Features - COMPLETE ✅
+### Phase 2: Core Features - COMPLETE
 **Goal:** Make the engine usable for simple 2D games.
 - Sprite rendering with WGPU 28.0.0 and batching
-- Archetype-based ECS with type-safe queries
+- ECS with type-safe queries
 - Asset management with texture loading
 - Rapier2d physics integration with presets
 - Scene serialization (RON format) with prefabs
 
-### Phase 3: Usability - COMPLETE ✅
+### Phase 3: Usability - COMPLETE
 **Goal:** Make the engine productive for developers.
 - Scene graph with parent-child relationships
 - Audio system with spatial audio
 - Immediate-mode UI framework
 - Simple Game API (`Game` trait, `run_game()`)
-- SRP refactoring (game.rs: 862→553 lines, -36%)
+- SRP refactoring (game.rs: 862->553 lines, -36%)
 
 **Technical Debt Resolved:**
 - Managers extracted: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager
 - Files extracted: game_config.rs, contexts.rs, ui_integration.rs, scene_manager.rs, behavior_runner.rs
-- SRP refactoring: game.rs reduced from 862 → 555 lines (-36%)
 - Test quality: 0 TODOs, 155+ assertions
+
+### Editor Foundation - COMPLETE (January 2026)
+**Goal:** Build editor UI framework and basic tools.
+- Dockable panel system (64 tests)
+- Scene viewport with camera pan/zoom (45 tests)
+- Read-only component inspector (15 tests)
+- Hierarchy panel with tree view (13 tests)
+- Entity picking and selection (6 tests)
+- Transform gizmos (10 tests)
+- Menu bar, toolbar, editor input (148 tests total)
 
 </details>

@@ -15,8 +15,7 @@ pub use crate::{
     scene_loader::{SceneLoader, SceneInstance},
     // Behavior system
     behavior_runner::BehaviorRunner,
-    // Advanced API
-    application::EngineApplication,
+    // Game loop
     game_loop::{GameLoop, GameLoopConfig},
     init,
     timing::Timer,

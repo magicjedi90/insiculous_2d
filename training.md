@@ -17,7 +17,6 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `behavior_runner.rs` - Behavior system for entity logic
   - `lifecycle.rs` - FSM for scene lifecycle management
   - `timing.rs` - Timer utilities for frame timing and delta calculation
-  - `application.rs` - Deprecated - use Game API instead
 
 - **crates/renderer/** - WGPU-based rendering system with instancing and batching
   - `renderer.rs` - Core WGPU rendering functionality
@@ -28,7 +27,8 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
 
 - **crates/ecs/** - Entity Component System for game object management
   - `lib.rs` - ECS world, entity management, component storage
-  - `component.rs` - Component trait and archetype-based storage
+  - `component.rs` - Component trait and HashMap-based per-type storage
+  - `query.rs` - Type-safe query types (Single, Pair, Triple)
   - `hierarchy_system.rs` - Parent-child transform propagation
   - `sprite_components.rs` - Sprite, Transform2D, Camera2D components
 
@@ -163,11 +163,11 @@ fn main() {
 
 **Files:** `game.rs`, `game_loop.rs`, `GameContext` struct
 
-### Archetype-Based ECS Pattern
-High-performance component storage using archetypes:
+### ECS Pattern
+HashMap-based per-type component storage with type-safe queries:
 
 ```rust
-// Components are stored densely by archetype
+// Components stored in per-type HashMaps via ComponentRegistry
 world.add_component(&entity, Transform2D::new(pos)).ok();
 world.add_component(&entity, Sprite::new(texture_handle)).ok();
 
