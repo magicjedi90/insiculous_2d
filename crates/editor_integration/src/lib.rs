@@ -20,6 +20,7 @@
 //! ```
 
 mod editor_game;
+mod entity_ops;
 mod panel_renderer;
 
 pub use editor_game::run_game_with_editor;

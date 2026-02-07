@@ -15,6 +15,7 @@ use engine_core::contexts::{GameContext, RenderContext};
 use engine_core::Game;
 use engine_core::GameConfig;
 
+use crate::entity_ops;
 use crate::panel_renderer;
 
 /// Wraps a user's `Game` with the full editor UI overlay.
@@ -25,6 +26,8 @@ struct EditorGame<G: Game> {
     font_loaded: bool,
     /// Snapshot of the world state captured when entering play mode.
     world_snapshot: Option<WorldSnapshot>,
+    /// Auto-incrementing counter for unique entity names.
+    entity_counter: u32,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -35,6 +38,7 @@ impl<G: Game> EditorGame<G> {
             transform_system: ecs::TransformHierarchySystem::new(),
             font_loaded: false,
             world_snapshot: None,
+            entity_counter: 0,
         }
     }
 
@@ -50,7 +54,6 @@ impl<G: Game> EditorGame<G> {
             "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
                 log::info!("Toggle panel: {}", action);
             }
-            "Create Empty" => log::info!("Creating empty entity..."),
             _ => log::info!("Unhandled action: {}", action),
         }
     }
@@ -146,7 +149,31 @@ impl<G: Game> Game for EditorGame<G> {
         // 3. Menu bar
         if let Some(action) = self.editor.menu_bar.render(ctx.ui, window_size.x) {
             log::info!("Menu action: {}", action);
-            self.handle_menu_action(&action);
+            match action.as_str() {
+                "Create Empty" | "Create Sprite" | "Create Camera"
+                | "Create Static Body" | "Create Dynamic Body" | "Create Kinematic Body"
+                    if !self.editor.is_playing() =>
+                {
+                    entity_ops::handle_create_action(
+                        &action,
+                        ctx.world,
+                        &mut self.editor.selection,
+                        Vec2::ZERO,
+                        &mut self.entity_counter,
+                    );
+                }
+                "Delete" if !self.editor.is_playing() => {
+                    entity_ops::delete_selected_entities(ctx.world, &mut self.editor.selection);
+                }
+                "Duplicate" if !self.editor.is_playing() => {
+                    entity_ops::duplicate_selected_entities(
+                        ctx.world,
+                        &mut self.editor.selection,
+                        &mut self.entity_counter,
+                    );
+                }
+                _ => self.handle_menu_action(&action),
+            }
         }
 
         // 4. Toolbar
@@ -347,6 +374,16 @@ impl<G: Game> Game for EditorGame<G> {
             KeyCode::KeyS if ctrl => {
                 log::info!("Save scene (Ctrl+S)");
             }
+            KeyCode::KeyD if ctrl => {
+                entity_ops::duplicate_selected_entities(
+                    ctx.world,
+                    &mut self.editor.selection,
+                    &mut self.entity_counter,
+                );
+            }
+            KeyCode::Delete | KeyCode::Backspace => {
+                entity_ops::delete_selected_entities(ctx.world, &mut self.editor.selection);
+            }
             KeyCode::Equal => self.editor.zoom_camera(1.1),
             KeyCode::Minus => self.editor.zoom_camera(0.9),
             KeyCode::Digit0 => self.editor.reset_camera(),
@@ -433,6 +470,7 @@ mod tests {
         assert_eq!(editor.editor.current_tool(), EditorTool::Select);
         assert!(editor.world_snapshot.is_none());
         assert!(editor.editor.is_editing());
+        assert_eq!(editor.entity_counter, 0);
     }
 
     #[test]

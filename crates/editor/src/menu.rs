@@ -208,22 +208,13 @@ impl MenuBar {
         bar.add_menu(
             Menu::new("Entity").with_items(vec![
                 MenuItem::action("Create Empty"),
-                MenuItem::submenu(
-                    "2D Object",
-                    vec![
-                        MenuItem::action("Sprite"),
-                        MenuItem::action("Camera"),
-                        MenuItem::action("Tilemap"),
-                    ],
-                ),
-                MenuItem::submenu(
-                    "Physics",
-                    vec![
-                        MenuItem::action("Static Body"),
-                        MenuItem::action("Dynamic Body"),
-                        MenuItem::action("Kinematic Body"),
-                    ],
-                ),
+                MenuItem::separator(),
+                MenuItem::action("Create Sprite"),
+                MenuItem::action("Create Camera"),
+                MenuItem::separator(),
+                MenuItem::action("Create Static Body"),
+                MenuItem::action("Create Dynamic Body"),
+                MenuItem::action("Create Kinematic Body"),
             ]),
         );
 
