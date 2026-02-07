@@ -1,341 +1,56 @@
 //! Editor demo - demonstrates the editor UI framework.
 //!
-//! Run with: cargo run --example editor_demo
+//! Run with: cargo run --example editor_demo --features editor
 
 use engine_core::prelude::*;
-use editor::prelude::*;
-use ecs::System;
+use editor_integration::run_game_with_editor;
 use glam::Vec2;
 
-struct EditorDemo {
-    editor: EditorContext,
-    font_loaded: bool,
-    transform_system: ecs::TransformHierarchySystem,
-}
+struct EditorDemoGame;
 
-impl Default for EditorDemo {
-    fn default() -> Self {
-        Self {
-            editor: EditorContext::new(),
-            font_loaded: false,
-            transform_system: ecs::TransformHierarchySystem::new(),
-        }
-    }
-}
-
-impl Game for EditorDemo {
+impl Game for EditorDemoGame {
     fn init(&mut self, ctx: &mut GameContext) {
-        // Try to load a font for text rendering
-        // Note: BellamysMapbats and BlackSamsGold are decorative/symbol fonts
-        let font_paths = [
-            "examples/assets/fonts/font.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ];
-
-        for path in font_paths {
-            if ctx.ui.load_font_file(path).is_ok() {
-                self.font_loaded = true;
-                log::info!("Font loaded from: {}", path);
-                break;
-            }
-        }
-
-        if !self.font_loaded {
-            log::warn!("No font loaded. Text will render as placeholders.");
-            log::warn!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
-        }
-
-        // Create test entities with a hierarchy to demonstrate the tree view
         use ecs::{GlobalTransform2D, Name, WorldHierarchyExt};
 
-        // Root entity: "Player" with Name component
+        // Root entity: "Player" with child hierarchy
         let player = ctx.world.create_entity();
         ctx.world.add_component(&player, Name::new("Player")).ok();
         ctx.world.add_component(&player, ecs::sprite_components::Transform2D::new(Vec2::new(-100.0, 0.0))).ok();
         ctx.world.add_component(&player, GlobalTransform2D::default()).ok();
 
-        // Child of Player: "Weapon"
         let weapon = ctx.world.create_entity();
         ctx.world.add_component(&weapon, Name::new("Weapon")).ok();
         ctx.world.add_component(&weapon, ecs::sprite_components::Transform2D::new(Vec2::new(20.0, 0.0))).ok();
         ctx.world.add_component(&weapon, GlobalTransform2D::default()).ok();
         ctx.world.set_parent(weapon, player).ok();
 
-        // Grandchild of Player: "Muzzle Flash" (child of Weapon)
         let muzzle = ctx.world.create_entity();
         ctx.world.add_component(&muzzle, Name::new("Muzzle Flash")).ok();
         ctx.world.add_component(&muzzle, ecs::sprite_components::Transform2D::new(Vec2::new(10.0, 0.0))).ok();
         ctx.world.add_component(&muzzle, GlobalTransform2D::default()).ok();
         ctx.world.set_parent(muzzle, weapon).ok();
 
-        // Another root: entity with Sprite component (no Name - tests fallback)
+        // Sprite entity (no Name — tests fallback display)
         let sprite_entity = ctx.world.create_entity();
         ctx.world.add_component(&sprite_entity, ecs::sprite_components::Transform2D::new(Vec2::new(100.0, 50.0))).ok();
         ctx.world.add_component(&sprite_entity, ecs::Sprite::new(0)).ok();
         ctx.world.add_component(&sprite_entity, GlobalTransform2D::default()).ok();
 
-        // Child of sprite_entity (no Name, no Sprite - tests Entity ID fallback)
         let child_entity = ctx.world.create_entity();
         ctx.world.add_component(&child_entity, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -30.0))).ok();
         ctx.world.add_component(&child_entity, GlobalTransform2D::default()).ok();
         ctx.world.set_parent(child_entity, sprite_entity).ok();
 
-        // Standalone root entity with just Transform
+        // Standalone root entity
         let standalone = ctx.world.create_entity();
         ctx.world.add_component(&standalone, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -100.0))).ok();
         ctx.world.add_component(&standalone, GlobalTransform2D::default()).ok();
 
-        log::info!("Editor demo initialized with 6 entities in hierarchy:");
-        log::info!("  Player (root)");
-        log::info!("    └─ Weapon (child)");
-        log::info!("       └─ Muzzle Flash (grandchild)");
-        log::info!("  Sprite (root, no Name)");
-        log::info!("    └─ Entity (child, no Name/Sprite)");
-        log::info!("  Entity (root, standalone)");
+        log::info!("Editor demo initialized with 6 entities in hierarchy");
     }
 
-    fn update(&mut self, ctx: &mut GameContext) {
-        let window_size = ctx.window_size;
-
-        // Update transform hierarchy (propagate parent transforms to children)
-        self.transform_system.update(&mut ctx.world, ctx.delta_time);
-
-        // Update editor layout
-        self.editor.update_layout(window_size);
-
-        // Render menu bar
-        if let Some(action) = self.editor.menu_bar.render(ctx.ui, window_size.x) {
-            log::info!("Menu action: {}", action);
-            self.handle_menu_action(&action);
-        }
-
-        // Render toolbar
-        if let Some(tool) = self.editor.toolbar.render(ctx.ui) {
-            log::info!("Tool changed: {:?}", tool);
-        }
-
-        // Render dock panels
-        let content_areas = self.editor.dock_area.render(ctx.ui);
-
-        // Handle panel resize
-        self.editor.dock_area.handle_resize(ctx.ui);
-
-        // Render content in each panel
-        for (panel_id, bounds) in content_areas.clone() {
-            self.render_panel_content(ctx, panel_id, bounds);
-        }
-
-        // Pop all clip rects (one per panel rendered)
-        self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
-
-        // Handle gizmo interaction for selected entity
-        if let Some(entity_id) = self.editor.selection.primary() {
-            if content_areas.iter().any(|(id, _)| *id == PanelId::SCENE_VIEW) {
-                // Get entity's global position (includes parent transforms)
-                let entity_pos = ctx.world
-                    .get::<ecs::GlobalTransform2D>(entity_id)
-                    .map(|t| t.position);
-
-                if let Some(entity_pos) = entity_pos {
-                    // Convert world position to screen position using viewport (handles Y-flip)
-                    let screen_pos = self.editor.world_to_screen(entity_pos);
-
-                    // Render gizmo and get interaction
-                    let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
-
-                    // Apply gizmo delta to entity transform
-                    if interaction.handle.is_some() && interaction.delta != Vec2::ZERO {
-                        // Convert screen delta to world delta
-                        let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
-                        let snap_enabled = self.editor.is_snap_to_grid();
-
-                        // Apply to entity
-                        if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                            transform.position += world_delta;
-
-                            // Apply grid snapping if enabled
-                            if snap_enabled {
-                                transform.position = self.editor.snap_position(transform.position);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Handle keyboard shortcuts for tools
-        self.handle_tool_shortcuts(ctx);
-
-        // Show editor info
-        let info_y = window_size.y - 30.0;
-        ctx.ui.label(
-            &format!(
-                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x",
-                self.editor.current_tool(),
-                if self.editor.is_grid_visible() { "ON" } else { "OFF" },
-                if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
-                self.editor.camera_zoom()
-            ),
-            Vec2::new(10.0, info_y),
-        );
-    }
-
-    fn on_key_pressed(&mut self, key: winit::keyboard::KeyCode, _ctx: &mut GameContext) {
-        use winit::keyboard::KeyCode;
-
-        match key {
-            KeyCode::KeyG => self.editor.toggle_grid(),
-            KeyCode::KeyS if _ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft) => {
-                log::info!("Save scene (Ctrl+S)");
-            }
-            KeyCode::Equal => self.editor.zoom_camera(1.1),
-            KeyCode::Minus => self.editor.zoom_camera(0.9),
-            KeyCode::Digit0 => self.editor.reset_camera(),
-            KeyCode::Space => self.editor.toggle_play_mode(),
-            _ => {}
-        }
-    }
-}
-
-impl EditorDemo {
-    fn handle_menu_action(&mut self, action: &str) {
-        match action {
-            "New Scene" => log::info!("Creating new scene..."),
-            "Open Scene..." => log::info!("Opening scene..."),
-            "Save" => log::info!("Saving scene..."),
-            "Save As..." => log::info!("Save as..."),
-            "Exit" => std::process::exit(0),
-            "Undo" => log::info!("Undo"),
-            "Redo" => log::info!("Redo"),
-            "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
-                log::info!("Toggle panel: {}", action);
-            }
-            "Create Empty" => log::info!("Creating empty entity..."),
-            _ => log::info!("Unhandled action: {}", action),
-        }
-    }
-
-    fn handle_tool_shortcuts(&mut self, ctx: &GameContext) {
-        use winit::keyboard::KeyCode;
-        let kb = ctx.input.keyboard();
-
-        if kb.is_key_just_pressed(KeyCode::KeyQ) {
-            self.editor.set_tool(EditorTool::Select);
-        } else if kb.is_key_just_pressed(KeyCode::KeyW) {
-            self.editor.set_tool(EditorTool::Move);
-        } else if kb.is_key_just_pressed(KeyCode::KeyE) {
-            self.editor.set_tool(EditorTool::Rotate);
-        } else if kb.is_key_just_pressed(KeyCode::KeyR) {
-            self.editor.set_tool(EditorTool::Scale);
-        }
-    }
-
-    fn render_panel_content(&mut self, ctx: &mut GameContext, panel_id: PanelId, bounds: common::Rect) {
-        let padding = 8.0;
-        let content_x = bounds.x + padding;
-        let mut y = bounds.y + padding;
-        let line_height = 20.0;
-
-        match panel_id {
-            PanelId::SCENE_VIEW => {
-                // Scene view - show grid info
-                if self.editor.is_grid_visible() {
-                    ctx.ui.label(
-                        &format!("Grid: {}px", self.editor.grid_size()),
-                        Vec2::new(content_x, y),
-                    );
-                }
-
-                // Draw viewport origin crosshair
-                let center = bounds.center();
-                ctx.ui.circle(center, 5.0, ui::Color::new(0.3, 0.3, 0.3, 1.0));
-                ctx.ui.line(
-                    Vec2::new(center.x - 20.0, center.y),
-                    Vec2::new(center.x + 20.0, center.y),
-                    ui::Color::new(0.4, 0.4, 0.4, 1.0),
-                    1.0,
-                );
-                ctx.ui.line(
-                    Vec2::new(center.x, center.y - 20.0),
-                    Vec2::new(center.x, center.y + 20.0),
-                    ui::Color::new(0.4, 0.4, 0.4, 1.0),
-                    1.0,
-                );
-
-                // Gizmo is rendered in main update() method for proper transform handling
-            }
-            PanelId::HIERARCHY => {
-                // Use the HierarchyPanel to render the entity tree
-                let clicked = self.editor.hierarchy.render(
-                    ctx.ui,
-                    &ctx.world,
-                    &mut self.editor.selection,
-                    bounds,
-                );
-
-                // Handle clicked entities - select them
-                for entity_id in clicked {
-                    if ctx.input.keyboard().is_key_pressed(winit::keyboard::KeyCode::ControlLeft) {
-                        self.editor.selection.toggle(entity_id);
-                    } else {
-                        self.editor.selection.select(entity_id);
-                    }
-                    log::info!("Selected entity: {} ({})",
-                        HierarchyPanel::entity_display_name(&ctx.world, entity_id),
-                        entity_id.value()
-                    );
-                }
-            }
-            PanelId::INSPECTOR => {
-                if let Some(entity_id) = self.editor.selection.primary() {
-                    ctx.ui.label(
-                        &format!("Entity: {}", entity_id.value()),
-                        Vec2::new(content_x, y),
-                    );
-                    y += line_height;
-
-                    // Use generic inspector for all components
-                    let style = InspectorStyle::default();
-
-                    // Inspect Transform2D if present
-                    if let Some(transform) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Transform2D", &*transform, content_x, y, &style);
-                    }
-
-                    // Inspect Sprite if present
-                    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Sprite", &*sprite, content_x, y, &style);
-                    }
-
-                    // Inspect Camera if present
-                    if let Some(camera) = ctx.world.get::<ecs::sprite_components::Camera>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Camera", &*camera, content_x, y, &style);
-                    }
-
-                    // Inspect SpriteAnimation if present
-                    if let Some(animation) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
-                        y += line_height * 0.5;
-                        let _ = inspect_component(ctx.ui, "SpriteAnimation", &*animation, content_x, y, &style);
-                    }
-                } else {
-                    ctx.ui.label("No selection", Vec2::new(content_x, y));
-                }
-            }
-            PanelId::ASSET_BROWSER => {
-                ctx.ui.label("(Asset browser not yet implemented)", Vec2::new(content_x, y));
-            }
-            _ => {
-                ctx.ui.label("Panel", Vec2::new(content_x, y));
-            }
-        }
+    fn update(&mut self, _ctx: &mut GameContext) {
+        // Editor handles all chrome — game logic goes here
     }
 }
 
@@ -345,7 +60,7 @@ fn main() {
     let config = GameConfig::new("Insiculous 2D - Editor Demo")
         .with_size(1280, 720);
 
-    if let Err(e) = run_game(EditorDemo::default(), config) {
+    if let Err(e) = run_game_with_editor(EditorDemoGame, config) {
         log::error!("Editor error: {}", e);
     }
 }

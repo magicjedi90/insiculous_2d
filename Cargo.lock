@@ -808,7 +808,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "ecs",
- "engine_core",
  "env_logger",
  "glam",
  "input",
@@ -817,6 +816,23 @@ dependencies = [
  "renderer",
  "serde",
  "serde_json",
+ "ui",
+ "winit",
+]
+
+[[package]]
+name = "editor_integration"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "ecs",
+ "editor",
+ "engine_core",
+ "glam",
+ "input",
+ "log",
+ "physics",
+ "renderer",
  "ui",
  "winit",
 ]
@@ -1188,6 +1204,7 @@ dependencies = [
  "common",
  "ecs",
  "editor",
+ "editor_integration",
  "engine_core",
  "env_logger",
  "glam",

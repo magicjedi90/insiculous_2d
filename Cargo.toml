@@ -16,6 +16,7 @@ members = [
     "crates/audio",
     "crates/ui",
     "crates/editor",
+    "crates/editor_integration",
 ]
 
 [workspace.dependencies]
@@ -37,10 +38,14 @@ glam = { version = "0.30.10", features = ["serde"] }
 bytemuck = { version = "1.21", features = ["derive"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
 
+[features]
+editor = ["dep:editor_integration"]
+
 [dependencies]
 engine_core = { path = "crates/engine_core" }
 ecs = { path = "crates/ecs" }
 editor = { path = "crates/editor" }
+editor_integration = { path = "crates/editor_integration", optional = true }
 ui = { path = "crates/ui" }
 common = { path = "crates/common" }
 glam = { workspace = true }
@@ -56,3 +61,4 @@ path = "examples/hello_world.rs"
 [[example]]
 name = "editor_demo"
 path = "examples/editor_demo.rs"
+required-features = ["editor"]

@@ -483,16 +483,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    // Handle escape to exit early (before we need managers)
-                    if key == KeyCode::Escape && event.state == ElementState::Pressed {
-                        self.game.on_exit();
-                        let _ = self.scene.stop();
-                        let _ = self.scene.shutdown();
-                        event_loop.exit();
-                        return;
-                    }
-
-                    // For other keys, create context and call handlers
+                    // Create context and call handlers
                     let window_size = self.window_size();
                     if let (Some(asset_manager), Some(audio_manager)) =
                         (&mut self.asset_manager, &mut self.audio_manager)

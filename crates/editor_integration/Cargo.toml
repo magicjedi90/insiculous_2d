@@ -1,14 +1,15 @@
 [package]
-name = "editor"
+name = "editor_integration"
 version = "0.1.0"
 edition = "2021"
-description = "Visual scene editor for insiculous_2d game engine"
-authors = ["Insiculous Team"]
+description = "Editor integration layer for insiculous_2d - wraps Game with editor UI"
 
 [dependencies]
 # Internal crates
 common = { path = "../common" }
 ecs = { path = "../ecs" }
+editor = { path = "../editor" }
+engine_core = { path = "../engine_core" }
 ui = { path = "../ui" }
 input = { path = "../input" }
 renderer = { path = "../renderer" }
@@ -18,8 +19,3 @@ physics = { path = "../physics" }
 glam = { workspace = true }
 log = { workspace = true }
 winit = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-
-[dev-dependencies]
-env_logger = { workspace = true }

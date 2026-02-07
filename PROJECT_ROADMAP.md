@@ -16,10 +16,11 @@
 | Audio | 3 | 100% pass |
 | UI | 53 | 100% pass |
 | Editor | 148 | 100% pass |
+| Editor Integration | 4 | 100% pass |
 | ECS Macros | 3 | 100% pass |
 | Common | 26 | 100% pass |
 
-**Total:** 557/557 tests passing (100% success rate)
+**Total:** 561/561 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Engine Features
@@ -47,7 +48,7 @@
 - Hierarchy panel with tree view, expand/collapse, name resolution
 - Selection system (single, multi, toggle, primary entity)
 
-**Verification:** `cargo run --example hello_world` (platformer demo), `cargo run --example editor_demo` (editor UI)
+**Verification:** `cargo run --example hello_world` (platformer demo), `cargo run --example editor_demo --features editor` (editor UI)
 
 ---
 
@@ -61,20 +62,22 @@
 
 **Goal:** An editor you can actually build a game scene in. Select entities, edit their properties, see changes live, save your work.
 
-#### 1A. Dev Mode Integration
-The editor should be a mode of the engine, not a separate example binary. When developing a game, you run with editor enabled and get the full editor UI overlaid on your game.
+#### 1A. Dev Mode Integration ✅ COMPLETE (February 2026)
+The editor is a mode of the engine, not a separate example binary. One function call (`run_game_with_editor(game, config)`) overlays the full editor UI on any game.
 
-- [ ] **Editor cargo feature** - `cargo run --features editor` activates editor mode
-  - Feature flag on `engine_core` that pulls in `editor` crate
-  - `GameConfig::with_editor(true)` runtime toggle
+- [x] **Editor cargo feature** - `cargo run --example editor_demo --features editor` activates editor mode
+  - `editor_integration` crate wraps any `Game` with `EditorGame<G>` transparent wrapper
+  - Feature flag `editor` on root crate gates `editor_integration` dependency
   - Editor panels render on top of the game viewport
-  - Editor-only code compiles out in release builds
-- [ ] **Editor integration in GameRunner** - Editor lifecycle hooks in the game loop
-  - `GameRunner` detects editor feature and initializes `EditorContext`
-  - Editor gets its own update pass (before/after game update depending on play state)
-  - Editor input handling takes priority over game input when panels are focused
-  - Editor camera separate from game camera
-- [ ] **Migrate editor_demo.rs to integration test** - Remove example, replace with `cargo run --features editor`
+  - Editor-only code compiles out without the `editor` feature
+- [x] **EditorGame wrapper** - Editor lifecycle hooks via `Game` trait delegation
+  - `EditorGame<G>` implements `Game`, intercepting init/update/on_key_pressed
+  - Editor gets its own update pass (before inner game update)
+  - Font loading, transform hierarchy, menu bar, toolbar, dock panels, gizmo, tool shortcuts all automatic
+  - Minimum window size enforced (1024x720) for editor usability
+- [x] **Simplified editor_demo.rs** - 351 lines → 66 lines, just entity setup + `run_game_with_editor()`
+- [x] **Removed hard-coded Escape exit** - Escape key now flows to `Game::on_key_pressed()` like any other key
+- [x] **Removed unused engine_core dep from editor crate** - Cleaner dependency graph
 
 #### 1B. Property Editing with Writeback
 The editable inspector widgets exist but aren't connected. Inspector changes must actually modify ECS components.
@@ -634,11 +637,8 @@ cargo test --workspace
 # Run game demo
 cargo run --example hello_world
 
-# Run with editor (Phase 1A target)
-cargo run --example hello_world --features editor
-
-# Current editor demo (will be replaced)
-cargo run --example editor_demo
+# Run editor demo
+cargo run --example editor_demo --features editor
 ```
 
 **Key Files:**
@@ -647,7 +647,7 @@ cargo run --example editor_demo
 - `PROJECT_ROADMAP.md` - This file (single source of truth)
 - `crates/*/TECH_DEBT.md` - Per-crate technical debt
 - `examples/hello_world.rs` - Reference implementation
-- `examples/editor_demo.rs` - Editor demo (to be replaced by feature flag)
+- `examples/editor_demo.rs` - Editor demo (uses `run_game_with_editor`, requires `--features editor`)
 
 ---
 

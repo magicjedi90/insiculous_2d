@@ -16,9 +16,10 @@
 - **Audio**: Rodio backend, 3 tests, spatial audio
 - **Engine Core**: Game API, managers, 67 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 148 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper, 4 tests
 
 ### Key Metrics
-- **Total Tests**: 557/557 passing (100% success rate)
+- **Total Tests**: 561/561 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
 - **Code Quality**: 30 ignored tests (GPU/window), 0 failures
 
@@ -89,17 +90,37 @@ This engine is designed to be developed collaboratively with AI agents. Follow t
 **game.rs BEFORE**: 862 lines (mixed concerns, poor SRP/DRY)
 **game.rs AFTER**: 553 lines (-36%, focused on orchestration)
 
+### Editor Integration (February 2026) - COMPLETE
+
+**New crate: `editor_integration`** bridges `engine_core` and `editor` without circular deps:
+- `EditorGame<G: Game>` — transparent wrapper that implements `Game`, intercepts all methods to add editor chrome
+- `run_game_with_editor(game, config)` — public entry point, wraps game and enforces min window size
+- `panel_renderer` — extracted panel content rendering (scene view, hierarchy, inspector, asset browser)
+
+**Dependency graph:**
+```
+engine_core ──→ ecs, renderer, input, physics, audio, ui  (unchanged)
+editor ──→ ecs, ui, input, renderer, physics, common      (engine_core dep removed)
+editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, common  (NEW)
+insiculous_2d (root) ──→ editor_integration (optional, behind "editor" feature)
+```
+
+**Other changes:**
+- Hard-coded Escape exit removed from `GameRunner` — Escape now flows to `Game::on_key_pressed()`
+- `editor_demo.rs` simplified from 351 → 66 lines via `run_game_with_editor()`
+
 ## Quick Reference
 
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 557 tests
+cargo test --workspace               # Run all 561 tests
 cargo test -p editor                 # Run editor tests only
+cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
 cargo clippy --workspace             # Lint check
 cargo run --example hello_world      # Run platformer demo
-cargo run --example editor_demo      # Run editor demo
+cargo run --example editor_demo --features editor  # Run editor demo
 ```
 
 **Key Files:**
@@ -108,12 +129,13 @@ cargo run --example editor_demo      # Run editor demo
 - `PROJECT_ROADMAP.md` - Single source of truth for tasks, priorities, tech debt
 - `crates/*/TECH_DEBT.md` - Per-crate technical debt details
 - `examples/hello_world.rs` - Working game demonstration
-- `examples/editor_demo.rs` - Editor UI demonstration (to be replaced by feature flag)
+- `examples/editor_demo.rs` - Editor demo (requires `--features editor`)
+- `crates/editor_integration/` - Editor-game wrapper crate
 
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 557/557 (100%)
+passed: 561/561 (100%)
 ignored: 30 (GPU/window)
 failed: 0
 ```
