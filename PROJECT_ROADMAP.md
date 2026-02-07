@@ -14,13 +14,13 @@
 | Physics | 28 | 100% pass |
 | Renderer | 62 | 100% pass |
 | Audio | 3 | 100% pass |
-| UI | 53 | 100% pass |
+| UI | 60 | 100% pass |
 | Editor | 148 | 100% pass |
-| Editor Integration | 4 | 100% pass |
+| Editor Integration | 14 | 100% pass |
 | ECS Macros | 3 | 100% pass |
 | Common | 26 | 100% pass |
 
-**Total:** 561/561 tests passing (100% success rate)
+**Total:** 578/578 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 30 ignored (GPU/window only)
 
 ### Completed Engine Features
@@ -82,17 +82,18 @@ The editor is a mode of the engine, not a separate example binary. One function 
 #### 1B. Property Editing with Writeback
 The editable inspector widgets exist but aren't connected. Inspector changes must actually modify ECS components.
 
-- [ ] **Wire up component editors** - Connect existing `edit_transform2d()`, `edit_sprite()`, etc. to ECS writeback
+- [x] **Wire up component editors** - Connect existing `edit_transform2d()`, `edit_sprite()`, etc. to ECS writeback
   - Inspector panel calls component-specific editors instead of read-only `inspect_component()`
   - Edit results (`TransformEditResult`, `SpriteEditResult`, etc.) applied via `world.get_mut::<T>()`
   - Changes visible immediately in viewport (live preview)
-- [ ] **RigidBody and Collider editing** - Wire up `edit_rigid_body()` and `edit_collider()` with physics sync
-  - Physics world must be notified of property changes (body type, damping, friction, etc.)
-  - Collider shape changes require rebuilding the physics body
-- [ ] **AudioSource editing** - Wire up `edit_audio_source()` for volume, pitch, spatial settings
-- [ ] **Rotate and Scale gizmos** - Currently only translate gizmo writes back
+  - Also wired up: RigidBody, Collider, AudioSource editing with writeback
+- [x] **RigidBody and Collider editing** - Wire up `edit_rigid_body()` and `edit_collider()` with physics sync
+  - Inspector writeback updates ECS components; `PhysicsSystem::update()` auto-syncs to rapier
+  - Body type and shape editing are read-only (enum dropdown/shape editor not yet available)
+- [x] **AudioSource editing** - Wire up `edit_audio_source()` for volume, pitch, spatial settings
+- [x] **Rotate and Scale gizmos** - Gizmo interaction writes back to `Transform2D`
   - Rotate gizmo: circular handle, angle delta applied to `Transform2D.rotation`
-  - Scale gizmo: corner handles, scale delta applied to `Transform2D.scale`
+  - Scale gizmo: corner handles, scale delta applied to `Transform2D.scale` (clamped to min 0.01)
 
 #### 1C. Play / Pause / Stop
 Run the game inside the editor, pause to inspect state, stop to reset to the saved scene.

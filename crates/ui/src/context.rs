@@ -463,6 +463,133 @@ impl UIContext {
         }
     }
 
+    /// Create a float text input field.
+    ///
+    /// Displays the value as text in a box. Click to focus and type a new value.
+    /// Accepts digits, period, and minus sign. Enter/Tab commits, Escape cancels.
+    /// The committed value is clamped to the min/max range.
+    ///
+    /// Returns the current value (unchanged while editing, new value on commit).
+    pub fn float_input(
+        &mut self,
+        id: impl Into<WidgetId>,
+        value: f32,
+        min: f32,
+        max: f32,
+        bounds: Rect,
+    ) -> f32 {
+        let id = id.into();
+        let result = self.interaction.interact(id, bounds, true);
+        let is_focused = self.interaction.is_focused(id);
+
+        // Snapshot keyboard state before mutating persistent state
+        let typed_chars = self.interaction.input().typed_chars.clone();
+        let enter = self.interaction.input().enter_pressed;
+        let escape = self.interaction.input().escape_pressed;
+        let backspace = self.interaction.input().backspace_pressed;
+        let tab = self.interaction.input().tab_pressed;
+        let mouse_just_pressed = self.interaction.input().mouse_just_pressed;
+        let mouse_in_bounds = bounds.contains(self.interaction.input().mouse_pos);
+
+        if result.clicked && !is_focused {
+            // Enter edit mode
+            self.interaction.set_focus(id);
+            let state = self.interaction.get_state(id);
+            state.string_value = format!("{:.2}", value);
+        }
+
+        if self.interaction.is_focused(id) {
+            // Process keyboard input
+            let state = self.interaction.get_state(id);
+
+            for ch in &typed_chars {
+                state.string_value.push(*ch);
+            }
+
+            if backspace {
+                state.string_value.pop();
+            }
+
+            // Commit on Enter or Tab
+            if enter || tab {
+                let new_value = state.string_value.parse::<f32>()
+                    .unwrap_or(value)
+                    .clamp(min, max);
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", new_value), false);
+                return new_value;
+            }
+
+            // Cancel on Escape
+            if escape {
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", value), false);
+                return value;
+            }
+
+            // Click outside commits
+            if mouse_just_pressed && !mouse_in_bounds {
+                let new_value = state.string_value.parse::<f32>()
+                    .unwrap_or(value)
+                    .clamp(min, max);
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", new_value), false);
+                return new_value;
+            }
+
+            // Draw focused state with editing text
+            let edit_text = self.interaction.get_state(id).string_value.clone();
+            self.draw_float_input_box(bounds, &edit_text, true);
+            return value; // Return original while editing
+        }
+
+        // Not focused — draw display value
+        let display = format!("{:.2}", value);
+        let hovered = result.state == WidgetState::Hovered;
+        self.draw_float_input_box(bounds, &display, hovered);
+        value
+    }
+
+    /// Draw a float input text box (shared by focused and unfocused states).
+    fn draw_float_input_box(&mut self, bounds: Rect, text: &str, highlighted: bool) {
+        let bg = if highlighted {
+            Color::new(0.2, 0.2, 0.25, 1.0)
+        } else {
+            Color::new(0.15, 0.15, 0.18, 1.0)
+        };
+        let border = if highlighted {
+            Color::new(0.4, 0.6, 1.0, 1.0)
+        } else {
+            Color::new(0.3, 0.3, 0.35, 1.0)
+        };
+
+        self.draw_list.rect_rounded(bounds, bg, 2.0);
+        self.draw_list.rect_border_rounded(bounds, border, 1.0, 2.0);
+
+        // Text positioned inside the box
+        let font_size = 13.0;
+        let padding = 4.0;
+
+        if let Some(font_handle) = self.font_manager.default_font() {
+            if let Ok(text_size) = self.font_manager.measure_text(font_handle, text, font_size) {
+                let text_top = bounds.y + (bounds.height - text_size.y) / 2.0;
+                let baseline_y = self.baseline_y(text_top, font_size, font_handle);
+                let text_pos = Vec2::new(bounds.x + padding, baseline_y);
+                if let Ok(layout) = self.font_manager.layout_text(font_handle, text, font_size) {
+                    let text_data = Self::layout_to_draw_data(
+                        &layout, text, text_pos, Color::WHITE, font_size,
+                    );
+                    self.draw_list.text(text_data);
+                    return;
+                }
+            }
+        }
+
+        // Fallback to placeholder
+        let text_pos = Vec2::new(bounds.x + padding, bounds.y + bounds.height / 2.0);
+        self.draw_list.text_placeholder(text, text_pos, Color::WHITE, font_size);
+    }
+
     /// Create a checkbox.
     ///
     /// Returns `true` if the checkbox was toggled this frame.
@@ -779,5 +906,31 @@ mod tests {
         ui.pop_clip_rect();
 
         assert_eq!(ui.draw_list().len(), 3);
+    }
+
+    #[test]
+    fn test_float_input_returns_original_without_interaction() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        let bounds = Rect::new(100.0, 100.0, 80.0, 20.0);
+        let result = ui.float_input("test_float", 3.14, 0.0, 10.0, bounds);
+
+        // Without any interaction, should return the original value
+        assert_eq!(result, 3.14);
+        // Should generate draw commands (background rect + border + text)
+        assert!(ui.draw_list().len() >= 2);
+    }
+
+    #[test]
+    fn test_float_input_draws_box() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        let bounds = Rect::new(50.0, 50.0, 100.0, 24.0);
+        ui.float_input("float_box", 42.0, 0.0, 100.0, bounds);
+
+        // Should have background rect, border rect, and text placeholder
+        assert!(ui.draw_list().len() >= 3);
     }
 }

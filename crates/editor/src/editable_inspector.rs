@@ -110,7 +110,7 @@ impl<T> EditResult<T> {
     }
 }
 
-/// Render an editable f32 value with a slider.
+/// Render an editable f32 value with a text input box.
 pub fn edit_f32(
     ui: &mut UIContext,
     id: FieldId,
@@ -125,26 +125,17 @@ pub fn edit_f32(
     // Draw label
     ui.label_styled(label, glam::Vec2::new(x, y + 4.0), style.label_color, 14.0);
 
-    // Slider bounds
-    let slider_x = x + style.label_width;
-    let slider_bounds = Rect::new(
-        slider_x,
-        y + (style.row_height - style.slider_height) / 2.0,
-        120.0,
-        style.slider_height,
+    // Text input bounds
+    let input_x = x + style.label_width;
+    let input_height = style.row_height - 4.0;
+    let input_bounds = Rect::new(
+        input_x,
+        y + (style.row_height - input_height) / 2.0,
+        100.0,
+        input_height,
     );
 
-    // Render slider and get new value
-    let new_value = ui.slider_range(id, value, min, max, slider_bounds);
-
-    // Display value as text
-    let value_text = format!("{:.2}", new_value);
-    ui.label_styled(
-        &value_text,
-        glam::Vec2::new(slider_x + 130.0, y + 4.0),
-        style.value_color,
-        14.0,
-    );
+    let new_value = ui.float_input(id, value, min, max, input_bounds);
 
     if (new_value - value).abs() > f32::EPSILON {
         EditResult::Changed(new_value)
@@ -200,7 +191,7 @@ pub fn edit_bool(
     }
 }
 
-/// Render an editable Vec2 value with separate X/Y sliders.
+/// Render an editable Vec2 value with separate X/Y text input boxes.
 pub fn edit_vec2(
     ui: &mut UIContext,
     id: FieldId,
@@ -216,53 +207,40 @@ pub fn edit_vec2(
     ui.label_styled(label, glam::Vec2::new(x, y + 4.0), style.label_color, 14.0);
 
     let mut new_value = value;
-    let slider_width = 80.0;
-    let slider_x = x + style.label_width;
+    let input_width = 70.0;
+    let input_height = style.row_height - 4.0;
+    let input_x = x + style.label_width;
+    let input_y = y + (style.row_height - input_height) / 2.0;
 
-    // X slider
-    let x_bounds = Rect::new(
-        slider_x,
-        y + (style.row_height - style.slider_height) / 2.0,
-        slider_width,
-        style.slider_height,
-    );
-    let new_x = ui.slider_range(
-        FieldId::new(id.component_index, id.field_index, 0),
-        value.x,
-        min,
-        max,
-        x_bounds,
-    );
-    new_value.x = new_x;
-
+    // X label
     ui.label_styled(
         "X",
-        glam::Vec2::new(slider_x + slider_width + 4.0, y + 4.0),
+        glam::Vec2::new(input_x, y + 4.0),
         Color::new(0.8, 0.4, 0.4, 1.0),
         12.0,
     );
 
-    // Y slider
-    let y_bounds = Rect::new(
-        slider_x + slider_width + 20.0,
-        y + (style.row_height - style.slider_height) / 2.0,
-        slider_width,
-        style.slider_height,
+    // X input
+    let x_bounds = Rect::new(input_x + 14.0, input_y, input_width, input_height);
+    new_value.x = ui.float_input(
+        FieldId::new(id.component_index, id.field_index, 0),
+        value.x, min, max, x_bounds,
     );
-    let new_y = ui.slider_range(
-        FieldId::new(id.component_index, id.field_index, 1),
-        value.y,
-        min,
-        max,
-        y_bounds,
-    );
-    new_value.y = new_y;
 
+    // Y label
+    let y_label_x = input_x + 14.0 + input_width + 8.0;
     ui.label_styled(
         "Y",
-        glam::Vec2::new(slider_x + slider_width * 2.0 + 24.0, y + 4.0),
+        glam::Vec2::new(y_label_x, y + 4.0),
         Color::new(0.4, 0.8, 0.4, 1.0),
         12.0,
+    );
+
+    // Y input
+    let y_bounds = Rect::new(y_label_x + 14.0, input_y, input_width, input_height);
+    new_value.y = ui.float_input(
+        FieldId::new(id.component_index, id.field_index, 1),
+        value.y, min, max, y_bounds,
     );
 
     if new_value != value {
@@ -292,7 +270,7 @@ pub fn display_u32(
     );
 }
 
-/// Render an editable color (Vec4) with RGBA sliders and preview.
+/// Render an editable color (Vec4) with RGBA text inputs and preview.
 pub fn edit_color(
     ui: &mut UIContext,
     id: FieldId,
@@ -320,68 +298,58 @@ pub fn edit_color(
     let preview_color = Color::new(value.x, value.y, value.z, value.w);
     ui.rect_rounded(preview_bounds, preview_color, 2.0);
 
-    // RGBA sliders (compact)
-    let slider_x = preview_x + style.color_preview_size + 8.0;
-    let slider_width = 60.0;
-    let slider_height = 12.0;
+    // RGBA text inputs (compact)
+    let input_x = preview_x + style.color_preview_size + 8.0;
+    let input_width = 48.0;
+    let input_height = 14.0;
+    let gap = 4.0;
 
     // Red
-    let r_bounds = Rect::new(slider_x, y + 2.0, slider_width, slider_height);
-    let new_r = ui.slider_range(
+    ui.label_styled("R", glam::Vec2::new(input_x, y + 2.0), Color::new(0.9, 0.4, 0.4, 1.0), 10.0);
+    let r_bounds = Rect::new(input_x + 12.0, y + 2.0, input_width, input_height);
+    let new_r = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 0),
-        value.x,
-        0.0,
-        1.0,
-        r_bounds,
+        value.x, 0.0, 1.0, r_bounds,
     );
-    if new_r != value.x {
+    if (new_r - value.x).abs() > f32::EPSILON {
         new_value.x = new_r;
         changed = true;
     }
 
     // Green
-    let g_bounds = Rect::new(slider_x + slider_width + 4.0, y + 2.0, slider_width, slider_height);
-    let new_g = ui.slider_range(
+    let g_x = input_x + 12.0 + input_width + gap;
+    ui.label_styled("G", glam::Vec2::new(g_x, y + 2.0), Color::new(0.4, 0.9, 0.4, 1.0), 10.0);
+    let g_bounds = Rect::new(g_x + 12.0, y + 2.0, input_width, input_height);
+    let new_g = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 1),
-        value.y,
-        0.0,
-        1.0,
-        g_bounds,
+        value.y, 0.0, 1.0, g_bounds,
     );
-    if new_g != value.y {
+    if (new_g - value.y).abs() > f32::EPSILON {
         new_value.y = new_g;
         changed = true;
     }
 
     // Blue
-    let b_bounds = Rect::new(slider_x, y + row_height / 2.0 + 2.0, slider_width, slider_height);
-    let new_b = ui.slider_range(
+    ui.label_styled("B", glam::Vec2::new(input_x, y + row_height / 2.0 + 2.0), Color::new(0.4, 0.4, 0.9, 1.0), 10.0);
+    let b_bounds = Rect::new(input_x + 12.0, y + row_height / 2.0 + 2.0, input_width, input_height);
+    let new_b = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 2),
-        value.z,
-        0.0,
-        1.0,
-        b_bounds,
+        value.z, 0.0, 1.0, b_bounds,
     );
-    if new_b != value.z {
+    if (new_b - value.z).abs() > f32::EPSILON {
         new_value.z = new_b;
         changed = true;
     }
 
     // Alpha
-    let a_bounds = Rect::new(
-        slider_x + slider_width + 4.0,
-        y + row_height / 2.0 + 2.0,
-        slider_width,
-        slider_height,
-    );
-    let new_a = ui.slider_range(
+    let a_x = input_x + 12.0 + input_width + gap;
+    ui.label_styled("A", glam::Vec2::new(a_x, y + row_height / 2.0 + 2.0), Color::new(0.7, 0.7, 0.7, 1.0), 10.0);
+    let a_bounds = Rect::new(a_x + 12.0, y + row_height / 2.0 + 2.0, input_width, input_height);
+    let new_a = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 3),
-        value.w,
-        0.0,
-        1.0,
-        a_bounds,
+        value.w, 0.0, 1.0, a_bounds,
     );
-    if new_a != value.w {
+    if (new_a - value.w).abs() > f32::EPSILON {
         new_value.w = new_a;
         changed = true;
     }

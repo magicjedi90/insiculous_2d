@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
-use input::prelude::{InputHandler, MouseButton};
+use input::prelude::{InputHandler, KeyCode, MouseButton};
 
 use crate::Rect;
 
@@ -121,6 +121,16 @@ pub struct InputState {
     pub mouse_just_released: bool,
     /// Mouse scroll delta
     pub scroll_delta: f32,
+    /// Characters typed this frame (for text input widgets)
+    pub typed_chars: Vec<char>,
+    /// Whether Enter/Return was just pressed
+    pub enter_pressed: bool,
+    /// Whether Escape was just pressed
+    pub escape_pressed: bool,
+    /// Whether Backspace was just pressed
+    pub backspace_pressed: bool,
+    /// Whether Tab was just pressed
+    pub tab_pressed: bool,
 }
 
 impl Default for InputState {
@@ -131,7 +141,47 @@ impl Default for InputState {
             mouse_just_pressed: false,
             mouse_just_released: false,
             scroll_delta: 0.0,
+            typed_chars: Vec::new(),
+            enter_pressed: false,
+            escape_pressed: false,
+            backspace_pressed: false,
+            tab_pressed: false,
         }
+    }
+}
+
+/// Map a physical KeyCode to a character for text input.
+/// Returns None for non-character keys. Only maps keys useful for numeric input.
+fn keycode_to_char(key: KeyCode, shift: bool) -> Option<char> {
+    use KeyCode::*;
+    match key {
+        // Numpad always maps to digits regardless of shift
+        Numpad0 => Some('0'),
+        Numpad1 => Some('1'),
+        Numpad2 => Some('2'),
+        Numpad3 => Some('3'),
+        Numpad4 => Some('4'),
+        Numpad5 => Some('5'),
+        Numpad6 => Some('6'),
+        Numpad7 => Some('7'),
+        Numpad8 => Some('8'),
+        Numpad9 => Some('9'),
+        NumpadDecimal => Some('.'),
+        NumpadSubtract => Some('-'),
+        // Top-row digits only when shift is not held
+        Digit0 if !shift => Some('0'),
+        Digit1 if !shift => Some('1'),
+        Digit2 if !shift => Some('2'),
+        Digit3 if !shift => Some('3'),
+        Digit4 if !shift => Some('4'),
+        Digit5 if !shift => Some('5'),
+        Digit6 if !shift => Some('6'),
+        Digit7 if !shift => Some('7'),
+        Digit8 if !shift => Some('8'),
+        Digit9 if !shift => Some('9'),
+        Period if !shift => Some('.'),
+        Minus if !shift => Some('-'),
+        _ => None,
     }
 }
 
@@ -140,12 +190,44 @@ impl InputState {
     pub fn from_input_handler(input: &InputHandler) -> Self {
         let mouse = input.mouse();
         let pos = mouse.position();
+        let kb = input.keyboard();
+
+        let shift = kb.is_key_pressed(KeyCode::ShiftLeft)
+            || kb.is_key_pressed(KeyCode::ShiftRight);
+
+        // Collect typed characters from just-pressed keys
+        let typed_keys = [
+            KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3,
+            KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7,
+            KeyCode::Digit8, KeyCode::Digit9,
+            KeyCode::Numpad0, KeyCode::Numpad1, KeyCode::Numpad2, KeyCode::Numpad3,
+            KeyCode::Numpad4, KeyCode::Numpad5, KeyCode::Numpad6, KeyCode::Numpad7,
+            KeyCode::Numpad8, KeyCode::Numpad9,
+            KeyCode::Period, KeyCode::NumpadDecimal,
+            KeyCode::Minus, KeyCode::NumpadSubtract,
+        ];
+
+        let mut typed_chars = Vec::new();
+        for &key in &typed_keys {
+            if kb.is_key_just_pressed(key) {
+                if let Some(ch) = keycode_to_char(key, shift) {
+                    typed_chars.push(ch);
+                }
+            }
+        }
+
         Self {
             mouse_pos: Vec2::new(pos.x, pos.y),
             mouse_down: mouse.is_button_pressed(MouseButton::Left),
             mouse_just_pressed: mouse.is_button_just_pressed(MouseButton::Left),
             mouse_just_released: mouse.is_button_just_released(MouseButton::Left),
             scroll_delta: mouse.wheel_delta(),
+            typed_chars,
+            enter_pressed: kb.is_key_just_pressed(KeyCode::Enter)
+                || kb.is_key_just_pressed(KeyCode::NumpadEnter),
+            escape_pressed: kb.is_key_just_pressed(KeyCode::Escape),
+            backspace_pressed: kb.is_key_just_pressed(KeyCode::Backspace),
+            tab_pressed: kb.is_key_just_pressed(KeyCode::Tab),
         }
     }
 }
@@ -399,5 +481,54 @@ mod tests {
         assert!(!input.mouse_down);
         assert!(!input.mouse_just_pressed);
         assert!(!input.mouse_just_released);
+        assert!(input.typed_chars.is_empty());
+        assert!(!input.enter_pressed);
+        assert!(!input.escape_pressed);
+        assert!(!input.backspace_pressed);
+        assert!(!input.tab_pressed);
+    }
+
+    #[test]
+    fn test_keycode_to_char_digits() {
+        assert_eq!(keycode_to_char(KeyCode::Digit0, false), Some('0'));
+        assert_eq!(keycode_to_char(KeyCode::Digit9, false), Some('9'));
+        assert_eq!(keycode_to_char(KeyCode::Numpad5, false), Some('5'));
+        assert_eq!(keycode_to_char(KeyCode::Numpad5, true), Some('5')); // numpad ignores shift
+    }
+
+    #[test]
+    fn test_keycode_to_char_special() {
+        assert_eq!(keycode_to_char(KeyCode::Period, false), Some('.'));
+        assert_eq!(keycode_to_char(KeyCode::Minus, false), Some('-'));
+        assert_eq!(keycode_to_char(KeyCode::NumpadDecimal, false), Some('.'));
+        assert_eq!(keycode_to_char(KeyCode::NumpadSubtract, true), Some('-'));
+    }
+
+    #[test]
+    fn test_keycode_to_char_shift_blocks_top_row() {
+        assert_eq!(keycode_to_char(KeyCode::Digit0, true), None); // Shift+0 = ')'
+        assert_eq!(keycode_to_char(KeyCode::Period, true), None); // Shift+. = '>'
+        assert_eq!(keycode_to_char(KeyCode::Minus, true), None); // Shift+- = '_'
+    }
+
+    #[test]
+    fn test_keycode_to_char_non_numeric() {
+        assert_eq!(keycode_to_char(KeyCode::KeyA, false), None);
+        assert_eq!(keycode_to_char(KeyCode::Space, false), None);
+        assert_eq!(keycode_to_char(KeyCode::Enter, false), None);
+    }
+
+    #[test]
+    fn test_focus_management() {
+        let mut manager = InteractionManager::new();
+        let id = WidgetId::from_str("text_input");
+
+        assert!(!manager.is_focused(id));
+
+        manager.set_focus(id);
+        assert!(manager.is_focused(id));
+
+        manager.clear_focus();
+        assert!(!manager.is_focused(id));
     }
 }

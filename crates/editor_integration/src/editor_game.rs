@@ -139,14 +139,32 @@ impl<G: Game> Game for EditorGame<G> {
                     let screen_pos = self.editor.world_to_screen(entity_pos);
                     let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
 
-                    if interaction.handle.is_some() && interaction.delta != Vec2::ZERO {
-                        let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
-                        let snap_enabled = self.editor.is_snap_to_grid();
+                    if interaction.handle.is_some() {
+                        // Translation
+                        if interaction.delta != Vec2::ZERO {
+                            let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
+                            let snap_enabled = self.editor.is_snap_to_grid();
 
-                        if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                            transform.position += world_delta;
-                            if snap_enabled {
-                                transform.position = self.editor.snap_position(transform.position);
+                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                transform.position += world_delta;
+                                if snap_enabled {
+                                    transform.position = self.editor.snap_position(transform.position);
+                                }
+                            }
+                        }
+
+                        // Rotation
+                        if interaction.rotation_delta != 0.0 {
+                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                transform.rotation += interaction.rotation_delta;
+                            }
+                        }
+
+                        // Scale
+                        if interaction.scale_delta != Vec2::ZERO {
+                            if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
+                                transform.scale += interaction.scale_delta;
+                                transform.scale = transform.scale.max(Vec2::splat(0.01));
                             }
                         }
                     }

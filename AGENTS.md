@@ -11,15 +11,15 @@
 - **ECS**: HashMap-based per-type storage, 110 tests, type-safe queries
 - **Renderer**: WGPU 28.0.0, instanced sprites, 62 tests
 - **Physics**: Rapier2d integration, 28 tests, presets
-- **UI**: Immediate-mode, 53 tests, fontdue integration
+- **UI**: Immediate-mode, 60 tests, fontdue integration
 - **Input**: Event-based, 56 tests, action mapping
 - **Audio**: Rodio backend, 3 tests, spatial audio
 - **Engine Core**: Game API, managers, 67 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 148 tests
-- **Editor Integration**: `run_game_with_editor()` wrapper, 4 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback, 14 tests
 
 ### Key Metrics
-- **Total Tests**: 561/561 passing (100% success rate)
+- **Total Tests**: 578/578 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
 - **Code Quality**: 30 ignored tests (GPU/window), 0 failures
 
@@ -114,7 +114,7 @@ insiculous_2d (root) ──→ editor_integration (optional, behind "editor" fea
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 561 tests
+cargo test --workspace               # Run all 578 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -135,7 +135,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 561/561 (100%)
+passed: 578/578 (100%)
 ignored: 30 (GPU/window)
 failed: 0
 ```
