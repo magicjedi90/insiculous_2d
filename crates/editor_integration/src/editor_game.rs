@@ -8,8 +8,8 @@
 use glam::Vec2;
 use winit::keyboard::KeyCode;
 
-use ecs::System;
-use editor::{EditorContext, EditorPlayState, EditorTool, PanelId, PlayControlAction};
+use ecs::{GlobalTransform2D, Pair, System, World};
+use editor::{EditorContext, EditorPlayState, EditorTool, PanelId, PickableEntity, PlayControlAction};
 use editor::world_snapshot::WorldSnapshot;
 use engine_core::contexts::{GameContext, RenderContext};
 use engine_core::Game;
@@ -181,6 +181,63 @@ impl<G: Game> Game for EditorGame<G> {
         // 7. Pop clip rects
         self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
 
+        // 7b. Viewport input handling (pan, zoom, click, selection)
+        if !self.editor.is_playing() {
+            let input_result = self.editor.viewport_input.handle_input_simple(
+                &mut self.editor.viewport,
+                &self.editor.input_mapping,
+                ctx.input,
+            );
+
+            if !self.editor.gizmo_has_priority() {
+                if input_result.clicked {
+                    let pickables = build_pickable_entities(ctx.world);
+                    let pick_result = self.editor.picker.pick_at_screen_pos(
+                        &self.editor.viewport,
+                        input_result.click_position,
+                        &pickables,
+                    );
+
+                    if let Some(entity_id) = pick_result.topmost() {
+                        if input_result.shift_held {
+                            self.editor.selection.add(entity_id);
+                        } else if input_result.ctrl_held {
+                            self.editor.selection.toggle(entity_id);
+                        } else {
+                            self.editor.selection.select(entity_id);
+                        }
+                    } else if !input_result.shift_held && !input_result.ctrl_held {
+                        self.editor.selection.clear();
+                    }
+                }
+
+                // Rectangle selection (drag just completed)
+                if !input_result.selection_drag_active
+                    && input_result.selection_start != Vec2::ZERO
+                    && !input_result.clicked
+                {
+                    let pickables = build_pickable_entities(ctx.world);
+                    let pick_result = self.editor.picker.pick_in_screen_rect(
+                        &self.editor.viewport,
+                        input_result.selection_start,
+                        input_result.selection_end,
+                        &pickables,
+                    );
+
+                    if input_result.shift_held {
+                        for &entity_id in &pick_result.hits {
+                            self.editor.selection.add(entity_id);
+                        }
+                    } else {
+                        self.editor.selection.clear();
+                        for &entity_id in &pick_result.hits {
+                            self.editor.selection.add(entity_id);
+                        }
+                    }
+                }
+            }
+        }
+
         // 8. Gizmo interaction for selected entity (skip during play)
         if !self.editor.is_playing() {
             if let Some(entity_id) = self.editor.selection.primary() {
@@ -314,6 +371,29 @@ impl<G: Game> Game for EditorGame<G> {
     }
 }
 
+/// Build the list of pickable entities from the world.
+///
+/// Queries for entities that have both `GlobalTransform2D` and `Sprite` components,
+/// which are required for viewport picking (position + visual size).
+fn build_pickable_entities(world: &World) -> Vec<PickableEntity> {
+    let entities = world.query_entities::<Pair<GlobalTransform2D, ecs::sprite_components::Sprite>>();
+    entities
+        .into_iter()
+        .filter_map(|entity_id| {
+            let global_t = world.get::<GlobalTransform2D>(entity_id)?;
+            let sprite = world.get::<ecs::sprite_components::Sprite>(entity_id)?;
+            // Visual size = sprite scale * global transform scale
+            let size = sprite.scale * global_t.scale;
+            Some(PickableEntity::new(
+                entity_id,
+                global_t.position,
+                size,
+                sprite.depth,
+            ))
+        })
+        .collect()
+}
+
 /// Run a game with the full editor UI overlay.
 ///
 /// This wraps the given game in `EditorGame`, which intercepts all `Game` trait
@@ -439,5 +519,87 @@ mod tests {
 
         let t = world.get::<common::Transform2D>(entity).unwrap();
         assert_eq!(t.position, glam::Vec2::new(10.0, 20.0));
+    }
+
+    #[test]
+    fn test_build_pickable_entities_with_both_components() {
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, GlobalTransform2D {
+            position: Vec2::new(100.0, 200.0),
+            scale: Vec2::new(2.0, 2.0),
+            ..Default::default()
+        }).ok();
+        let mut sprite = ecs::sprite_components::Sprite::new(0);
+        sprite.scale = Vec2::new(32.0, 32.0);
+        sprite.depth = 5.0;
+        world.add_component(&entity, sprite).ok();
+
+        let pickables = build_pickable_entities(&world);
+        assert_eq!(pickables.len(), 1);
+        assert_eq!(pickables[0].entity_id, entity);
+        assert_eq!(pickables[0].position, Vec2::new(100.0, 200.0));
+        // Size = sprite.scale * global_transform.scale = (32, 32) * (2, 2) = (64, 64)
+        assert_eq!(pickables[0].size, Vec2::new(64.0, 64.0));
+        assert_eq!(pickables[0].depth, 5.0);
+    }
+
+    #[test]
+    fn test_build_pickable_entities_skips_without_sprite() {
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        // Only GlobalTransform2D, no Sprite
+        world.add_component(&entity, GlobalTransform2D::default()).ok();
+
+        let pickables = build_pickable_entities(&world);
+        assert!(pickables.is_empty());
+    }
+
+    #[test]
+    fn test_build_pickable_entities_skips_without_global_transform() {
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        // Only Sprite, no GlobalTransform2D
+        world.add_component(&entity, ecs::sprite_components::Sprite::new(0)).ok();
+
+        let pickables = build_pickable_entities(&world);
+        assert!(pickables.is_empty());
+    }
+
+    #[test]
+    fn test_build_pickable_entities_multiple() {
+        let mut world = ecs::World::new();
+
+        // Entity 1
+        let e1 = world.create_entity();
+        world.add_component(&e1, GlobalTransform2D {
+            position: Vec2::new(10.0, 20.0),
+            ..Default::default()
+        }).ok();
+        let mut sprite1 = ecs::sprite_components::Sprite::new(0);
+        sprite1.depth = 1.0;
+        world.add_component(&e1, sprite1).ok();
+
+        // Entity 2
+        let e2 = world.create_entity();
+        world.add_component(&e2, GlobalTransform2D {
+            position: Vec2::new(50.0, 60.0),
+            ..Default::default()
+        }).ok();
+        let mut sprite2 = ecs::sprite_components::Sprite::new(1);
+        sprite2.depth = 3.0;
+        world.add_component(&e2, sprite2).ok();
+
+        // Entity 3 — no sprite, should be excluded
+        let e3 = world.create_entity();
+        world.add_component(&e3, GlobalTransform2D::default()).ok();
+
+        let pickables = build_pickable_entities(&world);
+        assert_eq!(pickables.len(), 2);
+
+        let ids: Vec<_> = pickables.iter().map(|p| p.entity_id).collect();
+        assert!(ids.contains(&e1));
+        assert!(ids.contains(&e2));
+        assert!(!ids.contains(&e3));
     }
 }

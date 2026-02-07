@@ -238,7 +238,7 @@ impl EditorInputMapping {
             action,
             input,
             |i, key| i.is_key_just_released(key),
-            |_i, _btn| false, // Mouse button release not yet supported
+            |i, btn| i.mouse().is_button_just_released(btn),
         )
     }
 
@@ -257,17 +257,17 @@ impl EditorInputMapping {
             primary_button: ButtonState {
                 pressed: input.is_mouse_button_pressed(MouseButton::Left),
                 just_pressed: input.is_mouse_button_just_pressed(MouseButton::Left),
-                just_released: false, // Would need input crate update
+                just_released: input.mouse().is_button_just_released(MouseButton::Left),
             },
             secondary_button: ButtonState {
                 pressed: input.is_mouse_button_pressed(MouseButton::Right),
                 just_pressed: input.is_mouse_button_just_pressed(MouseButton::Right),
-                just_released: false,
+                just_released: input.mouse().is_button_just_released(MouseButton::Right),
             },
             middle_button: ButtonState {
                 pressed: input.is_mouse_button_pressed(MouseButton::Middle),
                 just_pressed: input.is_mouse_button_just_pressed(MouseButton::Middle),
-                just_released: false,
+                just_released: input.mouse().is_button_just_released(MouseButton::Middle),
             },
         }
     }

@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
     "code-review@claude-plugins-official": true
-  }
+  },
+  "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
 }
