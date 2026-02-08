@@ -3,13 +3,179 @@
 //! Pure functions operating on `&mut World` + `&mut Selection` with no UI
 //! dependency — fully testable headlessly.
 
-use ecs::sprite_components::{Name, Sprite};
+use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
 use ecs::hierarchy::GlobalTransform2D;
 use ecs::audio_components::{AudioListener, AudioSource};
 use ecs::{EntityId, World, WorldHierarchyExt};
 use editor::Selection;
 use glam::Vec2;
 use physics::components::{Collider, RigidBody, RigidBodyType};
+
+// ==================== Component Add/Remove ====================
+
+/// Enumeration of component types that can be added to or removed from entities.
+///
+/// Transform2D, GlobalTransform2D, and Name are excluded because they are always
+/// present and should never be removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ComponentKind {
+    Camera,
+    Sprite,
+    SpriteAnimation,
+    RigidBody,
+    Collider,
+    AudioSource,
+    AudioListener,
+}
+
+/// Category grouping for the add-component popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentCategory {
+    Core,
+    Rendering,
+    Physics,
+    Audio,
+}
+
+impl ComponentCategory {
+    /// Display name for the category header.
+    pub fn label(self) -> &'static str {
+        match self {
+            ComponentCategory::Core => "Core",
+            ComponentCategory::Rendering => "Rendering",
+            ComponentCategory::Physics => "Physics",
+            ComponentCategory::Audio => "Audio",
+        }
+    }
+}
+
+/// Returns all component kinds grouped by category.
+pub fn categorized_components() -> &'static [(ComponentCategory, &'static [ComponentKind])] {
+    &[
+        (ComponentCategory::Core, &[ComponentKind::Camera]),
+        (ComponentCategory::Rendering, &[ComponentKind::Sprite, ComponentKind::SpriteAnimation]),
+        (ComponentCategory::Physics, &[ComponentKind::RigidBody, ComponentKind::Collider]),
+        (ComponentCategory::Audio, &[ComponentKind::AudioSource, ComponentKind::AudioListener]),
+    ]
+}
+
+/// Human-readable display name for a component kind.
+pub fn component_display_name(kind: ComponentKind) -> &'static str {
+    match kind {
+        ComponentKind::Camera => "Camera",
+        ComponentKind::Sprite => "Sprite",
+        ComponentKind::SpriteAnimation => "SpriteAnimation",
+        ComponentKind::RigidBody => "RigidBody",
+        ComponentKind::Collider => "Collider",
+        ComponentKind::AudioSource => "AudioSource",
+        ComponentKind::AudioListener => "AudioListener",
+    }
+}
+
+/// Check whether an entity has a specific component.
+pub fn entity_has_component(world: &World, entity: EntityId, kind: ComponentKind) -> bool {
+    match kind {
+        ComponentKind::Camera => world.get::<common::Camera>(entity).is_some(),
+        ComponentKind::Sprite => world.get::<Sprite>(entity).is_some(),
+        ComponentKind::SpriteAnimation => world.get::<SpriteAnimation>(entity).is_some(),
+        ComponentKind::RigidBody => world.get::<RigidBody>(entity).is_some(),
+        ComponentKind::Collider => world.get::<Collider>(entity).is_some(),
+        ComponentKind::AudioSource => world.get::<AudioSource>(entity).is_some(),
+        ComponentKind::AudioListener => world.get::<AudioListener>(entity).is_some(),
+    }
+}
+
+/// Returns the component kinds that are NOT present on the entity.
+pub fn available_components(world: &World, entity: EntityId) -> Vec<ComponentKind> {
+    let all = [
+        ComponentKind::Camera,
+        ComponentKind::Sprite,
+        ComponentKind::SpriteAnimation,
+        ComponentKind::RigidBody,
+        ComponentKind::Collider,
+        ComponentKind::AudioSource,
+        ComponentKind::AudioListener,
+    ];
+    all.into_iter()
+        .filter(|&kind| !entity_has_component(world, entity, kind))
+        .collect()
+}
+
+/// Add a default instance of the given component to an entity.
+pub fn add_component_to_entity(
+    world: &mut World,
+    entity: EntityId,
+    kind: ComponentKind,
+) -> Result<(), String> {
+    match kind {
+        ComponentKind::Camera => {
+            world.add_component(&entity, common::Camera::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::Sprite => {
+            world.add_component(&entity, Sprite::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::SpriteAnimation => {
+            world.add_component(&entity, SpriteAnimation::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::RigidBody => {
+            world.add_component(&entity, RigidBody::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::Collider => {
+            world.add_component(&entity, Collider::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::AudioSource => {
+            world.add_component(&entity, AudioSource::default())
+                .map_err(|e| format!("{}", e))
+        }
+        ComponentKind::AudioListener => {
+            world.add_component(&entity, AudioListener::default())
+                .map_err(|e| format!("{}", e))
+        }
+    }
+}
+
+/// Remove a component from an entity.
+///
+/// Removing `RigidBody` cascades to also remove `Collider`, since a collider
+/// without a rigid body is meaningless in the physics system.
+/// Removing an absent component is a no-op (returns Ok).
+pub fn remove_component_from_entity(
+    world: &mut World,
+    entity: EntityId,
+    kind: ComponentKind,
+) -> Result<(), String> {
+    match kind {
+        ComponentKind::Camera => {
+            let _ = world.remove_component::<common::Camera>(&entity);
+        }
+        ComponentKind::Sprite => {
+            let _ = world.remove_component::<Sprite>(&entity);
+        }
+        ComponentKind::SpriteAnimation => {
+            let _ = world.remove_component::<SpriteAnimation>(&entity);
+        }
+        ComponentKind::RigidBody => {
+            // Cascade: also remove Collider
+            let _ = world.remove_component::<Collider>(&entity);
+            let _ = world.remove_component::<RigidBody>(&entity);
+        }
+        ComponentKind::Collider => {
+            let _ = world.remove_component::<Collider>(&entity);
+        }
+        ComponentKind::AudioSource => {
+            let _ = world.remove_component::<AudioSource>(&entity);
+        }
+        ComponentKind::AudioListener => {
+            let _ = world.remove_component::<AudioListener>(&entity);
+        }
+    }
+    Ok(())
+}
 
 /// Create an empty entity with Transform2D, GlobalTransform2D, and Name.
 pub fn create_empty_entity(
@@ -586,5 +752,152 @@ mod tests {
         let count_before = world.entity_count();
         duplicate_selected_entities(&mut world, &mut sel, &mut counter);
         assert_eq!(world.entity_count(), count_before);
+    }
+
+    // ==================== Component Add/Remove Tests ====================
+
+    fn entity_with_transform(world: &mut World) -> EntityId {
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(Vec2::ZERO)).ok();
+        world.add_component(&entity, GlobalTransform2D::default()).ok();
+        world.add_component(&entity, Name::new("Test")).ok();
+        entity
+    }
+
+    #[test]
+    fn test_entity_has_component_true() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+        world.add_component(&entity, Sprite::default()).ok();
+
+        assert!(entity_has_component(&world, entity, ComponentKind::Sprite));
+    }
+
+    #[test]
+    fn test_entity_has_component_false() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+
+        assert!(!entity_has_component(&world, entity, ComponentKind::Sprite));
+        assert!(!entity_has_component(&world, entity, ComponentKind::RigidBody));
+    }
+
+    #[test]
+    fn test_available_components_filters_present() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+        world.add_component(&entity, Sprite::default()).ok();
+        world.add_component(&entity, RigidBody::default()).ok();
+
+        let available = available_components(&world, entity);
+        assert!(!available.contains(&ComponentKind::Sprite));
+        assert!(!available.contains(&ComponentKind::RigidBody));
+        assert!(available.contains(&ComponentKind::Camera));
+        assert!(available.contains(&ComponentKind::Collider));
+        assert!(available.contains(&ComponentKind::AudioSource));
+    }
+
+    #[test]
+    fn test_add_component_creates_default() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+
+        add_component_to_entity(&mut world, entity, ComponentKind::Sprite).unwrap();
+        assert!(world.get::<Sprite>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::Camera).unwrap();
+        assert!(world.get::<common::Camera>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::RigidBody).unwrap();
+        assert!(world.get::<RigidBody>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::Collider).unwrap();
+        assert!(world.get::<Collider>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::AudioSource).unwrap();
+        assert!(world.get::<AudioSource>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::AudioListener).unwrap();
+        assert!(world.get::<AudioListener>(entity).is_some());
+
+        add_component_to_entity(&mut world, entity, ComponentKind::SpriteAnimation).unwrap();
+        assert!(world.get::<SpriteAnimation>(entity).is_some());
+    }
+
+    #[test]
+    fn test_remove_sprite() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+        world.add_component(&entity, Sprite::default()).ok();
+
+        remove_component_from_entity(&mut world, entity, ComponentKind::Sprite).unwrap();
+        assert!(world.get::<Sprite>(entity).is_none());
+    }
+
+    #[test]
+    fn test_remove_rigid_body_cascades_to_collider() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+        world.add_component(&entity, RigidBody::default()).ok();
+        world.add_component(&entity, Collider::default()).ok();
+
+        remove_component_from_entity(&mut world, entity, ComponentKind::RigidBody).unwrap();
+        assert!(world.get::<RigidBody>(entity).is_none());
+        assert!(world.get::<Collider>(entity).is_none());
+    }
+
+    #[test]
+    fn test_remove_collider_alone_keeps_rigid_body() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+        world.add_component(&entity, RigidBody::default()).ok();
+        world.add_component(&entity, Collider::default()).ok();
+
+        remove_component_from_entity(&mut world, entity, ComponentKind::Collider).unwrap();
+        assert!(world.get::<Collider>(entity).is_none());
+        assert!(world.get::<RigidBody>(entity).is_some());
+    }
+
+    #[test]
+    fn test_remove_absent_component_is_safe() {
+        let mut world = World::new();
+        let entity = entity_with_transform(&mut world);
+
+        // Should not panic
+        let result = remove_component_from_entity(&mut world, entity, ComponentKind::Sprite);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_display_names_non_empty() {
+        let all_kinds = [
+            ComponentKind::Camera,
+            ComponentKind::Sprite,
+            ComponentKind::SpriteAnimation,
+            ComponentKind::RigidBody,
+            ComponentKind::Collider,
+            ComponentKind::AudioSource,
+            ComponentKind::AudioListener,
+        ];
+        for kind in all_kinds {
+            assert!(!component_display_name(kind).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_categorized_components_covers_all_kinds() {
+        let categories = categorized_components();
+        let mut all: Vec<ComponentKind> = Vec::new();
+        for (_, kinds) in categories {
+            all.extend_from_slice(kinds);
+        }
+        assert_eq!(all.len(), 7);
+        assert!(all.contains(&ComponentKind::Camera));
+        assert!(all.contains(&ComponentKind::Sprite));
+        assert!(all.contains(&ComponentKind::SpriteAnimation));
+        assert!(all.contains(&ComponentKind::RigidBody));
+        assert!(all.contains(&ComponentKind::Collider));
+        assert!(all.contains(&ComponentKind::AudioSource));
+        assert!(all.contains(&ComponentKind::AudioListener));
     }
 }

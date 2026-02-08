@@ -421,6 +421,38 @@ impl<'a> EditableInspector<'a> {
         self.field_index = 0;
     }
 
+    /// Add a component header with an optional [X] remove button.
+    ///
+    /// Returns `true` if the remove button was clicked.
+    /// When `removable` is `false`, behaves identically to `header()`.
+    pub fn header_with_remove(&mut self, type_name: &str, removable: bool) -> bool {
+        // Draw the header label
+        self.ui.label_styled(
+            type_name,
+            glam::Vec2::new(self.x, self.current_y),
+            self.style.header_color,
+            16.0,
+        );
+
+        let mut clicked = false;
+
+        if removable {
+            // Place a small [X] button to the right of the header
+            let btn_size = 18.0;
+            let btn_x = self.x + self.style.label_width + 90.0;
+            let btn_y = self.current_y;
+            let btn_bounds = Rect::new(btn_x, btn_y, btn_size, btn_size);
+
+            // Use component_index + 99 to avoid ID collisions with field inputs
+            let btn_id = FieldId::new(self.component_index, 99, 0);
+            clicked = self.ui.button(btn_id, "X", btn_bounds);
+        }
+
+        self.current_y += self.style.row_height + 4.0;
+        self.field_index = 0;
+        clicked
+    }
+
     /// Add an editable f32 field.
     pub fn f32(&mut self, label: &str, value: f32, min: f32, max: f32) -> EditResult<f32> {
         let id = FieldId::new(self.component_index, self.field_index, 0);

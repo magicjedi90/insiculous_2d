@@ -7,11 +7,16 @@ use glam::Vec2;
 
 use editor::{
     EditorContext, HierarchyPanel, InspectorStyle, PanelId,
-    EditableInspector,
+    EditableInspector, FieldId,
     edit_transform2d, edit_sprite, edit_rigid_body, edit_collider, edit_audio_source,
     inspect_component,
 };
 use engine_core::contexts::GameContext;
+
+use crate::entity_ops::{
+    ComponentKind, add_component_to_entity, available_components,
+    categorized_components, component_display_name, remove_component_from_entity,
+};
 
 /// Render the content of a specific dock panel.
 pub fn render_panel_content(
@@ -101,6 +106,9 @@ fn render_hierarchy(editor: &mut EditorContext, ctx: &mut GameContext, bounds: c
         bounds,
     );
 
+    if !clicked.is_empty() {
+        editor.close_add_component_popup();
+    }
     for entity_id in clicked {
         if ctx.input.keyboard().is_key_pressed(winit::keyboard::KeyCode::ControlLeft) {
             editor.selection.toggle(entity_id);
@@ -119,7 +127,7 @@ fn render_hierarchy(editor: &mut EditorContext, ctx: &mut GameContext, bounds: c
 ///
 /// During Editing/Paused: renders editable fields with live writeback.
 /// During Playing: renders read-only view via `inspect_component()`.
-fn render_inspector(editor: &EditorContext, ctx: &mut GameContext, content_x: f32, mut y: f32) {
+fn render_inspector(editor: &mut EditorContext, ctx: &mut GameContext, content_x: f32, mut y: f32) {
     let line_height = 20.0;
 
     let entity_id = match editor.selection.primary() {
@@ -139,7 +147,7 @@ fn render_inspector(editor: &EditorContext, ctx: &mut GameContext, content_x: f3
     if editor.is_playing() {
         render_inspector_readonly(ctx, entity_id, content_x, y);
     } else {
-        render_inspector_editable(ctx, entity_id, content_x, y);
+        render_inspector_editable(editor, ctx, entity_id, content_x, y);
     }
 }
 
@@ -157,9 +165,17 @@ fn render_inspector_readonly(
         y += line_height * 0.5;
         y = inspect_component(ctx.ui, "Transform2D", transform, content_x, y, &style);
     }
+    if let Some(camera) = ctx.world.get::<common::Camera>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "Camera", camera, content_x, y, &style);
+    }
     if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
         y += line_height * 0.5;
         y = inspect_component(ctx.ui, "Sprite", sprite, content_x, y, &style);
+    }
+    if let Some(anim) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
+        y += line_height * 0.5;
+        y = inspect_component(ctx.ui, "SpriteAnimation", anim, content_x, y, &style);
     }
     if let Some(body) = ctx.world.get::<physics::components::RigidBody>(entity_id) {
         y += line_height * 0.5;
@@ -171,12 +187,17 @@ fn render_inspector_readonly(
     }
     if let Some(source) = ctx.world.get::<ecs::audio_components::AudioSource>(entity_id) {
         y += line_height * 0.5;
-        let _ = inspect_component(ctx.ui, "AudioSource", source, content_x, y, &style);
+        y = inspect_component(ctx.ui, "AudioSource", source, content_x, y, &style);
+    }
+    if let Some(listener) = ctx.world.get::<ecs::audio_components::AudioListener>(entity_id) {
+        y += line_height * 0.5;
+        let _ = inspect_component(ctx.ui, "AudioListener", listener, content_x, y, &style);
     }
 }
 
 /// Editable inspector with live writeback (used during Editing/Paused).
 fn render_inspector_editable(
+    editor: &mut EditorContext,
     ctx: &mut GameContext,
     entity_id: ecs::EntityId,
     content_x: f32,
@@ -184,8 +205,10 @@ fn render_inspector_editable(
 ) {
     let line_height = 20.0;
     let mut component_index: usize = 0;
+    let mut removals: Vec<ComponentKind> = Vec::new();
+    let inspect_style = InspectorStyle::default();
 
-    // --- Transform2D ---
+    // --- Transform2D (not removable) ---
     if let Some(transform) = ctx.world.get::<common::Transform2D>(entity_id).copied() {
         y += line_height * 0.5;
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
@@ -203,13 +226,32 @@ fn render_inspector_editable(
         component_index += 1;
     }
 
-    // --- Sprite ---
+    // --- Camera (removable, read-only display for now) ---
+    if let Some(camera) = ctx.world.get::<common::Camera>(entity_id) {
+        y += line_height * 0.5;
+        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
+            .with_component_index(component_index);
+        if inspector.header_with_remove("Camera", true) {
+            removals.push(ComponentKind::Camera);
+        }
+        y = inspector.y();
+        y = inspect_component(ctx.ui, "", camera, content_x + 16.0, y, &inspect_style);
+        component_index += 1;
+    }
+
+    // --- Sprite (removable, uses edit_sprite which renders its own header) ---
     if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id).cloned() {
         y += line_height * 0.5;
+        let header_y = y; // Save position for remove button overlay
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
             .with_component_index(component_index);
         let result = edit_sprite(&mut inspector, &sprite);
         y = inspector.y();
+
+        // Overlay [X] button next to the header that edit_sprite rendered
+        if render_remove_button(ctx.ui, component_index, content_x, header_y) {
+            removals.push(ComponentKind::Sprite);
+        }
 
         if result.offset_changed || result.rotation_changed || result.scale_changed
             || result.color_changed || result.depth_changed
@@ -225,13 +267,31 @@ fn render_inspector_editable(
         component_index += 1;
     }
 
-    // --- RigidBody ---
+    // --- SpriteAnimation (removable, read-only display for now) ---
+    if let Some(anim) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
+        y += line_height * 0.5;
+        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
+            .with_component_index(component_index);
+        if inspector.header_with_remove("SpriteAnimation", true) {
+            removals.push(ComponentKind::SpriteAnimation);
+        }
+        y = inspector.y();
+        y = inspect_component(ctx.ui, "", anim, content_x + 16.0, y, &inspect_style);
+        component_index += 1;
+    }
+
+    // --- RigidBody (removable, uses edit_rigid_body which renders its own header) ---
     if let Some(body) = ctx.world.get::<physics::components::RigidBody>(entity_id).cloned() {
         y += line_height * 0.5;
+        let header_y = y;
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
             .with_component_index(component_index);
         let result = edit_rigid_body(&mut inspector, &body);
         y = inspector.y();
+
+        if render_remove_button(ctx.ui, component_index, content_x, header_y) {
+            removals.push(ComponentKind::RigidBody);
+        }
 
         if result.velocity_changed || result.angular_velocity_changed
             || result.gravity_scale_changed || result.linear_damping_changed
@@ -251,13 +311,18 @@ fn render_inspector_editable(
         component_index += 1;
     }
 
-    // --- Collider ---
+    // --- Collider (removable, uses edit_collider which renders its own header) ---
     if let Some(collider) = ctx.world.get::<physics::components::Collider>(entity_id).cloned() {
         y += line_height * 0.5;
+        let header_y = y;
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
             .with_component_index(component_index);
         let result = edit_collider(&mut inspector, &collider);
         y = inspector.y();
+
+        if render_remove_button(ctx.ui, component_index, content_x, header_y) {
+            removals.push(ComponentKind::Collider);
+        }
 
         if result.offset_changed || result.is_sensor_changed
             || result.friction_changed || result.restitution_changed
@@ -272,13 +337,18 @@ fn render_inspector_editable(
         component_index += 1;
     }
 
-    // --- AudioSource ---
+    // --- AudioSource (removable, uses edit_audio_source which renders its own header) ---
     if let Some(source) = ctx.world.get::<ecs::audio_components::AudioSource>(entity_id).cloned() {
         y += line_height * 0.5;
+        let header_y = y;
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
             .with_component_index(component_index);
         let result = edit_audio_source(&mut inspector, &source);
-        let _ = inspector.y();
+        y = inspector.y();
+
+        if render_remove_button(ctx.ui, component_index, content_x, header_y) {
+            removals.push(ComponentKind::AudioSource);
+        }
 
         if result.volume_changed || result.pitch_changed || result.looping_changed
             || result.play_on_spawn_changed || result.spatial_changed
@@ -296,7 +366,119 @@ fn render_inspector_editable(
                 if result.rolloff_factor_changed { a.rolloff_factor = result.new_rolloff_factor; }
             }
         }
+        component_index += 1;
     }
+
+    // --- AudioListener (removable, read-only display for now) ---
+    if let Some(listener) = ctx.world.get::<ecs::audio_components::AudioListener>(entity_id) {
+        y += line_height * 0.5;
+        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
+            .with_component_index(component_index);
+        if inspector.header_with_remove("AudioListener", true) {
+            removals.push(ComponentKind::AudioListener);
+        }
+        y = inspector.y();
+        y = inspect_component(ctx.ui, "", listener, content_x + 16.0, y, &inspect_style);
+        component_index += 1;
+    }
+
+    // Apply removals after rendering all components
+    for kind in &removals {
+        remove_component_from_entity(ctx.world, entity_id, *kind).ok();
+        log::info!("Removed component: {}", component_display_name(*kind));
+    }
+
+    // --- [+ Add Component] button ---
+    y += line_height;
+    let btn_bounds = ui::Rect::new(content_x, y, 160.0, 24.0);
+    // Use a high component_index to avoid ID collisions
+    let add_btn_id = FieldId::new(component_index + 50, 0, 0);
+    if ctx.ui.button(add_btn_id, "+ Add Component", btn_bounds) {
+        editor.toggle_add_component_popup();
+    }
+    y += 28.0;
+
+    // --- Add Component Popup ---
+    if editor.is_add_component_popup_open() {
+        let available = available_components(ctx.world, entity_id);
+        if available.is_empty() {
+            ctx.ui.label("(all components added)", Vec2::new(content_x + 8.0, y));
+        } else {
+            // Panel background
+            let popup_height = categorized_popup_height(&available);
+            let popup_bounds = ui::Rect::new(content_x, y, 180.0, popup_height);
+            ctx.ui.panel(popup_bounds);
+
+            let mut popup_y = y + 4.0;
+            let mut popup_btn_idx: usize = 0;
+
+            for (category, kinds) in categorized_components() {
+                // Filter to only show kinds that are available
+                let visible: Vec<ComponentKind> = kinds.iter()
+                    .copied()
+                    .filter(|k| available.contains(k))
+                    .collect();
+                if visible.is_empty() {
+                    continue;
+                }
+
+                // Category label
+                ctx.ui.label_styled(
+                    category.label(),
+                    Vec2::new(content_x + 8.0, popup_y),
+                    ui::Color::new(0.6, 0.6, 0.6, 1.0),
+                    12.0,
+                );
+                popup_y += 18.0;
+
+                // Component buttons
+                for kind in visible {
+                    let btn_bounds = ui::Rect::new(content_x + 16.0, popup_y, 148.0, 22.0);
+                    let btn_id = FieldId::new(component_index + 60 + popup_btn_idx, 0, 0);
+                    if ctx.ui.button(btn_id, component_display_name(kind), btn_bounds) {
+                        add_component_to_entity(ctx.world, entity_id, kind).ok();
+                        editor.close_add_component_popup();
+                        log::info!("Added component: {}", component_display_name(kind));
+                    }
+                    popup_y += 24.0;
+                    popup_btn_idx += 1;
+                }
+            }
+        }
+    }
+
+    let _ = component_index; // suppress unused warning
+}
+
+/// Render a small [X] remove button at the header position of a component.
+///
+/// Used for components that have their own `edit_*()` function which renders
+/// the header internally. The button is overlaid at the same Y position.
+fn render_remove_button(
+    ui: &mut ui::UIContext,
+    component_index: usize,
+    content_x: f32,
+    header_y: f32,
+) -> bool {
+    let style = editor::EditableFieldStyle::default();
+    let btn_size = 18.0;
+    let btn_x = content_x + style.label_width + 90.0;
+    let btn_bounds = ui::Rect::new(btn_x, header_y, btn_size, btn_size);
+    let btn_id = FieldId::new(component_index, 99, 0);
+    ui.button(btn_id, "X", btn_bounds)
+}
+
+/// Calculate the height needed for the categorized popup.
+fn categorized_popup_height(available: &[ComponentKind]) -> f32 {
+    let mut height = 8.0; // padding
+    for (_, kinds) in categorized_components() {
+        let visible_count = kinds.iter().filter(|k| available.contains(k)).count();
+        if visible_count > 0 {
+            height += 18.0; // category label
+            height += visible_count as f32 * 24.0; // buttons
+        }
+    }
+    height
 }
 
 /// Asset browser — placeholder.

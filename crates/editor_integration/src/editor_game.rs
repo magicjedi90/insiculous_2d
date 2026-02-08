@@ -80,10 +80,12 @@ impl<G: Game> EditorGame<G> {
                     // Starting a new play session — capture snapshot
                     self.world_snapshot = Some(WorldSnapshot::capture(world));
                     self.editor.set_play_state(EditorPlayState::Playing);
+                    self.editor.close_add_component_popup();
                     log::info!("Play: snapshot captured, entering play mode");
                 } else if self.editor.is_paused() {
                     // Resuming from pause
                     self.editor.set_play_state(EditorPlayState::Playing);
+                    self.editor.close_add_component_popup();
                     log::info!("Play: resumed from pause");
                 }
             }
@@ -218,6 +220,7 @@ impl<G: Game> Game for EditorGame<G> {
 
             if !self.editor.gizmo_has_priority() {
                 if input_result.clicked {
+                    self.editor.close_add_component_popup();
                     let pickables = build_pickable_entities(ctx.world);
                     let pick_result = self.editor.picker.pick_at_screen_pos(
                         &self.editor.viewport,

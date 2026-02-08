@@ -49,6 +49,8 @@ pub struct EditorContext {
     play_state: EditorPlayState,
     /// Play / Pause / Stop controls widget
     pub play_controls: PlayControls,
+    /// Whether the add-component popup is open in the inspector.
+    add_component_popup_open: bool,
 }
 
 impl Default for EditorContext {
@@ -99,6 +101,7 @@ impl EditorContext {
             snap_to_grid: false,
             play_state: EditorPlayState::default(),
             play_controls: PlayControls::new(),
+            add_component_popup_open: false,
         }
     }
 
@@ -282,6 +285,23 @@ impl EditorContext {
         } else {
             EditorPlayState::Editing
         };
+    }
+
+    // ================== Add Component Popup ==================
+
+    /// Whether the add-component popup is currently open.
+    pub fn is_add_component_popup_open(&self) -> bool {
+        self.add_component_popup_open
+    }
+
+    /// Toggle the add-component popup open/closed.
+    pub fn toggle_add_component_popup(&mut self) {
+        self.add_component_popup_open = !self.add_component_popup_open;
+    }
+
+    /// Close the add-component popup.
+    pub fn close_add_component_popup(&mut self) {
+        self.add_component_popup_open = false;
     }
 
     // ================== Layout Methods ==================
@@ -671,6 +691,24 @@ mod tests {
 
         // Gizmo should be at center of selection
         assert_eq!(ctx.gizmo.position(), Vec2::new(50.0, 50.0));
+    }
+
+    #[test]
+    fn test_add_component_popup_default_closed() {
+        let ctx = EditorContext::new();
+        assert!(!ctx.is_add_component_popup_open());
+    }
+
+    #[test]
+    fn test_add_component_popup_toggle() {
+        let mut ctx = EditorContext::new();
+        ctx.toggle_add_component_popup();
+        assert!(ctx.is_add_component_popup_open());
+        ctx.toggle_add_component_popup();
+        assert!(!ctx.is_add_component_popup_open());
+        ctx.toggle_add_component_popup();
+        ctx.close_add_component_popup();
+        assert!(!ctx.is_add_component_popup_open());
     }
 
     #[test]
