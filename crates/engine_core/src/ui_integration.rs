@@ -49,8 +49,39 @@ pub fn render_ui_commands(
     glyph_textures: &HashMap<GlyphCacheKey, TextureHandle>,
 ) {
     let white_texture = TextureHandle { id: 0 };
+    let mut clip_stack: Vec<Rect> = Vec::new();
 
     for cmd in commands {
+        // Software clip filtering: skip draw commands fully outside the active clip rect
+        if !clip_stack.is_empty() {
+            let cmd_bounds = match cmd {
+                DrawCommand::Rect { bounds, .. } | DrawCommand::RectBorder { bounds, .. } => {
+                    Some(*bounds)
+                }
+                DrawCommand::Text { data, .. } => {
+                    Some(Rect::new(data.position.x, data.position.y, data.width, data.height))
+                }
+                DrawCommand::TextPlaceholder { position, font_size, text, .. } => {
+                    Some(Rect::new(position.x, position.y, text.len() as f32 * font_size * 0.6, *font_size))
+                }
+                DrawCommand::Circle { center, radius, .. } => {
+                    Some(Rect::new(center.x - radius, center.y - radius, radius * 2.0, radius * 2.0))
+                }
+                DrawCommand::Line { start, end, .. } => {
+                    Some(Rect::new(start.x.min(end.x), start.y.min(end.y), (end.x - start.x).abs(), (end.y - start.y).abs()))
+                }
+                _ => None, // PushClipRect / PopClipRect handled below
+            };
+
+            if let Some(bounds) = cmd_bounds {
+                let active_clip = clip_stack.last().unwrap();
+                let overlap = intersect_rects(&bounds, active_clip);
+                if overlap.width == 0.0 || overlap.height == 0.0 {
+                    continue;
+                }
+            }
+        }
+
         match cmd {
             DrawCommand::Rect { bounds, color, depth, .. } => {
                 // Convert screen coordinates (0,0 = top-left) to world coordinates (0,0 = center)
@@ -204,12 +235,15 @@ pub fn render_ui_commands(
                 sprites.add_sprite(&sprite);
             }
             DrawCommand::PushClipRect { bounds } => {
-                // Clip rect commands are handled at a higher level
-                // Log for debugging during development
-                log::trace!("PushClipRect: {:?}", bounds);
+                let effective = if let Some(parent) = clip_stack.last() {
+                    intersect_rects(bounds, parent)
+                } else {
+                    *bounds
+                };
+                clip_stack.push(effective);
             }
             DrawCommand::PopClipRect => {
-                log::trace!("PopClipRect");
+                clip_stack.pop();
             }
         }
     }
@@ -237,7 +271,6 @@ fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &Rect, color: &UIColor, d
 ///
 /// Used for DPI-aware scissor clipping. Takes a logical UI rect and scale factor,
 /// returns physical pixel coordinates (x, y, width, height) suitable for wgpu scissor rect.
-#[allow(dead_code)]
 pub fn logical_to_physical_rect(rect: &Rect, scale_factor: f64) -> (u32, u32, u32, u32) {
     (
         (rect.x as f64 * scale_factor) as u32,
@@ -250,7 +283,6 @@ pub fn logical_to_physical_rect(rect: &Rect, scale_factor: f64) -> (u32, u32, u3
 /// Intersect two rects, returning the overlapping region.
 ///
 /// Used for nested clip rects - the effective clip is the intersection of all active clips.
-#[allow(dead_code)]
 pub fn intersect_rects(a: &Rect, b: &Rect) -> Rect {
     let x = a.x.max(b.x);
     let y = a.y.max(b.y);

@@ -257,22 +257,18 @@ impl DockArea {
             // Draw panel title - properly centered
             ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
 
-            // Get content bounds and push clip rect
+            // Track content area (caller will push/pop clip rect around each panel's content)
             let content = panel.content_bounds();
-            ui.push_clip_rect(content);
-
-            // Track content area (caller will render content, then pop clip)
             content_areas.push((panel.id, content));
         }
 
         content_areas
     }
 
-    /// Call after rendering content for each panel to pop the clip rect.
-    pub fn end_panel_content(&self, ui: &mut UIContext, panel_count: usize) {
-        for _ in 0..panel_count {
-            ui.pop_clip_rect();
-        }
+    /// No-op kept for API compatibility. Clip rects are now managed per-panel by the caller.
+    pub fn end_panel_content(&self, _ui: &mut UIContext, _panel_count: usize) {
+        // Clip rects are now pushed/popped around each panel's content individually
+        // by the caller, so this is no longer needed.
     }
 
     /// Handle resize dragging for panels.

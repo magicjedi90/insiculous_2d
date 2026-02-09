@@ -177,6 +177,23 @@ pub fn remove_component_from_entity(
     Ok(())
 }
 
+/// Create a base entity with Transform2D, GlobalTransform2D, and Name, then select it.
+fn create_base_entity(
+    world: &mut World,
+    selection: &mut Selection,
+    position: Vec2,
+    label: &str,
+    counter: &mut u32,
+) -> EntityId {
+    *counter += 1;
+    let entity = world.create_entity();
+    world.add_component(&entity, common::Transform2D::new(position)).ok();
+    world.add_component(&entity, GlobalTransform2D::default()).ok();
+    world.add_component(&entity, Name::new(format!("{} {}", label, counter))).ok();
+    selection.select(entity);
+    entity
+}
+
 /// Create an empty entity with Transform2D, GlobalTransform2D, and Name.
 pub fn create_empty_entity(
     world: &mut World,
@@ -184,13 +201,7 @@ pub fn create_empty_entity(
     position: Vec2,
     counter: &mut u32,
 ) -> EntityId {
-    *counter += 1;
-    let entity = world.create_entity();
-    world.add_component(&entity, common::Transform2D::new(position)).ok();
-    world.add_component(&entity, GlobalTransform2D::default()).ok();
-    world.add_component(&entity, Name::new(format!("Entity {}", counter))).ok();
-    selection.select(entity);
-    entity
+    create_base_entity(world, selection, position, "Entity", counter)
 }
 
 /// Create a sprite entity (empty + Sprite).
@@ -200,13 +211,8 @@ pub fn create_sprite_entity(
     position: Vec2,
     counter: &mut u32,
 ) -> EntityId {
-    *counter += 1;
-    let entity = world.create_entity();
-    world.add_component(&entity, common::Transform2D::new(position)).ok();
-    world.add_component(&entity, GlobalTransform2D::default()).ok();
-    world.add_component(&entity, Name::new(format!("Sprite {}", counter))).ok();
+    let entity = create_base_entity(world, selection, position, "Sprite", counter);
     world.add_component(&entity, Sprite::new(0)).ok();
-    selection.select(entity);
     entity
 }
 
@@ -217,13 +223,8 @@ pub fn create_camera_entity(
     position: Vec2,
     counter: &mut u32,
 ) -> EntityId {
-    *counter += 1;
-    let entity = world.create_entity();
-    world.add_component(&entity, common::Transform2D::new(position)).ok();
-    world.add_component(&entity, GlobalTransform2D::default()).ok();
-    world.add_component(&entity, Name::new(format!("Camera {}", counter))).ok();
+    let entity = create_base_entity(world, selection, position, "Camera", counter);
     world.add_component(&entity, common::Camera::default()).ok();
-    selection.select(entity);
     entity
 }
 
@@ -235,20 +236,15 @@ pub fn create_physics_body(
     body_type: RigidBodyType,
     counter: &mut u32,
 ) -> EntityId {
-    *counter += 1;
     let type_label = match body_type {
         RigidBodyType::Static => "StaticBody",
         RigidBodyType::Dynamic => "DynamicBody",
         RigidBodyType::Kinematic => "KinematicBody",
     };
-    let entity = world.create_entity();
-    world.add_component(&entity, common::Transform2D::new(position)).ok();
-    world.add_component(&entity, GlobalTransform2D::default()).ok();
-    world.add_component(&entity, Name::new(format!("{} {}", type_label, counter))).ok();
+    let entity = create_base_entity(world, selection, position, type_label, counter);
     world.add_component(&entity, Sprite::new(0)).ok();
     world.add_component(&entity, RigidBody::default().with_body_type(body_type)).ok();
     world.add_component(&entity, Collider::default()).ok();
-    selection.select(entity);
     entity
 }
 
@@ -393,41 +389,34 @@ fn duplicate_entity_recursive(
     Some(new_entity)
 }
 
+/// Clone a set of component types from one entity to another.
+macro_rules! clone_component {
+    ($world:expr, $source:expr, $dest:expr, $($Type:ty),+ $(,)?) => {
+        $(
+            if let Some(c) = $world.get::<$Type>($source).cloned() {
+                $world.add_component(&$dest, c).ok();
+            }
+        )+
+    };
+}
+
 /// Clone all known component types from source to destination.
 ///
 /// Hierarchy components (Parent, Children) are deliberately skipped —
 /// hierarchy is rebuilt explicitly by the caller.
 fn clone_components(world: &mut World, source: EntityId, dest: EntityId) {
-    if let Some(c) = world.get::<common::Transform2D>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<GlobalTransform2D>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<common::Camera>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<Name>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<Sprite>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<ecs::sprite_components::SpriteAnimation>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<RigidBody>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<Collider>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<AudioSource>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
-    if let Some(c) = world.get::<AudioListener>(source).cloned() {
-        world.add_component(&dest, c).ok();
-    }
+    clone_component!(world, source, dest,
+        common::Transform2D,
+        GlobalTransform2D,
+        common::Camera,
+        Name,
+        Sprite,
+        ecs::sprite_components::SpriteAnimation,
+        RigidBody,
+        Collider,
+        AudioSource,
+        AudioListener,
+    );
 }
 
 #[cfg(test)]

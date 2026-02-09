@@ -200,15 +200,14 @@ impl<G: Game> Game for EditorGame<G> {
         let content_areas = self.editor.dock_area.render(ctx.ui);
         self.editor.dock_area.handle_resize(ctx.ui);
 
-        // 6. Panel content
+        // 6. Panel content (each panel gets its own push/pop clip rect)
         for (panel_id, bounds) in content_areas.clone() {
+            ctx.ui.push_clip_rect(ui::Rect::new(bounds.x, bounds.y, bounds.width, bounds.height));
             panel_renderer::render_panel_content(
                 &mut self.editor, ctx, panel_id, bounds,
             );
+            ctx.ui.pop_clip_rect();
         }
-
-        // 7. Pop clip rects
-        self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
 
         // 7b. Viewport input handling (pan, zoom, click, selection)
         if !self.editor.is_playing() {
@@ -321,7 +320,13 @@ impl<G: Game> Game for EditorGame<G> {
 
         // 10. Delegate to inner game (only when Playing)
         if self.editor.is_playing() {
+            if let Some(scene_bounds) = self.editor.scene_view_bounds() {
+                ctx.ui.push_clip_rect(ui::Rect::new(scene_bounds.x, scene_bounds.y, scene_bounds.width, scene_bounds.height));
+            }
             self.inner.update(ctx);
+            if self.editor.scene_view_bounds().is_some() {
+                ctx.ui.pop_clip_rect();
+            }
         }
 
         // 11. Status bar (includes play state)

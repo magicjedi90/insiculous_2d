@@ -161,38 +161,24 @@ fn render_inspector_readonly(
     let style = InspectorStyle::default();
     let line_height = 20.0;
 
-    if let Some(transform) = ctx.world.get::<common::Transform2D>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "Transform2D", transform, content_x, y, &style);
+    macro_rules! inspect_if_present {
+        ($Type:ty, $name:expr) => {
+            if let Some(component) = ctx.world.get::<$Type>(entity_id) {
+                y += line_height * 0.5;
+                y = inspect_component(ctx.ui, $name, component, content_x, y, &style);
+            }
+        };
     }
-    if let Some(camera) = ctx.world.get::<common::Camera>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "Camera", camera, content_x, y, &style);
-    }
-    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "Sprite", sprite, content_x, y, &style);
-    }
-    if let Some(anim) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "SpriteAnimation", anim, content_x, y, &style);
-    }
-    if let Some(body) = ctx.world.get::<physics::components::RigidBody>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "RigidBody", body, content_x, y, &style);
-    }
-    if let Some(collider) = ctx.world.get::<physics::components::Collider>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "Collider", collider, content_x, y, &style);
-    }
-    if let Some(source) = ctx.world.get::<ecs::audio_components::AudioSource>(entity_id) {
-        y += line_height * 0.5;
-        y = inspect_component(ctx.ui, "AudioSource", source, content_x, y, &style);
-    }
-    if let Some(listener) = ctx.world.get::<ecs::audio_components::AudioListener>(entity_id) {
-        y += line_height * 0.5;
-        let _ = inspect_component(ctx.ui, "AudioListener", listener, content_x, y, &style);
-    }
+
+    inspect_if_present!(common::Transform2D, "Transform2D");
+    inspect_if_present!(common::Camera, "Camera");
+    inspect_if_present!(ecs::sprite_components::Sprite, "Sprite");
+    inspect_if_present!(ecs::sprite_components::SpriteAnimation, "SpriteAnimation");
+    inspect_if_present!(physics::components::RigidBody, "RigidBody");
+    inspect_if_present!(physics::components::Collider, "Collider");
+    inspect_if_present!(ecs::audio_components::AudioSource, "AudioSource");
+    inspect_if_present!(ecs::audio_components::AudioListener, "AudioListener");
+    let _ = y;
 }
 
 /// Editable inspector with live writeback (used during Editing/Paused).

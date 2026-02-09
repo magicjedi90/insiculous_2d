@@ -263,11 +263,6 @@ impl EditorContext {
         self.play_state.in_play_session()
     }
 
-    /// Check if the editor is in play mode (alias for `in_play_session()`).
-    pub fn is_play_mode(&self) -> bool {
-        self.in_play_session()
-    }
-
     /// Enter play mode (sets state to Playing).
     pub fn enter_play_mode(&mut self) {
         self.play_state = EditorPlayState::Playing;
@@ -444,7 +439,7 @@ mod tests {
         assert_eq!(ctx.camera_zoom(), 1.0);
         assert!(ctx.is_grid_visible());
         assert!(!ctx.is_snap_to_grid());
-        assert!(!ctx.is_play_mode());
+        assert!(!ctx.in_play_session());
     }
 
     #[test]
@@ -566,19 +561,17 @@ mod tests {
 
         // Default is editing
         assert!(ctx.is_editing());
-        assert!(!ctx.is_play_mode());
+        assert!(!ctx.in_play_session());
         assert_eq!(ctx.play_state(), EditorPlayState::Editing);
 
         // Enter play mode
         ctx.enter_play_mode();
         assert!(ctx.is_playing());
-        assert!(ctx.is_play_mode());
         assert!(ctx.in_play_session());
 
         // Exit play mode
         ctx.exit_play_mode();
         assert!(ctx.is_editing());
-        assert!(!ctx.is_play_mode());
         assert!(!ctx.in_play_session());
 
         // Toggle into playing
@@ -593,7 +586,6 @@ mod tests {
         ctx.set_play_state(EditorPlayState::Paused);
         assert!(ctx.is_paused());
         assert!(ctx.in_play_session());
-        assert!(ctx.is_play_mode()); // alias for in_play_session
     }
 
     #[test]
