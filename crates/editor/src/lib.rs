@@ -41,6 +41,7 @@ pub mod stored_component;
 mod toolbar;
 mod viewport;
 mod viewport_input;
+pub mod editor_preferences;
 pub mod layout;
 pub mod world_snapshot;
 
@@ -52,6 +53,7 @@ pub use component_editors::{
     TransformEditResult,
 };
 pub use context::EditorContext;
+pub use editor_preferences::EditorPreferences;
 pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
 pub use editable_inspector::{
     component_header, display_u32, edit_bool, edit_color, edit_f32, edit_normalized_f32, edit_vec2,
@@ -79,11 +81,11 @@ pub mod prelude {
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
         DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
-        EditorPlayState, EditorTool, EditableFieldStyle, EditableInspector, EditResult,
-        EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer, HierarchyPanel, InspectorStyle,
-        Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity, PlayControlAction,
-        PlayControls, RigidBodyEditResult, SceneViewport, Selection, SelectionRect,
-        SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig, ViewportInputHandler,
-        ViewportInputResult, AABB,
+        EditorPlayState, EditorPreferences, EditorTool, EditableFieldStyle, EditableInspector,
+        EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer, HierarchyPanel,
+        InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity,
+        PlayControlAction, PlayControls, RigidBodyEditResult, SceneViewport, Selection,
+        SelectionRect, SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig,
+        ViewportInputHandler, ViewportInputResult, AABB,
     };
 }

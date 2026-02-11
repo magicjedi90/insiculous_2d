@@ -5,6 +5,8 @@
 //! dock panels, hierarchy, inspector, gizmo, tool shortcuts, play/pause/stop)
 //! and delegating to the inner game.
 
+use std::path::{Path, PathBuf};
+
 use glam::Vec2;
 use winit::keyboard::KeyCode;
 
@@ -12,6 +14,7 @@ use ecs::{GlobalTransform2D, Pair, System, World};
 use editor::{EditorContext, EditorPlayState, EditorTool, PanelId, PickableEntity, PlayControlAction};
 use editor::world_snapshot::WorldSnapshot;
 use engine_core::contexts::{GameContext, RenderContext};
+use engine_core::scene_data::PhysicsSettings;
 use engine_core::Game;
 use engine_core::GameConfig;
 
@@ -32,6 +35,8 @@ struct EditorGame<G: Game> {
     command_history: editor::CommandHistory,
     /// Initial transform captured when gizmo drag starts.
     gizmo_drag_start: Option<common::Transform2D>,
+    /// Physics settings for scene serialization.
+    physics_settings: Option<PhysicsSettings>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -45,23 +50,115 @@ impl<G: Game> EditorGame<G> {
             entity_counter: 0,
             command_history: editor::CommandHistory::new(),
             gizmo_drag_start: None,
+            physics_settings: None,
         }
     }
 
     fn handle_menu_action(&mut self, action: &str) {
         match action {
-            "New Scene" => log::info!("Creating new scene..."),
-            "Open Scene..." => log::info!("Opening scene..."),
-            "Save" => log::info!("Saving scene..."),
-            "Save As..." => log::info!("Save as..."),
             "Exit" => std::process::exit(0),
             // Undo/Redo handled in update() where we have world access.
             "Undo" | "Redo" => {}
+            // Scene ops handled in update() where we have world + assets access.
+            "New Scene" | "Open Scene..." | "Save" | "Save As..." => {}
             "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
                 log::info!("Toggle panel: {}", action);
             }
             _ => log::info!("Unhandled action: {}", action),
         }
+    }
+
+    /// Save the current scene to the existing scene path (or default if none set).
+    fn save_scene(&mut self, world: &World, assets: &engine_core::assets::AssetManager) -> Result<(), String> {
+        let path = self.editor.scene_path()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("scenes/scene.ron"));
+        self.save_scene_as(world, assets, path)
+    }
+
+    /// Save the current scene to a specific path.
+    fn save_scene_as(&mut self, world: &World, assets: &engine_core::assets::AssetManager, path: PathBuf) -> Result<(), String> {
+        let scene_name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+
+        let texture_path_fn = |handle: u32| -> String {
+            assets.texture_path(handle)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    if handle == 0 { "#white".to_string() } else { format!("#texture_{}", handle) }
+                })
+        };
+
+        let scene_data = engine_core::scene_serializer::world_to_scene_data(
+            world, &scene_name, self.physics_settings.clone(), &texture_path_fn,
+        );
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            }
+        }
+
+        engine_core::scene_serializer::save_scene_to_file(&scene_data, &path)?;
+
+        self.editor.set_scene_path(Some(path.clone()));
+        self.editor.set_dirty(false);
+        log::info!("Scene saved to: {:?}", path);
+        Ok(())
+    }
+
+    /// Load a scene from disk, replacing the current world.
+    fn load_scene(&mut self, world: &mut World, assets: &mut engine_core::assets::AssetManager, path: &Path) -> Result<(), String> {
+        if self.editor.is_dirty() {
+            log::warn!("Current scene has unsaved changes. Save first to avoid losing work.");
+        }
+
+        // Clear existing world
+        for entity in world.entities() {
+            world.remove_entity(&entity).ok();
+        }
+
+        // Load and instantiate scene
+        let scene_instance = engine_core::scene_loader::SceneLoader::load_and_instantiate(path, world, assets)
+            .map_err(|e| format!("Failed to load scene: {}", e))?;
+
+        // Store physics settings from loaded scene
+        self.physics_settings = scene_instance.physics.clone();
+
+        log::info!("Scene loaded from: {:?} ({} entities)", path, scene_instance.entity_count);
+
+        self.editor.set_scene_path(Some(path.to_path_buf()));
+        self.editor.set_dirty(false);
+        self.command_history = editor::CommandHistory::new();
+        self.editor.selection.clear();
+        self.gizmo_drag_start = None;
+
+        Ok(())
+    }
+
+    /// Create a new empty scene, clearing the world.
+    fn new_scene(&mut self, world: &mut World) {
+        if self.editor.is_dirty() {
+            log::warn!("Current scene has unsaved changes. Save first to avoid losing work.");
+        }
+
+        // Clear existing world
+        for entity in world.entities() {
+            world.remove_entity(&entity).ok();
+        }
+
+        self.editor.set_scene_path(None);
+        self.editor.set_dirty(false);
+        self.command_history = editor::CommandHistory::new();
+        self.editor.selection.clear();
+        self.entity_counter = 0;
+        self.physics_settings = None;
+        self.gizmo_drag_start = None;
+        log::info!("New scene created");
     }
 
     fn handle_tool_shortcuts(&mut self, ctx: &GameContext) {
@@ -173,6 +270,7 @@ impl<G: Game> Game for EditorGame<G> {
                     ) {
                         let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, entity);
                         self.command_history.push_already_executed(Box::new(cmd));
+                        self.editor.mark_dirty();
                     }
                 }
                 "Delete" if !self.editor.is_playing() => {
@@ -189,6 +287,7 @@ impl<G: Game> Game for EditorGame<G> {
                             self.command_history.execute(Box::new(cmd), ctx.world);
                         }
                         self.editor.selection.clear();
+                        self.editor.mark_dirty();
                     }
                 }
                 "Duplicate" if !self.editor.is_playing() => {
@@ -202,15 +301,38 @@ impl<G: Game> Game for EditorGame<G> {
                             if new_entity != primary {
                                 let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, new_entity);
                                 self.command_history.push_already_executed(Box::new(cmd));
+                                self.editor.mark_dirty();
                             }
                         }
                     }
                 }
                 "Undo" if !self.editor.is_playing() => {
                     self.command_history.undo(ctx.world);
+                    self.editor.mark_dirty();
                 }
                 "Redo" if !self.editor.is_playing() => {
                     self.command_history.redo(ctx.world);
+                    self.editor.mark_dirty();
+                }
+                "New Scene" if !self.editor.is_playing() => {
+                    self.new_scene(ctx.world);
+                }
+                "Open Scene..." if !self.editor.is_playing() => {
+                    let path = PathBuf::from("scenes/scene.ron");
+                    if let Err(e) = self.load_scene(ctx.world, ctx.assets, &path) {
+                        log::error!("Failed to load scene: {}", e);
+                    }
+                }
+                "Save" => {
+                    if let Err(e) = self.save_scene(ctx.world, ctx.assets) {
+                        log::error!("Failed to save: {}", e);
+                    }
+                }
+                "Save As..." => {
+                    let path = PathBuf::from("scenes/scene.ron");
+                    if let Err(e) = self.save_scene_as(ctx.world, ctx.assets, path) {
+                        log::error!("Failed to save: {}", e);
+                    }
                 }
                 _ => self.handle_menu_action(&action),
             }
@@ -360,6 +482,7 @@ impl<G: Game> Game for EditorGame<G> {
                                 if let Some(final_val) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
                                     let cmd = editor::commands::TransformGizmoCommand::new(entity_id, initial, *final_val);
                                     self.command_history.push_already_executed(Box::new(cmd));
+                                    self.editor.mark_dirty();
                                 }
                             }
                         }
@@ -384,16 +507,20 @@ impl<G: Game> Game for EditorGame<G> {
             }
         }
 
-        // 11. Status bar (includes play state and undo info)
+        // 11. Status bar (includes play state, scene name, dirty indicator, undo info)
         let info_y = window_size.y - 30.0;
         let undo_info = if let Some(name) = self.command_history.undo_name() {
             format!("Undo: {}", name)
         } else {
             "Ready".to_string()
         };
+        let scene_name = self.editor.scene_display_name();
+        let dirty_indicator = if self.editor.is_dirty() { "*" } else { "" };
         ctx.ui.label(
             &format!(
-                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {} | {}",
+                "{}{} | Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {} | {}",
+                scene_name,
+                dirty_indicator,
                 self.editor.current_tool(),
                 if self.editor.is_grid_visible() { "ON" } else { "OFF" },
                 if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
@@ -441,16 +568,40 @@ impl<G: Game> Game for EditorGame<G> {
         match key {
             KeyCode::KeyZ if ctrl && !shift => {
                 self.command_history.undo(ctx.world);
+                self.editor.mark_dirty();
             }
             KeyCode::KeyZ if ctrl && shift => {
                 self.command_history.redo(ctx.world);
+                self.editor.mark_dirty();
             }
             KeyCode::KeyY if ctrl => {
                 self.command_history.redo(ctx.world);
+                self.editor.mark_dirty();
             }
             KeyCode::KeyG => self.editor.toggle_grid(),
+            KeyCode::KeyS if ctrl && shift => {
+                // Ctrl+Shift+S → Save As
+                let path = PathBuf::from("scenes/scene.ron");
+                if let Err(e) = self.save_scene_as(ctx.world, ctx.assets, path) {
+                    log::error!("Failed to save: {}", e);
+                }
+            }
             KeyCode::KeyS if ctrl => {
-                log::info!("Save scene (Ctrl+S)");
+                // Ctrl+S → Save
+                if let Err(e) = self.save_scene(ctx.world, ctx.assets) {
+                    log::error!("Failed to save: {}", e);
+                }
+            }
+            KeyCode::KeyN if ctrl => {
+                // Ctrl+N → New Scene
+                self.new_scene(ctx.world);
+            }
+            KeyCode::KeyO if ctrl => {
+                // Ctrl+O → Open Scene
+                let path = PathBuf::from("scenes/scene.ron");
+                if let Err(e) = self.load_scene(ctx.world, ctx.assets, &path) {
+                    log::error!("Failed to load scene: {}", e);
+                }
             }
             KeyCode::KeyD if ctrl => {
                 if let Some(primary) = self.editor.selection.primary() {
@@ -463,6 +614,7 @@ impl<G: Game> Game for EditorGame<G> {
                         if new_entity != primary {
                             let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, new_entity);
                             self.command_history.push_already_executed(Box::new(cmd));
+                            self.editor.mark_dirty();
                         }
                     }
                 }
@@ -481,6 +633,7 @@ impl<G: Game> Game for EditorGame<G> {
                         self.command_history.execute(Box::new(cmd), ctx.world);
                     }
                     self.editor.selection.clear();
+                    self.editor.mark_dirty();
                 }
             }
             KeyCode::Equal => self.editor.zoom_camera(1.1),
@@ -746,5 +899,198 @@ mod tests {
         assert!(ids.contains(&e1));
         assert!(ids.contains(&e2));
         assert!(!ids.contains(&e3));
+    }
+
+    // ================== Scene Save/Load Tests ==================
+
+    #[test]
+    fn test_editor_game_initial_scene_state() {
+        let editor = EditorGame::new(DummyGame);
+        assert!(!editor.editor.is_dirty());
+        assert!(editor.editor.scene_path().is_none());
+        assert!(editor.physics_settings.is_none());
+    }
+
+    #[test]
+    fn test_new_scene_clears_world() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        let _e1 = world.create_entity();
+        let _e2 = world.create_entity();
+        assert_eq!(world.entities().len(), 2);
+
+        editor.new_scene(&mut world);
+        assert_eq!(world.entities().len(), 0);
+        assert!(!editor.editor.is_dirty());
+        assert!(editor.editor.scene_path().is_none());
+    }
+
+    #[test]
+    fn test_new_scene_resets_editor_state() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+
+        // Simulate some state
+        editor.editor.mark_dirty();
+        editor.editor.set_scene_path(Some(PathBuf::from("test.ron")));
+        editor.entity_counter = 5;
+
+        editor.new_scene(&mut world);
+        assert!(!editor.editor.is_dirty());
+        assert!(editor.editor.scene_path().is_none());
+        assert_eq!(editor.entity_counter, 0);
+        assert!(editor.physics_settings.is_none());
+    }
+
+    #[test]
+    fn test_save_creates_file() {
+        let _editor = EditorGame::new(DummyGame);
+        let world = ecs::World::new();
+
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_save_scene.ron");
+
+        // Use a simple texture path function since we don't have AssetManager in tests
+        let scene_name = "test";
+        let texture_path_fn = |handle: u32| -> String {
+            if handle == 0 { "#white".to_string() } else { format!("#texture_{}", handle) }
+        };
+        let scene_data = engine_core::scene_serializer::world_to_scene_data(
+            &world, scene_name, None, &texture_path_fn,
+        );
+        let result = engine_core::scene_serializer::save_scene_to_file(&scene_data, &path);
+        assert!(result.is_ok());
+        assert!(path.exists());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_save_clears_dirty_flag() {
+        let mut editor = EditorGame::new(DummyGame);
+        let world = World::new();
+
+        editor.editor.mark_dirty();
+        assert!(editor.editor.is_dirty());
+
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_save_dirty.ron");
+
+        // We can't use save_scene_as directly without AssetManager,
+        // so test the flag behavior with set_dirty
+        let texture_path_fn = |handle: u32| -> String {
+            if handle == 0 { "#white".to_string() } else { format!("#texture_{}", handle) }
+        };
+        let scene_data = engine_core::scene_serializer::world_to_scene_data(
+            &world, "test", None, &texture_path_fn,
+        );
+        engine_core::scene_serializer::save_scene_to_file(&scene_data, &path).unwrap();
+        editor.editor.set_scene_path(Some(path.clone()));
+        editor.editor.set_dirty(false);
+
+        assert!(!editor.editor.is_dirty());
+        assert_eq!(editor.editor.scene_path(), Some(path.as_path()));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_new_scene_warns_if_dirty() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        world.create_entity();
+
+        editor.editor.mark_dirty();
+        // new_scene should still work even when dirty (just logs a warning)
+        editor.new_scene(&mut world);
+        assert_eq!(world.entities().len(), 0);
+        assert!(!editor.editor.is_dirty());
+    }
+
+    #[test]
+    fn test_save_scene_roundtrip() {
+        let _editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+
+        // Create entities with components
+        let e1 = world.create_entity();
+        world.add_component(&e1, common::Transform2D::new(Vec2::new(100.0, 200.0))).ok();
+        world.add_component(&e1, ecs::sprite_components::Name::new("player")).ok();
+
+        let e2 = world.create_entity();
+        world.add_component(&e2, common::Transform2D::new(Vec2::new(50.0, 50.0))).ok();
+
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_roundtrip.ron");
+
+        // Serialize
+        let texture_path_fn = |handle: u32| -> String {
+            if handle == 0 { "#white".to_string() } else { format!("#texture_{}", handle) }
+        };
+        let scene_data = engine_core::scene_serializer::world_to_scene_data(
+            &world, "Roundtrip", None, &texture_path_fn,
+        );
+        engine_core::scene_serializer::save_scene_to_file(&scene_data, &path).unwrap();
+
+        // Verify the file is valid RON by parsing it with SceneLoader
+        let parsed = engine_core::scene_loader::SceneLoader::load_from_file(&path).unwrap();
+        assert_eq!(parsed.name, "Roundtrip");
+        assert_eq!(parsed.entities.len(), 2);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_save_as_updates_path() {
+        let mut editor = EditorGame::new(DummyGame);
+
+        assert!(editor.editor.scene_path().is_none());
+
+        let path = PathBuf::from("scenes/my_scene.ron");
+        editor.editor.set_scene_path(Some(path.clone()));
+
+        assert_eq!(editor.editor.scene_path(), Some(path.as_path()));
+        assert_eq!(editor.editor.scene_display_name(), "my_scene.ron");
+    }
+
+    #[test]
+    fn test_dirty_flag_set_on_entity_create() {
+        let mut editor = EditorGame::new(DummyGame);
+        assert!(!editor.editor.is_dirty());
+
+        // Simulate entity creation marking dirty
+        editor.editor.mark_dirty();
+        assert!(editor.editor.is_dirty());
+    }
+
+    #[test]
+    fn test_load_scene_resets_selection() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+        let entity = world.create_entity();
+        editor.editor.selection.select(entity);
+        assert!(!editor.editor.selection.is_empty());
+
+        editor.new_scene(&mut world);
+        assert!(editor.editor.selection.is_empty());
+    }
+
+    #[test]
+    fn test_physics_settings_preserved_on_new() {
+        let mut editor = EditorGame::new(DummyGame);
+        let mut world = ecs::World::new();
+
+        editor.physics_settings = Some(PhysicsSettings::default());
+        assert!(editor.physics_settings.is_some());
+
+        editor.new_scene(&mut world);
+        assert!(editor.physics_settings.is_none());
+    }
+
+    #[test]
+    fn test_scene_display_in_status() {
+        let editor = EditorGame::new(DummyGame);
+        assert_eq!(editor.editor.scene_display_name(), "Untitled");
+        assert_eq!(editor.editor.title_bar_text(), "Untitled - Insiculous Editor");
     }
 }

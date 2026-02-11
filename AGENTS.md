@@ -14,18 +14,18 @@
 - **UI**: Immediate-mode, 60 tests, fontdue integration
 - **Input**: Event-based, 56 tests, action mapping
 - **Audio**: Rodio backend, 3 tests, spatial audio
-- **Engine Core**: Game API, managers, 67 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 162 tests
-- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop, 17 tests
+- **Engine Core**: Game API, managers, scene serializer, 85 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, 196 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 72 tests
 
 ### Key Metrics
-- **Total Tests**: 598/598 passing (100% success rate)
+- **Total Tests**: 707/707 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
 - **Code Quality**: 29 ignored tests (GPU/window), 0 failures
 
 ### Current Priority
-**Phase 1: Functional Editor** - See `PROJECT_ROADMAP.md` for full details.
-The editor foundation (UI, viewport, inspector, hierarchy) is built. Phases 1A (dev mode), 1B (property writeback), and 1C (play/pause/stop) are complete. Next: viewport entity picking, entity CRUD, undo/redo, scene save/load.
+**Phase 1: Functional Editor** - Complete! See `PROJECT_ROADMAP.md` for full details.
+All Phase 1 milestones (1A–1H) are complete. The editor is now a real scene authoring tool with entity CRUD, component management, undo/redo, play/pause/stop, and scene save/load. Next: Phase 2 (Ideal Editor UI).
 
 ### Technical Debt (Tracked in PROJECT_ROADMAP.md)
 See `PROJECT_ROADMAP.md` Technical Debt section for prioritized list
@@ -140,7 +140,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 598/598 (100%)
+passed: 707/707 (100%)
 ignored: 29 (GPU/window)
 failed: 0
 ```

@@ -51,6 +51,10 @@ pub struct EditorContext {
     pub play_controls: PlayControls,
     /// Whether the add-component popup is open in the inspector.
     add_component_popup_open: bool,
+    /// Whether the scene has unsaved changes
+    is_dirty: bool,
+    /// Current scene file path (None = untitled/new scene)
+    scene_path: Option<std::path::PathBuf>,
 }
 
 impl Default for EditorContext {
@@ -102,6 +106,8 @@ impl EditorContext {
             play_state: EditorPlayState::default(),
             play_controls: PlayControls::new(),
             add_component_popup_open: false,
+            is_dirty: false,
+            scene_path: None,
         }
     }
 
@@ -297,6 +303,54 @@ impl EditorContext {
     /// Close the add-component popup.
     pub fn close_add_component_popup(&mut self) {
         self.add_component_popup_open = false;
+    }
+
+    // ================== Scene State Methods ==================
+
+    /// Whether the scene has unsaved changes.
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
+
+    /// Set the dirty flag.
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.is_dirty = dirty;
+    }
+
+    /// Convenience: mark the scene as having unsaved changes.
+    pub fn mark_dirty(&mut self) {
+        self.is_dirty = true;
+    }
+
+    /// Get the current scene file path, if any.
+    pub fn scene_path(&self) -> Option<&std::path::Path> {
+        self.scene_path.as_deref()
+    }
+
+    /// Set the current scene file path.
+    pub fn set_scene_path(&mut self, path: Option<std::path::PathBuf>) {
+        self.scene_path = path;
+    }
+
+    /// Get a display name for the current scene.
+    ///
+    /// Returns the file name if a path is set, otherwise "Untitled".
+    pub fn scene_display_name(&self) -> String {
+        self.scene_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "Untitled".to_string())
+    }
+
+    /// Get the title bar text including dirty indicator.
+    ///
+    /// Format: "filename.ron* - Insiculous Editor" (with * if dirty)
+    pub fn title_bar_text(&self) -> String {
+        let name = self.scene_display_name();
+        let dirty_indicator = if self.is_dirty { "*" } else { "" };
+        format!("{}{} - Insiculous Editor", name, dirty_indicator)
     }
 
     // ================== Layout Methods ==================
@@ -716,5 +770,61 @@ mod tests {
         let viewport_center = ctx.viewport.viewport_center();
         assert!((screen_pos.x - viewport_center.x).abs() < 0.01);
         assert!((screen_pos.y - viewport_center.y).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_dirty_flag_default_false() {
+        let ctx = EditorContext::new();
+        assert!(!ctx.is_dirty());
+    }
+
+    #[test]
+    fn test_mark_dirty_sets_flag() {
+        let mut ctx = EditorContext::new();
+        ctx.mark_dirty();
+        assert!(ctx.is_dirty());
+        ctx.set_dirty(false);
+        assert!(!ctx.is_dirty());
+    }
+
+    #[test]
+    fn test_scene_path_default_none() {
+        let ctx = EditorContext::new();
+        assert!(ctx.scene_path().is_none());
+    }
+
+    #[test]
+    fn test_scene_display_name_untitled() {
+        let ctx = EditorContext::new();
+        assert_eq!(ctx.scene_display_name(), "Untitled");
+    }
+
+    #[test]
+    fn test_scene_display_name_with_path() {
+        let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/my_level.ron")));
+        assert_eq!(ctx.scene_display_name(), "my_level.ron");
+    }
+
+    #[test]
+    fn test_title_bar_text_clean() {
+        let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/test.ron")));
+        assert_eq!(ctx.title_bar_text(), "test.ron - Insiculous Editor");
+    }
+
+    #[test]
+    fn test_title_bar_text_dirty() {
+        let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/test.ron")));
+        ctx.mark_dirty();
+        assert_eq!(ctx.title_bar_text(), "test.ron* - Insiculous Editor");
+    }
+
+    #[test]
+    fn test_title_bar_text_untitled_dirty() {
+        let mut ctx = EditorContext::new();
+        ctx.mark_dirty();
+        assert_eq!(ctx.title_bar_text(), "Untitled* - Insiculous Editor");
     }
 }

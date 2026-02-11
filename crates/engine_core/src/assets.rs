@@ -73,22 +73,32 @@ impl Default for AssetConfig {
 pub struct AssetManager {
     texture_manager: TextureManager,
     config: AssetConfig,
+    /// Maps texture handle IDs back to their original path strings for serialization.
+    handle_to_path: HashMap<u32, String>,
 }
 
 impl AssetManager {
     /// Create a new asset manager with the given WGPU device and queue
     pub fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+        let mut handle_to_path = HashMap::new();
+        // Handle 0 is always the white texture
+        handle_to_path.insert(0, "#white".to_string());
         Self {
             texture_manager: TextureManager::new(device, queue),
             config: AssetConfig::default(),
+            handle_to_path,
         }
     }
 
     /// Create a new asset manager with custom configuration
     pub fn with_config(device: Arc<Device>, queue: Arc<Queue>, config: AssetConfig) -> Self {
+        let mut handle_to_path = HashMap::new();
+        // Handle 0 is always the white texture
+        handle_to_path.insert(0, "#white".to_string());
         Self {
             texture_manager: TextureManager::new(device, queue),
             config,
+            handle_to_path,
         }
     }
 
@@ -105,6 +115,7 @@ impl AssetManager {
     /// ```
     pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> Result<TextureHandle, AssetError> {
         let path = path.as_ref();
+        let original_path_string = path.to_string_lossy().to_string();
 
         // Resolve path against base path if relative
         let full_path = if path.is_relative() {
@@ -118,6 +129,7 @@ impl AssetManager {
         }
 
         let handle = self.texture_manager.load_texture(&full_path, TextureLoadConfig::default())?;
+        self.handle_to_path.insert(handle.id, original_path_string);
 
         Ok(handle)
     }
@@ -162,6 +174,7 @@ impl AssetManager {
         color: [u8; 4],
     ) -> Result<TextureHandle, AssetError> {
         let handle = self.texture_manager.create_solid_color(width, height, color)?;
+        self.handle_to_path.insert(handle.id, "#solid".to_string());
         Ok(handle)
     }
 
@@ -261,6 +274,14 @@ impl AssetManager {
     /// Get the current base path
     pub fn base_path(&self) -> &str {
         &self.config.base_path
+    }
+
+    /// Look up the original path string for a texture handle.
+    ///
+    /// Returns `None` if the handle was not loaded through this manager.
+    /// Handle 0 always maps to `"#white"`.
+    pub fn texture_path(&self, handle: u32) -> Option<&str> {
+        self.handle_to_path.get(&handle).map(|s| s.as_str())
     }
 }
 

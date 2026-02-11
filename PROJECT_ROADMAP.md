@@ -18,17 +18,17 @@ This roadmap targets a purpose-built 2D editor — not a 3D engine with 2D bolte
 |--------|-------|--------|
 | ECS | 110 | 100% pass |
 | Input | 56 | 100% pass |
-| Engine Core | 67 | 100% pass |
+| Engine Core | 85 | 100% pass |
 | Physics | 28 | 100% pass |
 | Renderer | 62 | 100% pass |
 | Audio | 3 | 100% pass |
 | UI | 60 | 100% pass |
-| Editor | 210+ | 100% pass |
-| Editor Integration | 23 | 100% pass |
+| Editor | 196 | 100% pass |
+| Editor Integration | 72 | 100% pass |
 | ECS Macros | 3 | 100% pass |
 | Common | 26 | 100% pass |
 
-**Total:** 664+ tests passing (100% success rate)
+**Total:** 707 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 29 ignored (GPU/window only)
 
 ### Completed Engine Features
@@ -58,6 +58,9 @@ This roadmap targets a purpose-built 2D editor — not a 3D engine with 2D bolte
 - Play/Pause/Stop with world snapshot/restore (Ctrl+P, Ctrl+Shift+P, F5)
 - Visual play state indicator (tinted viewport border)
 - Input routing (editor vs game based on play state)
+- Undo/redo command system (11 command types, merging for continuous edits, Ctrl+Z/Y shortcuts)
+- Scene save/load (Ctrl+S/Ctrl+O/Ctrl+N, RON format, dirty flag tracking)
+- Editor preferences persistence (camera, grid, last scene)
 - Read-only inspector during Playing state
 - Snap-to-grid system (toggle, configurable grid size)
 - Selection system (single, multi, toggle, primary entity)
@@ -231,23 +234,25 @@ Every editor operation is reversible via the command pattern.
   - Display current command name in status bar
   - Undo/redo disabled during Playing state
 
-#### 1H. Scene Save/Load 🎯 CURRENT PRIORITY
+#### 1H. Scene Save/Load ✅ COMPLETE
 Persist scene changes to disk and reload them.
 
-- [ ] **Save scene** - Ctrl+S serializes world to RON file
-  - Serialize all entities with components
-  - Preserve hierarchy relationships
+- [x] **Save scene** - Ctrl+S serializes world to RON file
+  - `scene_serializer.rs` converts World → SceneData (inverse of scene_loader)
+  - Serialize all entities with components (Transform2D, Sprite, Camera, RigidBody, Collider, Behavior, SpriteAnimation)
+  - Preserve hierarchy relationships (recursive children)
   - Compatible with existing `SceneData` format from `scene_loader.rs`
-  - Dirty flag tracking (unsaved changes indicator in title bar)
-- [ ] **Load scene** - File > Open loads RON scene into editor
-  - Clear current world, load new scene
-  - Reset editor state (selection, camera position)
-  - Recent files list
-- [ ] **Editor state persistence** - Save/restore editor preferences
+  - Dirty flag tracking (unsaved changes indicator in status bar)
+  - Ctrl+S save, Ctrl+Shift+S save-as, texture handle→path resolution via AssetManager
+- [x] **Load scene** - File > Open (Ctrl+O) loads RON scene into editor
+  - Clear current world, load new scene via SceneLoader
+  - Reset editor state (selection, command history, gizmo drag)
+  - Ctrl+N for new empty scene
+- [x] **Editor state persistence** - EditorPreferences struct
   - Camera position and zoom
-  - Panel layout and sizes
   - Last opened scene path
-  - Stored separately from scene data (e.g., `.editor_state.json`)
+  - Snap-to-grid and grid size
+  - Stored as `.editor_state.json` (save/load via EditorPreferences)
 
 **Phase 1 Milestone:** Open `hello_world.scene.ron` in the editor, move platforms with gizmos, edit physics properties in inspector, press Play to test, Stop to reset, Save changes to disk.
 
