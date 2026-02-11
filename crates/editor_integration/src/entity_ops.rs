@@ -102,7 +102,10 @@ pub fn available_components(world: &World, entity: EntityId) -> Vec<ComponentKin
 }
 
 /// Add a default instance of the given component to an entity.
-pub fn add_component_to_entity(
+///
+/// Used in tests; production code uses command system (`AddComponentCommand`).
+#[cfg(test)]
+pub(crate) fn add_component_to_entity(
     world: &mut World,
     entity: EntityId,
     kind: ComponentKind,
@@ -144,7 +147,10 @@ pub fn add_component_to_entity(
 /// Removing `RigidBody` cascades to also remove `Collider`, since a collider
 /// without a rigid body is meaningless in the physics system.
 /// Removing an absent component is a no-op (returns Ok).
-pub fn remove_component_from_entity(
+///
+/// Used in tests; production code uses command system (`RemoveComponentCommand`).
+#[cfg(test)]
+pub(crate) fn remove_component_from_entity(
     world: &mut World,
     entity: EntityId,
     kind: ComponentKind,
@@ -276,6 +282,9 @@ pub fn handle_create_action(
 /// - Children are reparented to the deleted entity's parent (or made roots).
 /// - The entity and all its components are removed.
 /// - Selection is cleared afterward.
+///
+/// Used in tests; production code uses command system (`DeleteEntityCommand`).
+#[cfg(test)]
 pub fn delete_selected_entities(world: &mut World, selection: &mut Selection) {
     let selected: Vec<EntityId> = selection.selected().collect();
     if selected.is_empty() {

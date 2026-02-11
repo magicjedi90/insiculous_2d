@@ -28,6 +28,10 @@ struct EditorGame<G: Game> {
     world_snapshot: Option<WorldSnapshot>,
     /// Auto-incrementing counter for unique entity names.
     entity_counter: u32,
+    /// Undo/redo command history for editor actions.
+    command_history: editor::CommandHistory,
+    /// Initial transform captured when gizmo drag starts.
+    gizmo_drag_start: Option<common::Transform2D>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -39,6 +43,8 @@ impl<G: Game> EditorGame<G> {
             font_loaded: false,
             world_snapshot: None,
             entity_counter: 0,
+            command_history: editor::CommandHistory::new(),
+            gizmo_drag_start: None,
         }
     }
 
@@ -49,8 +55,8 @@ impl<G: Game> EditorGame<G> {
             "Save" => log::info!("Saving scene..."),
             "Save As..." => log::info!("Save as..."),
             "Exit" => std::process::exit(0),
-            "Undo" => log::info!("Undo"),
-            "Redo" => log::info!("Redo"),
+            // Undo/Redo handled in update() where we have world access.
+            "Undo" | "Redo" => {}
             "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
                 log::info!("Toggle panel: {}", action);
             }
@@ -77,6 +83,8 @@ impl<G: Game> EditorGame<G> {
         match action {
             PlayControlAction::Play => {
                 if self.editor.is_editing() {
+                    // Cancel any in-progress gizmo drag
+                    self.gizmo_drag_start = None;
                     // Starting a new play session — capture snapshot
                     self.world_snapshot = Some(WorldSnapshot::capture(world));
                     self.editor.set_play_state(EditorPlayState::Playing);
@@ -156,23 +164,53 @@ impl<G: Game> Game for EditorGame<G> {
                 | "Create Static Body" | "Create Dynamic Body" | "Create Kinematic Body"
                     if !self.editor.is_playing() =>
                 {
-                    entity_ops::handle_create_action(
+                    if let Some(entity) = entity_ops::handle_create_action(
                         &action,
                         ctx.world,
                         &mut self.editor.selection,
                         Vec2::ZERO,
                         &mut self.entity_counter,
-                    );
+                    ) {
+                        let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, entity);
+                        self.command_history.push_already_executed(Box::new(cmd));
+                    }
                 }
                 "Delete" if !self.editor.is_playing() => {
-                    entity_ops::delete_selected_entities(ctx.world, &mut self.editor.selection);
+                    let selected: Vec<ecs::EntityId> = self.editor.selection.selected().collect();
+                    if !selected.is_empty() {
+                        if selected.len() == 1 {
+                            let cmd = editor::commands::DeleteEntityCommand::new(selected[0]);
+                            self.command_history.execute(Box::new(cmd), ctx.world);
+                        } else {
+                            let cmds: Vec<Box<dyn editor::EditorCommand>> = selected.iter()
+                                .map(|&e| Box::new(editor::commands::DeleteEntityCommand::new(e)) as Box<dyn editor::EditorCommand>)
+                                .collect();
+                            let cmd = editor::commands::MacroCommand::new("Delete Entities", cmds);
+                            self.command_history.execute(Box::new(cmd), ctx.world);
+                        }
+                        self.editor.selection.clear();
+                    }
                 }
                 "Duplicate" if !self.editor.is_playing() => {
-                    entity_ops::duplicate_selected_entities(
-                        ctx.world,
-                        &mut self.editor.selection,
-                        &mut self.entity_counter,
-                    );
+                    if let Some(primary) = self.editor.selection.primary() {
+                        entity_ops::duplicate_selected_entities(
+                            ctx.world,
+                            &mut self.editor.selection,
+                            &mut self.entity_counter,
+                        );
+                        if let Some(new_entity) = self.editor.selection.primary() {
+                            if new_entity != primary {
+                                let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, new_entity);
+                                self.command_history.push_already_executed(Box::new(cmd));
+                            }
+                        }
+                    }
+                }
+                "Undo" if !self.editor.is_playing() => {
+                    self.command_history.undo(ctx.world);
+                }
+                "Redo" if !self.editor.is_playing() => {
+                    self.command_history.redo(ctx.world);
                 }
                 _ => self.handle_menu_action(&action),
             }
@@ -204,7 +242,7 @@ impl<G: Game> Game for EditorGame<G> {
         for (panel_id, bounds) in content_areas.clone() {
             ctx.ui.push_clip_rect(ui::Rect::new(bounds.x, bounds.y, bounds.width, bounds.height));
             panel_renderer::render_panel_content(
-                &mut self.editor, ctx, panel_id, bounds,
+                &mut self.editor, ctx, panel_id, bounds, &mut self.command_history,
             );
             ctx.ui.pop_clip_rect();
         }
@@ -279,6 +317,13 @@ impl<G: Game> Game for EditorGame<G> {
                         let screen_pos = self.editor.world_to_screen(entity_pos);
                         let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
 
+                        // Capture initial transform when gizmo drag starts
+                        if interaction.handle.is_some() && self.gizmo_drag_start.is_none() {
+                            if let Some(t) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
+                                self.gizmo_drag_start = Some(*t);
+                            }
+                        }
+
                         if interaction.handle.is_some() {
                             // Translation
                             if interaction.delta != Vec2::ZERO {
@@ -308,6 +353,16 @@ impl<G: Game> Game for EditorGame<G> {
                                 }
                             }
                         }
+
+                        // Gizmo released — create undo command for the drag
+                        if interaction.handle.is_none() && self.gizmo_drag_start.is_some() {
+                            if let Some(initial) = self.gizmo_drag_start.take() {
+                                if let Some(final_val) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
+                                    let cmd = editor::commands::TransformGizmoCommand::new(entity_id, initial, *final_val);
+                                    self.command_history.push_already_executed(Box::new(cmd));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -329,16 +384,22 @@ impl<G: Game> Game for EditorGame<G> {
             }
         }
 
-        // 11. Status bar (includes play state)
+        // 11. Status bar (includes play state and undo info)
         let info_y = window_size.y - 30.0;
+        let undo_info = if let Some(name) = self.command_history.undo_name() {
+            format!("Undo: {}", name)
+        } else {
+            "Ready".to_string()
+        };
         ctx.ui.label(
             &format!(
-                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {}",
+                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {} | {}",
                 self.editor.current_tool(),
                 if self.editor.is_grid_visible() { "ON" } else { "OFF" },
                 if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
                 self.editor.camera_zoom(),
                 self.editor.play_state().label(),
+                undo_info,
             ),
             Vec2::new(10.0, info_y),
         );
@@ -378,19 +439,49 @@ impl<G: Game> Game for EditorGame<G> {
 
         // Editor shortcuts (only during Editing/Paused)
         match key {
+            KeyCode::KeyZ if ctrl && !shift => {
+                self.command_history.undo(ctx.world);
+            }
+            KeyCode::KeyZ if ctrl && shift => {
+                self.command_history.redo(ctx.world);
+            }
+            KeyCode::KeyY if ctrl => {
+                self.command_history.redo(ctx.world);
+            }
             KeyCode::KeyG => self.editor.toggle_grid(),
             KeyCode::KeyS if ctrl => {
                 log::info!("Save scene (Ctrl+S)");
             }
             KeyCode::KeyD if ctrl => {
-                entity_ops::duplicate_selected_entities(
-                    ctx.world,
-                    &mut self.editor.selection,
-                    &mut self.entity_counter,
-                );
+                if let Some(primary) = self.editor.selection.primary() {
+                    entity_ops::duplicate_selected_entities(
+                        ctx.world,
+                        &mut self.editor.selection,
+                        &mut self.entity_counter,
+                    );
+                    if let Some(new_entity) = self.editor.selection.primary() {
+                        if new_entity != primary {
+                            let cmd = editor::commands::CreateEntityCommand::already_created(ctx.world, new_entity);
+                            self.command_history.push_already_executed(Box::new(cmd));
+                        }
+                    }
+                }
             }
             KeyCode::Delete | KeyCode::Backspace => {
-                entity_ops::delete_selected_entities(ctx.world, &mut self.editor.selection);
+                let selected: Vec<ecs::EntityId> = self.editor.selection.selected().collect();
+                if !selected.is_empty() {
+                    if selected.len() == 1 {
+                        let cmd = editor::commands::DeleteEntityCommand::new(selected[0]);
+                        self.command_history.execute(Box::new(cmd), ctx.world);
+                    } else {
+                        let cmds: Vec<Box<dyn editor::EditorCommand>> = selected.iter()
+                            .map(|&e| Box::new(editor::commands::DeleteEntityCommand::new(e)) as Box<dyn editor::EditorCommand>)
+                            .collect();
+                        let cmd = editor::commands::MacroCommand::new("Delete Entities", cmds);
+                        self.command_history.execute(Box::new(cmd), ctx.world);
+                    }
+                    self.editor.selection.clear();
+                }
             }
             KeyCode::Equal => self.editor.zoom_camera(1.1),
             KeyCode::Minus => self.editor.zoom_camera(0.9),
@@ -479,6 +570,14 @@ mod tests {
         assert!(editor.world_snapshot.is_none());
         assert!(editor.editor.is_editing());
         assert_eq!(editor.entity_counter, 0);
+    }
+
+    #[test]
+    fn test_command_history_initialized() {
+        let editor = EditorGame::new(DummyGame);
+        assert!(!editor.command_history.can_undo());
+        assert!(!editor.command_history.can_redo());
+        assert!(editor.gizmo_drag_start.is_none());
     }
 
     #[test]

@@ -22,6 +22,7 @@
 //! }
 //! ```
 
+pub mod commands;
 mod component_editors;
 mod context;
 mod dock;
@@ -36,6 +37,7 @@ mod picking;
 mod play_controls;
 mod play_state;
 mod selection;
+pub mod stored_component;
 mod toolbar;
 mod viewport;
 mod viewport_input;
@@ -43,6 +45,7 @@ pub mod layout;
 pub mod world_snapshot;
 
 // Re-export main types
+pub use commands::{CommandHistory, EditorCommand};
 pub use component_editors::{
     edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
     AudioSourceEditResult, ColliderEditResult, RigidBodyEditResult, SpriteEditResult,
@@ -71,6 +74,7 @@ pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInpu
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
+        CommandHistory, EditorCommand,
         component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,

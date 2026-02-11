@@ -6,7 +6,7 @@
 use glam::Vec2;
 
 use editor::{
-    EditorContext, HierarchyPanel, InspectorStyle, PanelId,
+    CommandHistory, EditorContext, HierarchyPanel, InspectorStyle, PanelId,
     EditableInspector, FieldId,
     edit_transform2d, edit_sprite, edit_rigid_body, edit_collider, edit_audio_source,
     inspect_component,
@@ -14,8 +14,8 @@ use editor::{
 use engine_core::contexts::GameContext;
 
 use crate::entity_ops::{
-    ComponentKind, add_component_to_entity, available_components,
-    categorized_components, component_display_name, remove_component_from_entity,
+    ComponentKind, available_components,
+    categorized_components, component_display_name,
 };
 
 /// Render the content of a specific dock panel.
@@ -24,6 +24,7 @@ pub fn render_panel_content(
     ctx: &mut GameContext,
     panel_id: PanelId,
     bounds: common::Rect,
+    command_history: &mut CommandHistory,
 ) {
     let padding = 8.0;
     let content_x = bounds.x + padding;
@@ -32,7 +33,7 @@ pub fn render_panel_content(
     match panel_id {
         PanelId::SCENE_VIEW => render_scene_view(editor, ctx, bounds),
         PanelId::HIERARCHY => render_hierarchy(editor, ctx, bounds),
-        PanelId::INSPECTOR => render_inspector(editor, ctx, content_x, y),
+        PanelId::INSPECTOR => render_inspector(editor, ctx, content_x, y, command_history),
         PanelId::ASSET_BROWSER => render_asset_browser(ctx, content_x, y),
         _ => render_default(ctx, content_x, y),
     }
@@ -127,7 +128,13 @@ fn render_hierarchy(editor: &mut EditorContext, ctx: &mut GameContext, bounds: c
 ///
 /// During Editing/Paused: renders editable fields with live writeback.
 /// During Playing: renders read-only view via `inspect_component()`.
-fn render_inspector(editor: &mut EditorContext, ctx: &mut GameContext, content_x: f32, mut y: f32) {
+fn render_inspector(
+    editor: &mut EditorContext,
+    ctx: &mut GameContext,
+    content_x: f32,
+    mut y: f32,
+    command_history: &mut CommandHistory,
+) {
     let line_height = 20.0;
 
     let entity_id = match editor.selection.primary() {
@@ -147,7 +154,7 @@ fn render_inspector(editor: &mut EditorContext, ctx: &mut GameContext, content_x
     if editor.is_playing() {
         render_inspector_readonly(ctx, entity_id, content_x, y);
     } else {
-        render_inspector_editable(editor, ctx, entity_id, content_x, y);
+        render_inspector_editable(editor, ctx, entity_id, content_x, y, command_history);
     }
 }
 
@@ -188,6 +195,7 @@ fn render_inspector_editable(
     entity_id: ecs::EntityId,
     content_x: f32,
     mut y: f32,
+    command_history: &mut CommandHistory,
 ) {
     let line_height = 20.0;
     let mut component_index: usize = 0;
@@ -203,11 +211,24 @@ fn render_inspector_editable(
         y = inspector.y();
 
         if result.position_changed || result.rotation_changed || result.scale_changed {
+            let mut new_transform = transform;
+            if result.position_changed { new_transform.position = result.new_position; }
+            if result.rotation_changed { new_transform.rotation = result.new_rotation; }
+            if result.scale_changed { new_transform.scale = result.new_scale; }
+
+            // Apply to world for immediate visual feedback
             if let Some(t) = ctx.world.get_mut::<common::Transform2D>(entity_id) {
-                if result.position_changed { t.position = result.new_position; }
-                if result.rotation_changed { t.rotation = result.new_rotation; }
-                if result.scale_changed { t.scale = result.new_scale; }
+                *t = new_transform;
             }
+
+            let field_hint = if result.position_changed { "position" }
+                else if result.rotation_changed { "rotation" }
+                else { "scale" };
+
+            let cmd = editor::commands::SetTransformCommand::new(
+                entity_id, transform, new_transform, field_hint,
+            );
+            command_history.try_merge_or_push(Box::new(cmd));
         }
         component_index += 1;
     }
@@ -228,13 +249,12 @@ fn render_inspector_editable(
     // --- Sprite (removable, uses edit_sprite which renders its own header) ---
     if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id).cloned() {
         y += line_height * 0.5;
-        let header_y = y; // Save position for remove button overlay
+        let header_y = y;
         let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
             .with_component_index(component_index);
         let result = edit_sprite(&mut inspector, &sprite);
         y = inspector.y();
 
-        // Overlay [X] button next to the header that edit_sprite rendered
         if render_remove_button(ctx.ui, component_index, content_x, header_y) {
             removals.push(ComponentKind::Sprite);
         }
@@ -242,13 +262,28 @@ fn render_inspector_editable(
         if result.offset_changed || result.rotation_changed || result.scale_changed
             || result.color_changed || result.depth_changed
         {
+            let mut new_sprite = sprite.clone();
+            if result.offset_changed { new_sprite.offset = result.new_offset; }
+            if result.rotation_changed { new_sprite.rotation = result.new_rotation; }
+            if result.scale_changed { new_sprite.scale = result.new_scale; }
+            if result.color_changed { new_sprite.color = result.new_color; }
+            if result.depth_changed { new_sprite.depth = result.new_depth; }
+
+            // Apply to world for immediate visual feedback
             if let Some(s) = ctx.world.get_mut::<ecs::sprite_components::Sprite>(entity_id) {
-                if result.offset_changed { s.offset = result.new_offset; }
-                if result.rotation_changed { s.rotation = result.new_rotation; }
-                if result.scale_changed { s.scale = result.new_scale; }
-                if result.color_changed { s.color = result.new_color; }
-                if result.depth_changed { s.depth = result.new_depth; }
+                *s = new_sprite.clone();
             }
+
+            let field_hint = if result.color_changed { "color" }
+                else if result.depth_changed { "depth" }
+                else if result.offset_changed { "offset" }
+                else if result.rotation_changed { "rotation" }
+                else { "scale" };
+
+            let cmd = editor::commands::SetSpriteCommand::new(
+                entity_id, sprite, new_sprite, field_hint,
+            );
+            command_history.try_merge_or_push(Box::new(cmd));
         }
         component_index += 1;
     }
@@ -284,15 +319,32 @@ fn render_inspector_editable(
             || result.angular_damping_changed || result.can_rotate_changed
             || result.ccd_enabled_changed
         {
+            let mut new_body = body.clone();
+            if result.velocity_changed { new_body.velocity = result.new_velocity; }
+            if result.angular_velocity_changed { new_body.angular_velocity = result.new_angular_velocity; }
+            if result.gravity_scale_changed { new_body.gravity_scale = result.new_gravity_scale; }
+            if result.linear_damping_changed { new_body.linear_damping = result.new_linear_damping; }
+            if result.angular_damping_changed { new_body.angular_damping = result.new_angular_damping; }
+            if result.can_rotate_changed { new_body.can_rotate = result.new_can_rotate; }
+            if result.ccd_enabled_changed { new_body.ccd_enabled = result.new_ccd_enabled; }
+
+            // Apply to world for immediate visual feedback
             if let Some(rb) = ctx.world.get_mut::<physics::components::RigidBody>(entity_id) {
-                if result.velocity_changed { rb.velocity = result.new_velocity; }
-                if result.angular_velocity_changed { rb.angular_velocity = result.new_angular_velocity; }
-                if result.gravity_scale_changed { rb.gravity_scale = result.new_gravity_scale; }
-                if result.linear_damping_changed { rb.linear_damping = result.new_linear_damping; }
-                if result.angular_damping_changed { rb.angular_damping = result.new_angular_damping; }
-                if result.can_rotate_changed { rb.can_rotate = result.new_can_rotate; }
-                if result.ccd_enabled_changed { rb.ccd_enabled = result.new_ccd_enabled; }
+                *rb = new_body.clone();
             }
+
+            let field_hint = if result.velocity_changed { "velocity" }
+                else if result.angular_velocity_changed { "angular_velocity" }
+                else if result.gravity_scale_changed { "gravity_scale" }
+                else if result.linear_damping_changed { "linear_damping" }
+                else if result.angular_damping_changed { "angular_damping" }
+                else if result.can_rotate_changed { "can_rotate" }
+                else { "ccd_enabled" };
+
+            let cmd = editor::commands::SetRigidBodyCommand::new(
+                entity_id, body, new_body, field_hint,
+            );
+            command_history.try_merge_or_push(Box::new(cmd));
         }
         component_index += 1;
     }
@@ -313,12 +365,26 @@ fn render_inspector_editable(
         if result.offset_changed || result.is_sensor_changed
             || result.friction_changed || result.restitution_changed
         {
+            let mut new_collider = collider.clone();
+            if result.offset_changed { new_collider.offset = result.new_offset; }
+            if result.is_sensor_changed { new_collider.is_sensor = result.new_is_sensor; }
+            if result.friction_changed { new_collider.friction = result.new_friction; }
+            if result.restitution_changed { new_collider.restitution = result.new_restitution; }
+
+            // Apply to world for immediate visual feedback
             if let Some(c) = ctx.world.get_mut::<physics::components::Collider>(entity_id) {
-                if result.offset_changed { c.offset = result.new_offset; }
-                if result.is_sensor_changed { c.is_sensor = result.new_is_sensor; }
-                if result.friction_changed { c.friction = result.new_friction; }
-                if result.restitution_changed { c.restitution = result.new_restitution; }
+                *c = new_collider.clone();
             }
+
+            let field_hint = if result.offset_changed { "offset" }
+                else if result.is_sensor_changed { "is_sensor" }
+                else if result.friction_changed { "friction" }
+                else { "restitution" };
+
+            let cmd = editor::commands::SetColliderCommand::new(
+                entity_id, collider, new_collider, field_hint,
+            );
+            command_history.try_merge_or_push(Box::new(cmd));
         }
         component_index += 1;
     }
@@ -341,16 +407,34 @@ fn render_inspector_editable(
             || result.max_distance_changed || result.reference_distance_changed
             || result.rolloff_factor_changed
         {
+            let mut new_source = source.clone();
+            if result.volume_changed { new_source.volume = result.new_volume; }
+            if result.pitch_changed { new_source.pitch = result.new_pitch; }
+            if result.looping_changed { new_source.looping = result.new_looping; }
+            if result.play_on_spawn_changed { new_source.play_on_spawn = result.new_play_on_spawn; }
+            if result.spatial_changed { new_source.spatial = result.new_spatial; }
+            if result.max_distance_changed { new_source.max_distance = result.new_max_distance; }
+            if result.reference_distance_changed { new_source.reference_distance = result.new_reference_distance; }
+            if result.rolloff_factor_changed { new_source.rolloff_factor = result.new_rolloff_factor; }
+
+            // Apply to world for immediate visual feedback
             if let Some(a) = ctx.world.get_mut::<ecs::audio_components::AudioSource>(entity_id) {
-                if result.volume_changed { a.volume = result.new_volume; }
-                if result.pitch_changed { a.pitch = result.new_pitch; }
-                if result.looping_changed { a.looping = result.new_looping; }
-                if result.play_on_spawn_changed { a.play_on_spawn = result.new_play_on_spawn; }
-                if result.spatial_changed { a.spatial = result.new_spatial; }
-                if result.max_distance_changed { a.max_distance = result.new_max_distance; }
-                if result.reference_distance_changed { a.reference_distance = result.new_reference_distance; }
-                if result.rolloff_factor_changed { a.rolloff_factor = result.new_rolloff_factor; }
+                *a = new_source.clone();
             }
+
+            let field_hint = if result.volume_changed { "volume" }
+                else if result.pitch_changed { "pitch" }
+                else if result.looping_changed { "looping" }
+                else if result.play_on_spawn_changed { "play_on_spawn" }
+                else if result.spatial_changed { "spatial" }
+                else if result.max_distance_changed { "max_distance" }
+                else if result.reference_distance_changed { "reference_distance" }
+                else { "rolloff_factor" };
+
+            let cmd = editor::commands::SetAudioSourceCommand::new(
+                entity_id, source, new_source, field_hint,
+            );
+            command_history.try_merge_or_push(Box::new(cmd));
         }
         component_index += 1;
     }
@@ -368,16 +452,17 @@ fn render_inspector_editable(
         component_index += 1;
     }
 
-    // Apply removals after rendering all components
+    // Apply removals via commands
     for kind in &removals {
-        remove_component_from_entity(ctx.world, entity_id, *kind).ok();
+        let cmd_kind = to_command_kind(*kind);
+        let cmd = editor::commands::RemoveComponentCommand::new(entity_id, cmd_kind);
+        command_history.execute(Box::new(cmd), ctx.world);
         log::info!("Removed component: {}", component_display_name(*kind));
     }
 
     // --- [+ Add Component] button ---
     y += line_height;
     let btn_bounds = ui::Rect::new(content_x, y, 160.0, 24.0);
-    // Use a high component_index to avoid ID collisions
     let add_btn_id = FieldId::new(component_index + 50, 0, 0);
     if ctx.ui.button(add_btn_id, "+ Add Component", btn_bounds) {
         editor.toggle_add_component_popup();
@@ -390,7 +475,6 @@ fn render_inspector_editable(
         if available.is_empty() {
             ctx.ui.label("(all components added)", Vec2::new(content_x + 8.0, y));
         } else {
-            // Panel background
             let popup_height = categorized_popup_height(&available);
             let popup_bounds = ui::Rect::new(content_x, y, 180.0, popup_height);
             ctx.ui.panel(popup_bounds);
@@ -399,7 +483,6 @@ fn render_inspector_editable(
             let mut popup_btn_idx: usize = 0;
 
             for (category, kinds) in categorized_components() {
-                // Filter to only show kinds that are available
                 let visible: Vec<ComponentKind> = kinds.iter()
                     .copied()
                     .filter(|k| available.contains(k))
@@ -408,7 +491,6 @@ fn render_inspector_editable(
                     continue;
                 }
 
-                // Category label
                 ctx.ui.label_styled(
                     category.label(),
                     Vec2::new(content_x + 8.0, popup_y),
@@ -417,12 +499,13 @@ fn render_inspector_editable(
                 );
                 popup_y += 18.0;
 
-                // Component buttons
                 for kind in visible {
                     let btn_bounds = ui::Rect::new(content_x + 16.0, popup_y, 148.0, 22.0);
                     let btn_id = FieldId::new(component_index + 60 + popup_btn_idx, 0, 0);
                     if ctx.ui.button(btn_id, component_display_name(kind), btn_bounds) {
-                        add_component_to_entity(ctx.world, entity_id, kind).ok();
+                        let cmd_kind = to_command_kind(kind);
+                        let cmd = editor::commands::AddComponentCommand::new(entity_id, cmd_kind);
+                        command_history.execute(Box::new(cmd), ctx.world);
                         editor.close_add_component_popup();
                         log::info!("Added component: {}", component_display_name(kind));
                     }
@@ -433,7 +516,7 @@ fn render_inspector_editable(
         }
     }
 
-    let _ = component_index; // suppress unused warning
+    let _ = component_index;
 }
 
 /// Render a small [X] remove button at the header position of a component.
@@ -467,6 +550,19 @@ fn categorized_popup_height(available: &[ComponentKind]) -> f32 {
     height
 }
 
+/// Convert from `entity_ops::ComponentKind` to `editor::commands::ComponentKind`.
+fn to_command_kind(kind: ComponentKind) -> editor::commands::ComponentKind {
+    match kind {
+        ComponentKind::Camera => editor::commands::ComponentKind::Camera,
+        ComponentKind::Sprite => editor::commands::ComponentKind::Sprite,
+        ComponentKind::SpriteAnimation => editor::commands::ComponentKind::SpriteAnimation,
+        ComponentKind::RigidBody => editor::commands::ComponentKind::RigidBody,
+        ComponentKind::Collider => editor::commands::ComponentKind::Collider,
+        ComponentKind::AudioSource => editor::commands::ComponentKind::AudioSource,
+        ComponentKind::AudioListener => editor::commands::ComponentKind::AudioListener,
+    }
+}
+
 /// Asset browser — placeholder.
 fn render_asset_browser(ctx: &mut GameContext, content_x: f32, y: f32) {
     ctx.ui.label("(Asset browser not yet implemented)", Vec2::new(content_x, y));
@@ -479,6 +575,7 @@ fn render_default(ctx: &mut GameContext, content_x: f32, y: f32) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ecs::World;
     use glam::Vec2;
 
@@ -695,5 +792,129 @@ mod tests {
 
         let t = world.get::<common::Transform2D>(entity).unwrap();
         assert_eq!(t.scale, Vec2::new(0.01, 0.01)); // clamped to minimum
+    }
+
+    // ==================== Command-based writeback tests ====================
+
+    /// Verify SetTransformCommand applies and undoes correctly via command history.
+    #[test]
+    fn test_set_transform_via_command_and_undo() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(Vec2::ZERO)).ok();
+
+        let old = *world.get::<common::Transform2D>(entity).unwrap();
+        let new = common::Transform2D::new(Vec2::new(100.0, 200.0));
+
+        // Apply manually (like the inspector does)
+        if let Some(t) = world.get_mut::<common::Transform2D>(entity) {
+            *t = new;
+        }
+
+        // Push to history without executing
+        let mut history = editor::CommandHistory::new();
+        let cmd = editor::commands::SetTransformCommand::new(entity, old, new, "position");
+        history.try_merge_or_push(Box::new(cmd));
+
+        assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::new(100.0, 200.0));
+
+        // Undo should restore original
+        history.undo(&mut world);
+        assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::ZERO);
+
+        // Redo should reapply
+        history.redo(&mut world);
+        assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::new(100.0, 200.0));
+    }
+
+    /// Verify continuous slider drags merge into a single undo entry.
+    #[test]
+    fn test_transform_slider_merges_into_single_undo() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(Vec2::ZERO)).ok();
+
+        let mut history = editor::CommandHistory::new();
+
+        // Simulate 3 frames of dragging the position slider
+        let t0 = *world.get::<common::Transform2D>(entity).unwrap();
+        let t1 = common::Transform2D::new(Vec2::new(10.0, 0.0));
+        let t2 = common::Transform2D::new(Vec2::new(20.0, 0.0));
+        let t3 = common::Transform2D::new(Vec2::new(30.0, 0.0));
+
+        // Frame 1
+        world.get_mut::<common::Transform2D>(entity).unwrap().position = t1.position;
+        history.try_merge_or_push(Box::new(
+            editor::commands::SetTransformCommand::new(entity, t0, t1, "position"),
+        ));
+
+        // Frame 2 (merges)
+        world.get_mut::<common::Transform2D>(entity).unwrap().position = t2.position;
+        history.try_merge_or_push(Box::new(
+            editor::commands::SetTransformCommand::new(entity, t1, t2, "position"),
+        ));
+
+        // Frame 3 (merges)
+        world.get_mut::<common::Transform2D>(entity).unwrap().position = t3.position;
+        history.try_merge_or_push(Box::new(
+            editor::commands::SetTransformCommand::new(entity, t2, t3, "position"),
+        ));
+
+        // Single undo should go back to original
+        history.undo(&mut world);
+        assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::ZERO);
+        assert!(!history.can_undo());
+    }
+
+    /// Verify AddComponentCommand works via execute and can be undone.
+    #[test]
+    fn test_add_component_via_command_and_undo() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(Vec2::ZERO)).ok();
+
+        let mut history = editor::CommandHistory::new();
+        let cmd = editor::commands::AddComponentCommand::new(
+            entity, editor::commands::ComponentKind::Sprite,
+        );
+        history.execute(Box::new(cmd), &mut world);
+
+        assert!(world.get::<ecs::sprite_components::Sprite>(entity).is_some());
+
+        history.undo(&mut world);
+        assert!(world.get::<ecs::sprite_components::Sprite>(entity).is_none());
+    }
+
+    /// Verify RemoveComponentCommand works via execute and can be undone.
+    #[test]
+    fn test_remove_component_via_command_and_undo() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world.add_component(&entity, common::Transform2D::new(Vec2::ZERO)).ok();
+        world.add_component(&entity, ecs::sprite_components::Sprite::new(42)).ok();
+
+        let mut history = editor::CommandHistory::new();
+        let cmd = editor::commands::RemoveComponentCommand::new(
+            entity, editor::commands::ComponentKind::Sprite,
+        );
+        history.execute(Box::new(cmd), &mut world);
+
+        assert!(world.get::<ecs::sprite_components::Sprite>(entity).is_none());
+
+        history.undo(&mut world);
+        assert!(world.get::<ecs::sprite_components::Sprite>(entity).is_some());
+        assert_eq!(world.get::<ecs::sprite_components::Sprite>(entity).unwrap().texture_handle, 42);
+    }
+
+    /// Verify to_command_kind maps all variants correctly.
+    #[test]
+    fn test_to_command_kind_maps_all_variants() {
+        assert_eq!(to_command_kind(ComponentKind::Camera), editor::commands::ComponentKind::Camera);
+        assert_eq!(to_command_kind(ComponentKind::Sprite), editor::commands::ComponentKind::Sprite);
+        assert_eq!(to_command_kind(ComponentKind::SpriteAnimation), editor::commands::ComponentKind::SpriteAnimation);
+        assert_eq!(to_command_kind(ComponentKind::RigidBody), editor::commands::ComponentKind::RigidBody);
+        assert_eq!(to_command_kind(ComponentKind::Collider), editor::commands::ComponentKind::Collider);
+        assert_eq!(to_command_kind(ComponentKind::AudioSource), editor::commands::ComponentKind::AudioSource);
+        assert_eq!(to_command_kind(ComponentKind::AudioListener), editor::commands::ComponentKind::AudioListener);
     }
 }
