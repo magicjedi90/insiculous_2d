@@ -243,9 +243,10 @@ impl DockArea {
                 continue;
             }
 
-            // Draw panel background (skip for scene view — it shows game content directly)
+            // Draw panel background (skip for scene view — it shows game content directly).
+            // Uses the opaque EditorTheme background so game sprites never bleed through.
             if panel.id != PanelId::SCENE_VIEW {
-                ui.panel(panel.bounds);
+                ui.panel_styled(panel.bounds, theme.bg_primary, theme.border_panel, 1.0);
             }
 
             // Draw panel header

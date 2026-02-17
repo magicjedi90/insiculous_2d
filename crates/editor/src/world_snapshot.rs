@@ -8,6 +8,7 @@
 //! lost on restore. Acceptable for Phase 1C.
 
 use ecs::{EntityId, World};
+use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::hierarchy::{Children, GlobalTransform2D, Parent};
 use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
 use ecs::audio_components::{AudioListener, AudioSource};
@@ -33,6 +34,10 @@ struct EntitySnapshot {
     // Hierarchy
     parent: Option<Parent>,
     children: Option<Children>,
+    // Behaviors
+    behavior: Option<Behavior>,
+    behavior_state: Option<BehaviorState>,
+    entity_tag: Option<EntityTag>,
 }
 
 impl EntitySnapshot {
@@ -52,6 +57,9 @@ impl EntitySnapshot {
             audio_listener: world.get::<AudioListener>(id).cloned(),
             parent: world.get::<Parent>(id).cloned(),
             children: world.get::<Children>(id).cloned(),
+            behavior: world.get::<Behavior>(id).cloned(),
+            behavior_state: world.get::<BehaviorState>(id).cloned(),
+            entity_tag: world.get::<EntityTag>(id).cloned(),
         }
     }
 
@@ -70,6 +78,9 @@ impl EntitySnapshot {
         if let Some(c) = self.audio_listener { world.add_component(&id, c).ok(); }
         if let Some(c) = self.parent { world.add_component(&id, c).ok(); }
         if let Some(c) = self.children { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.behavior { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.behavior_state { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.entity_tag { world.add_component(&id, c).ok(); }
     }
 }
 
@@ -224,5 +235,45 @@ mod tests {
         let col = world.get::<Collider>(entity).unwrap();
         assert_eq!(col.friction, 0.9);
         assert!(col.is_sensor);
+    }
+
+    #[test]
+    fn test_snapshot_preserves_behavior_components() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+
+        let behavior = Behavior::PlayerPlatformer {
+            move_speed: 150.0,
+            jump_impulse: 500.0,
+            jump_cooldown: 0.25,
+            tag: "hero".to_string(),
+        };
+        world.add_component(&entity, behavior).ok();
+
+        let mut state = BehaviorState::default();
+        state.timer = 1.5;
+        world.add_component(&entity, state).ok();
+
+        world.add_component(&entity, EntityTag::new("hero")).ok();
+
+        let snapshot = WorldSnapshot::capture(&world);
+        world.clear();
+        snapshot.restore(&mut world);
+
+        // Behavior should survive the snapshot round-trip
+        let b = world.get::<Behavior>(entity).unwrap();
+        match b {
+            Behavior::PlayerPlatformer { move_speed, tag, .. } => {
+                assert_eq!(*move_speed, 150.0);
+                assert_eq!(tag, "hero");
+            }
+            _ => panic!("Wrong behavior variant"),
+        }
+
+        let bs = world.get::<BehaviorState>(entity).unwrap();
+        assert_eq!(bs.timer, 1.5);
+
+        let tag = world.get::<EntityTag>(entity).unwrap();
+        assert!(tag.matches("hero"));
     }
 }
