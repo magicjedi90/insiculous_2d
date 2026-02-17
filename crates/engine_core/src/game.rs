@@ -381,30 +381,40 @@ impl<G: Game> GameRunner<G> {
         // Prepare glyph textures for text rendering
         self.prepare_glyph_textures(ui_commands);
 
-        // Build sprite batches
-        let mut batcher = SpriteBatcher::new(1000);
-
+        // Phase 1: Game sprites — render into their own batcher so they never
+        // share a batch with UI elements (which would cause UI panel backgrounds
+        // to paint over game sprites due to painter's algorithm).
+        let mut game_batcher = SpriteBatcher::new(1000);
         {
+            let empty_commands: &[DrawCommand] = &[];
             let mut ctx = RenderContext {
                 world: &self.scene.world,
-                sprites: &mut batcher,
+                sprites: &mut game_batcher,
                 camera: self.render_manager.camera_mut(),
                 window_size,
-                ui_commands,
+                ui_commands: empty_commands,
                 glyph_textures: &self.glyph_textures,
             };
             self.game.render(&mut ctx);
         }
 
-        // Collect batches, sort by depth, and render with asset manager's textures
-        let mut batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
-        // Sort batches by their minimum depth (ascending for back-to-front rendering)
-        batches.sort_by(|a, b| {
-            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
-            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
-            a_min.total_cmp(&b_min)
-        });
-        let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
+        // Phase 2: UI sprites — separate batcher
+        let mut ui_batcher = SpriteBatcher::new(1000);
+        render_ui_commands(&mut ui_batcher, ui_commands, window_size, &self.glyph_textures);
+
+        // Collect and sort game batches (by depth then texture handle for stability)
+        game_batcher.sort_all_batches();
+        let mut game_batches: Vec<SpriteBatch> = game_batcher.batches().values().cloned().collect();
+        Self::sort_batches(&mut game_batches);
+
+        // Collect and sort UI batches
+        ui_batcher.sort_all_batches();
+        let mut ui_batches: Vec<SpriteBatch> = ui_batcher.batches().values().cloned().collect();
+        Self::sort_batches(&mut ui_batches);
+
+        // Combine: game batches first, then UI batches on top
+        game_batches.extend(ui_batches);
+        let batch_refs: Vec<&SpriteBatch> = game_batches.iter().collect();
 
         // Get textures from asset manager (need to reborrow after RenderContext)
         if let Some(asset_manager) = &self.asset_manager {
@@ -413,6 +423,21 @@ impl<G: Game> GameRunner<G> {
                 log::error!("Render error: {}", e);
             }
         }
+    }
+
+    /// Sort sprite batches by depth (min, then max, then texture handle for determinism).
+    fn sort_batches(batches: &mut [SpriteBatch]) {
+        batches.sort_by(|a, b| {
+            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            a_min.total_cmp(&b_min)
+                .then_with(|| {
+                    let a_max = a.instances.iter().map(|i| i.depth).max_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+                    let b_max = b.instances.iter().map(|i| i.depth).max_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+                    a_max.total_cmp(&b_max)
+                })
+                .then_with(|| a.texture_handle.id.cmp(&b.texture_handle.id))
+        });
     }
 }
 

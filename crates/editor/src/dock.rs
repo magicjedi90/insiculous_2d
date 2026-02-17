@@ -242,8 +242,10 @@ impl DockArea {
                 continue;
             }
 
-            // Draw panel background
-            ui.panel(panel.bounds);
+            // Draw panel background (skip for scene view — it shows game content directly)
+            if panel.id != PanelId::SCENE_VIEW {
+                ui.panel(panel.bounds);
+            }
 
             // Draw panel header
             let header_bounds = Rect::new(
