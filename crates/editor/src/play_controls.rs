@@ -4,9 +4,10 @@
 //! the action the user clicked, if any.
 
 use glam::Vec2;
-use ui::{Color, Rect, UIContext};
+use ui::{Rect, UIContext};
 
 use crate::play_state::EditorPlayState;
+use crate::theme::EditorTheme;
 
 /// Action returned when the user clicks a play control button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +53,12 @@ impl PlayControls {
     /// - **Editing:** `[Play]`
     /// - **Playing:** `[Pause] [Stop]`
     /// - **Paused:**  `[Resume] [Stop]`
-    pub fn render(&self, ui: &mut UIContext, state: EditorPlayState) -> Option<PlayControlAction> {
+    pub fn render(
+        &self,
+        ui: &mut UIContext,
+        state: EditorPlayState,
+        theme: &EditorTheme,
+    ) -> Option<PlayControlAction> {
         let mut action = None;
         let x = self.position.x;
         let y = self.position.y;
@@ -62,15 +68,14 @@ impl PlayControls {
         ui.line(
             Vec2::new(sep_x, y + 4.0),
             Vec2::new(sep_x, y + self.button_size - 4.0),
-            Color::new(0.4, 0.4, 0.4, 0.6),
+            theme.separator,
             1.0,
         );
 
         match state {
             EditorPlayState::Editing => {
                 let btn = Rect::new(x, y, self.button_size, self.button_size);
-                // Green tint behind play button
-                ui.rect_rounded(btn, Color::new(0.15, 0.35, 0.15, 1.0), 4.0);
+                ui.rect_rounded(btn, theme.play_button_bg, 4.0);
                 if ui.button("play_ctrl_play", "Play", btn) {
                     action = Some(PlayControlAction::Play);
                 }
@@ -83,21 +88,21 @@ impl PlayControls {
 
                 let stop_x = x + self.button_size + self.spacing;
                 let stop_btn = Rect::new(stop_x, y, self.button_size, self.button_size);
-                ui.rect_rounded(stop_btn, Color::new(0.4, 0.15, 0.15, 1.0), 4.0);
+                ui.rect_rounded(stop_btn, theme.stop_button_bg, 4.0);
                 if ui.button("play_ctrl_stop", "Stop", stop_btn) {
                     action = Some(PlayControlAction::Stop);
                 }
             }
             EditorPlayState::Paused => {
                 let resume_btn = Rect::new(x, y, self.button_size + 10.0, self.button_size);
-                ui.rect_rounded(resume_btn, Color::new(0.15, 0.35, 0.15, 1.0), 4.0);
+                ui.rect_rounded(resume_btn, theme.play_button_bg, 4.0);
                 if ui.button("play_ctrl_resume", "Resume", resume_btn) {
                     action = Some(PlayControlAction::Play);
                 }
 
                 let stop_x = x + self.button_size + 10.0 + self.spacing;
                 let stop_btn = Rect::new(stop_x, y, self.button_size, self.button_size);
-                ui.rect_rounded(stop_btn, Color::new(0.4, 0.15, 0.15, 1.0), 4.0);
+                ui.rect_rounded(stop_btn, theme.stop_button_bg, 4.0);
                 if ui.button("play_ctrl_stop2", "Stop", stop_btn) {
                     action = Some(PlayControlAction::Stop);
                 }

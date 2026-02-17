@@ -12,6 +12,8 @@ use crate::{
     picking::EntityPicker,
     play_controls::PlayControls,
     play_state::EditorPlayState,
+    status_bar::StatusBar,
+    theme::EditorTheme,
     viewport::SceneViewport,
     viewport_input::ViewportInputHandler,
     DockArea, DockPanel, DockPosition, EditorTool, Gizmo, GizmoMode, MenuBar, PanelId, Selection,
@@ -55,6 +57,10 @@ pub struct EditorContext {
     is_dirty: bool,
     /// Current scene file path (None = untitled/new scene)
     scene_path: Option<std::path::PathBuf>,
+    /// Centralized design-system theme
+    pub theme: EditorTheme,
+    /// Status bar at the bottom of the editor
+    pub status_bar: StatusBar,
 }
 
 impl Default for EditorContext {
@@ -90,9 +96,13 @@ impl EditorContext {
                 .with_min_size(100.0),
         );
 
+        let theme = EditorTheme::default();
+        let mut gizmo = Gizmo::new();
+        gizmo.apply_theme(&theme);
+
         Self {
             selection: Selection::new(),
-            gizmo: Gizmo::new(),
+            gizmo,
             toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)), // Inside scene view, below panel header
             menu_bar: MenuBar::editor_default(),
             dock_area,
@@ -108,6 +118,8 @@ impl EditorContext {
             add_component_popup_open: false,
             is_dirty: false,
             scene_path: None,
+            theme,
+            status_bar: StatusBar::new(),
         }
     }
 
@@ -360,13 +372,14 @@ impl EditorContext {
     /// This should be called each frame before rendering to ensure
     /// panels are properly sized and viewport bounds are updated.
     pub fn update_layout(&mut self, window_size: Vec2) {
-        // Reserve space for menu bar
+        // Reserve space for menu bar (top) and status bar (bottom)
         let menu_height = self.menu_bar.height();
+        let status_bar_height = crate::status_bar::STATUS_BAR_HEIGHT;
         let content_bounds = common::Rect::new(
             0.0,
             menu_height,
             window_size.x,
-            window_size.y - menu_height,
+            window_size.y - menu_height - status_bar_height,
         );
 
         self.dock_area.set_bounds(content_bounds);

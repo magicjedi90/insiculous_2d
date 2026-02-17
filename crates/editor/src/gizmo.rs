@@ -6,6 +6,8 @@
 use glam::Vec2;
 use ui::{Color, Rect, UIContext};
 
+use crate::theme::EditorTheme;
+
 /// The type of gizmo operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GizmoMode {
@@ -149,6 +151,13 @@ impl Gizmo {
     /// Get the gizmo position.
     pub fn position(&self) -> Vec2 {
         self.position
+    }
+
+    /// Apply colors from the editor theme.
+    pub fn apply_theme(&mut self, theme: &EditorTheme) {
+        self.color_x = theme.gizmo_x;
+        self.color_y = theme.gizmo_y;
+        self.color_center = theme.gizmo_center;
     }
 
     /// Set the entity rotation (for rotation gizmo display).

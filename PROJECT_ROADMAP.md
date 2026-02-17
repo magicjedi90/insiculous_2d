@@ -23,12 +23,12 @@ This roadmap targets a purpose-built 2D editor — not a 3D engine with 2D bolte
 | Renderer | 62 | 100% pass |
 | Audio | 3 | 100% pass |
 | UI | 60 | 100% pass |
-| Editor | 196 | 100% pass |
+| Editor | 213 | 100% pass |
 | Editor Integration | 72 | 100% pass |
 | ECS Macros | 3 | 100% pass |
 | Common | 26 | 100% pass |
 
-**Total:** 707 tests passing (100% success rate)
+**Total:** 724 tests passing (100% success rate)
 **Code Quality:** 0 TODOs, 155+ assertions, 29 ignored (GPU/window only)
 
 ### Completed Engine Features
@@ -406,34 +406,34 @@ Replace the single asset browser placeholder with a tabbed panel system supporti
   - Double-click tab to collapse/expand
   - Drag top edge to resize
 
-#### 2F. Status Bar
+#### 2F. Status Bar ✅ COMPLETE (February 2026)
 Persistent status bar at the very bottom of the editor window, below all panels.
 
-- [ ] **Status bar layout** - Full-width bar (22px height) with three sections
+- [x] **Status bar layout** - Full-width bar (22px height) with three sections
   - Left: Status message (e.g., "Ready", "Saving...", "Entity created", undo command name)
-  - Center: Runtime stats — `Objects: 42 | FPS: 60 | VRAM: 128MB`
-  - Right: Version string (e.g., "v2.0.1 - Stable")
-- [ ] **Object count** - Live entity count from ECS world
-- [ ] **FPS counter** - Smoothed frames-per-second from game loop
+  - Center: Runtime stats — `Objects: 42 | FPS: 60`
+  - Right: Version string (e.g., "v0.1.0") in accent-cyan
+- [x] **Object count** - Live entity count from ECS world
+- [x] **FPS counter** - Smoothed frames-per-second from game loop
 - [ ] **VRAM estimate** - Approximate GPU memory usage from renderer
   - Texture memory + buffer memory
   - Updated every 60 frames (not every frame)
-- [ ] **Status messages** - Contextual messages that auto-clear after 3 seconds
-  - "Entity created" after Create Entity
+- [x] **Status messages** - Contextual messages that auto-clear after 3 seconds
   - "Scene saved" after Ctrl+S
-  - "Undo: Move Entity" after Ctrl+Z
-  - Error messages persist until dismissed
+  - "Scene loaded" after Ctrl+O
+  - "Undo: <command>" / "Redo: <command>" after Ctrl+Z/Y
+  - Error messages persist until explicitly dismissed
 
-#### 2G. Design System Theme Implementation
+#### 2G. Design System Theme Implementation — STARTED (February 2026)
 Apply the design system colors, typography, and spacing to all existing editor UI.
 
-- [ ] **Theme constants** - Centralized color/spacing definitions
-  - `EditorTheme` struct with all design system tokens
-  - Used by all panels, toolbar, status bar, menus
-  - Replaces any hardcoded colors scattered across editor code
-- [ ] **Panel border styling** - All panels bordered with `border-panel` (#007acc)
-  - Consistent 1px border on all panels
-  - Panel headers use `accent-cyan` text on `bg-primary` background
+- [x] **Theme constants** - Centralized color/spacing definitions
+  - `EditorTheme` struct with all design system tokens (30+ color fields)
+  - `editor/src/theme.rs` — single source of truth for all editor colors
+  - Theme stored on `EditorContext`, passed to dock, play controls, panel renderer
+  - Converter methods: `grid_colors()`, `inspector_style()`, `editable_field_style()`, `play_state_border()`
+  - Replaced hardcoded colors in: dock.rs, play_controls.rs, panel_renderer.rs, gizmo.rs
+- [x] **Panel border styling** - Panel headers use `accent-cyan` text on `bg-header` background
 - [ ] **Input field styling** - Consistent input appearance
   - `bg-input` (#2d2d2d) background for all text/number inputs
   - `text-primary` for values, `text-secondary` for labels

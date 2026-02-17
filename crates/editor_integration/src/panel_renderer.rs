@@ -41,35 +41,38 @@ pub fn render_panel_content(
 
 /// Scene view — grid info, viewport origin crosshair, and play-state border.
 fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: common::Rect) {
+    let theme = &editor.theme;
     let padding = 8.0;
     let content_x = bounds.x + padding;
     let y = bounds.y + padding;
 
     if editor.is_grid_visible() {
-        ctx.ui.label(
+        ctx.ui.label_styled(
             &format!("Grid: {}px", editor.grid_size()),
             Vec2::new(content_x, y),
+            theme.text_muted,
+            12.0,
         );
     }
 
     // Draw viewport origin crosshair
     let center = bounds.center();
-    ctx.ui.circle(center, 5.0, ui::Color::new(0.3, 0.3, 0.3, 1.0));
+    ctx.ui.circle(center, 5.0, theme.border_subtle);
     ctx.ui.line(
         Vec2::new(center.x - 20.0, center.y),
         Vec2::new(center.x + 20.0, center.y),
-        ui::Color::new(0.4, 0.4, 0.4, 1.0),
+        theme.separator,
         1.0,
     );
     ctx.ui.line(
         Vec2::new(center.x, center.y - 20.0),
         Vec2::new(center.x, center.y + 20.0),
-        ui::Color::new(0.4, 0.4, 0.4, 1.0),
+        theme.separator,
         1.0,
     );
 
     // Play-state border tint
-    let border_color = editor.play_state().border_color();
+    let border_color = theme.play_state_border(editor.play_state());
     let w = if editor.in_play_session() { 3.0 } else { 1.0 };
 
     // Top
@@ -494,7 +497,7 @@ fn render_inspector_editable(
                 ctx.ui.label_styled(
                     category.label(),
                     Vec2::new(content_x + 8.0, popup_y),
-                    ui::Color::new(0.6, 0.6, 0.6, 1.0),
+                    editor.theme.text_muted,
                     12.0,
                 );
                 popup_y += 18.0;

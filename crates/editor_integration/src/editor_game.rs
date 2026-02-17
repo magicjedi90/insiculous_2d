@@ -107,6 +107,7 @@ impl<G: Game> EditorGame<G> {
 
         self.editor.set_scene_path(Some(path.clone()));
         self.editor.set_dirty(false);
+        self.editor.status_bar.show_message("Scene saved");
         log::info!("Scene saved to: {:?}", path);
         Ok(())
     }
@@ -136,6 +137,7 @@ impl<G: Game> EditorGame<G> {
         self.command_history = editor::CommandHistory::new();
         self.editor.selection.clear();
         self.gizmo_drag_start = None;
+        self.editor.status_bar.show_message("Scene loaded");
 
         Ok(())
     }
@@ -307,10 +309,16 @@ impl<G: Game> Game for EditorGame<G> {
                     }
                 }
                 "Undo" if !self.editor.is_playing() => {
+                    if let Some(name) = self.command_history.undo_name() {
+                        self.editor.status_bar.show_message(format!("Undo: {}", name));
+                    }
                     self.command_history.undo(ctx.world);
                     self.editor.mark_dirty();
                 }
                 "Redo" if !self.editor.is_playing() => {
+                    if let Some(name) = self.command_history.redo_name() {
+                        self.editor.status_bar.show_message(format!("Redo: {}", name));
+                    }
                     self.command_history.redo(ctx.world);
                     self.editor.mark_dirty();
                 }
@@ -325,12 +333,14 @@ impl<G: Game> Game for EditorGame<G> {
                 }
                 "Save" => {
                     if let Err(e) = self.save_scene(ctx.world, ctx.assets) {
+                        self.editor.status_bar.show_error(format!("Save failed: {}", e));
                         log::error!("Failed to save: {}", e);
                     }
                 }
                 "Save As..." => {
                     let path = PathBuf::from("scenes/scene.ron");
                     if let Err(e) = self.save_scene_as(ctx.world, ctx.assets, path) {
+                        self.editor.status_bar.show_error(format!("Save failed: {}", e));
                         log::error!("Failed to save: {}", e);
                     }
                 }
@@ -351,13 +361,15 @@ impl<G: Game> Game for EditorGame<G> {
                 toolbar_bounds.y,
             );
             let play_state = self.editor.play_state();
-            if let Some(action) = self.editor.play_controls.render(ctx.ui, play_state) {
+            let theme = &self.editor.theme;
+            if let Some(action) = self.editor.play_controls.render(ctx.ui, play_state, theme) {
                 self.handle_play_action(action, ctx.world);
             }
         }
 
         // 5. Dock panel frames + resize handles
-        let content_areas = self.editor.dock_area.render(ctx.ui);
+        let theme = &self.editor.theme;
+        let content_areas = self.editor.dock_area.render(ctx.ui, theme);
         self.editor.dock_area.handle_resize(ctx.ui);
 
         // 6. Panel content (each panel gets its own push/pop clip rect)
@@ -507,29 +519,17 @@ impl<G: Game> Game for EditorGame<G> {
             }
         }
 
-        // 11. Status bar (includes play state, scene name, dirty indicator, undo info)
-        let info_y = window_size.y - 30.0;
-        let undo_info = if let Some(name) = self.command_history.undo_name() {
-            format!("Undo: {}", name)
-        } else {
-            "Ready".to_string()
-        };
-        let scene_name = self.editor.scene_display_name();
-        let dirty_indicator = if self.editor.is_dirty() { "*" } else { "" };
-        ctx.ui.label(
-            &format!(
-                "{}{} | Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x | {} | {}",
-                scene_name,
-                dirty_indicator,
-                self.editor.current_tool(),
-                if self.editor.is_grid_visible() { "ON" } else { "OFF" },
-                if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
-                self.editor.camera_zoom(),
-                self.editor.play_state().label(),
-                undo_info,
-            ),
-            Vec2::new(10.0, info_y),
-        );
+        // 11. Status bar
+        {
+            // Update FPS (smoothed) and entity count
+            let fps = if ctx.delta_time > 0.0 { 1.0 / ctx.delta_time } else { 0.0 };
+            let smoothed_fps = fps.min(999.0); // Cap for display
+            self.editor.status_bar.update_stats(ctx.world.entity_count(), smoothed_fps);
+            self.editor.status_bar.update(ctx.delta_time);
+
+            let theme = &self.editor.theme;
+            self.editor.status_bar.render(ctx.ui, window_size, theme);
+        }
     }
 
     fn render(&mut self, ctx: &mut RenderContext) {

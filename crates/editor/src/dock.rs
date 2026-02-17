@@ -3,9 +3,10 @@
 //! Provides a flexible layout system with dockable panels that can be
 //! positioned at different edges of the window or floated.
 
-use ui::{Color, Rect, TextAlign, UIContext, WidgetId};
+use ui::{Rect, UIContext, WidgetId};
 
 use crate::layout::{DEFAULT_PANEL_WIDTH, HEADER_HEIGHT, MIN_PANEL_SIZE, RESIZE_HANDLE_SIZE};
+use crate::theme::EditorTheme;
 
 /// Unique identifier for a dock panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -234,7 +235,7 @@ impl DockArea {
     /// Returns the content bounds for each visible panel. The caller should:
     /// 1. Render content within each bounds
     /// 2. Call `end_panel_content(ui)` after rendering each panel's content
-    pub fn render(&mut self, ui: &mut UIContext) -> Vec<(PanelId, Rect)> {
+    pub fn render(&mut self, ui: &mut UIContext, theme: &EditorTheme) -> Vec<(PanelId, Rect)> {
         let mut content_areas = Vec::new();
 
         for panel in &self.panels {
@@ -254,10 +255,11 @@ impl DockArea {
                 panel.bounds.width,
                 self.header_height,
             );
-            ui.rect_rounded(header_bounds, Color::new(0.15, 0.15, 0.15, 1.0), 0.0);
+            ui.rect_rounded(header_bounds, theme.bg_header, 0.0);
 
-            // Draw panel title - properly centered
-            ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
+            // Draw panel title in accent color
+            let title_pos = glam::Vec2::new(header_bounds.x + 8.0, header_bounds.y + 4.0);
+            ui.label_styled(&panel.title, title_pos, theme.accent_cyan, 14.0);
 
             // Track content area (caller will push/pop clip rect around each panel's content)
             let content = panel.content_bounds();

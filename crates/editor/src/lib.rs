@@ -37,7 +37,9 @@ mod picking;
 mod play_controls;
 mod play_state;
 mod selection;
+pub mod status_bar;
 pub mod stored_component;
+pub mod theme;
 mod toolbar;
 mod viewport;
 mod viewport_input;
@@ -69,6 +71,8 @@ pub use picking::{EntityPicker, PickResult, PickableEntity, SelectionRect, AABB}
 pub use play_controls::{PlayControlAction, PlayControls};
 pub use play_state::EditorPlayState;
 pub use selection::Selection;
+pub use status_bar::{StatusBar, StatusBarStats, STATUS_BAR_HEIGHT};
+pub use theme::EditorTheme;
 pub use toolbar::{EditorTool, Toolbar};
 pub use viewport::SceneViewport;
 pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInputResult};
@@ -82,8 +86,9 @@ pub mod prelude {
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
         DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
         EditorPlayState, EditorPreferences, EditorTool, EditableFieldStyle, EditableInspector,
-        EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer, HierarchyPanel,
-        InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult, PickableEntity,
+        EditorTheme, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer,
+        HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
+        PickableEntity, StatusBar, StatusBarStats, STATUS_BAR_HEIGHT,
         PlayControlAction, PlayControls, RigidBodyEditResult, SceneViewport, Selection,
         SelectionRect, SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig,
         ViewportInputHandler, ViewportInputResult, AABB,
