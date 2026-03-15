@@ -105,6 +105,17 @@ impl PhysicsSystem {
         self.collision_callbacks.len()
     }
 
+    /// Clear all physics state, forcing re-sync from ECS on next update.
+    ///
+    /// Preserves configuration (gravity, scale, callbacks) but resets all
+    /// rapier bodies, colliders, and entity mappings. Call this when the
+    /// editor restores a world snapshot to ensure physics re-initializes
+    /// from the restored ECS component values.
+    pub fn clear(&mut self) {
+        self.physics_world.clear();
+        self.time_accumulator = 0.0;
+    }
+
     /// Get a reference to the physics world
     pub fn physics_world(&self) -> &PhysicsWorld {
         &self.physics_world
@@ -390,6 +401,72 @@ mod tests {
 
         // Note: Without actual collisions, the callbacks won't be invoked,
         // but this test verifies the API works correctly
+    }
+
+    #[test]
+    fn test_clear_resets_physics_state() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::new(0.0, 100.0))).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+        assert!(system.physics_world().has_rigid_body(entity));
+
+        system.clear();
+
+        assert!(!system.physics_world().has_rigid_body(entity));
+        assert_eq!(system.physics_world().rigid_body_count(), 0);
+    }
+
+    #[test]
+    fn test_clear_allows_resync_from_ecs() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::new(0.0, 100.0))).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        // Run physics for several frames (body falls due to gravity)
+        system.initialize(&mut world).unwrap();
+        for _ in 0..30 {
+            system.update(&mut world, 1.0 / 60.0);
+        }
+        let fallen_y = world.get::<Transform2D>(entity).unwrap().position.y;
+        assert!(fallen_y < 100.0, "Body should have fallen");
+
+        // Restore original position in ECS (simulating snapshot restore)
+        if let Some(t) = world.get_mut::<Transform2D>(entity) {
+            t.position = Vec2::new(0.0, 100.0);
+        }
+        if let Some(rb) = world.get_mut::<RigidBody>(entity) {
+            rb.velocity = Vec2::ZERO;
+        }
+
+        // Clear physics and update — should re-sync from ECS
+        system.clear();
+        system.update(&mut world, 0.0); // Zero dt to just sync without stepping
+
+        let pos = world.get::<Transform2D>(entity).unwrap().position;
+        assert_eq!(pos, Vec2::new(0.0, 100.0), "Position should match restored ECS state");
+    }
+
+    #[test]
+    fn test_clear_preserves_callbacks() {
+        let mut system = PhysicsSystem::new();
+        system.add_collision_callback(|_| {});
+        system.add_collision_callback(|_| {});
+        assert_eq!(system.collision_callback_count(), 2);
+
+        system.clear();
+
+        assert_eq!(system.collision_callback_count(), 2, "Callbacks should survive clear");
     }
 
     #[test]

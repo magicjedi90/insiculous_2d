@@ -161,6 +161,13 @@ impl Game for PlatformerGame {
                    total, roots, total - roots);
     }
 
+    fn on_play_stopped(&mut self, _ctx: &mut GameContext) {
+        // Clear rapier physics world so it re-syncs from restored ECS state
+        if let Some(physics) = &mut self.physics {
+            physics.clear();
+        }
+    }
+
     fn update(&mut self, ctx: &mut GameContext) {
         // Jump sound
         if ctx.input.is_key_just_pressed(KeyCode::Space) {

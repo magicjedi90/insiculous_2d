@@ -110,6 +110,11 @@ pub trait Game: Sized + 'static {
         render_ui_commands(ctx.sprites, ctx.ui_commands, ctx.window_size, ctx.glyph_textures);
     }
 
+    /// Called by the editor when play mode is stopped and the world has been
+    /// restored to its pre-play state. Override this to reset any non-ECS state
+    /// (e.g., physics world) that was modified during play.
+    fn on_play_stopped(&mut self, _ctx: &mut GameContext) {}
+
     /// Called when a key is pressed. Override for custom key handling.
     fn on_key_pressed(&mut self, _key: KeyCode, _ctx: &mut GameContext) {}
 

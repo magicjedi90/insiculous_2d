@@ -178,7 +178,10 @@ impl<G: Game> EditorGame<G> {
     }
 
     /// Handle a play control action (Play, Pause, Stop).
-    fn handle_play_action(&mut self, action: PlayControlAction, world: &mut ecs::World) {
+    ///
+    /// Returns `true` if a Stop was performed (world restored from snapshot),
+    /// so the caller can notify the inner game via `on_play_stopped`.
+    fn handle_play_action(&mut self, action: PlayControlAction, world: &mut ecs::World) -> bool {
         match action {
             PlayControlAction::Play => {
                 if self.editor.is_editing() {
@@ -195,12 +198,14 @@ impl<G: Game> EditorGame<G> {
                     self.editor.close_add_component_popup();
                     log::info!("Play: resumed from pause");
                 }
+                false
             }
             PlayControlAction::Pause => {
                 if self.editor.is_playing() {
                     self.editor.set_play_state(EditorPlayState::Paused);
                     log::info!("Paused");
                 }
+                false
             }
             PlayControlAction::Stop => {
                 if self.editor.in_play_session() {
@@ -210,6 +215,9 @@ impl<G: Game> EditorGame<G> {
                         log::info!("Stop: world restored from snapshot");
                     }
                     self.editor.set_play_state(EditorPlayState::Editing);
+                    true
+                } else {
+                    false
                 }
             }
         }
@@ -363,7 +371,9 @@ impl<G: Game> Game for EditorGame<G> {
             let play_state = self.editor.play_state();
             let theme = &self.editor.theme;
             if let Some(action) = self.editor.play_controls.render(ctx.ui, play_state, theme) {
-                self.handle_play_action(action, ctx.world);
+                if self.handle_play_action(action, ctx.world) {
+                    self.inner.on_play_stopped(ctx);
+                }
             }
         }
 
@@ -545,7 +555,9 @@ impl<G: Game> Game for EditorGame<G> {
         // Play state shortcuts (always intercepted)
         if key == KeyCode::KeyP && ctrl && shift {
             // Ctrl+Shift+P → Stop
-            self.handle_play_action(PlayControlAction::Stop, ctx.world);
+            if self.handle_play_action(PlayControlAction::Stop, ctx.world) {
+                self.inner.on_play_stopped(ctx);
+            }
             return;
         }
         if key == KeyCode::KeyP && ctrl {

@@ -31,13 +31,13 @@ struct EntitySnapshot {
     // Audio
     audio_source: Option<AudioSource>,
     audio_listener: Option<AudioListener>,
-    // Hierarchy
-    parent: Option<Parent>,
-    children: Option<Children>,
-    // Behaviors
+    // Behavior
     behavior: Option<Behavior>,
     behavior_state: Option<BehaviorState>,
     entity_tag: Option<EntityTag>,
+    // Hierarchy
+    parent: Option<Parent>,
+    children: Option<Children>,
 }
 
 impl EntitySnapshot {
@@ -55,11 +55,11 @@ impl EntitySnapshot {
             collider: world.get::<Collider>(id).cloned(),
             audio_source: world.get::<AudioSource>(id).cloned(),
             audio_listener: world.get::<AudioListener>(id).cloned(),
-            parent: world.get::<Parent>(id).cloned(),
-            children: world.get::<Children>(id).cloned(),
             behavior: world.get::<Behavior>(id).cloned(),
             behavior_state: world.get::<BehaviorState>(id).cloned(),
             entity_tag: world.get::<EntityTag>(id).cloned(),
+            parent: world.get::<Parent>(id).cloned(),
+            children: world.get::<Children>(id).cloned(),
         }
     }
 
@@ -76,11 +76,11 @@ impl EntitySnapshot {
         if let Some(c) = self.collider { world.add_component(&id, c).ok(); }
         if let Some(c) = self.audio_source { world.add_component(&id, c).ok(); }
         if let Some(c) = self.audio_listener { world.add_component(&id, c).ok(); }
-        if let Some(c) = self.parent { world.add_component(&id, c).ok(); }
-        if let Some(c) = self.children { world.add_component(&id, c).ok(); }
         if let Some(c) = self.behavior { world.add_component(&id, c).ok(); }
         if let Some(c) = self.behavior_state { world.add_component(&id, c).ok(); }
         if let Some(c) = self.entity_tag { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.parent { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.children { world.add_component(&id, c).ok(); }
     }
 }
 
@@ -241,7 +241,6 @@ mod tests {
     fn test_snapshot_preserves_behavior_components() {
         let mut world = World::new();
         let entity = world.create_entity();
-
         let behavior = Behavior::PlayerPlatformer {
             move_speed: 150.0,
             jump_impulse: 500.0,
