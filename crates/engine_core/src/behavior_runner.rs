@@ -15,6 +15,19 @@ use input::GameAction;
 use input::InputHandler;
 use physics::{PhysicsSystem, RigidBody, RigidBodyType};
 
+/// Event emitted when a collectible entity is picked up.
+/// Read these via `world.read_events::<EntityCollected>()` to update
+/// score, play sounds, spawn particles, etc.
+#[derive(Debug, Clone)]
+pub struct EntityCollected {
+    /// The collectible entity that was collected (may already be despawned)
+    pub entity: EntityId,
+    /// The score value of the collectible
+    pub score_value: u32,
+    /// The collector entity's tag
+    pub collector_tag: String,
+}
+
 /// Processes behavior components for all entities.
 ///
 /// The `BehaviorRunner` iterates over all entities with `Behavior` components
@@ -90,6 +103,9 @@ impl BehaviorRunner {
 
         // Collect tag assignments to apply after iteration
         let mut tag_assignments: Vec<(EntityId, String)> = Vec::new();
+
+        // Collect events to emit after iteration
+        let mut collected_events: Vec<EntityCollected> = Vec::new();
 
         // Process all entities with behaviors directly - avoid cloning
         for entity in world.entities() {
@@ -235,6 +251,11 @@ impl BehaviorRunner {
                 Behavior::Collectible { score_value, despawn_on_collect, collector_tag } => {
                         if Self::check_tagged_overlap(world, entity, collector_tag, 40.0) {
                             log::info!("Collected! +{} points", score_value);
+                            collected_events.push(EntityCollected {
+                                entity,
+                                score_value: *score_value,
+                                collector_tag: collector_tag.clone(),
+                            });
                             if *despawn_on_collect {
                                 to_despawn.push(entity);
                             }
@@ -283,6 +304,11 @@ impl BehaviorRunner {
             for (entity, impulse) in impulse_commands {
                 physics.apply_impulse(entity, impulse);
             }
+        }
+
+        // Emit collection events before despawning
+        for event in collected_events {
+            world.emit_event(event);
         }
 
         // Remove collected entities

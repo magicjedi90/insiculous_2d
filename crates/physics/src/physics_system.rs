@@ -270,7 +270,13 @@ impl System for PhysicsSystem {
         // Sync physics results back to ECS
         self.sync_physics_to_ecs(world);
 
-        // Process collision callbacks (all registered callbacks receive each event)
+        // Emit collision events to world event bus (available to any system)
+        let events = self.physics_world.collision_events();
+        for collision in events {
+            world.emit_event(collision.clone());
+        }
+
+        // Process legacy collision callbacks (all registered callbacks receive each event)
         if !self.collision_callbacks.is_empty() {
             let events = self.physics_world.collision_events();
             for collision in events {

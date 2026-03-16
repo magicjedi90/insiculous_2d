@@ -14,7 +14,7 @@ pub use crate::{
     scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, BehaviorData, SceneLoadError},
     scene_loader::{SceneLoader, SceneInstance},
     // Behavior system
-    behavior_runner::BehaviorRunner,
+    behavior_runner::{BehaviorRunner, EntityCollected},
     // Game loop
     game_loop::{GameLoop, GameLoopConfig},
     init,
@@ -37,6 +37,7 @@ pub use ecs::hierarchy_system::TransformHierarchySystem;
 pub use ecs::WorldHierarchyExt;
 pub use ecs::System;
 pub use ecs::behavior::Behavior;
+pub use ecs::{StateMachine, HierarchicalStateMachine, EventBus, ResourceStorage};
 
 // Re-export input types (KeyCode re-exported through input crate, not directly from winit)
 pub use input::prelude::KeyCode;

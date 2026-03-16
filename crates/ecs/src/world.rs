@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::component::{Component, ComponentRegistry};
 use crate::entity::{Entity, EntityId};
+use crate::event::EventBus;
 use crate::generation::EntityGeneration;
+use crate::resource::ResourceStorage;
 use crate::system::SystemRegistry;
 use crate::query::QueryTypes;
 use crate::EcsError;
@@ -37,6 +39,10 @@ pub struct World {
     components: ComponentRegistry,
     /// The system registry
     systems: SystemRegistry,
+    /// Typed singleton resources for cross-system state
+    resources: ResourceStorage,
+    /// Typed event bus for loose-coupled system communication
+    events: EventBus,
     /// Whether the world is initialized
     initialized: bool,
     /// Whether the world is running
@@ -58,6 +64,8 @@ impl World {
             entity_generations: HashMap::with_capacity(config.entity_capacity),
             components: ComponentRegistry::new(),
             systems: SystemRegistry::new(),
+            resources: ResourceStorage::new(),
+            events: EventBus::new(),
             initialized: false,
             running: false,
             config,
@@ -373,6 +381,55 @@ impl World {
         self.entity_generations.insert(id, generation);
         self.entities.insert(id, entity);
         id
+    }
+
+    // --- Resources (typed singleton state) ---
+
+    /// Insert a resource, replacing any previous value of the same type.
+    pub fn insert_resource<T: Send + Sync + 'static>(&mut self, resource: T) {
+        self.resources.insert(resource);
+    }
+
+    /// Get an immutable reference to a resource by type.
+    pub fn resource<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.resources.get::<T>()
+    }
+
+    /// Get a mutable reference to a resource by type.
+    pub fn resource_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.resources.get_mut::<T>()
+    }
+
+    /// Remove a resource by type, returning it if it existed.
+    pub fn remove_resource<T: Send + Sync + 'static>(&mut self) -> Option<T> {
+        self.resources.remove::<T>()
+    }
+
+    /// Check if a resource of the given type exists.
+    pub fn has_resource<T: Send + Sync + 'static>(&self) -> bool {
+        self.resources.contains::<T>()
+    }
+
+    // --- Events (typed per-frame messaging) ---
+
+    /// Emit an event. Readable by any system until the next `flush_events()`.
+    pub fn emit_event<E: Send + Sync + 'static>(&mut self, event: E) {
+        self.events.emit(event);
+    }
+
+    /// Read all events of type `E` emitted since the last flush.
+    pub fn read_events<E: Send + Sync + 'static>(&self) -> &[E] {
+        self.events.read::<E>()
+    }
+
+    /// Check if there are any pending events of type `E`.
+    pub fn has_events<E: Send + Sync + 'static>(&self) -> bool {
+        self.events.has_events::<E>()
+    }
+
+    /// Clear all event queues. Call at the end of each frame.
+    pub fn flush_events(&mut self) {
+        self.events.flush();
     }
 
     /// Get world configuration

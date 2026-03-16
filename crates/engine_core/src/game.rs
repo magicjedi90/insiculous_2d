@@ -311,6 +311,9 @@ impl<G: Game> GameRunner<G> {
             return;
         }
 
+        // Flush events from previous frame before processing new input
+        self.scene.world.flush_events();
+
         // Process queued input events FIRST so UI sees fresh mouse/keyboard state
         self.input.process_queued_events();
 

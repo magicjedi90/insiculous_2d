@@ -23,6 +23,33 @@ use ecs::hierarchy_system::TransformHierarchySystem;
 use ecs::WorldHierarchyExt;
 use std::path::Path;
 
+// --- Resources ---
+#[derive(Debug, Clone)]
+struct GameState {
+    score: u32,
+    coins_collected: u32,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self { score: 0, coins_collected: 0 }
+    }
+}
+
+// --- State Machine ---
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerState { Idle, Running, Jumping, Falling }
+
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerGroup { OnGround, InAir }
+
+fn player_group(state: &PlayerState) -> PlayerGroup {
+    match state {
+        PlayerState::Idle | PlayerState::Running => PlayerGroup::OnGround,
+        PlayerState::Jumping | PlayerState::Falling => PlayerGroup::InAir,
+    }
+}
+
 /// Platformer game — same logic as hello_world.rs.
 struct PlatformerGame {
     physics: Option<PhysicsSystem>,
@@ -138,6 +165,15 @@ impl Game for PlatformerGame {
         // Add Name components for editor hierarchy display
         self.add_editor_names(ctx);
 
+        // --- Resources & State Machine ---
+        ctx.world.insert_resource(GameState::default());
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            ctx.world.add_component(
+                &player,
+                HierarchicalStateMachine::new(PlayerState::Idle, player_group),
+            ).ok();
+        }
+
         // Try to load sound effects
         match ctx.audio.load_sound("examples/assets/sounds/snd_jump.wav") {
             Ok(handle) => {
@@ -211,6 +247,30 @@ impl Game for PlatformerGame {
         {
             use ecs::System;
             self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
+        }
+
+        // --- Events: process collection events ---
+        let collected: Vec<EntityCollected> = ctx.world.read_events::<EntityCollected>().to_vec();
+        for event in &collected {
+            if let Some(state) = ctx.world.resource_mut::<GameState>() {
+                state.score += event.score_value;
+                state.coins_collected += 1;
+            }
+        }
+
+        // --- State Machine: update player state from velocity ---
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            let vel = ctx.world.get::<RigidBody>(player)
+                .map(|rb| rb.velocity)
+                .unwrap_or(glam::Vec2::ZERO);
+            let new_state = if vel.y > 10.0 { PlayerState::Jumping }
+                else if vel.y < -10.0 { PlayerState::Falling }
+                else if vel.x.abs() > 5.0 { PlayerState::Running }
+                else { PlayerState::Idle };
+            if let Some(sm) = ctx.world.get_mut::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
+                sm.transition_to(new_state);
+                sm.tick(ctx.delta_time);
+            }
         }
 
         // In-game UI (only when the editor delegates update to us)
