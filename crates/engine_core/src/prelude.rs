@@ -33,6 +33,10 @@ pub use glam::{Vec2, Vec4};
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::Sprite;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
+pub use ecs::hierarchy_system::TransformHierarchySystem;
+pub use ecs::WorldHierarchyExt;
+pub use ecs::System;
+pub use ecs::behavior::Behavior;
 
 // Re-export input types (KeyCode re-exported through input crate, not directly from winit)
 pub use input::prelude::KeyCode;

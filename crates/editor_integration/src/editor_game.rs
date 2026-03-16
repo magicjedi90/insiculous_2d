@@ -228,7 +228,7 @@ impl<G: Game> Game for EditorGame<G> {
     fn init(&mut self, ctx: &mut GameContext) {
         // Load font from common search paths
         let font_paths = [
-            "examples/assets/fonts/font.ttf",
+            "assets/fonts/font.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",

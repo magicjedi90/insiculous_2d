@@ -1,10 +1,10 @@
 # Insiculous 2D - Project Roadmap
 
-## Target: IDEAL 2D GAME ENGINE EDITOR
+## Target: SHIP A GAME WITH THE ENGINE
 
-**Reference mockup:** `crates/editor/IdealEditor.png`
+This roadmap prioritizes proving the engine works by shipping a real game. Editor polish and advanced tooling are secondary — they get built when they unblock game development, not before.
 
-This roadmap targets a purpose-built 2D editor — not a 3D engine with 2D bolted on. Every design decision prioritizes pixel-perfect 2D workflows, orthographic viewports, and sprite-native tooling. The editor should feel like a specialized 2D tool on par with Godot and Unity's 2D mode.
+**Reference mockup:** `crates/editor/IdealEditor.png` (editor UI target, now Phase 2D backlog)
 
 ---
 
@@ -66,7 +66,11 @@ This roadmap targets a purpose-built 2D editor — not a 3D engine with 2D bolte
 - Selection system (single, multi, toggle, primary entity)
 - Undo/redo system (command pattern, 100-entry history, command merging for continuous edits)
 
-**Verification:** `cargo run --example hello_world` (platformer demo), `cargo run --example editor_demo --features editor` (editor UI)
+**Verification:**
+- `cargo run --example hello_world` (platformer demo)
+- `cargo run --example editor_demo --features editor` (editor UI)
+- `cargo run --bin editor --features editor -- ../my_platformer` (standalone editor on game project)
+- `cd ../my_platformer && cargo run` (standalone game)
 
 ---
 
@@ -265,196 +269,82 @@ Persist scene changes to disk and reload them.
 
 ---
 
-### Phase 2: Ideal Editor UI (Mockup-Driven) 🎯 NEXT
+### Phase 2: Ship a Game 🎯 NEXT
 
-**Goal:** Transform the functional editor into the polished, 2D-native tool shown in the design mockup. Focus on getting the visual layout pixel-perfect first, then add interactivity. Every pixel should communicate "this is a 2D-first editor."
+**Goal:** Prove the engine works by building and shipping a real standalone game. Editor improvements happen only when they directly block game development.
 
-**Reference:** `crates/editor/IdealEditor.png`
+---
 
-#### 2A. Top Toolbar Redesign
-Unified toolbar matching the mockup layout: play controls left, tool selection center-left, title center, status indicators center-right, action buttons right.
+#### 2A. Standalone Infrastructure ✅ COMPLETE (March 2026)
+Decouple the editor from games. Prove external consumption works.
 
-- [ ] **Toolbar layout overhaul** - Replace current toolbar with mockup layout
-  - Left section: Play (triangle), Pause (||), Stop (square) buttons with colored backgrounds
-  - Center-left: Tool icons — Select (cursor), Move (arrows), Rotate (arc), Scale (box) with visual feedback
-  - Center: Editor title "IDEAL 2D GAME ENGINE EDITOR" (or project name)
-  - Center subtitle: "Context-Aware - Modular - 2D-Optimized" tagline
-  - Center-right: Status indicators — `Grid: ON`, `Snap: 8px`, `Zoom: 100%` (clickable to toggle/edit)
-  - Right section: Save, Export, Settings buttons with icons
-- [ ] **Grid/Snap/Zoom toolbar indicators** - Live-updating status chips
-  - Grid toggle: click to toggle grid visibility (current state shown)
-  - Snap value: click to cycle snap sizes (1px, 2px, 4px, 8px, 16px, 32px, Off)
-  - Zoom level: shows current camera zoom percentage (mouse wheel to adjust)
-- [ ] **Save/Export/Settings buttons** - Quick-access toolbar actions
-  - Save: Ctrl+S (same as File > Save, with dirty indicator)
-  - Export: Opens export dialog (build/package game)
-  - Settings: Opens editor preferences panel
+- [x] **Standalone editor binary** - `cargo run --bin editor --features editor -- /path/to/project`
+  - `src/bin/editor.rs` — thin `Game` impl that accepts project path, auto-loads scenes, provides physics preview
+  - Added `[[bin]]` target in root `Cargo.toml` with `required-features = ["editor"]`
+  - Editor searches `<project>/assets/scenes/` for `.ron` files on startup
+- [x] **Standalone game project** - `../my_platformer/` with only `engine_core` + `ecs` deps
+  - `my_platformer/src/main.rs` — `run_game(PlatformerGame, config)`, no editor embedded
+  - `my_platformer/src/game.rs` — full platformer with physics, audio, UI, scene loading
+  - `my_platformer/assets/` — scenes, images, fonts, sounds (copied from engine examples)
+  - Scene file uses project-relative texture paths (`images/wood_texture.png` not `assets/images/...`)
+- [x] **Editor font path fix** - Changed `"examples/assets/fonts/font.ttf"` → `"assets/fonts/font.ttf"` in `editor_game.rs`
+- [x] **Extended engine prelude** - Added `TransformHierarchySystem`, `WorldHierarchyExt`, `System`, `Behavior` re-exports
 
-#### 2B. Scene Tree Enhancements
-Upgrade the hierarchy panel to match the mockup's scene tree with search, icons, and polished interaction.
+#### 2B. First Playable
+Multiple levels, progression, and basic game design.
 
-- [ ] **Scene tree header** - "SCENE TREE" header in accent-cyan, matching mockup style
-- [ ] **Node type icons** - Distinct icons for entity types (14x14, left of name)
-  - Camera icon for entities with Camera component
-  - Sprite icon for entities with Sprite component
-  - Physics icon for entities with RigidBody/Collider
-  - Audio icon for entities with AudioSource
-  - Script icon for entities with behaviors/scripts (e.g., "PlayerController.cs" style)
-  - Folder/group icon for entities that are hierarchy parents only
-  - Generic entity icon as fallback
-- [ ] **Search bar** - Filter bar at bottom of scene tree panel
-  - Text input: "Search nodes..." placeholder
-  - Real-time filtering as user types
-  - Highlight matches, collapse non-matching branches
-  - Filter by name, component type
-- [ ] **Selection highlighting** - Checkmark indicator on selected entities (like mockup's `Player [✓]`)
-  - Primary selection in accent-cyan text
-  - Multi-selection with checkmarks on each
-- [ ] **Entity count badges** - Show child count for collapsed groups (e.g., "Enemies [5]")
-- [ ] **Visibility toggle** - Eye icon per entity to hide/show in viewport (does not affect game logic)
-- [ ] **Drag-and-drop reparenting** - Drag entities in hierarchy to change parent
-  - Visual drop target indicator (above, below, as child)
-  - Reparent updates transform hierarchy (recalculate local transform from global)
-  - Prevent circular reparenting (can't parent to own descendant)
-  - Drop at root level to unparent
-- [ ] **Right-click context menu** - Context actions per entity
-  - Create Child, Duplicate, Delete, Rename
-  - Copy/Cut/Paste
-  - Focus in Viewport
+- [ ] **Game design document** - Define core mechanics, level count, progression
+  - Target: 5-10 short levels with increasing difficulty
+  - Core loop: platformer with collectibles and a goal per level
+- [ ] **Scene transitions** - Load next scene on level completion
+  - Trigger zones (collider-based) that load the next scene
+  - `SceneManager` API for switching scenes at runtime
+- [ ] **Level progression** - Track completed levels, score
+  - Simple game state struct persisted between scenes
+  - Level select or sequential progression
+- [ ] **Game-over and restart** - Death/fail condition → restart level
+  - Fall-off-screen detection
+  - Reset to level start on death
 
-#### 2C. Inspector Polish
-Upgrade the inspector to match the mockup's collapsible sections, color picker, and preview area.
+#### 2C. Polish for Release
+Make it feel like a real game.
 
-- [ ] **Inspector header** - "INSPECTOR" in accent-cyan, matching mockup style
-- [ ] **Collapsible component sections** - Triangle toggle (▼/▶) on section headers
-  - Click header to collapse/expand component fields
-  - Collapsed state persisted per component type
-  - Section header shows component name in accent-cyan bold (e.g., "▼ Transform", "▼ Sprite Renderer", "▼ Physics 2D")
-- [ ] **Color picker widget** - Visual color swatch + hex input
-  - Small color swatch preview (16x16) next to hex value
-  - Click swatch to open color picker popup
-  - Hex input (e.g., "#FFFFFF") with live preview
-  - Used for Sprite color, background color, etc.
-- [ ] **Flip checkboxes** - Inline checkbox row for Sprite flip X/Y
-  - `[ ]X  [✓]Y` layout matching mockup
-- [ ] **Dropdown menus** - For enum fields (Body Type: Dynamic/Static/Kinematic)
-  - Click to open dropdown list
-  - Currently read-only for body type — wire up for editing
-- [ ] **Preview thumbnail** - Mini viewport in top-right of inspector
-  - Shows selected entity's sprite/appearance
-  - Small (80x80) preview area
-  - Tool mode icons overlaid (move, rotate, scale, etc.)
-- [ ] **Numeric input fields** - Monospace display matching mockup style
-  - `Position:  X  120.0  Y  85.0` layout with labels
-  - `Rotation:  0.0°` with degree symbol
-  - `Scale:     X  1.0   Y  1.0` aligned columns
-  - Click-to-edit, drag-to-adjust, Tab to next field
-- [ ] **"+ Add Component" button** - Full-width blue button at bottom of inspector
-  - Uses `accent-blue` background (#0078d4)
-  - Centered text: "+ Add Component"
-  - Opens categorized popup (already implemented, just style update)
+- [ ] **Title screen / main menu** - Start screen with Play button
+  - UI-only scene: title, "Play" button, maybe "Settings"
+  - Transition to first level on Play
+- [ ] **Sound design** - Jump, land, collect, death, level-complete sounds
+- [ ] **Visual feedback** - Particle-like effects for key moments
+  - Collect sparkle, death flash, level-complete celebration
+- [ ] **Game feel tuning** - Tighten controls, camera follow, juice
+  - Camera smoothly follows player
+  - Coyote time, input buffering for jumps
+  - Screen shake on impact
+- [ ] **Packaging** - Distributable binary
+  - Assets embedded or bundled alongside binary
+  - README with controls and credits
 
-#### 2D. Viewport Enhancements
-Polish the 2D viewport to match the mockup's orthographic view with canvas bounds and gizmo styling.
+#### 2D. Editor Improvements (As Needed)
+Former Phase 2 items become a backlog. Only tackled when they directly block game development.
 
-- [ ] **Viewport header** - "2D VIEWPORT [Orthographic]" label at top of viewport panel
-- [ ] **Canvas bounds overlay** - Always-visible game resolution rectangle
-  - Dotted/dashed line rectangle showing game resolution (e.g., 1920x1080)
-  - Label: "UI Canvas (1920x1080)" in text-secondary color
-  - Configurable resolution (match GameConfig window size)
-  - Semi-transparent fill outside bounds (subtle darkening)
-- [ ] **Gizmo visual polish** - Match mockup's gizmo style
-  - X-axis: green arrow/line extending right with "X" label
-  - Y-axis: red arrow/line extending up with "Y" label
-  - Selection box: white/cyan dashed rectangle around selected entity
-  - Axis labels at arrow tips
-- [ ] **Dark viewport background** - Near-black (#000000) viewport canvas
-  - Distinct from panel background (#1e1e1e)
-  - Makes sprites and objects visually pop
-- [ ] **Grid styling** - Subtle grid matching mockup
-  - Primary grid lines in `border-subtle` (#333333)
-  - Origin axes more prominent (red Y, green X)
-  - Grid adapts to zoom level (already implemented via LOD)
+**Backlog** (from former "Phase 2: Ideal Editor UI"):
+- [ ] Toolbar redesign (play controls, tool selection, status indicators)
+- [ ] Scene tree enhancements (icons, search, drag-and-drop reparenting)
+- [ ] Inspector polish (collapsible sections, color picker, dropdowns)
+- [ ] Viewport enhancements (canvas bounds overlay, gizmo polish)
+- [ ] Bottom panel tabbed workspace (Project, Animation, Tilemap, Profiler)
+- [ ] VRAM estimate in status bar
+- [ ] Input field / button styling consistency
+- [ ] Font system (monospace for numeric values)
 
-#### 2E. Bottom Panel — Tabbed Workspace
-Replace the single asset browser placeholder with a tabbed panel system supporting multiple workspace tools.
+**Reference:** `crates/editor/IdealEditor.png` for target mockup
 
-- [ ] **Tab bar** - Horizontal tabs at top of bottom panel
-  - Tabs: Project, Animation, Tilemap, Sprite Editor, Profiler
-  - Active tab highlighted with accent-blue underline
-  - Tab icons (folder, film strip, grid, image, chart)
-  - Click to switch, tabs persist across sessions
-- [ ] **Project tab** - File/asset browser (replaces current asset browser placeholder)
-  - Grid/list view toggle
-  - Folder navigation with breadcrumb path
-  - Thumbnail generation for textures
-  - Search bar with type filtering
-  - Drag-and-drop asset assignment to inspector/viewport
-- [ ] **Animation tab** - Sprite animation timeline (stub initially)
-  - Placeholder: "Animation editor — coming in Phase 4"
-  - Will house dopesheet, keyframe editor, animation preview
-- [ ] **Tilemap tab** - Tile painting workspace (stub initially)
-  - Placeholder: "Tilemap editor — coming in Phase 5"
-  - Will house brush tools, tile palette, layer management
-- [ ] **Sprite Editor tab** - Sprite sheet slicing tool (stub initially)
-  - Placeholder: "Sprite editor — coming in Phase 4"
-  - Will house sprite sheet importer, frame definition, atlas preview
-- [ ] **Profiler tab** - Performance monitoring (stub initially)
-  - Placeholder: "Profiler — coming in Phase 5"
-  - Will house frame time graph, system breakdown, draw call stats
-- [ ] **Panel collapse** - Bottom panel can be collapsed to just the tab bar (click tab to toggle)
-  - Double-click tab to collapse/expand
-  - Drag top edge to resize
-
-#### 2F. Status Bar ✅ COMPLETE (February 2026)
-Persistent status bar at the very bottom of the editor window, below all panels.
-
-- [x] **Status bar layout** - Full-width bar (22px height) with three sections
-  - Left: Status message (e.g., "Ready", "Saving...", "Entity created", undo command name)
-  - Center: Runtime stats — `Objects: 42 | FPS: 60`
-  - Right: Version string (e.g., "v0.1.0") in accent-cyan
-- [x] **Object count** - Live entity count from ECS world
-- [x] **FPS counter** - Smoothed frames-per-second from game loop
-- [ ] **VRAM estimate** - Approximate GPU memory usage from renderer
-  - Texture memory + buffer memory
-  - Updated every 60 frames (not every frame)
-- [x] **Status messages** - Contextual messages that auto-clear after 3 seconds
-  - "Scene saved" after Ctrl+S
-  - "Scene loaded" after Ctrl+O
-  - "Undo: <command>" / "Redo: <command>" after Ctrl+Z/Y
-  - Error messages persist until explicitly dismissed
-
-#### 2G. Design System Theme Implementation — STARTED (February 2026)
-Apply the design system colors, typography, and spacing to all existing editor UI.
-
-- [x] **Theme constants** - Centralized color/spacing definitions
-  - `EditorTheme` struct with all design system tokens (30+ color fields)
-  - `editor/src/theme.rs` — single source of truth for all editor colors
-  - Theme stored on `EditorContext`, passed to dock, play controls, panel renderer
-  - Converter methods: `grid_colors()`, `inspector_style()`, `editable_field_style()`, `play_state_border()`
-  - Replaced hardcoded colors in: dock.rs, play_controls.rs, panel_renderer.rs, gizmo.rs
-- [x] **Panel border styling** - Panel headers use `accent-cyan` text on `bg-header` background
-- [ ] **Input field styling** - Consistent input appearance
-  - `bg-input` (#2d2d2d) background for all text/number inputs
-  - `text-primary` for values, `text-secondary` for labels
-  - 24px height, 4px border-radius
-- [ ] **Button styling** - Consistent button appearance
-  - Primary buttons: `accent-blue` background, white text
-  - Secondary buttons: `bg-input` background, `text-secondary`
-  - Hover: lighten by 10%, Active: darken by 10%
-- [ ] **Font system** - Monospace for numeric values, system font for labels
-  - Ensure monospace font loaded for inspector numeric fields
-  - Coordinate displays always use fixed-width characters
-
-**Phase 2 Milestone:** The editor visually matches the design mockup. All panels have proper headers, borders, and colors. The toolbar shows grid/snap/zoom status. The bottom panel has tabs (even if some are stubs). A status bar shows FPS and entity count. The scene tree has icons and search. The inspector has collapsible sections and a color picker.
+**Phase 2 Milestone:** A standalone platformer game (`my_platformer`) with 5+ levels, title screen, sound, and basic progression that can be played start-to-finish. The game consumes the engine as an external dependency and runs independently of the editor.
 
 **Success Metrics:**
-- Screenshot of editor is visually comparable to `IdealEditor.png`
-- All design system colors applied consistently (no hardcoded one-offs)
-- Bottom panel tabs switchable (even if content is placeholder)
-- Status bar shows live FPS and entity count
-- Scene tree search filters entities in real-time
-- Inspector sections collapse/expand smoothly
+- `cd my_platformer && cargo run` launches a complete game
+- `cargo run --bin editor --features editor -- ../my_platformer` edits the game's scenes
+- 5+ levels playable start to finish
+- Game has title screen, sound, and game-over/restart
 
 ---
 
@@ -929,17 +819,25 @@ This engine is built for AI-assisted development. Every feature must be verifiab
 # Run all tests
 cargo test --workspace
 
-# Run game demo
+# Run game demo (engine example)
 cargo run --example hello_world
 
-# Run editor demo
+# Run editor demo (engine example)
 cargo run --example editor_demo --features editor
+
+# Run standalone editor on a game project
+cargo run --bin editor --features editor -- ../my_platformer
+
+# Run standalone game
+cd ../my_platformer && cargo run
 ```
 
 **Key Files:**
 - `AGENTS.md` - AI agent guidance (high-level)
 - `training.md` - API patterns and examples
 - `PROJECT_ROADMAP.md` - This file (single source of truth)
+- `src/bin/editor.rs` - Standalone editor binary
+- `../my_platformer/` - Standalone game project consuming the engine
 - `crates/*/TECH_DEBT.md` - Per-crate technical debt
 - `crates/editor/IdealEditor.png` - Target mockup for editor UI
 - `examples/hello_world.rs` - Reference implementation

@@ -1208,7 +1208,9 @@ dependencies = [
  "engine_core",
  "env_logger",
  "glam",
+ "input",
  "log",
+ "physics",
  "ui",
  "winit",
 ]

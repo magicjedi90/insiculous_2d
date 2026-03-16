@@ -52,6 +52,13 @@ glam = { workspace = true }
 winit = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
+physics = { path = "crates/physics" }
+input = { path = "crates/input" }
+
+[[bin]]
+name = "editor"
+path = "src/bin/editor.rs"
+required-features = ["editor"]
 
 # Examples
 [[example]]
