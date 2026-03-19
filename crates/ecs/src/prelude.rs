@@ -8,7 +8,7 @@ pub use crate::{
     entity::{Entity, EntityId},
     event::EventBus,
     hierarchy::{Children, GlobalTransform2D, Parent},
-    hierarchy_ext::WorldHierarchyExt,
+    hierarchy_extension::WorldHierarchyExt,
     hierarchy_system::TransformHierarchySystem,
     init,
     resource::ResourceStorage,
