@@ -35,11 +35,11 @@ The 20 games challenge is a structured progression: each game teaches new patter
 
 **Engine work required:** None. All five games are buildable today.
 
-Each game lives in `games/<name>/` as a standalone cargo project consuming the engine.
+Each game lives in `../games/<name>/` as a standalone cargo project consuming the engine via path deps.
 
 ---
 
-### Game 1: Pong ☐
+### Game 1: Pong ☑ IN PROGRESS
 
 Two paddles, one ball, score display. The "Hello, World" of games.
 
@@ -130,7 +130,8 @@ Behavior::CameraFollow {
 
 ### Gap 2: `Lifetime` Component + `LifetimeSystem`
 
-**Blocks:** Game 3 (bullets), 5 (bullets), 8 (Galaga — multiple projectiles), 11 (Run & Gun), 16 (Bullet Hell)
+**Blocks:** Game 8 (Galaga — multiple projectiles), 11 (Run & Gun), 16 (Bullet Hell)
+**Nice-to-have for:** Game 3 (Space Invaders), 5 (Asteroids) — buildable without it via manual despawn
 
 **What:** A component that auto-despawns an entity after a given duration. Replaces manual timer tracking in game code for bullets, effects, and debris.
 
@@ -196,7 +197,7 @@ These games require one or more of the engine gap additions above.
 | 14 | Sokoban / Puzzle | Tilemap | Move history / undo, level editor-compatible format |
 | 15 | Metroidvania | CameraFollow, Tilemap, SpriteAnimation | Ability gating, persistent world state, map system |
 
-Each game gets its own `games/<name>/` project with a `README.md` describing controls, mechanics, and what was learned.
+Each game gets its own `../games/<name>/` project with a `README.md` describing controls, mechanics, and what was learned.
 
 ---
 
@@ -274,8 +275,8 @@ LOW priority items are tracked in `crates/*/TECH_DEBT.md` and are not listed her
 ## Development Guidelines
 
 ### For Every Game
-1. Each game is a standalone cargo project in `games/<name>/`
-2. Depends only on `engine_core` + `ecs` (+ physics/audio as needed) — no editor dep
+1. Each game is a standalone cargo project in `../games/<name>/` (sibling to this repo)
+2. Depends on `engine_core` (includes physics by default) + `ecs` if needed directly — no editor dep
 3. Has a `README.md` with: controls, how to run, what patterns it demonstrates
 4. `cargo run` from the game directory launches it
 
@@ -298,24 +299,24 @@ LOW priority items are tracked in `crates/*/TECH_DEBT.md` and are not listed her
 ## Quick Reference
 
 ```bash
-# Run all tests
+# Run all engine tests
 cargo test --workspace
 
 # Run engine example
 cargo run --example hello_world
 
-# Run editor on a game project
-cargo run --bin editor --features editor -- games/pong
+# Run editor on a game project (games/ is a sibling directory)
+cargo run --bin editor --features editor -- ../games/pong
 
-# Run a game
-cd games/pong && cargo run
+# Run a game directly
+cd ../games/pong && cargo run
 ```
 
 **Key Files:**
 - `AGENTS.md` — AI agent guidance (high-level)
 - `training.md` — API patterns and examples
 - `PROJECT_ROADMAP.md` — This file
-- `games/` — All game projects (created as games are built)
+- `../games/` — Sibling directory with all game projects
 - `src/bin/editor.rs` — Standalone editor binary
 - `crates/editor/IdealEditor.png` — Target mockup for editor UI
 - `examples/hello_world.rs` — Reference implementation
