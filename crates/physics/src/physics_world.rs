@@ -450,6 +450,32 @@ impl PhysicsWorld {
             }
         }
 
+        // Process sensor intersection events from narrow phase.
+        // Sensors don't generate contact pairs — they generate intersection pairs instead.
+        for (collider1, collider2, intersecting) in self.narrow_phase.intersection_pairs() {
+            if let (Some(&entity_a), Some(&entity_b)) = (
+                self.collider_to_entity.get(&collider1),
+                self.collider_to_entity.get(&collider2),
+            ) {
+                let pair = CollisionPair::new(entity_a, entity_b);
+
+                if intersecting {
+                    current_collisions.insert(pair);
+
+                    let started = !self.previous_collisions.contains(&pair);
+                    self.collision_events.push(CollisionData {
+                        event: CollisionEvent {
+                            entity_a,
+                            entity_b,
+                            started,
+                            stopped: false,
+                        },
+                        contacts: Vec::new(), // Sensors have no contact points
+                    });
+                }
+            }
+        }
+
         // Find collisions that ended (were in previous but not in current)
         for pair in &self.previous_collisions {
             if !current_collisions.contains(pair) {
