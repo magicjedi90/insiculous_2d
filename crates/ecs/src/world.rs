@@ -140,6 +140,20 @@ impl World {
     }
 
     /// Create a new entity with generation tracking
+    /// Create an entity and return a builder for adding components.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let entity = world.spawn()
+    ///     .with(Transform2D::new(pos))
+    ///     .with(Sprite::new(tex))
+    ///     .id();
+    /// ```
+    pub fn spawn(&mut self) -> crate::entity_builder::EntityBuilder<'_> {
+        crate::entity_builder::EntityBuilder::new(self)
+    }
+
+    /// Create a new entity and return its ID
     pub fn create_entity(&mut self) -> EntityId {
         let entity = Entity::new();
         let id = entity.id();

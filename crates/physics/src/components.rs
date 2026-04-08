@@ -296,6 +296,32 @@ pub struct CollisionEvent {
     pub stopped: bool,
 }
 
+impl CollisionEvent {
+    /// Check if both entities are involved in this collision (order-independent).
+    pub fn involves(&self, a: ecs::EntityId, b: ecs::EntityId) -> bool {
+        (self.entity_a == a && self.entity_b == b)
+            || (self.entity_a == b && self.entity_b == a)
+    }
+
+    /// Check if a specific entity is part of this collision.
+    pub fn involves_entity(&self, entity: ecs::EntityId) -> bool {
+        self.entity_a == entity || self.entity_b == entity
+    }
+
+    /// Get the other entity in the collision, if the given entity is involved.
+    ///
+    /// Returns `None` if the given entity is not part of this collision.
+    pub fn other(&self, entity: ecs::EntityId) -> Option<ecs::EntityId> {
+        if self.entity_a == entity {
+            Some(self.entity_b)
+        } else if self.entity_b == entity {
+            Some(self.entity_a)
+        } else {
+            None
+        }
+    }
+}
+
 /// Contact point data for detailed collision information
 #[derive(Debug, Clone)]
 pub struct ContactPoint {
@@ -386,5 +412,62 @@ mod tests {
         } else {
             panic!("Expected capsule shape");
         }
+    }
+
+    // === CollisionEvent helper tests ===
+
+    #[test]
+    fn test_collision_event_involves_matching_pair() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert!(event.involves(a, b));
+    }
+
+    #[test]
+    fn test_collision_event_involves_reversed_pair() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert!(event.involves(b, a));
+    }
+
+    #[test]
+    fn test_collision_event_involves_non_matching_pair() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let c = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert!(!event.involves(a, c));
+        assert!(!event.involves(c, b));
+    }
+
+    #[test]
+    fn test_collision_event_involves_entity() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let c = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert!(event.involves_entity(a));
+        assert!(event.involves_entity(b));
+        assert!(!event.involves_entity(c));
+    }
+
+    #[test]
+    fn test_collision_event_other_returns_partner() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert_eq!(event.other(a), Some(b));
+        assert_eq!(event.other(b), Some(a));
+    }
+
+    #[test]
+    fn test_collision_event_other_returns_none_for_uninvolved() {
+        let a = ecs::EntityId::new();
+        let b = ecs::EntityId::new();
+        let c = ecs::EntityId::new();
+        let event = CollisionEvent { entity_a: a, entity_b: b, started: true, stopped: false };
+        assert_eq!(event.other(c), None);
     }
 }

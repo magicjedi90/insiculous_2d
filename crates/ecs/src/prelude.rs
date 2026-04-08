@@ -6,6 +6,7 @@
 pub use crate::{
     component::Component,
     entity::{Entity, EntityId},
+    entity_builder::EntityBuilder,
     event::EventBus,
     hierarchy::{Children, GlobalTransform2D, Parent},
     hierarchy_extension::WorldHierarchyExt,

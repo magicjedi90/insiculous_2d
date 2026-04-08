@@ -156,6 +156,32 @@ impl PhysicsSystem {
         self.physics_world.collision_events()
     }
 
+    /// Set the velocity of a rigid body
+    pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
+        self.physics_world.set_body_velocity(entity, linear, angular);
+    }
+
+    /// Get the velocity of a rigid body
+    pub fn get_body_velocity(&self, entity: EntityId) -> Option<(Vec2, f32)> {
+        self.physics_world.get_body_velocity(entity)
+    }
+
+    /// Set the position and rotation of a rigid body
+    pub fn set_body_transform(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
+        self.physics_world.set_body_transform(entity, position, rotation);
+    }
+
+    /// Set the next kinematic position (for kinematic bodies)
+    pub fn set_kinematic_target(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
+        self.physics_world.set_kinematic_target(entity, position, rotation);
+    }
+
+    /// Reset a body's position and zero its velocity.
+    pub fn reset_body(&mut self, entity: EntityId, position: Vec2) {
+        self.physics_world.set_body_transform(entity, position, 0.0);
+        self.physics_world.set_body_velocity(entity, Vec2::ZERO, 0.0);
+    }
+
     /// Sync a single entity from ECS to physics world
     fn sync_entity_to_physics(&mut self, world: &mut World, entity: EntityId) {
         // Get transform for position
@@ -488,5 +514,74 @@ mod tests {
 
         system.clear_collision_callbacks();
         assert_eq!(system.collision_callback_count(), 0);
+    }
+
+    // === Promoted PhysicsWorld method tests ===
+
+    #[test]
+    fn test_set_and_get_body_velocity() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::ZERO)).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic().with_gravity_scale(0.0)).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+
+        system.set_body_velocity(entity, Vec2::new(200.0, 100.0), 0.0);
+        let (vel, _) = system.get_body_velocity(entity).expect("body should exist");
+        assert!((vel.x - 200.0).abs() < 1.0, "x velocity should be ~200, got {}", vel.x);
+        assert!((vel.y - 100.0).abs() < 1.0, "y velocity should be ~100, got {}", vel.y);
+    }
+
+    #[test]
+    fn test_set_body_transform_updates_position() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::ZERO)).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic().with_gravity_scale(0.0)).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+
+        system.set_body_transform(entity, Vec2::new(500.0, 300.0), 0.0);
+        system.update(&mut world, 1.0 / 60.0);
+
+        let pos = world.get::<Transform2D>(entity).unwrap().position;
+        assert!((pos.x - 500.0).abs() < 2.0, "x should be ~500, got {}", pos.x);
+        assert!((pos.y - 300.0).abs() < 2.0, "y should be ~300, got {}", pos.y);
+    }
+
+    #[test]
+    fn test_reset_body_zeros_velocity_and_sets_position() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::ZERO)).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic().with_gravity_scale(0.0)).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+
+        system.set_body_velocity(entity, Vec2::new(999.0, 999.0), 0.0);
+        system.reset_body(entity, Vec2::new(100.0, 200.0));
+
+        let (vel, _) = system.get_body_velocity(entity).expect("body should exist");
+        assert!(vel.length() < 1.0, "velocity should be ~zero after reset, got {:?}", vel);
+    }
+
+    #[test]
+    fn test_get_body_velocity_returns_none_for_unknown_entity() {
+        let system = PhysicsSystem::new();
+        let fake_entity = ecs::EntityId::new();
+        assert!(system.get_body_velocity(fake_entity).is_none());
     }
 }

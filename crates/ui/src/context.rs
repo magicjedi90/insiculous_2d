@@ -372,6 +372,55 @@ impl UIContext {
         self.label(text, Vec2::new(x, baseline_y));
     }
 
+    /// Create a text label centered horizontally at a position.
+    ///
+    /// Measures the text width and offsets so the text appears centered
+    /// on `center.x`. The `center.y` specifies the vertical baseline position.
+    pub fn label_centered(&mut self, text: &str, center: Vec2) {
+        let color = self.theme.text.color;
+        let font_size = self.theme.text.font_size;
+        self.label_centered_styled(text, center, color, font_size);
+    }
+
+    /// Create a centered text label with custom styling.
+    pub fn label_centered_styled(
+        &mut self,
+        text: &str,
+        center: Vec2,
+        color: Color,
+        font_size: f32,
+    ) {
+        let half_width = if let Some(fh) = self.font_manager.default_font() {
+            self.font_manager
+                .measure_text(fh, text, font_size)
+                .map(|size| size.x / 2.0)
+                .unwrap_or_else(|_| text.len() as f32 * font_size * 0.3)
+        } else {
+            text.len() as f32 * font_size * 0.3
+        };
+
+        self.label_styled(text, Vec2::new(center.x - half_width, center.y), color, font_size);
+    }
+
+    /// Measure text dimensions using the default font and font size.
+    ///
+    /// Returns the width and height of the text bounding box. If no font
+    /// is loaded, returns an estimate based on character count.
+    pub fn measure_text(&self, text: &str) -> Vec2 {
+        self.measure_text_styled(text, self.theme.text.font_size)
+    }
+
+    /// Measure text dimensions with a custom font size.
+    pub fn measure_text_styled(&self, text: &str, font_size: f32) -> Vec2 {
+        if let Some(fh) = self.font_manager.default_font() {
+            self.font_manager
+                .measure_text(fh, text, font_size)
+                .unwrap_or_else(|_| Vec2::new(text.len() as f32 * font_size * 0.6, font_size * 1.2))
+        } else {
+            Vec2::new(text.len() as f32 * font_size * 0.6, font_size * 1.2)
+        }
+    }
+
     /// Create a panel (container background).
     pub fn panel(&mut self, bounds: Rect) {
         let style = &self.theme.panel;
@@ -932,5 +981,50 @@ mod tests {
 
         // Should have background rect, border rect, and text placeholder
         assert!(ui.draw_list().len() >= 3);
+    }
+
+    // === label_centered / measure_text tests ===
+
+    #[test]
+    fn test_label_centered_generates_draw_command() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        ui.label_centered("hello", Vec2::new(400.0, 300.0));
+
+        assert!(ui.draw_list().len() >= 1);
+    }
+
+    #[test]
+    fn test_label_centered_styled_generates_draw_command() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        ui.label_centered_styled("styled", Vec2::new(400.0, 300.0), Color::WHITE, 24.0);
+
+        assert!(ui.draw_list().len() >= 1);
+    }
+
+    #[test]
+    fn test_measure_text_returns_nonzero_dimensions() {
+        let ui = UIContext::new();
+        let size = ui.measure_text("hello");
+        assert!(size.x > 0.0, "text width should be positive");
+        assert!(size.y > 0.0, "text height should be positive");
+    }
+
+    #[test]
+    fn test_measure_text_larger_font_gives_wider_result() {
+        let ui = UIContext::new();
+        let small = ui.measure_text_styled("hello", 12.0);
+        let large = ui.measure_text_styled("hello", 24.0);
+        assert!(large.x > small.x, "larger font should produce wider text");
+    }
+
+    #[test]
+    fn test_measure_text_empty_string_returns_zero_width() {
+        let ui = UIContext::new();
+        let size = ui.measure_text("");
+        assert_eq!(size.x, 0.0, "empty string should have zero width");
     }
 }

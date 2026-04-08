@@ -20,6 +20,7 @@
 // Core infrastructure - private modules, re-exported at crate root
 mod component;
 mod entity;
+mod entity_builder;
 mod query;
 mod world;
 
@@ -48,6 +49,7 @@ pub use component::*;
 pub use component_registry::{global_registry, ComponentMeta};
 pub use ecs_macros::ComponentMeta as DeriveComponentMeta;
 pub use entity::*;
+pub use entity_builder::*;
 pub use event::EventBus;
 pub use generation::*;
 pub use hierarchy::*;
