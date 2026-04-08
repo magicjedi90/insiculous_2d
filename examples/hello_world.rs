@@ -26,6 +26,49 @@ use ecs::hierarchy_system::TransformHierarchySystem;
 use ecs::WorldHierarchyExt;
 use std::path::Path;
 
+// --- Resources: typed singleton state stored in the World ---
+
+/// Cross-system game state accessible by any system via `world.resource::<GameState>()`.
+/// This is the Repository pattern adapted for ECS — a single source of truth for
+/// game-wide state like score and lives.
+#[derive(Debug, Clone)]
+struct GameState {
+    score: u32,
+    coins_collected: u32,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self { score: 0, coins_collected: 0 }
+    }
+}
+
+// --- State Machine: per-entity state for the player ---
+
+/// Player behavioral states, driven by physics velocity and input.
+/// Systems read this to decide animations, sounds, UI display, etc.
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerState {
+    Idle,
+    Running,
+    Jumping,
+    Falling,
+}
+
+/// Player state groups for shared behavior across related states.
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerGroup {
+    OnGround,
+    InAir,
+}
+
+fn player_group(state: &PlayerState) -> PlayerGroup {
+    match state {
+        PlayerState::Idle | PlayerState::Running => PlayerGroup::OnGround,
+        PlayerState::Jumping | PlayerState::Falling => PlayerGroup::InAir,
+    }
+}
+
 /// Our game state - simplified with BehaviorRunner handling player movement
 struct HelloWorld {
     physics: Option<PhysicsSystem>,
@@ -157,6 +200,17 @@ impl Game for HelloWorld {
         use ecs::System;
         self.transform_hierarchy.initialize(&mut ctx.world).ok();
 
+        // --- Resource: insert game-wide state ---
+        ctx.world.insert_resource(GameState::default());
+
+        // --- State Machine: attach to player entity ---
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            ctx.world.add_component(
+                &player,
+                HierarchicalStateMachine::new(PlayerState::Idle, player_group),
+            ).ok();
+        }
+
         // Count entities with hierarchy relationships
         let root_count = ctx.world.get_root_entities().len();
         let total_count = ctx.world.entity_count();
@@ -283,7 +337,7 @@ impl Game for HelloWorld {
             self.reset_player(ctx);
         }
 
-        // Step physics simulation
+        // Step physics simulation (also emits CollisionData events to the world event bus)
         if let Some(physics) = &mut self.physics {
             use ecs::System;
             physics.update(&mut ctx.world, ctx.delta_time);
@@ -296,6 +350,43 @@ impl Game for HelloWorld {
             self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
         }
 
+        // --- Events: read collection events emitted by BehaviorRunner ---
+        // Any system can read these — audio, particles, scoring all stay decoupled
+        let collected: Vec<EntityCollected> = ctx.world.read_events::<EntityCollected>().to_vec();
+        for event in &collected {
+            if let Some(state) = ctx.world.resource_mut::<GameState>() {
+                state.score += event.score_value;
+                state.coins_collected += 1;
+            }
+            println!("Collected! +{} points (total: {})",
+                event.score_value,
+                ctx.world.resource::<GameState>().map(|s| s.score).unwrap_or(0));
+        }
+
+        // --- State Machine: update player state based on physics velocity ---
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            // Determine state from physics velocity
+            let vel = ctx.world.get::<RigidBody>(player)
+                .map(|rb| rb.velocity)
+                .unwrap_or(Vec2::ZERO);
+            let moving_x = vel.x.abs() > 5.0;
+
+            let new_state = if vel.y > 10.0 {
+                PlayerState::Jumping
+            } else if vel.y < -10.0 {
+                PlayerState::Falling
+            } else if moving_x {
+                PlayerState::Running
+            } else {
+                PlayerState::Idle
+            };
+
+            if let Some(sm) = ctx.world.get_mut::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
+                sm.transition_to(new_state);
+                sm.tick(ctx.delta_time);
+            }
+        }
+
         // ==================== UI Demo ====================
         // Toggle UI visibility with H key
         if ctx.input.is_key_just_pressed(KeyCode::KeyH) {
@@ -306,15 +397,33 @@ impl Game for HelloWorld {
         // Labels render with actual fonts if loaded, otherwise as placeholder rectangles
         if self.show_ui {
             // Draw a semi-transparent control panel in the top-left
-            let panel_rect = UIRect::new(10.0, 10.0, 220.0, 200.0);
+            let panel_rect = UIRect::new(10.0, 10.0, 220.0, 250.0);
             ctx.ui.panel(panel_rect);
 
             // Title label (renders with font glyphs if font loaded)
             ctx.ui.label("Controls", Vec2::new(20.0, 25.0));
 
+            // --- Score display (from Resource) ---
+            let score = ctx.world.resource::<GameState>().map(|s| s.score).unwrap_or(0);
+            let coins = ctx.world.resource::<GameState>().map(|s| s.coins_collected).unwrap_or(0);
+            let score_text = format!("Score: {} ({} coins)", score, coins);
+            ctx.ui.label(&score_text, Vec2::new(20.0, 50.0));
+
+            // --- Player state display (from StateMachine) ---
+            let state_text = if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+                if let Some(sm) = ctx.world.get::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
+                    format!("State: {:?} ({:?})", sm.current(), sm.parent())
+                } else {
+                    "State: N/A".to_string()
+                }
+            } else {
+                "State: No player".to_string()
+            };
+            ctx.ui.label(&state_text, Vec2::new(20.0, 70.0));
+
             // Volume slider
-            ctx.ui.label("Volume:", Vec2::new(20.0, 55.0));
-            let slider_rect = UIRect::new(20.0, 70.0, 190.0, 20.0);
+            ctx.ui.label("Volume:", Vec2::new(20.0, 95.0));
+            let slider_rect = UIRect::new(20.0, 110.0, 190.0, 20.0);
             let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
             if new_volume != self.volume {
                 self.volume = new_volume;
@@ -322,7 +431,7 @@ impl Game for HelloWorld {
             }
 
             // Music toggle button
-            let music_btn_rect = UIRect::new(20.0, 100.0, 90.0, 30.0);
+            let music_btn_rect = UIRect::new(20.0, 140.0, 90.0, 30.0);
             let music_label = if self.music_playing { "Pause" } else { "Play" };
             if ctx.ui.button("music_btn", music_label, music_btn_rect) {
                 if self.music_playing {
@@ -335,22 +444,22 @@ impl Game for HelloWorld {
             }
 
             // Reset button
-            let reset_btn_rect = UIRect::new(120.0, 100.0, 90.0, 30.0);
+            let reset_btn_rect = UIRect::new(120.0, 140.0, 90.0, 30.0);
             if ctx.ui.button("reset_btn", "Reset", reset_btn_rect) {
                 self.reset_player(ctx);
             }
 
             // Progress bar showing current volume level
-            ctx.ui.label("Volume Bar:", Vec2::new(20.0, 145.0));
-            let progress_rect = UIRect::new(20.0, 160.0, 190.0, 15.0);
+            ctx.ui.label("Volume Bar:", Vec2::new(20.0, 185.0));
+            let progress_rect = UIRect::new(20.0, 200.0, 190.0, 15.0);
             ctx.ui.progress_bar(self.volume, progress_rect);
 
             // Help text and status at bottom
-            ctx.ui.label("H: Toggle UI", Vec2::new(20.0, 185.0));
+            ctx.ui.label("H: Toggle UI", Vec2::new(20.0, 225.0));
 
             // Show font status
             let font_status = if self.font_loaded { "Font: ON" } else { "Font: OFF" };
-            ctx.ui.label(font_status, Vec2::new(140.0, 185.0));
+            ctx.ui.label(font_status, Vec2::new(140.0, 225.0));
         }
     }
 

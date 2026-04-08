@@ -1,339 +1,327 @@
-//! Editor demo - demonstrates the editor UI framework.
+//! Editor demo - wraps the Hello World platformer in the full editor UI.
 //!
-//! Run with: cargo run --example editor_demo
+//! Run with: cargo run --example editor_demo --features editor
+//!
+//! This loads the same scene and game logic as hello_world.rs, but wrapped
+//! inside the editor. Use Play/Pause/Stop (Ctrl+P / Ctrl+Shift+P) to run
+//! the game simulation, inspect entities in the hierarchy & inspector,
+//! and watch the world restore on Stop.
+//!
+//! Controls (while Playing):
+//!   WASD to move player, SPACE to jump, R to reset
+//!
+//! Editor shortcuts:
+//!   Ctrl+P       Play / Pause toggle
+//!   Ctrl+Shift+P Stop (restore scene)
+//!   F5           Play / Resume
+//!   Q/W/E/R      Select / Move / Rotate / Scale tool
+//!   G            Toggle grid
 
 use engine_core::prelude::*;
-use editor::prelude::*;
-use ecs::System;
-use glam::Vec2;
+use editor_integration::run_game_with_editor;
+use ecs::hierarchy_system::TransformHierarchySystem;
+use ecs::WorldHierarchyExt;
+use std::path::Path;
 
-struct EditorDemo {
-    editor: EditorContext,
-    font_loaded: bool,
-    transform_system: ecs::TransformHierarchySystem,
+// --- Resources ---
+#[derive(Debug, Clone)]
+struct GameState {
+    score: u32,
+    coins_collected: u32,
 }
 
-impl Default for EditorDemo {
+impl Default for GameState {
     fn default() -> Self {
+        Self { score: 0, coins_collected: 0 }
+    }
+}
+
+// --- State Machine ---
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerState { Idle, Running, Jumping, Falling }
+
+#[derive(Debug, Clone, PartialEq)]
+enum PlayerGroup { OnGround, InAir }
+
+fn player_group(state: &PlayerState) -> PlayerGroup {
+    match state {
+        PlayerState::Idle | PlayerState::Running => PlayerGroup::OnGround,
+        PlayerState::Jumping | PlayerState::Falling => PlayerGroup::InAir,
+    }
+}
+
+/// Platformer game — same logic as hello_world.rs.
+struct PlatformerGame {
+    physics: Option<PhysicsSystem>,
+    behaviors: BehaviorRunner,
+    scene_instance: Option<SceneInstance>,
+    transform_hierarchy: TransformHierarchySystem,
+    jump_sound: Option<SoundHandle>,
+    music_playing: bool,
+    volume: f32,
+    show_ui: bool,
+}
+
+impl PlatformerGame {
+    fn new() -> Self {
         Self {
-            editor: EditorContext::new(),
-            font_loaded: false,
-            transform_system: ecs::TransformHierarchySystem::new(),
+            physics: None,
+            behaviors: BehaviorRunner::new(),
+            scene_instance: None,
+            transform_hierarchy: TransformHierarchySystem::new(),
+            jump_sound: None,
+            music_playing: false,
+            volume: 1.0,
+            show_ui: true,
+        }
+    }
+
+    fn reset_player(&mut self, ctx: &mut GameContext) {
+        let player = self.scene_instance.as_ref()
+            .and_then(|scene| scene.get_entity("player"));
+
+        if let Some(player) = player {
+            if let Some(transform) = ctx.world.get_mut::<Transform2D>(player) {
+                transform.position = glam::Vec2::new(-200.0, 100.0);
+            }
+            if let Some(body) = ctx.world.get_mut::<RigidBody>(player) {
+                body.velocity = glam::Vec2::ZERO;
+            }
+            if let Some(physics) = &mut self.physics {
+                physics.physics_world_mut().set_body_transform(
+                    player, glam::Vec2::new(-200.0, 100.0), 0.0,
+                );
+                physics.physics_world_mut().set_body_velocity(player, glam::Vec2::ZERO, 0.0);
+            }
         }
     }
 }
 
-impl Game for EditorDemo {
+impl Game for PlatformerGame {
     fn init(&mut self, ctx: &mut GameContext) {
-        // Try to load a font for text rendering
-        // Note: BellamysMapbats and BlackSamsGold are decorative/symbol fonts
-        let font_paths = [
-            "examples/assets/fonts/font.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ];
+        ctx.assets.set_base_path("examples");
 
-        for path in font_paths {
-            if ctx.ui.load_font_file(path).is_ok() {
-                self.font_loaded = true;
-                log::info!("Font loaded from: {}", path);
-                break;
+        let scene_path = Path::new("examples/assets/scenes/hello_world.scene.ron");
+
+        match SceneLoader::load_and_instantiate(scene_path, &mut ctx.world, ctx.assets) {
+            Ok(instance) => {
+                log::info!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
+                self.behaviors.set_named_entities(instance.named_entities.clone());
+
+                let physics_config = if let Some(settings) = &instance.physics {
+                    PhysicsConfig::new(glam::Vec2::new(settings.gravity.0, settings.gravity.1))
+                        .with_scale(settings.pixels_per_meter)
+                } else {
+                    PhysicsConfig::platformer()
+                };
+
+                self.physics = Some(PhysicsSystem::with_config(physics_config));
+                self.scene_instance = Some(instance);
+            }
+            Err(e) => {
+                log::warn!("Failed to load scene: {}", e);
+                log::info!("Creating entities programmatically as fallback...");
+
+                use ecs::behavior::Behavior;
+                let player = ctx.world.create_entity();
+                ctx.world.add_component(&player, Transform2D::new(glam::Vec2::new(-200.0, 100.0))).ok();
+                ctx.world.add_component(&player, Sprite::new(0).with_color(glam::Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
+                ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
+                ctx.world.add_component(&player, Collider::player_box()).ok();
+                ctx.world.add_component(&player, Behavior::PlayerPlatformer {
+                    move_speed: 120.0,
+                    jump_impulse: 420.0,
+                    jump_cooldown: 0.3,
+                    tag: "player".to_string(),
+                }).ok();
+
+                let ground = ctx.world.create_entity();
+                ctx.world.add_component(&ground,
+                    Transform2D::new(glam::Vec2::new(0.0, -250.0))
+                        .with_scale(glam::Vec2::new(10.0, 0.5))
+                ).ok();
+                ctx.world.add_component(&ground,
+                    Sprite::new(0).with_color(glam::Vec4::new(0.3, 0.3, 0.3, 1.0))
+                ).ok();
+                ctx.world.add_component(&ground, RigidBody::new_static()).ok();
+                ctx.world.add_component(&ground, Collider::platform(800.0, 40.0)).ok();
+
+                self.physics = Some(PhysicsSystem::with_config(PhysicsConfig::platformer()));
             }
         }
 
-        if !self.font_loaded {
-            log::warn!("No font loaded. Text will render as placeholders.");
-            log::warn!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
+        // Initialise physics
+        if let Some(physics) = &mut self.physics {
+            use ecs::System;
+            physics.initialize(&mut ctx.world).ok();
         }
 
-        // Create test entities with a hierarchy to demonstrate the tree view
-        use ecs::{GlobalTransform2D, Name, WorldHierarchyExt};
+        // Initialise transform hierarchy
+        {
+            use ecs::System;
+            self.transform_hierarchy.initialize(&mut ctx.world).ok();
+        }
 
-        // Root entity: "Player" with Name component
-        let player = ctx.world.create_entity();
-        ctx.world.add_component(&player, Name::new("Player")).ok();
-        ctx.world.add_component(&player, ecs::sprite_components::Transform2D::new(Vec2::new(-100.0, 0.0))).ok();
-        ctx.world.add_component(&player, GlobalTransform2D::default()).ok();
+        // Add Name components for editor hierarchy display
+        self.add_editor_names(ctx);
 
-        // Child of Player: "Weapon"
-        let weapon = ctx.world.create_entity();
-        ctx.world.add_component(&weapon, Name::new("Weapon")).ok();
-        ctx.world.add_component(&weapon, ecs::sprite_components::Transform2D::new(Vec2::new(20.0, 0.0))).ok();
-        ctx.world.add_component(&weapon, GlobalTransform2D::default()).ok();
-        ctx.world.set_parent(weapon, player).ok();
+        // --- Resources & State Machine ---
+        ctx.world.insert_resource(GameState::default());
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            ctx.world.add_component(
+                &player,
+                HierarchicalStateMachine::new(PlayerState::Idle, player_group),
+            ).ok();
+        }
 
-        // Grandchild of Player: "Muzzle Flash" (child of Weapon)
-        let muzzle = ctx.world.create_entity();
-        ctx.world.add_component(&muzzle, Name::new("Muzzle Flash")).ok();
-        ctx.world.add_component(&muzzle, ecs::sprite_components::Transform2D::new(Vec2::new(10.0, 0.0))).ok();
-        ctx.world.add_component(&muzzle, GlobalTransform2D::default()).ok();
-        ctx.world.set_parent(muzzle, weapon).ok();
+        // Try to load sound effects
+        match ctx.audio.load_sound("examples/assets/sounds/snd_jump.wav") {
+            Ok(handle) => {
+                self.jump_sound = Some(handle);
+                log::info!("Loaded jump sound effect");
+            }
+            Err(e) => {
+                log::info!("No jump sound loaded ({})", e);
+            }
+        }
 
-        // Another root: entity with Sprite component (no Name - tests fallback)
-        let sprite_entity = ctx.world.create_entity();
-        ctx.world.add_component(&sprite_entity, ecs::sprite_components::Transform2D::new(Vec2::new(100.0, 50.0))).ok();
-        ctx.world.add_component(&sprite_entity, ecs::Sprite::new(0)).ok();
-        ctx.world.add_component(&sprite_entity, GlobalTransform2D::default()).ok();
+        // Try to load background music
+        match ctx.audio.play_music("examples/assets/sounds/music.ogg") {
+            Ok(()) => { self.music_playing = true; }
+            Err(_) => {}
+        }
 
-        // Child of sprite_entity (no Name, no Sprite - tests Entity ID fallback)
-        let child_entity = ctx.world.create_entity();
-        ctx.world.add_component(&child_entity, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -30.0))).ok();
-        ctx.world.add_component(&child_entity, GlobalTransform2D::default()).ok();
-        ctx.world.set_parent(child_entity, sprite_entity).ok();
+        let total = ctx.world.entity_count();
+        let roots = ctx.world.get_root_entities().len();
+        log::info!("Game initialised: {} entities ({} roots, {} children)",
+                   total, roots, total - roots);
+    }
 
-        // Standalone root entity with just Transform
-        let standalone = ctx.world.create_entity();
-        ctx.world.add_component(&standalone, ecs::sprite_components::Transform2D::new(Vec2::new(0.0, -100.0))).ok();
-        ctx.world.add_component(&standalone, GlobalTransform2D::default()).ok();
-
-        log::info!("Editor demo initialized with 6 entities in hierarchy:");
-        log::info!("  Player (root)");
-        log::info!("    └─ Weapon (child)");
-        log::info!("       └─ Muzzle Flash (grandchild)");
-        log::info!("  Sprite (root, no Name)");
-        log::info!("    └─ Entity (child, no Name/Sprite)");
-        log::info!("  Entity (root, standalone)");
+    fn on_play_stopped(&mut self, _ctx: &mut GameContext) {
+        // Clear rapier physics world so it re-syncs from restored ECS state
+        if let Some(physics) = &mut self.physics {
+            physics.clear();
+        }
     }
 
     fn update(&mut self, ctx: &mut GameContext) {
-        let window_size = ctx.window_size;
-
-        // Update transform hierarchy (propagate parent transforms to children)
-        self.transform_system.update(&mut ctx.world, ctx.delta_time);
-
-        // Update editor layout
-        self.editor.update_layout(window_size);
-
-        // Render menu bar
-        if let Some(action) = self.editor.menu_bar.render(ctx.ui, window_size.x) {
-            log::info!("Menu action: {}", action);
-            self.handle_menu_action(&action);
-        }
-
-        // Render toolbar
-        if let Some(tool) = self.editor.toolbar.render(ctx.ui) {
-            log::info!("Tool changed: {:?}", tool);
-        }
-
-        // Render dock panels
-        let content_areas = self.editor.dock_area.render(ctx.ui);
-
-        // Handle panel resize
-        self.editor.dock_area.handle_resize(ctx.ui);
-
-        // Render content in each panel
-        for (panel_id, bounds) in content_areas.clone() {
-            self.render_panel_content(ctx, panel_id, bounds);
-        }
-
-        // Pop all clip rects (one per panel rendered)
-        self.editor.dock_area.end_panel_content(ctx.ui, content_areas.len());
-
-        // Handle gizmo interaction for selected entity
-        if let Some(entity_id) = self.editor.selection.primary() {
-            if content_areas.iter().any(|(id, _)| *id == PanelId::SCENE_VIEW) {
-                // Get entity's global position (includes parent transforms)
-                let entity_pos = ctx.world
-                    .get::<ecs::GlobalTransform2D>(entity_id)
-                    .map(|t| t.position);
-
-                if let Some(entity_pos) = entity_pos {
-                    // Convert world position to screen position using viewport (handles Y-flip)
-                    let screen_pos = self.editor.world_to_screen(entity_pos);
-
-                    // Render gizmo and get interaction
-                    let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
-
-                    // Apply gizmo delta to entity transform
-                    if interaction.handle.is_some() && interaction.delta != Vec2::ZERO {
-                        // Convert screen delta to world delta
-                        let world_delta = self.editor.gizmo_delta_to_world(interaction.delta);
-                        let snap_enabled = self.editor.is_snap_to_grid();
-
-                        // Apply to entity
-                        if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                            transform.position += world_delta;
-
-                            // Apply grid snapping if enabled
-                            if snap_enabled {
-                                transform.position = self.editor.snap_position(transform.position);
-                            }
-                        }
-                    }
-                }
+        // Jump sound
+        if ctx.input.is_key_just_pressed(KeyCode::Space) {
+            if let Some(jump_sound) = &self.jump_sound {
+                let settings = SoundSettings::new().with_volume(0.8).with_speed(1.0);
+                ctx.audio.play_with_settings(jump_sound, settings).ok();
             }
         }
 
-        // Handle keyboard shortcuts for tools
-        self.handle_tool_shortcuts(ctx);
+        // Music toggle
+        if ctx.input.is_key_just_pressed(KeyCode::KeyM) {
+            if self.music_playing {
+                ctx.audio.pause_music();
+                self.music_playing = false;
+            } else {
+                ctx.audio.resume_music();
+                self.music_playing = true;
+            }
+        }
 
-        // Show editor info
-        let info_y = window_size.y - 30.0;
-        ctx.ui.label(
-            &format!(
-                "Tool: {:?} | Grid: {} | Snap: {} | Zoom: {:.1}x",
-                self.editor.current_tool(),
-                if self.editor.is_grid_visible() { "ON" } else { "OFF" },
-                if self.editor.is_snap_to_grid() { "ON" } else { "OFF" },
-                self.editor.camera_zoom()
-            ),
-            Vec2::new(10.0, info_y),
+        // Behaviours (player movement)
+        self.behaviors.update(
+            &mut ctx.world,
+            ctx.input,
+            ctx.delta_time,
+            self.physics.as_mut(),
         );
-    }
 
-    fn on_key_pressed(&mut self, key: winit::keyboard::KeyCode, _ctx: &mut GameContext) {
-        use winit::keyboard::KeyCode;
+        // Reset
+        if ctx.input.is_key_pressed(KeyCode::KeyR) {
+            self.reset_player(ctx);
+        }
 
-        match key {
-            KeyCode::KeyG => self.editor.toggle_grid(),
-            KeyCode::KeyS if _ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft) => {
-                log::info!("Save scene (Ctrl+S)");
+        // Physics
+        if let Some(physics) = &mut self.physics {
+            use ecs::System;
+            physics.update(&mut ctx.world, ctx.delta_time);
+        }
+
+        // Hierarchy propagation
+        {
+            use ecs::System;
+            self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
+        }
+
+        // --- Events: process collection events ---
+        let collected: Vec<EntityCollected> = ctx.world.read_events::<EntityCollected>().to_vec();
+        for event in &collected {
+            if let Some(state) = ctx.world.resource_mut::<GameState>() {
+                state.score += event.score_value;
+                state.coins_collected += 1;
             }
-            KeyCode::Equal => self.editor.zoom_camera(1.1),
-            KeyCode::Minus => self.editor.zoom_camera(0.9),
-            KeyCode::Digit0 => self.editor.reset_camera(),
-            KeyCode::Space => self.editor.toggle_play_mode(),
-            _ => {}
+        }
+
+        // --- State Machine: update player state from velocity ---
+        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            let vel = ctx.world.get::<RigidBody>(player)
+                .map(|rb| rb.velocity)
+                .unwrap_or(glam::Vec2::ZERO);
+            let new_state = if vel.y > 10.0 { PlayerState::Jumping }
+                else if vel.y < -10.0 { PlayerState::Falling }
+                else if vel.x.abs() > 5.0 { PlayerState::Running }
+                else { PlayerState::Idle };
+            if let Some(sm) = ctx.world.get_mut::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
+                sm.transition_to(new_state);
+                sm.tick(ctx.delta_time);
+            }
+        }
+
+        // In-game UI (only when the editor delegates update to us)
+        if ctx.input.is_key_just_pressed(KeyCode::KeyH) {
+            self.show_ui = !self.show_ui;
+        }
+
+        if self.show_ui {
+            let panel_rect = UIRect::new(10.0, 10.0, 220.0, 140.0);
+            ctx.ui.panel(panel_rect);
+            ctx.ui.label("Game Controls", glam::Vec2::new(20.0, 25.0));
+
+            ctx.ui.label("Volume:", glam::Vec2::new(20.0, 55.0));
+            let slider_rect = UIRect::new(20.0, 70.0, 190.0, 20.0);
+            let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
+            if new_volume != self.volume {
+                self.volume = new_volume;
+                ctx.audio.set_master_volume(self.volume);
+            }
+
+            let reset_btn_rect = UIRect::new(20.0, 100.0, 90.0, 30.0);
+            if ctx.ui.button("reset_btn", "Reset", reset_btn_rect) {
+                self.reset_player(ctx);
+            }
         }
     }
 }
 
-impl EditorDemo {
-    fn handle_menu_action(&mut self, action: &str) {
-        match action {
-            "New Scene" => log::info!("Creating new scene..."),
-            "Open Scene..." => log::info!("Opening scene..."),
-            "Save" => log::info!("Saving scene..."),
-            "Save As..." => log::info!("Save as..."),
-            "Exit" => std::process::exit(0),
-            "Undo" => log::info!("Undo"),
-            "Redo" => log::info!("Redo"),
-            "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
-                log::info!("Toggle panel: {}", action);
+impl PlatformerGame {
+    /// Add Name + GlobalTransform2D to entities that lack them, so the editor
+    /// hierarchy and inspector work nicely.
+    fn add_editor_names(&self, ctx: &mut GameContext) {
+        use ecs::{GlobalTransform2D, Name};
+
+        if let Some(instance) = &self.scene_instance {
+            for (name, &entity_id) in &instance.named_entities {
+                if ctx.world.get::<Name>(entity_id).is_none() {
+                    ctx.world.add_component(&entity_id, Name::new(name)).ok();
+                }
+                if ctx.world.get::<GlobalTransform2D>(entity_id).is_none() {
+                    ctx.world.add_component(&entity_id, GlobalTransform2D::default()).ok();
+                }
             }
-            "Create Empty" => log::info!("Creating empty entity..."),
-            _ => log::info!("Unhandled action: {}", action),
         }
-    }
 
-    fn handle_tool_shortcuts(&mut self, ctx: &GameContext) {
-        use winit::keyboard::KeyCode;
-        let kb = ctx.input.keyboard();
-
-        if kb.is_key_just_pressed(KeyCode::KeyQ) {
-            self.editor.set_tool(EditorTool::Select);
-        } else if kb.is_key_just_pressed(KeyCode::KeyW) {
-            self.editor.set_tool(EditorTool::Move);
-        } else if kb.is_key_just_pressed(KeyCode::KeyE) {
-            self.editor.set_tool(EditorTool::Rotate);
-        } else if kb.is_key_just_pressed(KeyCode::KeyR) {
-            self.editor.set_tool(EditorTool::Scale);
-        }
-    }
-
-    fn render_panel_content(&mut self, ctx: &mut GameContext, panel_id: PanelId, bounds: common::Rect) {
-        let padding = 8.0;
-        let content_x = bounds.x + padding;
-        let mut y = bounds.y + padding;
-        let line_height = 20.0;
-
-        match panel_id {
-            PanelId::SCENE_VIEW => {
-                // Scene view - show grid info
-                if self.editor.is_grid_visible() {
-                    ctx.ui.label(
-                        &format!("Grid: {}px", self.editor.grid_size()),
-                        Vec2::new(content_x, y),
-                    );
-                }
-
-                // Draw viewport origin crosshair
-                let center = bounds.center();
-                ctx.ui.circle(center, 5.0, ui::Color::new(0.3, 0.3, 0.3, 1.0));
-                ctx.ui.line(
-                    Vec2::new(center.x - 20.0, center.y),
-                    Vec2::new(center.x + 20.0, center.y),
-                    ui::Color::new(0.4, 0.4, 0.4, 1.0),
-                    1.0,
-                );
-                ctx.ui.line(
-                    Vec2::new(center.x, center.y - 20.0),
-                    Vec2::new(center.x, center.y + 20.0),
-                    ui::Color::new(0.4, 0.4, 0.4, 1.0),
-                    1.0,
-                );
-
-                // Gizmo is rendered in main update() method for proper transform handling
-            }
-            PanelId::HIERARCHY => {
-                // Use the HierarchyPanel to render the entity tree
-                let clicked = self.editor.hierarchy.render(
-                    ctx.ui,
-                    &ctx.world,
-                    &mut self.editor.selection,
-                    bounds,
-                );
-
-                // Handle clicked entities - select them
-                for entity_id in clicked {
-                    if ctx.input.keyboard().is_key_pressed(winit::keyboard::KeyCode::ControlLeft) {
-                        self.editor.selection.toggle(entity_id);
-                    } else {
-                        self.editor.selection.select(entity_id);
-                    }
-                    log::info!("Selected entity: {} ({})",
-                        HierarchyPanel::entity_display_name(&ctx.world, entity_id),
-                        entity_id.value()
-                    );
-                }
-            }
-            PanelId::INSPECTOR => {
-                if let Some(entity_id) = self.editor.selection.primary() {
-                    ctx.ui.label(
-                        &format!("Entity: {}", entity_id.value()),
-                        Vec2::new(content_x, y),
-                    );
-                    y += line_height;
-
-                    // Use generic inspector for all components
-                    let style = InspectorStyle::default();
-
-                    // Inspect Transform2D if present
-                    if let Some(transform) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Transform2D", &*transform, content_x, y, &style);
-                    }
-
-                    // Inspect Sprite if present
-                    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Sprite", &*sprite, content_x, y, &style);
-                    }
-
-                    // Inspect Camera if present
-                    if let Some(camera) = ctx.world.get::<ecs::sprite_components::Camera>(entity_id) {
-                        y += line_height * 0.5;
-                        y = inspect_component(ctx.ui, "Camera", &*camera, content_x, y, &style);
-                    }
-
-                    // Inspect SpriteAnimation if present
-                    if let Some(animation) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
-                        y += line_height * 0.5;
-                        let _ = inspect_component(ctx.ui, "SpriteAnimation", &*animation, content_x, y, &style);
-                    }
-                } else {
-                    ctx.ui.label("No selection", Vec2::new(content_x, y));
-                }
-            }
-            PanelId::ASSET_BROWSER => {
-                ctx.ui.label("(Asset browser not yet implemented)", Vec2::new(content_x, y));
-            }
-            _ => {
-                ctx.ui.label("Panel", Vec2::new(content_x, y));
+        // Ensure all entities have a GlobalTransform2D for the editor gizmo
+        for entity_id in ctx.world.entities() {
+            if ctx.world.get::<Transform2D>(entity_id).is_some()
+                && ctx.world.get::<GlobalTransform2D>(entity_id).is_none()
+            {
+                ctx.world.add_component(&entity_id, GlobalTransform2D::default()).ok();
             }
         }
     }
@@ -343,9 +331,10 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let config = GameConfig::new("Insiculous 2D - Editor Demo")
-        .with_size(1280, 720);
+        .with_size(1280, 720)
+        .with_clear_color(0.1, 0.1, 0.15, 1.0);
 
-    if let Err(e) = run_game(EditorDemo::default(), config) {
+    if let Err(e) = run_game_with_editor(PlatformerGame::new(), config) {
         log::error!("Editor error: {}", e);
     }
 }

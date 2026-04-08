@@ -6,6 +6,8 @@
 use glam::Vec2;
 use ui::{Color, Rect, UIContext};
 
+use crate::theme::EditorTheme;
+
 /// The type of gizmo operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GizmoMode {
@@ -151,6 +153,13 @@ impl Gizmo {
         self.position
     }
 
+    /// Apply colors from the editor theme.
+    pub fn apply_theme(&mut self, theme: &EditorTheme) {
+        self.color_x = theme.gizmo_x;
+        self.color_y = theme.gizmo_y;
+        self.color_center = theme.gizmo_center;
+    }
+
     /// Set the entity rotation (for rotation gizmo display).
     pub fn set_rotation(&mut self, rotation: f32) {
         self.rotation = rotation;
@@ -171,8 +180,19 @@ impl Gizmo {
         self.active_handle
     }
 
+    /// Create a square rect centered at the given position, sized to handle_size.
+    fn centered_handle_rect(&self, center: Vec2) -> Rect {
+        Rect::new(
+            center.x - self.handle_size / 2.0,
+            center.y - self.handle_size / 2.0,
+            self.handle_size,
+            self.handle_size,
+        )
+    }
+
     /// Convert world position to screen position.
     /// For now, this is a simple offset. A real implementation would use camera transform.
+    #[allow(dead_code)] // Will be used when editor gizmo rendering is wired to viewport
     fn world_to_screen(&self, world_pos: Vec2, camera_offset: Vec2, camera_zoom: f32) -> Vec2 {
         (world_pos - camera_offset) * camera_zoom
     }
@@ -203,12 +223,7 @@ impl Gizmo {
         ui.line(screen_pos, x_end, self.color_x, 2.0);
 
         // X axis arrow head
-        let x_arrow_bounds = Rect::new(
-            x_end.x - self.handle_size / 2.0,
-            x_end.y - self.handle_size / 2.0,
-            self.handle_size,
-            self.handle_size,
-        );
+        let x_arrow_bounds = self.centered_handle_rect(x_end);
         let x_hovered = x_arrow_bounds.contains(mouse_pos);
         let x_color = if x_hovered || self.active_handle == Some(GizmoHandle::AxisX) {
             Color::new(1.0, 0.4, 0.4, 1.0)
@@ -222,12 +237,7 @@ impl Gizmo {
         ui.line(screen_pos, y_end, self.color_y, 2.0);
 
         // Y axis arrow head
-        let y_arrow_bounds = Rect::new(
-            y_end.x - self.handle_size / 2.0,
-            y_end.y - self.handle_size / 2.0,
-            self.handle_size,
-            self.handle_size,
-        );
+        let y_arrow_bounds = self.centered_handle_rect(y_end);
         let y_hovered = y_arrow_bounds.contains(mouse_pos);
         let y_color = if y_hovered || self.active_handle == Some(GizmoHandle::AxisY) {
             Color::new(0.4, 1.0, 0.4, 1.0)
@@ -237,12 +247,7 @@ impl Gizmo {
         ui.rect(y_arrow_bounds, y_color);
 
         // Center handle (for free movement)
-        let center_bounds = Rect::new(
-            screen_pos.x - self.handle_size / 2.0,
-            screen_pos.y - self.handle_size / 2.0,
-            self.handle_size,
-            self.handle_size,
-        );
+        let center_bounds = self.centered_handle_rect(screen_pos);
         let center_hovered = center_bounds.contains(mouse_pos);
         let center_color = if center_hovered || self.active_handle == Some(GizmoHandle::Center) {
             Color::new(1.0, 1.0, 0.4, 1.0)
@@ -396,12 +401,7 @@ impl Gizmo {
         ];
 
         for (corner, pos) in corners {
-            let handle_bounds = Rect::new(
-                pos.x - self.handle_size / 2.0,
-                pos.y - self.handle_size / 2.0,
-                self.handle_size,
-                self.handle_size,
-            );
+            let handle_bounds = self.centered_handle_rect(pos);
 
             let hovered = handle_bounds.contains(mouse_pos);
             let active = self.active_handle == Some(GizmoHandle::ScaleCorner(corner));
@@ -442,12 +442,7 @@ impl Gizmo {
             // Check if any handle is still being dragged
             let still_dragging = corners.iter().any(|(c, _)| {
                 let id = format!("gizmo_scale_{:?}", c);
-                let bounds = Rect::new(
-                    screen_pos.x - self.handle_size / 2.0,
-                    screen_pos.y - self.handle_size / 2.0,
-                    self.handle_size,
-                    self.handle_size,
-                );
+                let bounds = self.centered_handle_rect(screen_pos);
                 ui.interact(id.as_str(), bounds, true).dragging
             });
 

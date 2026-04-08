@@ -159,6 +159,14 @@ impl UIContext {
 
     // ================== Widget Helpers ==================
 
+    /// Calculate the baseline Y position for vertically centered text.
+    fn baseline_y(&self, text_top: f32, font_size: f32, font_handle: FontHandle) -> f32 {
+        let ascent = self.font_manager.metrics(font_handle, font_size)
+            .map(|m| m.ascent)
+            .unwrap_or(font_size * 0.8);
+        text_top + ascent
+    }
+
     /// Get the background color for a widget based on its state and the button style
     fn widget_background_color(&self, state: WidgetState) -> Color {
         let style = &self.theme.button;
@@ -253,11 +261,8 @@ impl UIContext {
             if let Ok(text_size) = self.font_manager.measure_text(font_handle, label, font_size) {
                 // Position text so it's centered vertically
                 let text_top = bounds.y + (bounds.height - text_size.y) / 2.0;
-                // Get font metrics to find the baseline
-                let metrics = self.font_manager.metrics(font_handle, font_size);
-                let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
                 // The baseline is 'ascent' pixels below the text top
-                let baseline_y = text_top + ascent;
+                let baseline_y = self.baseline_y(text_top, font_size, font_handle);
                 let text_pos = Vec2::new(
                     bounds.x + (bounds.width - text_size.x) / 2.0,
                     baseline_y,
@@ -332,14 +337,11 @@ impl UIContext {
         let font_size = self.theme.text.font_size;
         let padding = 8.0; // Standard padding
 
-        // Get text dimensions if font is available
-        let (text_size, metrics) = if let Some(font_handle) = self.font_manager.default_font() {
-            let size = self.font_manager.measure_text(font_handle, text, font_size).ok();
-            let m = self.font_manager.metrics(font_handle, font_size);
-            (size, m)
-        } else {
-            (None, None)
-        };
+        // Get text dimensions and font handle if available
+        let font_handle = self.font_manager.default_font();
+        let text_size = font_handle.and_then(|fh| {
+            self.font_manager.measure_text(fh, text, font_size).ok()
+        });
 
         // Calculate X position based on alignment
         let x = if let Some(size) = text_size {
@@ -359,13 +361,64 @@ impl UIContext {
         };
 
         // Calculate Y baseline position for vertical centering
-        // The text origin is at the baseline, so we need to offset by ascent
-        let ascent = metrics.map(|m| m.ascent).unwrap_or(font_size * 0.8);
         let text_height = text_size.map(|s| s.y).unwrap_or(font_size);
         let text_top = bounds.y + (bounds.height - text_height) / 2.0;
-        let baseline_y = text_top + ascent;
+        let baseline_y = if let Some(fh) = font_handle {
+            self.baseline_y(text_top, font_size, fh)
+        } else {
+            text_top + font_size * 0.8
+        };
 
         self.label(text, Vec2::new(x, baseline_y));
+    }
+
+    /// Create a text label centered horizontally at a position.
+    ///
+    /// Measures the text width and offsets so the text appears centered
+    /// on `center.x`. The `center.y` specifies the vertical baseline position.
+    pub fn label_centered(&mut self, text: &str, center: Vec2) {
+        let color = self.theme.text.color;
+        let font_size = self.theme.text.font_size;
+        self.label_centered_styled(text, center, color, font_size);
+    }
+
+    /// Create a centered text label with custom styling.
+    pub fn label_centered_styled(
+        &mut self,
+        text: &str,
+        center: Vec2,
+        color: Color,
+        font_size: f32,
+    ) {
+        let half_width = if let Some(fh) = self.font_manager.default_font() {
+            self.font_manager
+                .measure_text(fh, text, font_size)
+                .map(|size| size.x / 2.0)
+                .unwrap_or_else(|_| text.len() as f32 * font_size * 0.3)
+        } else {
+            text.len() as f32 * font_size * 0.3
+        };
+
+        self.label_styled(text, Vec2::new(center.x - half_width, center.y), color, font_size);
+    }
+
+    /// Measure text dimensions using the default font and font size.
+    ///
+    /// Returns the width and height of the text bounding box. If no font
+    /// is loaded, returns an estimate based on character count.
+    pub fn measure_text(&self, text: &str) -> Vec2 {
+        self.measure_text_styled(text, self.theme.text.font_size)
+    }
+
+    /// Measure text dimensions with a custom font size.
+    pub fn measure_text_styled(&self, text: &str, font_size: f32) -> Vec2 {
+        if let Some(fh) = self.font_manager.default_font() {
+            self.font_manager
+                .measure_text(fh, text, font_size)
+                .unwrap_or_else(|_| Vec2::new(text.len() as f32 * font_size * 0.6, font_size * 1.2))
+        } else {
+            Vec2::new(text.len() as f32 * font_size * 0.6, font_size * 1.2)
+        }
     }
 
     /// Create a panel (container background).
@@ -457,6 +510,133 @@ impl UIContext {
         } else {
             value
         }
+    }
+
+    /// Create a float text input field.
+    ///
+    /// Displays the value as text in a box. Click to focus and type a new value.
+    /// Accepts digits, period, and minus sign. Enter/Tab commits, Escape cancels.
+    /// The committed value is clamped to the min/max range.
+    ///
+    /// Returns the current value (unchanged while editing, new value on commit).
+    pub fn float_input(
+        &mut self,
+        id: impl Into<WidgetId>,
+        value: f32,
+        min: f32,
+        max: f32,
+        bounds: Rect,
+    ) -> f32 {
+        let id = id.into();
+        let result = self.interaction.interact(id, bounds, true);
+        let is_focused = self.interaction.is_focused(id);
+
+        // Snapshot keyboard state before mutating persistent state
+        let typed_chars = self.interaction.input().typed_chars.clone();
+        let enter = self.interaction.input().enter_pressed;
+        let escape = self.interaction.input().escape_pressed;
+        let backspace = self.interaction.input().backspace_pressed;
+        let tab = self.interaction.input().tab_pressed;
+        let mouse_just_pressed = self.interaction.input().mouse_just_pressed;
+        let mouse_in_bounds = bounds.contains(self.interaction.input().mouse_pos);
+
+        if result.clicked && !is_focused {
+            // Enter edit mode
+            self.interaction.set_focus(id);
+            let state = self.interaction.get_state(id);
+            state.string_value = format!("{:.2}", value);
+        }
+
+        if self.interaction.is_focused(id) {
+            // Process keyboard input
+            let state = self.interaction.get_state(id);
+
+            for ch in &typed_chars {
+                state.string_value.push(*ch);
+            }
+
+            if backspace {
+                state.string_value.pop();
+            }
+
+            // Commit on Enter or Tab
+            if enter || tab {
+                let new_value = state.string_value.parse::<f32>()
+                    .unwrap_or(value)
+                    .clamp(min, max);
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", new_value), false);
+                return new_value;
+            }
+
+            // Cancel on Escape
+            if escape {
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", value), false);
+                return value;
+            }
+
+            // Click outside commits
+            if mouse_just_pressed && !mouse_in_bounds {
+                let new_value = state.string_value.parse::<f32>()
+                    .unwrap_or(value)
+                    .clamp(min, max);
+                self.interaction.clear_focus();
+                self.draw_float_input_box(bounds, &format!("{:.2}", new_value), false);
+                return new_value;
+            }
+
+            // Draw focused state with editing text
+            let edit_text = self.interaction.get_state(id).string_value.clone();
+            self.draw_float_input_box(bounds, &edit_text, true);
+            return value; // Return original while editing
+        }
+
+        // Not focused — draw display value
+        let display = format!("{:.2}", value);
+        let hovered = result.state == WidgetState::Hovered;
+        self.draw_float_input_box(bounds, &display, hovered);
+        value
+    }
+
+    /// Draw a float input text box (shared by focused and unfocused states).
+    fn draw_float_input_box(&mut self, bounds: Rect, text: &str, highlighted: bool) {
+        let bg = if highlighted {
+            Color::new(0.2, 0.2, 0.25, 1.0)
+        } else {
+            Color::new(0.15, 0.15, 0.18, 1.0)
+        };
+        let border = if highlighted {
+            Color::new(0.4, 0.6, 1.0, 1.0)
+        } else {
+            Color::new(0.3, 0.3, 0.35, 1.0)
+        };
+
+        self.draw_list.rect_rounded(bounds, bg, 2.0);
+        self.draw_list.rect_border_rounded(bounds, border, 1.0, 2.0);
+
+        // Text positioned inside the box
+        let font_size = 13.0;
+        let padding = 4.0;
+
+        if let Some(font_handle) = self.font_manager.default_font() {
+            if let Ok(text_size) = self.font_manager.measure_text(font_handle, text, font_size) {
+                let text_top = bounds.y + (bounds.height - text_size.y) / 2.0;
+                let baseline_y = self.baseline_y(text_top, font_size, font_handle);
+                let text_pos = Vec2::new(bounds.x + padding, baseline_y);
+                if let Ok(layout) = self.font_manager.layout_text(font_handle, text, font_size) {
+                    let text_data = Self::layout_to_draw_data(
+                        &layout, text, text_pos, Color::WHITE, font_size,
+                    );
+                    self.draw_list.text(text_data);
+                    return;
+                }
+            }
+        }
+
+        // Fallback to placeholder
+        let text_pos = Vec2::new(bounds.x + padding, bounds.y + bounds.height / 2.0);
+        self.draw_list.text_placeholder(text, text_pos, Color::WHITE, font_size);
     }
 
     /// Create a checkbox.
@@ -775,5 +955,76 @@ mod tests {
         ui.pop_clip_rect();
 
         assert_eq!(ui.draw_list().len(), 3);
+    }
+
+    #[test]
+    fn test_float_input_returns_original_without_interaction() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        let bounds = Rect::new(100.0, 100.0, 80.0, 20.0);
+        let result = ui.float_input("test_float", 3.14, 0.0, 10.0, bounds);
+
+        // Without any interaction, should return the original value
+        assert_eq!(result, 3.14);
+        // Should generate draw commands (background rect + border + text)
+        assert!(ui.draw_list().len() >= 2);
+    }
+
+    #[test]
+    fn test_float_input_draws_box() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        let bounds = Rect::new(50.0, 50.0, 100.0, 24.0);
+        ui.float_input("float_box", 42.0, 0.0, 100.0, bounds);
+
+        // Should have background rect, border rect, and text placeholder
+        assert!(ui.draw_list().len() >= 3);
+    }
+
+    // === label_centered / measure_text tests ===
+
+    #[test]
+    fn test_label_centered_generates_draw_command() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        ui.label_centered("hello", Vec2::new(400.0, 300.0));
+
+        assert!(ui.draw_list().len() >= 1);
+    }
+
+    #[test]
+    fn test_label_centered_styled_generates_draw_command() {
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+
+        ui.label_centered_styled("styled", Vec2::new(400.0, 300.0), Color::WHITE, 24.0);
+
+        assert!(ui.draw_list().len() >= 1);
+    }
+
+    #[test]
+    fn test_measure_text_returns_nonzero_dimensions() {
+        let ui = UIContext::new();
+        let size = ui.measure_text("hello");
+        assert!(size.x > 0.0, "text width should be positive");
+        assert!(size.y > 0.0, "text height should be positive");
+    }
+
+    #[test]
+    fn test_measure_text_larger_font_gives_wider_result() {
+        let ui = UIContext::new();
+        let small = ui.measure_text_styled("hello", 12.0);
+        let large = ui.measure_text_styled("hello", 24.0);
+        assert!(large.x > small.x, "larger font should produce wider text");
+    }
+
+    #[test]
+    fn test_measure_text_empty_string_returns_zero_width() {
+        let ui = UIContext::new();
+        let size = ui.measure_text("");
+        assert_eq!(size.x, 0.0, "empty string should have zero width");
     }
 }

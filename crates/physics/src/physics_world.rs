@@ -172,6 +172,29 @@ impl PhysicsWorld {
         }
     }
 
+    /// Clear all physics bodies, colliders, and entity mappings.
+    ///
+    /// Preserves configuration (gravity, solver iterations, scale) but resets
+    /// all simulation state. Used when the editor restores a world snapshot
+    /// and physics needs to re-sync from ECS on the next update.
+    pub fn clear(&mut self) {
+        self.rigid_body_set = RigidBodySet::new();
+        self.collider_set = ColliderSet::new();
+        self.island_manager = IslandManager::new();
+        self.broad_phase = DefaultBroadPhase::new();
+        self.narrow_phase = NarrowPhase::new();
+        self.impulse_joint_set = ImpulseJointSet::new();
+        self.multibody_joint_set = MultibodyJointSet::new();
+        self.ccd_solver = CCDSolver::new();
+        self.query_pipeline = QueryPipeline::new();
+        self.entity_to_body.clear();
+        self.body_to_entity.clear();
+        self.entity_to_collider.clear();
+        self.collider_to_entity.clear();
+        self.collision_events.clear();
+        self.previous_collisions.clear();
+    }
+
     /// Get the physics configuration
     pub fn config(&self) -> &PhysicsConfig {
         &self.config
@@ -422,6 +445,32 @@ impl PhysicsWorld {
                             stopped: false,
                         },
                         contacts,
+                    });
+                }
+            }
+        }
+
+        // Process sensor intersection events from narrow phase.
+        // Sensors don't generate contact pairs — they generate intersection pairs instead.
+        for (collider1, collider2, intersecting) in self.narrow_phase.intersection_pairs() {
+            if let (Some(&entity_a), Some(&entity_b)) = (
+                self.collider_to_entity.get(&collider1),
+                self.collider_to_entity.get(&collider2),
+            ) {
+                let pair = CollisionPair::new(entity_a, entity_b);
+
+                if intersecting {
+                    current_collisions.insert(pair);
+
+                    let started = !self.previous_collisions.contains(&pair);
+                    self.collision_events.push(CollisionData {
+                        event: CollisionEvent {
+                            entity_a,
+                            entity_b,
+                            started,
+                            stopped: false,
+                        },
+                        contacts: Vec::new(), // Sensors have no contact points
                     });
                 }
             }
@@ -829,6 +878,64 @@ mod tests {
         let stopped = stopped_collision.unwrap();
         assert!(!stopped.event.started, "Stopped event should not be marked as started");
         assert!(stopped.event.stopped, "Stopped event should be marked as stopped");
+    }
+
+    #[test]
+    fn test_clear_removes_all_bodies_and_colliders() {
+        let mut world = PhysicsWorld::default();
+        let entity = EntityId::new();
+        let mut body = RigidBody::new_dynamic();
+        let mut collider = Collider::box_collider(32.0, 32.0);
+
+        world.add_rigid_body(entity, &mut body, Vec2::ZERO, 0.0);
+        world.add_collider(entity, &mut collider, Some(&body));
+        assert!(world.has_rigid_body(entity));
+        assert!(world.has_collider(entity));
+
+        world.clear();
+
+        assert!(!world.has_rigid_body(entity));
+        assert!(!world.has_collider(entity));
+        assert_eq!(world.rigid_body_count(), 0);
+        assert_eq!(world.collider_count(), 0);
+    }
+
+    #[test]
+    fn test_clear_preserves_config() {
+        let config = PhysicsConfig::new(Vec2::new(0.0, -500.0)).with_scale(50.0);
+        let mut world = PhysicsWorld::new(config);
+
+        world.clear();
+
+        assert_eq!(world.gravity(), Vec2::new(0.0, -500.0));
+        assert_eq!(world.config().pixels_per_meter, 50.0);
+    }
+
+    #[test]
+    fn test_clear_allows_re_adding_same_entity() {
+        let mut world = PhysicsWorld::default();
+        let entity = EntityId::new();
+        let mut body = RigidBody::new_dynamic();
+        let mut collider = Collider::box_collider(32.0, 32.0);
+
+        world.add_rigid_body(entity, &mut body, Vec2::new(100.0, 200.0), 0.0);
+        world.add_collider(entity, &mut collider, Some(&body));
+
+        // Step to move body
+        for _ in 0..10 {
+            world.step(1.0 / 60.0);
+        }
+
+        world.clear();
+
+        // Re-add at original position
+        let mut body2 = RigidBody::new_dynamic();
+        let mut collider2 = Collider::box_collider(32.0, 32.0);
+        world.add_rigid_body(entity, &mut body2, Vec2::new(100.0, 200.0), 0.0);
+        world.add_collider(entity, &mut collider2, Some(&body2));
+
+        let (pos, _) = world.get_body_transform(entity).unwrap();
+        assert_eq!(pos, Vec2::new(100.0, 200.0));
     }
 
     #[test]

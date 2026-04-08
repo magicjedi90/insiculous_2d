@@ -179,3 +179,130 @@ fn test_query_entities() {
     assert_eq!(with_both.len(), 1);
     assert!(with_both.contains(&entity_with_both));
 }
+
+#[test]
+fn test_world_clear_removes_entities_and_components() {
+    use ecs::sprite_components::Transform2D;
+
+    let mut world = World::new();
+    let e1 = world.create_entity();
+    let e2 = world.create_entity();
+    world.add_component(&e1, Transform2D::default()).unwrap();
+    world.add_component(&e2, Transform2D::default()).unwrap();
+
+    assert_eq!(world.entity_count(), 2);
+
+    world.clear();
+
+    assert_eq!(world.entity_count(), 0);
+    assert!(world.get::<Transform2D>(e1).is_none());
+    assert!(world.get::<Transform2D>(e2).is_none());
+}
+
+#[test]
+fn test_create_entity_with_id_preserves_id() {
+    let mut world = World::new();
+    let id = EntityId::with_generation(42, 3);
+    let created = world.create_entity_with_id(id);
+
+    assert_eq!(created, id);
+    assert_eq!(created.value(), 42);
+    assert_eq!(created.generation(), 3);
+    assert_eq!(world.entity_count(), 1);
+    assert!(world.get_entity(&id).is_ok());
+}
+
+#[test]
+fn test_clear_then_create_entity_with_id() {
+    use ecs::sprite_components::Transform2D;
+
+    let mut world = World::new();
+    let original = world.create_entity();
+    world.add_component(&original, Transform2D::new(glam::Vec2::new(10.0, 20.0))).unwrap();
+
+    world.clear();
+
+    // Recreate with same ID
+    let restored = world.create_entity_with_id(original);
+    world.add_component(&restored, Transform2D::new(glam::Vec2::new(30.0, 40.0))).unwrap();
+
+    assert_eq!(world.entity_count(), 1);
+    let t = world.get::<Transform2D>(restored).unwrap();
+    assert_eq!(t.position, glam::Vec2::new(30.0, 40.0));
+}
+
+// === EntityBuilder (world.spawn()) tests ===
+
+#[test]
+fn test_spawn_creates_entity() {
+    let mut world = World::new();
+    let entity = world.spawn().id();
+
+    assert_eq!(world.entity_count(), 1);
+    assert!(world.get_entity(&entity).is_ok());
+}
+
+#[test]
+fn test_spawn_with_single_component() {
+    use ecs::sprite_components::Transform2D;
+
+    let mut world = World::new();
+    let entity = world.spawn()
+        .with(Transform2D::new(glam::Vec2::new(10.0, 20.0)))
+        .id();
+
+    assert!(world.has_component::<Transform2D>(&entity).unwrap());
+    let t = world.get::<Transform2D>(entity).unwrap();
+    assert_eq!(t.position, glam::Vec2::new(10.0, 20.0));
+}
+
+#[test]
+fn test_spawn_with_multiple_components() {
+    use ecs::sprite_components::{Transform2D, Sprite};
+
+    let mut world = World::new();
+    let entity = world.spawn()
+        .with(Transform2D::new(glam::Vec2::new(5.0, 5.0)))
+        .with(Sprite::new(42))
+        .id();
+
+    assert!(world.has_component::<Transform2D>(&entity).unwrap());
+    assert!(world.has_component::<Sprite>(&entity).unwrap());
+    assert_eq!(world.get::<Sprite>(entity).unwrap().texture_handle, 42);
+}
+
+#[test]
+fn test_spawn_returns_correct_entity_id() {
+    use ecs::sprite_components::Transform2D;
+
+    let mut world = World::new();
+    let e1 = world.spawn()
+        .with(Transform2D::new(glam::Vec2::new(1.0, 0.0)))
+        .id();
+    let e2 = world.spawn()
+        .with(Transform2D::new(glam::Vec2::new(2.0, 0.0)))
+        .id();
+
+    assert_ne!(e1, e2);
+    assert_eq!(world.get::<Transform2D>(e1).unwrap().position.x, 1.0);
+    assert_eq!(world.get::<Transform2D>(e2).unwrap().position.x, 2.0);
+}
+
+#[test]
+fn test_spawn_multiple_entities_independent() {
+    use ecs::sprite_components::{Transform2D, Sprite};
+
+    let mut world = World::new();
+    let e1 = world.spawn()
+        .with(Transform2D::new(glam::Vec2::ZERO))
+        .id();
+    let e2 = world.spawn()
+        .with(Sprite::new(7))
+        .id();
+
+    assert_eq!(world.entity_count(), 2);
+    assert!(world.has_component::<Transform2D>(&e1).unwrap());
+    assert!(!world.has_component::<Sprite>(&e1).unwrap());
+    assert!(!world.has_component::<Transform2D>(&e2).unwrap());
+    assert!(world.has_component::<Sprite>(&e2).unwrap());
+}

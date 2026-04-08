@@ -141,18 +141,22 @@ impl InputMapping {
         self.bind_input(InputSource::Gamepad(0, GamepadButton::Select), GameAction::Select);
     }
 
-    /// Bind an input source to a game action
-    pub fn bind_input(&mut self, input: InputSource, action: GameAction) {
-        // Remove any existing binding for this input
-        if let Some(old_action) = self.bindings.remove(&input) {
+    /// Remove an existing binding for the given input source, cleaning up action_bindings.
+    fn remove_existing_binding(&mut self, input: &InputSource) {
+        if let Some(old_action) = self.bindings.remove(input) {
             if let Some(sources) = self.action_bindings.get_mut(&old_action) {
-                sources.retain(|&s| s != input);
-                // If the action has no more bindings, remove it entirely
+                sources.retain(|&s| s != *input);
                 if sources.is_empty() {
                     self.action_bindings.remove(&old_action);
                 }
             }
         }
+    }
+
+    /// Bind an input source to a game action
+    pub fn bind_input(&mut self, input: InputSource, action: GameAction) {
+        // Remove any existing binding for this input
+        self.remove_existing_binding(&input);
 
         // Add the new binding
         self.bindings.insert(input, action);
@@ -187,11 +191,7 @@ impl InputMapping {
     /// ```
     pub fn bind_input_to_multiple_actions(&mut self, input: InputSource, actions: Vec<GameAction>) {
         // Remove any existing binding for this input
-        if let Some(old_action) = self.bindings.remove(&input) {
-            if let Some(sources) = self.action_bindings.get_mut(&old_action) {
-                sources.retain(|&s| s != input);
-            }
-        }
+        self.remove_existing_binding(&input);
 
         // Bind to the first action for the reverse lookup (limitation: only first action returned by get_action)
         if let Some(first_action) = actions.first() {

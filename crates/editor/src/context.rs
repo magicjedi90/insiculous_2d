@@ -3,9 +3,6 @@
 //! The EditorContext wraps a GameContext and adds editor-specific state
 //! like selection, gizmos, and editor camera.
 
-use std::path::{Path, PathBuf};
-
-use engine_core::scene_data::EditorSettings;
 use glam::Vec2;
 
 use crate::{
@@ -13,6 +10,10 @@ use crate::{
     grid::GridRenderer,
     hierarchy::HierarchyPanel,
     picking::EntityPicker,
+    play_controls::PlayControls,
+    play_state::EditorPlayState,
+    status_bar::StatusBar,
+    theme::EditorTheme,
     viewport::SceneViewport,
     viewport_input::ViewportInputHandler,
     DockArea, DockPanel, DockPosition, EditorTool, Gizmo, GizmoMode, MenuBar, PanelId, Selection,
@@ -46,12 +47,20 @@ pub struct EditorContext {
     pub hierarchy: HierarchyPanel,
     /// Snap to grid enabled
     snap_to_grid: bool,
-    /// Whether the editor is in play mode (running the game)
-    play_mode: bool,
-    /// Path to currently loaded scene (None = unsaved new scene)
-    current_scene_path: Option<PathBuf>,
-    /// Scene name for display
-    scene_name: String,
+    /// Current play state (Editing / Playing / Paused)
+    play_state: EditorPlayState,
+    /// Play / Pause / Stop controls widget
+    pub play_controls: PlayControls,
+    /// Whether the add-component popup is open in the inspector.
+    add_component_popup_open: bool,
+    /// Whether the scene has unsaved changes
+    is_dirty: bool,
+    /// Current scene file path (None = untitled/new scene)
+    scene_path: Option<std::path::PathBuf>,
+    /// Centralized design-system theme
+    pub theme: EditorTheme,
+    /// Status bar at the bottom of the editor
+    pub status_bar: StatusBar,
 }
 
 impl Default for EditorContext {
@@ -87,9 +96,13 @@ impl EditorContext {
                 .with_min_size(100.0),
         );
 
+        let theme = EditorTheme::default();
+        let mut gizmo = Gizmo::new();
+        gizmo.apply_theme(&theme);
+
         Self {
             selection: Selection::new(),
-            gizmo: Gizmo::new(),
+            gizmo,
             toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)), // Inside scene view, below panel header
             menu_bar: MenuBar::editor_default(),
             dock_area,
@@ -100,9 +113,13 @@ impl EditorContext {
             input_mapping: EditorInputMapping::new(),
             hierarchy: HierarchyPanel::new(),
             snap_to_grid: false,
-            play_mode: false,
-            current_scene_path: None,
-            scene_name: "Untitled".to_string(),
+            play_state: EditorPlayState::default(),
+            play_controls: PlayControls::new(),
+            add_component_popup_open: false,
+            is_dirty: false,
+            scene_path: None,
+            theme,
+            status_bar: StatusBar::new(),
         }
     }
 
@@ -232,58 +249,120 @@ impl EditorContext {
         }
     }
 
-    // ================== Play Mode Methods ==================
+    // ================== Play State Methods ==================
 
-    /// Check if the editor is in play mode.
-    pub fn is_play_mode(&self) -> bool {
-        self.play_mode
+    /// Get the current play state.
+    pub fn play_state(&self) -> EditorPlayState {
+        self.play_state
     }
 
-    /// Enter play mode.
+    /// Set the play state.
+    pub fn set_play_state(&mut self, state: EditorPlayState) {
+        self.play_state = state;
+    }
+
+    /// Whether the editor is in normal editing mode.
+    pub fn is_editing(&self) -> bool {
+        self.play_state.is_editing()
+    }
+
+    /// Whether the game simulation is actively running.
+    pub fn is_playing(&self) -> bool {
+        self.play_state.is_playing()
+    }
+
+    /// Whether the game is paused.
+    pub fn is_paused(&self) -> bool {
+        self.play_state.is_paused()
+    }
+
+    /// Whether a play session is active (Playing or Paused).
+    pub fn in_play_session(&self) -> bool {
+        self.play_state.in_play_session()
+    }
+
+    /// Enter play mode (sets state to Playing).
     pub fn enter_play_mode(&mut self) {
-        self.play_mode = true;
+        self.play_state = EditorPlayState::Playing;
     }
 
-    /// Exit play mode.
+    /// Exit play mode (sets state to Editing).
     pub fn exit_play_mode(&mut self) {
-        self.play_mode = false;
+        self.play_state = EditorPlayState::Editing;
     }
 
-    /// Toggle play mode.
+    /// Toggle between Editing and Playing.
     pub fn toggle_play_mode(&mut self) {
-        self.play_mode = !self.play_mode;
+        self.play_state = if self.play_state.is_editing() {
+            EditorPlayState::Playing
+        } else {
+            EditorPlayState::Editing
+        };
     }
 
-    // ================== Scene Methods ==================
+    // ================== Add Component Popup ==================
 
-    /// Get the path to the currently loaded scene.
-    pub fn current_scene_path(&self) -> Option<&Path> {
-        self.current_scene_path.as_deref()
+    /// Whether the add-component popup is currently open.
+    pub fn is_add_component_popup_open(&self) -> bool {
+        self.add_component_popup_open
     }
 
-    /// Set the current scene path and name.
-    pub fn set_current_scene(&mut self, path: Option<PathBuf>, name: String) {
-        self.current_scene_path = path;
-        self.scene_name = name;
+    /// Toggle the add-component popup open/closed.
+    pub fn toggle_add_component_popup(&mut self) {
+        self.add_component_popup_open = !self.add_component_popup_open;
     }
 
-    /// Get the current scene name.
-    pub fn scene_name(&self) -> &str {
-        &self.scene_name
+    /// Close the add-component popup.
+    pub fn close_add_component_popup(&mut self) {
+        self.add_component_popup_open = false;
     }
 
-    /// Create EditorSettings from current editor state.
-    pub fn to_editor_settings(&self) -> EditorSettings {
-        EditorSettings {
-            camera_position: (self.camera_offset().x, self.camera_offset().y),
-            camera_zoom: self.camera_zoom(),
-        }
+    // ================== Scene State Methods ==================
+
+    /// Whether the scene has unsaved changes.
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
     }
 
-    /// Apply EditorSettings to restore camera state.
-    pub fn apply_editor_settings(&mut self, settings: &EditorSettings) {
-        self.set_camera_offset(Vec2::new(settings.camera_position.0, settings.camera_position.1));
-        self.set_camera_zoom(settings.camera_zoom);
+    /// Set the dirty flag.
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.is_dirty = dirty;
+    }
+
+    /// Convenience: mark the scene as having unsaved changes.
+    pub fn mark_dirty(&mut self) {
+        self.is_dirty = true;
+    }
+
+    /// Get the current scene file path, if any.
+    pub fn scene_path(&self) -> Option<&std::path::Path> {
+        self.scene_path.as_deref()
+    }
+
+    /// Set the current scene file path.
+    pub fn set_scene_path(&mut self, path: Option<std::path::PathBuf>) {
+        self.scene_path = path;
+    }
+
+    /// Get a display name for the current scene.
+    ///
+    /// Returns the file name if a path is set, otherwise "Untitled".
+    pub fn scene_display_name(&self) -> String {
+        self.scene_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "Untitled".to_string())
+    }
+
+    /// Get the title bar text including dirty indicator.
+    ///
+    /// Format: "filename.ron* - Insiculous Editor" (with * if dirty)
+    pub fn title_bar_text(&self) -> String {
+        let name = self.scene_display_name();
+        let dirty_indicator = if self.is_dirty { "*" } else { "" };
+        format!("{}{} - Insiculous Editor", name, dirty_indicator)
     }
 
     // ================== Layout Methods ==================
@@ -293,13 +372,14 @@ impl EditorContext {
     /// This should be called each frame before rendering to ensure
     /// panels are properly sized and viewport bounds are updated.
     pub fn update_layout(&mut self, window_size: Vec2) {
-        // Reserve space for menu bar
+        // Reserve space for menu bar (top) and status bar (bottom)
         let menu_height = self.menu_bar.height();
+        let status_bar_height = crate::status_bar::STATUS_BAR_HEIGHT;
         let content_bounds = common::Rect::new(
             0.0,
             menu_height,
             window_size.x,
-            window_size.y - menu_height,
+            window_size.y - menu_height - status_bar_height,
         );
 
         self.dock_area.set_bounds(content_bounds);
@@ -426,7 +506,7 @@ mod tests {
         assert_eq!(ctx.camera_zoom(), 1.0);
         assert!(ctx.is_grid_visible());
         assert!(!ctx.is_snap_to_grid());
-        assert!(!ctx.is_play_mode());
+        assert!(!ctx.in_play_session());
     }
 
     #[test]
@@ -543,16 +623,36 @@ mod tests {
     }
 
     #[test]
-    fn test_editor_context_play_mode() {
+    fn test_editor_context_play_state() {
         let mut ctx = EditorContext::new();
 
-        assert!(!ctx.is_play_mode());
+        // Default is editing
+        assert!(ctx.is_editing());
+        assert!(!ctx.in_play_session());
+        assert_eq!(ctx.play_state(), EditorPlayState::Editing);
+
+        // Enter play mode
         ctx.enter_play_mode();
-        assert!(ctx.is_play_mode());
+        assert!(ctx.is_playing());
+        assert!(ctx.in_play_session());
+
+        // Exit play mode
         ctx.exit_play_mode();
-        assert!(!ctx.is_play_mode());
+        assert!(ctx.is_editing());
+        assert!(!ctx.in_play_session());
+
+        // Toggle into playing
         ctx.toggle_play_mode();
-        assert!(ctx.is_play_mode());
+        assert!(ctx.is_playing());
+
+        // Toggle back to editing
+        ctx.toggle_play_mode();
+        assert!(ctx.is_editing());
+
+        // Set paused state directly
+        ctx.set_play_state(EditorPlayState::Paused);
+        assert!(ctx.is_paused());
+        assert!(ctx.in_play_session());
     }
 
     #[test]
@@ -653,6 +753,24 @@ mod tests {
     }
 
     #[test]
+    fn test_add_component_popup_default_closed() {
+        let ctx = EditorContext::new();
+        assert!(!ctx.is_add_component_popup_open());
+    }
+
+    #[test]
+    fn test_add_component_popup_toggle() {
+        let mut ctx = EditorContext::new();
+        ctx.toggle_add_component_popup();
+        assert!(ctx.is_add_component_popup_open());
+        ctx.toggle_add_component_popup();
+        assert!(!ctx.is_add_component_popup_open());
+        ctx.toggle_add_component_popup();
+        ctx.close_add_component_popup();
+        assert!(!ctx.is_add_component_popup_open());
+    }
+
+    #[test]
     fn test_gizmo_screen_position() {
         let mut ctx = EditorContext::new();
         ctx.update_layout(Vec2::new(800.0, 600.0));
@@ -668,50 +786,58 @@ mod tests {
     }
 
     #[test]
-    fn test_editor_context_scene_tracking() {
-        let mut ctx = EditorContext::new();
-
-        // Initially no scene
-        assert!(ctx.current_scene_path().is_none());
-        assert_eq!(ctx.scene_name(), "Untitled");
-
-        // Set a scene
-        ctx.set_current_scene(
-            Some(std::path::PathBuf::from("/test/scene.ron")),
-            "My Scene".to_string(),
-        );
-
-        assert_eq!(
-            ctx.current_scene_path(),
-            Some(std::path::Path::new("/test/scene.ron"))
-        );
-        assert_eq!(ctx.scene_name(), "My Scene");
+    fn test_dirty_flag_default_false() {
+        let ctx = EditorContext::new();
+        assert!(!ctx.is_dirty());
     }
 
     #[test]
-    fn test_editor_settings_conversion() {
+    fn test_mark_dirty_sets_flag() {
         let mut ctx = EditorContext::new();
-        ctx.set_camera_offset(Vec2::new(150.0, -200.0));
-        ctx.set_camera_zoom(1.5);
-
-        let settings = ctx.to_editor_settings();
-
-        assert_eq!(settings.camera_position, (150.0, -200.0));
-        assert_eq!(settings.camera_zoom, 1.5);
+        ctx.mark_dirty();
+        assert!(ctx.is_dirty());
+        ctx.set_dirty(false);
+        assert!(!ctx.is_dirty());
     }
 
     #[test]
-    fn test_apply_editor_settings() {
+    fn test_scene_path_default_none() {
+        let ctx = EditorContext::new();
+        assert!(ctx.scene_path().is_none());
+    }
+
+    #[test]
+    fn test_scene_display_name_untitled() {
+        let ctx = EditorContext::new();
+        assert_eq!(ctx.scene_display_name(), "Untitled");
+    }
+
+    #[test]
+    fn test_scene_display_name_with_path() {
         let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/my_level.ron")));
+        assert_eq!(ctx.scene_display_name(), "my_level.ron");
+    }
 
-        let settings = engine_core::scene_data::EditorSettings {
-            camera_position: (100.0, 50.0),
-            camera_zoom: 2.0,
-        };
+    #[test]
+    fn test_title_bar_text_clean() {
+        let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/test.ron")));
+        assert_eq!(ctx.title_bar_text(), "test.ron - Insiculous Editor");
+    }
 
-        ctx.apply_editor_settings(&settings);
+    #[test]
+    fn test_title_bar_text_dirty() {
+        let mut ctx = EditorContext::new();
+        ctx.set_scene_path(Some(std::path::PathBuf::from("/scenes/test.ron")));
+        ctx.mark_dirty();
+        assert_eq!(ctx.title_bar_text(), "test.ron* - Insiculous Editor");
+    }
 
-        assert_eq!(ctx.camera_offset(), Vec2::new(100.0, 50.0));
-        assert_eq!(ctx.camera_zoom(), 2.0);
+    #[test]
+    fn test_title_bar_text_untitled_dirty() {
+        let mut ctx = EditorContext::new();
+        ctx.mark_dirty();
+        assert_eq!(ctx.title_bar_text(), "Untitled* - Insiculous Editor");
     }
 }

@@ -4,17 +4,16 @@ use std::collections::HashMap;
 
 use crate::component::{Component, ComponentRegistry};
 use crate::entity::{Entity, EntityId};
+use crate::event::EventBus;
 use crate::generation::EntityGeneration;
+use crate::resource::ResourceStorage;
 use crate::system::SystemRegistry;
-use crate::archetype::QueryTypes;
-use crate::ArchetypeStorage;
+use crate::query::QueryTypes;
 use crate::EcsError;
 
 /// Configuration for the ECS world
 #[derive(Debug, Clone)]
 pub struct WorldConfig {
-    /// Whether to use archetype-based component storage for better performance
-    pub use_archetype_storage: bool,
     /// Initial capacity for entity storage
     pub entity_capacity: usize,
     /// Initial capacity for component storage
@@ -24,7 +23,6 @@ pub struct WorldConfig {
 impl Default for WorldConfig {
     fn default() -> Self {
         Self {
-            use_archetype_storage: false, // Default to legacy for backward compatibility
             entity_capacity: 1024,
             component_capacity: 4096,
         }
@@ -41,13 +39,10 @@ pub struct World {
     components: ComponentRegistry,
     /// The system registry
     systems: SystemRegistry,
-    /// Archetype storage for optimized component access.
-    ///
-    /// Currently created when `use_archetype_storage` is enabled but not yet used for queries.
-    /// This is scaffolding for future archetype-based query optimization. The field is retained
-    /// to avoid breaking the `World::new_optimized()` API contract.
-    #[allow(dead_code)] // Scaffolding: stored for future archetype query implementation
-    archetype_storage: Option<ArchetypeStorage>,
+    /// Typed singleton resources for cross-system state
+    resources: ResourceStorage,
+    /// Typed event bus for loose-coupled system communication
+    events: EventBus,
     /// Whether the world is initialized
     initialized: bool,
     /// Whether the world is running
@@ -64,36 +59,17 @@ impl World {
 
     /// Create a new world with custom configuration
     pub fn with_config(config: WorldConfig) -> Self {
-        let components = if config.use_archetype_storage {
-            ComponentRegistry::new_archetype_based()
-        } else {
-            ComponentRegistry::new()
-        };
-
-        let archetype_storage = if config.use_archetype_storage {
-            Some(ArchetypeStorage::new())
-        } else {
-            None
-        };
-
         Self {
             entities: HashMap::with_capacity(config.entity_capacity),
             entity_generations: HashMap::with_capacity(config.entity_capacity),
-            components,
+            components: ComponentRegistry::new(),
             systems: SystemRegistry::new(),
-            archetype_storage,
+            resources: ResourceStorage::new(),
+            events: EventBus::new(),
             initialized: false,
             running: false,
             config,
         }
-    }
-
-    /// Create a new world with archetype-based storage for optimal performance
-    pub fn new_optimized() -> Self {
-        Self::with_config(WorldConfig {
-            use_archetype_storage: true,
-            ..WorldConfig::default()
-        })
     }
 
     /// Initialize the world
@@ -106,7 +82,7 @@ impl World {
         self.systems.initialize()?;
 
         self.initialized = true;
-        log::info!("World initialized with {} entities and {} systems", 
+        log::info!("World initialized with {} entities and {} systems",
                   self.entities.len(), self.systems.len());
         Ok(())
     }
@@ -164,15 +140,29 @@ impl World {
     }
 
     /// Create a new entity with generation tracking
+    /// Create an entity and return a builder for adding components.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let entity = world.spawn()
+    ///     .with(Transform2D::new(pos))
+    ///     .with(Sprite::new(tex))
+    ///     .id();
+    /// ```
+    pub fn spawn(&mut self) -> crate::entity_builder::EntityBuilder<'_> {
+        crate::entity_builder::EntityBuilder::new(self)
+    }
+
+    /// Create a new entity and return its ID
     pub fn create_entity(&mut self) -> EntityId {
         let entity = Entity::new();
         let id = entity.id();
-        
+
         // Track the entity generation
         let generation = EntityGeneration::with_generation(id.generation());
         self.entity_generations.insert(id, generation);
         self.entities.insert(id, entity);
-        
+
         log::trace!("Created entity {} with generation {}", id.value(), id.generation());
         id
     }
@@ -309,13 +299,13 @@ impl World {
         // Extract systems into a temporary variable to avoid borrowing conflicts
         let mut temp_systems = SystemRegistry::new();
         std::mem::swap(&mut self.systems, &mut temp_systems);
-        
+
         // Update systems with the world
         temp_systems.update_all(self, delta_time);
-        
+
         // Move systems back
         std::mem::swap(&mut self.systems, &mut temp_systems);
-        
+
         Ok(())
     }
 
@@ -361,8 +351,6 @@ impl World {
     /// Query for entities with specific component types.
     ///
     /// Returns a vector of entity IDs that have all required component types.
-    /// This is a simple implementation that iterates through all entities
-    /// and checks if they have the required components.
     ///
     /// # Example
     /// ```ignore
@@ -387,14 +375,80 @@ impl World {
             .collect()
     }
 
+    /// Remove all entities and components from the world.
+    ///
+    /// Clears entities, generations, and component storage. Does not
+    /// affect systems, initialization state, or configuration.
+    pub fn clear(&mut self) {
+        self.entities.clear();
+        self.entity_generations.clear();
+        self.components.shutdown().ok();
+    }
+
+    /// Create an entity with a specific ID (for snapshot restoration).
+    ///
+    /// Inserts the entity and its generation into the world. If an entity
+    /// with the same ID already exists, it will be overwritten.
+    pub fn create_entity_with_id(&mut self, id: EntityId) -> EntityId {
+        let entity = Entity::with_id(id);
+        let generation = EntityGeneration::with_generation(id.generation());
+        self.entity_generations.insert(id, generation);
+        self.entities.insert(id, entity);
+        id
+    }
+
+    // --- Resources (typed singleton state) ---
+
+    /// Insert a resource, replacing any previous value of the same type.
+    pub fn insert_resource<T: Send + Sync + 'static>(&mut self, resource: T) {
+        self.resources.insert(resource);
+    }
+
+    /// Get an immutable reference to a resource by type.
+    pub fn resource<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.resources.get::<T>()
+    }
+
+    /// Get a mutable reference to a resource by type.
+    pub fn resource_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.resources.get_mut::<T>()
+    }
+
+    /// Remove a resource by type, returning it if it existed.
+    pub fn remove_resource<T: Send + Sync + 'static>(&mut self) -> Option<T> {
+        self.resources.remove::<T>()
+    }
+
+    /// Check if a resource of the given type exists.
+    pub fn has_resource<T: Send + Sync + 'static>(&self) -> bool {
+        self.resources.contains::<T>()
+    }
+
+    // --- Events (typed per-frame messaging) ---
+
+    /// Emit an event. Readable by any system until the next `flush_events()`.
+    pub fn emit_event<E: Send + Sync + 'static>(&mut self, event: E) {
+        self.events.emit(event);
+    }
+
+    /// Read all events of type `E` emitted since the last flush.
+    pub fn read_events<E: Send + Sync + 'static>(&self) -> &[E] {
+        self.events.read::<E>()
+    }
+
+    /// Check if there are any pending events of type `E`.
+    pub fn has_events<E: Send + Sync + 'static>(&self) -> bool {
+        self.events.has_events::<E>()
+    }
+
+    /// Clear all event queues. Call at the end of each frame.
+    pub fn flush_events(&mut self) {
+        self.events.flush();
+    }
+
     /// Get world configuration
     pub fn config(&self) -> &WorldConfig {
         &self.config
-    }
-
-    /// Check if using archetype storage
-    pub fn uses_archetype_storage(&self) -> bool {
-        self.config.use_archetype_storage
     }
 }
 

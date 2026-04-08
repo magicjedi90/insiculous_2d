@@ -79,3 +79,47 @@ None required - all issues are low priority and the code functions correctly.
 1. **MAGIC-001** - Extract field ranges to configuration when adding per-project customization
 2. **MAGIC-002** - Increase ID multipliers if adding components with many fields
 3. **MAGIC-003** - Add layout dimensions to EditableFieldStyle if UI customization needed
+
+---
+
+## New Findings (February 2026 Audit)
+
+8 new issues found (0 High, 4 Medium, 4 Low)
+
+### ~~DRY-001: Repeated vec-like detection in inspector.rs~~ ✅ RESOLVED
+- **File:** `src/inspector.rs`
+- **Resolution:** Extracted `has_exact_keys(map, keys)` helper. `is_vec_like()` simplified from 25 lines to 3 lines with 3 calls to the helper.
+- **Resolved:** February 2026
+
+### ~~SRP-001/DRY-002: EditorInputMapping action checking tripled~~ ✅ RESOLVED
+- **File:** `src/editor_input.rs`
+- **Resolution:** Extracted `check_action_with()` generic helper using closure predicates. All 3 methods (`is_action_pressed`, `is_action_just_pressed`, `is_action_just_released`) now delegate to this helper, reducing ~50 lines to ~20.
+- **Resolved:** February 2026
+
+### SRP-002: MenuBar.render() mixes layout, interaction, and rendering
+- **File:** `src/menu.rs:246-302`
+- **Issue:** 57-line method handles bounds calculation, click detection, state management, AND dropdown rendering
+- **Suggested fix:** Split into update_menu_layout(), render_menu_titles(), handle_menu_interactions()
+- **Priority:** Medium | **Effort:** Medium
+
+### ~~DRY-003: Menu dropdown hardcoded constants~~ ✅ RESOLVED
+- **File:** `src/menu.rs`
+- **Resolution:** Promoted `ITEM_HEIGHT`, `ITEM_PADDING`, `DROPDOWN_WIDTH` to module-level constants as `DROPDOWN_ITEM_HEIGHT`, `DROPDOWN_ITEM_PADDING`, `DROPDOWN_WIDTH`. All references updated.
+- **Resolved:** February 2026
+
+### ~~DRY-004: Gizmo arrow head bounds calculation repeated 4+ times~~ ✅ RESOLVED
+- **File:** `src/gizmo.rs`
+- **Resolution:** Extracted `centered_handle_rect(&self, center) -> Rect` helper method. All 5 occurrences of centered rect creation now use this helper.
+- **Resolved:** February 2026
+
+### ARCH-001: Gizmo render_translate() is 95 lines
+- **File:** `src/gizmo.rs:197-291`
+- **Issue:** Large method with repeated handle rendering pattern
+- **Suggested fix:** Extract `render_gizmo_handle()` helper
+- **Priority:** Low | **Effort:** Medium
+
+### ARCH-002: Component edit result structs have 26-33 fields each
+- **File:** `src/component_editors.rs`
+- **Issue:** TransformEditResult, SpriteEditResult, etc. have per-field boolean flags creating boilerplate
+- **Suggested fix:** Use change mask pattern or generic EditResult<T>
+- **Priority:** Medium | **Effort:** Large

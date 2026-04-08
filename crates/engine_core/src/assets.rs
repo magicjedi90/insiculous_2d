@@ -73,26 +73,32 @@ impl Default for AssetConfig {
 pub struct AssetManager {
     texture_manager: TextureManager,
     config: AssetConfig,
-    /// Reverse mapping from texture handle ID to path/reference string
-    texture_paths: HashMap<u32, String>,
+    /// Maps texture handle IDs back to their original path strings for serialization.
+    handle_to_path: HashMap<u32, String>,
 }
 
 impl AssetManager {
     /// Create a new asset manager with the given WGPU device and queue
     pub fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+        let mut handle_to_path = HashMap::new();
+        // Handle 0 is always the white texture
+        handle_to_path.insert(0, "#white".to_string());
         Self {
             texture_manager: TextureManager::new(device, queue),
             config: AssetConfig::default(),
-            texture_paths: HashMap::new(),
+            handle_to_path,
         }
     }
 
     /// Create a new asset manager with custom configuration
     pub fn with_config(device: Arc<Device>, queue: Arc<Queue>, config: AssetConfig) -> Self {
+        let mut handle_to_path = HashMap::new();
+        // Handle 0 is always the white texture
+        handle_to_path.insert(0, "#white".to_string());
         Self {
             texture_manager: TextureManager::new(device, queue),
             config,
-            texture_paths: HashMap::new(),
+            handle_to_path,
         }
     }
 
@@ -109,6 +115,7 @@ impl AssetManager {
     /// ```
     pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> Result<TextureHandle, AssetError> {
         let path = path.as_ref();
+        let original_path_string = path.to_string_lossy().to_string();
 
         // Resolve path against base path if relative
         let full_path = if path.is_relative() {
@@ -122,9 +129,7 @@ impl AssetManager {
         }
 
         let handle = self.texture_manager.load_texture(&full_path, TextureLoadConfig::default())?;
-
-        // Store the original path for scene saving (use the input path, not full_path)
-        self.texture_paths.insert(handle.id, path.to_string_lossy().to_string());
+        self.handle_to_path.insert(handle.id, original_path_string);
 
         Ok(handle)
     }
@@ -169,14 +174,7 @@ impl AssetManager {
         color: [u8; 4],
     ) -> Result<TextureHandle, AssetError> {
         let handle = self.texture_manager.create_solid_color(width, height, color)?;
-
-        // Store as #solid:RRGGBBAA format for scene saving
-        let path = format!(
-            "#solid:{:02X}{:02X}{:02X}{:02X}",
-            color[0], color[1], color[2], color[3]
-        );
-        self.texture_paths.insert(handle.id, path);
-
+        self.handle_to_path.insert(handle.id, "#solid".to_string());
         Ok(handle)
     }
 
@@ -278,18 +276,12 @@ impl AssetManager {
         &self.config.base_path
     }
 
-    /// Get the path/reference string for a texture handle.
+    /// Look up the original path string for a texture handle.
     ///
-    /// Returns:
-    /// - `Some("#white")` for handle 0 (built-in white texture)
-    /// - `Some(path)` for loaded textures
-    /// - `Some("#solid:RRGGBBAA")` for solid color textures
-    /// - `None` for unknown handles
-    pub fn get_texture_path(&self, handle: u32) -> Option<&str> {
-        if handle == 0 {
-            return Some("#white");
-        }
-        self.texture_paths.get(&handle).map(|s| s.as_str())
+    /// Returns `None` if the handle was not loaded through this manager.
+    /// Handle 0 always maps to `"#white"`.
+    pub fn texture_path(&self, handle: u32) -> Option<&str> {
+        self.handle_to_path.get(&handle).map(|s| s.as_str())
     }
 }
 
@@ -308,39 +300,5 @@ mod tests {
     fn test_asset_error_display() {
         let err = AssetError::NotFound("player.png".to_string());
         assert!(format!("{}", err).contains("player.png"));
-    }
-
-    // Tests for texture path lookup (unit tests without GPU)
-
-    #[test]
-    fn test_get_texture_path_white() {
-        // Handle 0 is always #white - test the logic in isolation
-        // We use a helper function since we can't create real AssetManager without GPU
-        assert_eq!(texture_path_for_handle(0), Some("#white"));
-    }
-
-    #[test]
-    fn test_get_texture_path_unknown() {
-        assert_eq!(texture_path_for_handle(9999), None);
-    }
-
-    /// Helper for testing texture path logic without GPU
-    fn texture_path_for_handle(handle: u32) -> Option<&'static str> {
-        if handle == 0 {
-            Some("#white")
-        } else {
-            None
-        }
-    }
-
-    #[test]
-    fn test_solid_color_path_format() {
-        // Test the format string generation for solid colors
-        let color: [u8; 4] = [255, 128, 64, 255];
-        let path = format!(
-            "#solid:{:02X}{:02X}{:02X}{:02X}",
-            color[0], color[1], color[2], color[3]
-        );
-        assert_eq!(path, "#solid:FF8040FF");
     }
 }

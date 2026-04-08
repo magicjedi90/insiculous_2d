@@ -808,7 +808,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "ecs",
- "engine_core",
  "env_logger",
  "glam",
  "input",
@@ -819,6 +818,23 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",
+ "ui",
+ "winit",
+]
+
+[[package]]
+name = "editor_integration"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "ecs",
+ "editor",
+ "engine_core",
+ "glam",
+ "input",
+ "log",
+ "physics",
+ "renderer",
  "ui",
  "winit",
 ]
@@ -1197,10 +1213,13 @@ dependencies = [
  "common",
  "ecs",
  "editor",
+ "editor_integration",
  "engine_core",
  "env_logger",
  "glam",
+ "input",
  "log",
+ "physics",
  "ui",
  "winit",
 ]

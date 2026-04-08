@@ -13,6 +13,23 @@ use ui::{Color as UIColor, DrawCommand, Rect};
 use std::collections::HashMap;
 use crate::contexts::GlyphCacheKey;
 
+/// Convert a screen-space rect center to world coordinates.
+/// Screen: (0,0) = top-left. World: (0,0) = center.
+fn screen_rect_center_to_world(bounds: &Rect, window_size: Vec2) -> Vec2 {
+    Vec2::new(
+        bounds.x + bounds.width / 2.0 - window_size.x / 2.0,
+        window_size.y / 2.0 - (bounds.y + bounds.height / 2.0),
+    )
+}
+
+/// Convert a screen-space point to world coordinates.
+fn screen_point_to_world(x: f32, y: f32, window_size: Vec2) -> Vec2 {
+    Vec2::new(
+        x - window_size.x / 2.0,
+        window_size.y / 2.0 - y,
+    )
+}
+
 /// Renders UI draw commands as sprites in the sprite batcher.
 /// 
 /// This function converts UI draw commands into renderer sprites, handling:
@@ -32,16 +49,46 @@ pub fn render_ui_commands(
     glyph_textures: &HashMap<GlyphCacheKey, TextureHandle>,
 ) {
     let white_texture = TextureHandle { id: 0 };
+    let mut clip_stack: Vec<Rect> = Vec::new();
 
     for cmd in commands {
+        // Software clip filtering: skip draw commands fully outside the active clip rect
+        if !clip_stack.is_empty() {
+            let cmd_bounds = match cmd {
+                DrawCommand::Rect { bounds, .. } | DrawCommand::RectBorder { bounds, .. } => {
+                    Some(*bounds)
+                }
+                DrawCommand::Text { data, .. } => {
+                    Some(Rect::new(data.position.x, data.position.y, data.width, data.height))
+                }
+                DrawCommand::TextPlaceholder { position, font_size, text, .. } => {
+                    Some(Rect::new(position.x, position.y, text.len() as f32 * font_size * 0.6, *font_size))
+                }
+                DrawCommand::Circle { center, radius, .. } => {
+                    Some(Rect::new(center.x - radius, center.y - radius, radius * 2.0, radius * 2.0))
+                }
+                DrawCommand::Line { start, end, .. } => {
+                    Some(Rect::new(start.x.min(end.x), start.y.min(end.y), (end.x - start.x).abs(), (end.y - start.y).abs()))
+                }
+                _ => None, // PushClipRect / PopClipRect handled below
+            };
+
+            if let Some(bounds) = cmd_bounds {
+                let active_clip = clip_stack.last().unwrap();
+                let overlap = intersect_rects(&bounds, active_clip);
+                if overlap.width == 0.0 || overlap.height == 0.0 {
+                    continue;
+                }
+            }
+        }
+
         match cmd {
             DrawCommand::Rect { bounds, color, depth, .. } => {
                 // Convert screen coordinates (0,0 = top-left) to world coordinates (0,0 = center)
-                let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
-                let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
+                let center = screen_rect_center_to_world(bounds, window_size);
 
                 let sprite = Sprite::new(white_texture)
-                    .with_position(Vec2::new(center_x, center_y))
+                    .with_position(center)
                     .with_scale(Vec2::new(bounds.width, bounds.height))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
                     .with_depth(*depth);
@@ -72,11 +119,11 @@ pub fn render_ui_commands(
                 // Render text with rasterized glyph data
                 if data.glyphs.is_empty() {
                     // No glyphs - render as placeholder rectangle
-                    let center_x = data.position.x + data.width / 2.0 - window_size.x / 2.0;
-                    let center_y = window_size.y / 2.0 - (data.position.y + data.height / 2.0);
+                    let text_bounds = Rect::new(data.position.x, data.position.y, data.width, data.height);
+                    let center = screen_rect_center_to_world(&text_bounds, window_size);
 
                     let sprite = Sprite::new(white_texture)
-                        .with_position(Vec2::new(center_x, center_y))
+                        .with_position(center)
                         .with_scale(Vec2::new(data.width.max(data.font_size * 4.0), data.height.max(data.font_size)))
                         .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a * 0.3))
                         .with_depth(*depth);
@@ -94,15 +141,15 @@ pub fn render_ui_commands(
                         // - data.position is at the BASELINE of the text
                         // - glyph.x is horizontal offset from text start
                         // - glyph.y is vertical offset from baseline to glyph top (negative = above baseline)
-                        // 
-                        // UI to world conversion:
-                        // - UI Y increases downward, world Y increases upward
-                        // - glyph_y_ui = data.position.y + glyph.y (UI position of glyph top)
-                        // - world_y = window_size.y/2 - glyph_y_ui (flip and center)
-                        // 
-                        // We add height/2 to get the center of the glyph for sprite rendering
-                        let glyph_x = data.position.x + glyph.x + glyph.width as f32 / 2.0 - window_size.x / 2.0;
-                        let glyph_y = window_size.y / 2.0 - (data.position.y + glyph.y + glyph.height as f32 / 2.0);
+                        //
+                        // We construct a rect for the glyph bounds and convert its center to world coords
+                        let glyph_bounds = Rect::new(
+                            data.position.x + glyph.x,
+                            data.position.y + glyph.y,
+                            glyph.width as f32,
+                            glyph.height as f32,
+                        );
+                        let glyph_center = screen_rect_center_to_world(&glyph_bounds, window_size);
 
                         // Look up glyph texture in cache (color-agnostic)
                         let glyph_key = GlyphCacheKey::new(
@@ -128,7 +175,7 @@ pub fn render_ui_commands(
                         let render_height = glyph.height as f32;
 
                         let sprite = Sprite::new(texture)
-                            .with_position(Vec2::new(glyph_x, glyph_y))
+                            .with_position(glyph_center)
                             .with_scale(Vec2::new(render_width, render_height))
                             .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a))
                             .with_depth(*depth);
@@ -142,11 +189,11 @@ pub fn render_ui_commands(
             DrawCommand::TextPlaceholder { text, position, color, font_size, depth } => {
                 // Placeholder: render a small rectangle where text would be
                 let estimated_width = text.len() as f32 * *font_size * 0.6;
-                let center_x = position.x + estimated_width / 2.0 - window_size.x / 2.0;
-                let center_y = window_size.y / 2.0 - (position.y + *font_size / 2.0);
+                let placeholder_bounds = Rect::new(position.x, position.y, estimated_width, *font_size);
+                let center = screen_rect_center_to_world(&placeholder_bounds, window_size);
 
                 let sprite = Sprite::new(white_texture)
-                    .with_position(Vec2::new(center_x, center_y))
+                    .with_position(center)
                     .with_scale(Vec2::new(estimated_width, *font_size))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a * 0.3))
                     .with_depth(*depth);
@@ -155,11 +202,10 @@ pub fn render_ui_commands(
             }
             DrawCommand::Circle { center, radius, color, depth } => {
                 // Render circle as a square (approximation until we have circle shader)
-                let center_x = center.x - window_size.x / 2.0;
-                let center_y = window_size.y / 2.0 - center.y;
+                let world_center = screen_point_to_world(center.x, center.y, window_size);
 
                 let sprite = Sprite::new(white_texture)
-                    .with_position(Vec2::new(center_x, center_y))
+                    .with_position(world_center)
                     .with_scale(Vec2::new(*radius * 2.0, *radius * 2.0))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
                     .with_depth(*depth);
@@ -173,11 +219,14 @@ pub fn render_ui_commands(
                 let length = (dx * dx + dy * dy).sqrt();
                 let angle = dy.atan2(dx);
 
-                let mid_x = (start.x + end.x) / 2.0 - window_size.x / 2.0;
-                let mid_y = window_size.y / 2.0 - (start.y + end.y) / 2.0;
+                let midpoint = screen_point_to_world(
+                    (start.x + end.x) / 2.0,
+                    (start.y + end.y) / 2.0,
+                    window_size,
+                );
 
                 let sprite = Sprite::new(white_texture)
-                    .with_position(Vec2::new(mid_x, mid_y))
+                    .with_position(midpoint)
                     .with_rotation(-angle) // Negate for coordinate system
                     .with_scale(Vec2::new(length, *width))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
@@ -186,12 +235,15 @@ pub fn render_ui_commands(
                 sprites.add_sprite(&sprite);
             }
             DrawCommand::PushClipRect { bounds } => {
-                // Clip rect commands are handled at a higher level
-                // Log for debugging during development
-                log::trace!("PushClipRect: {:?}", bounds);
+                let effective = if let Some(parent) = clip_stack.last() {
+                    intersect_rects(bounds, parent)
+                } else {
+                    *bounds
+                };
+                clip_stack.push(effective);
             }
             DrawCommand::PopClipRect => {
-                log::trace!("PopClipRect");
+                clip_stack.pop();
             }
         }
     }
@@ -204,11 +256,10 @@ pub fn render_ui_commands(
 /// coordinates (center origin).
 fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &Rect, color: &UIColor, depth: f32, window_size: Vec2) {
     let white_texture = TextureHandle { id: 0 };
-    let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
-    let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
+    let center = screen_rect_center_to_world(bounds, window_size);
 
     let sprite = Sprite::new(white_texture)
-        .with_position(Vec2::new(center_x, center_y))
+        .with_position(center)
         .with_scale(Vec2::new(bounds.width, bounds.height))
         .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
         .with_depth(depth);
@@ -220,7 +271,6 @@ fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &Rect, color: &UIColor, d
 ///
 /// Used for DPI-aware scissor clipping. Takes a logical UI rect and scale factor,
 /// returns physical pixel coordinates (x, y, width, height) suitable for wgpu scissor rect.
-#[allow(dead_code)]
 pub fn logical_to_physical_rect(rect: &Rect, scale_factor: f64) -> (u32, u32, u32, u32) {
     (
         (rect.x as f64 * scale_factor) as u32,
@@ -233,7 +283,6 @@ pub fn logical_to_physical_rect(rect: &Rect, scale_factor: f64) -> (u32, u32, u3
 /// Intersect two rects, returning the overlapping region.
 ///
 /// Used for nested clip rects - the effective clip is the intersection of all active clips.
-#[allow(dead_code)]
 pub fn intersect_rects(a: &Rect, b: &Rect) -> Rect {
     let x = a.x.max(b.x);
     let y = a.y.max(b.y);

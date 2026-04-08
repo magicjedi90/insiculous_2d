@@ -110,6 +110,11 @@ pub trait Game: Sized + 'static {
         render_ui_commands(ctx.sprites, ctx.ui_commands, ctx.window_size, ctx.glyph_textures);
     }
 
+    /// Called by the editor when play mode is stopped and the world has been
+    /// restored to its pre-play state. Override this to reset any non-ECS state
+    /// (e.g., physics world) that was modified during play.
+    fn on_play_stopped(&mut self, _ctx: &mut GameContext) {}
+
     /// Called when a key is pressed. Override for custom key handling.
     fn on_key_pressed(&mut self, _key: KeyCode, _ctx: &mut GameContext) {}
 
@@ -306,14 +311,16 @@ impl<G: Game> GameRunner<G> {
             return;
         }
 
+        // Flush events from previous frame before processing new input
+        self.scene.world.flush_events();
+
         // Process queued input events FIRST so UI sees fresh mouse/keyboard state
         self.input.process_queued_events();
 
         // Update all subsystems
         self.update_audio();
         self.update_ui_begin(window_size);
-        self.initialize_if_needed(delta_time, window_size);
-        self.update_game_logic(delta_time, window_size);
+        self.initialize_and_update(delta_time, window_size);
         let ui_commands = self.update_ui_end();
         self.update_input_end();
 
@@ -335,13 +342,9 @@ impl<G: Game> GameRunner<G> {
         self.ui_manager.begin_frame(&self.input, window_size);
     }
 
-    /// Initialize game on first frame
-    fn initialize_if_needed(&mut self, delta_time: f32, window_size: Vec2) {
-        if self.initialized {
-            return;
-        }
-
-        // Get mutable references to managers
+    /// Initialize game on first frame, then update game logic.
+    /// Combined to eliminate duplicated GameContext construction and placeholder audio patterns.
+    fn initialize_and_update(&mut self, delta_time: f32, window_size: Vec2) {
         let asset_manager = self.asset_manager.as_mut().unwrap();
         let audio_manager = self.audio_manager.as_mut();
 
@@ -355,35 +358,19 @@ impl<G: Game> GameRunner<G> {
                 world: &mut self.scene.world,
                 assets: asset_manager,
                 audio,
-                ui: &mut self.ui_manager.ui_context(),
+                ui: self.ui_manager.ui_context(),
                 delta_time,
                 window_size,
             };
-            self.game.init(&mut ctx);
-        }
-        self.initialized = true;
-    }
 
-    /// Update game logic
-    fn update_game_logic(&mut self, delta_time: f32, window_size: Vec2) {
-        // Update game logic
-        let asset_manager = self.asset_manager.as_mut().unwrap();
-        let audio_manager = self.audio_manager.as_mut();
+            if !self.initialized {
+                self.game.init(&mut ctx);
+                self.initialized = true;
+            }
 
-        let mut placeholder_audio = AudioManager::new().ok();
-        let audio = audio_manager.or(placeholder_audio.as_mut());
-
-        if let Some(audio) = audio {
-            let mut ctx = GameContext {
-                input: &self.input,
-                world: &mut self.scene.world,
-                assets: asset_manager,
-                audio,
-                ui: &mut self.ui_manager.ui_context(),
-                delta_time,
-                window_size,
-            };
             self.game.update(&mut ctx);
+        } else if !self.initialized {
+            self.initialized = true;
         }
     }
 
@@ -402,30 +389,40 @@ impl<G: Game> GameRunner<G> {
         // Prepare glyph textures for text rendering
         self.prepare_glyph_textures(ui_commands);
 
-        // Build sprite batches
-        let mut batcher = SpriteBatcher::new(1000);
-
+        // Phase 1: Game sprites — render into their own batcher so they never
+        // share a batch with UI elements (which would cause UI panel backgrounds
+        // to paint over game sprites due to painter's algorithm).
+        let mut game_batcher = SpriteBatcher::new(1000);
         {
+            let empty_commands: &[DrawCommand] = &[];
             let mut ctx = RenderContext {
                 world: &self.scene.world,
-                sprites: &mut batcher,
+                sprites: &mut game_batcher,
                 camera: self.render_manager.camera_mut(),
                 window_size,
-                ui_commands,
+                ui_commands: empty_commands,
                 glyph_textures: &self.glyph_textures,
             };
             self.game.render(&mut ctx);
         }
 
-        // Collect batches, sort by depth, and render with asset manager's textures
-        let mut batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
-        // Sort batches by their minimum depth (ascending for back-to-front rendering)
-        batches.sort_by(|a, b| {
-            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
-            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap_or(0.0);
-            a_min.partial_cmp(&b_min).unwrap()
-        });
-        let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
+        // Phase 2: UI sprites — separate batcher
+        let mut ui_batcher = SpriteBatcher::new(1000);
+        render_ui_commands(&mut ui_batcher, ui_commands, window_size, &self.glyph_textures);
+
+        // Collect and sort game batches (by depth then texture handle for stability)
+        game_batcher.sort_all_batches();
+        let mut game_batches: Vec<SpriteBatch> = game_batcher.batches().values().cloned().collect();
+        Self::sort_batches(&mut game_batches);
+
+        // Collect and sort UI batches
+        ui_batcher.sort_all_batches();
+        let mut ui_batches: Vec<SpriteBatch> = ui_batcher.batches().values().cloned().collect();
+        Self::sort_batches(&mut ui_batches);
+
+        // Combine: game batches first, then UI batches on top
+        game_batches.extend(ui_batches);
+        let batch_refs: Vec<&SpriteBatch> = game_batches.iter().collect();
 
         // Get textures from asset manager (need to reborrow after RenderContext)
         if let Some(asset_manager) = &self.asset_manager {
@@ -434,6 +431,21 @@ impl<G: Game> GameRunner<G> {
                 log::error!("Render error: {}", e);
             }
         }
+    }
+
+    /// Sort sprite batches by depth (min, then max, then texture handle for determinism).
+    fn sort_batches(batches: &mut [SpriteBatch]) {
+        batches.sort_by(|a, b| {
+            let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+            a_min.total_cmp(&b_min)
+                .then_with(|| {
+                    let a_max = a.instances.iter().map(|i| i.depth).max_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+                    let b_max = b.instances.iter().map(|i| i.depth).max_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
+                    a_max.total_cmp(&b_max)
+                })
+                .then_with(|| a.texture_handle.id.cmp(&b.texture_handle.id))
+        });
     }
 }
 
@@ -504,16 +516,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    // Handle escape to exit early (before we need managers)
-                    if key == KeyCode::Escape && event.state == ElementState::Pressed {
-                        self.game.on_exit();
-                        let _ = self.scene.stop();
-                        let _ = self.scene.shutdown();
-                        event_loop.exit();
-                        return;
-                    }
-
-                    // For other keys, create context and call handlers
+                    // Create context and call handlers
                     let window_size = self.window_size();
                     if let (Some(asset_manager), Some(audio_manager)) =
                         (&mut self.asset_manager, &mut self.audio_manager)

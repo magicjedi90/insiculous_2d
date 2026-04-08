@@ -1,0 +1,21 @@
+[package]
+name = "editor_integration"
+version = "0.1.0"
+edition = "2021"
+description = "Editor integration layer for insiculous_2d - wraps Game with editor UI"
+
+[dependencies]
+# Internal crates
+common = { path = "../common" }
+ecs = { path = "../ecs" }
+editor = { path = "../editor" }
+engine_core = { path = "../engine_core" }
+ui = { path = "../ui" }
+input = { path = "../input" }
+renderer = { path = "../renderer" }
+physics = { path = "../physics" }
+
+# External dependencies
+glam = { workspace = true }
+log = { workspace = true }
+winit = { workspace = true }

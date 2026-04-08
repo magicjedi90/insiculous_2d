@@ -3,9 +3,10 @@
 //! Provides a flexible layout system with dockable panels that can be
 //! positioned at different edges of the window or floated.
 
-use ui::{Color, Rect, TextAlign, UIContext, WidgetId};
+use ui::{Rect, UIContext, WidgetId};
 
 use crate::layout::{DEFAULT_PANEL_WIDTH, HEADER_HEIGHT, MIN_PANEL_SIZE, RESIZE_HANDLE_SIZE};
+use crate::theme::EditorTheme;
 
 /// Unique identifier for a dock panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -234,7 +235,7 @@ impl DockArea {
     /// Returns the content bounds for each visible panel. The caller should:
     /// 1. Render content within each bounds
     /// 2. Call `end_panel_content(ui)` after rendering each panel's content
-    pub fn render(&mut self, ui: &mut UIContext) -> Vec<(PanelId, Rect)> {
+    pub fn render(&mut self, ui: &mut UIContext, theme: &EditorTheme) -> Vec<(PanelId, Rect)> {
         let mut content_areas = Vec::new();
 
         for panel in &self.panels {
@@ -242,8 +243,11 @@ impl DockArea {
                 continue;
             }
 
-            // Draw panel background
-            ui.panel(panel.bounds);
+            // Draw panel background (skip for scene view — it shows game content directly).
+            // Uses the opaque EditorTheme background so game sprites never bleed through.
+            if panel.id != PanelId::SCENE_VIEW {
+                ui.panel_styled(panel.bounds, theme.bg_primary, theme.border_panel, 1.0);
+            }
 
             // Draw panel header
             let header_bounds = Rect::new(
@@ -252,27 +256,24 @@ impl DockArea {
                 panel.bounds.width,
                 self.header_height,
             );
-            ui.rect_rounded(header_bounds, Color::new(0.15, 0.15, 0.15, 1.0), 0.0);
+            ui.rect_rounded(header_bounds, theme.bg_header, 0.0);
 
-            // Draw panel title - properly centered
-            ui.label_in_bounds(&panel.title, header_bounds, TextAlign::Left);
+            // Draw panel title in accent color
+            let title_pos = glam::Vec2::new(header_bounds.x + 8.0, header_bounds.y + 4.0);
+            ui.label_styled(&panel.title, title_pos, theme.accent_cyan, 14.0);
 
-            // Get content bounds and push clip rect
+            // Track content area (caller will push/pop clip rect around each panel's content)
             let content = panel.content_bounds();
-            ui.push_clip_rect(content);
-
-            // Track content area (caller will render content, then pop clip)
             content_areas.push((panel.id, content));
         }
 
         content_areas
     }
 
-    /// Call after rendering content for each panel to pop the clip rect.
-    pub fn end_panel_content(&self, ui: &mut UIContext, panel_count: usize) {
-        for _ in 0..panel_count {
-            ui.pop_clip_rect();
-        }
+    /// No-op kept for API compatibility. Clip rects are now managed per-panel by the caller.
+    pub fn end_panel_content(&self, _ui: &mut UIContext, _panel_count: usize) {
+        // Clip rects are now pushed/popped around each panel's content individually
+        // by the caller, so this is no longer needed.
     }
 
     /// Handle resize dragging for panels.

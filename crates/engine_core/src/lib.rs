@@ -22,7 +22,6 @@
 //! }
 //! ```
 
-mod application;
 pub mod behavior_runner;
 mod game;
 mod game_loop;
@@ -33,7 +32,7 @@ pub mod lifecycle;
 pub mod assets;
 pub mod scene_data;
 pub mod scene_loader;
-pub mod scene_saver;
+pub mod scene_serializer;
 pub mod render_manager;
 pub mod window_manager;
 pub mod game_loop_manager;
@@ -45,11 +44,6 @@ pub mod ui_integration;
 pub mod prelude;
 
 // Re-export for convenience
-#[deprecated(
-    since = "0.2.0",
-    note = "Use the Game trait and run_game() instead (see game.rs)"
-)]
-pub use application::EngineApplication;
 pub use behavior_runner::*;
 pub use game::*;
 pub use game_loop::*;
@@ -60,7 +54,7 @@ pub use lifecycle::*;
 pub use assets::*;
 pub use scene_data::*;
 pub use scene_loader::*;
-pub use scene_saver::*;
+pub use scene_serializer::*;
 pub use render_manager::*;
 pub use window_manager::*;
 pub use game_loop_manager::*;

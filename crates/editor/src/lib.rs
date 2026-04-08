@@ -22,6 +22,7 @@
 //! }
 //! ```
 
+pub mod commands;
 mod component_editors;
 mod context;
 mod dock;
@@ -34,19 +35,28 @@ mod hierarchy;
 mod inspector;
 mod menu;
 mod picking;
+mod play_controls;
+mod play_state;
 mod selection;
+pub mod status_bar;
+pub mod stored_component;
+pub mod theme;
 mod toolbar;
 mod viewport;
 mod viewport_input;
+pub mod editor_preferences;
 pub mod layout;
+pub mod world_snapshot;
 
 // Re-export main types
+pub use commands::{CommandHistory, EditorCommand};
 pub use component_editors::{
     edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
     AudioSourceEditResult, ColliderEditResult, RigidBodyEditResult, SpriteEditResult,
     TransformEditResult,
 };
 pub use context::EditorContext;
+pub use editor_preferences::EditorPreferences;
 pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
 pub use editable_inspector::{
     component_header, display_u32, edit_bool, edit_color, edit_f32, edit_normalized_f32, edit_vec2,
@@ -62,7 +72,11 @@ pub use grid::{GridColors, GridConfig, GridRenderer};
 pub use inspector::{inspect_component, InspectorStyle};
 pub use menu::{Menu, MenuBar, MenuItem};
 pub use picking::{EntityPicker, PickResult, PickableEntity, SelectionRect, AABB};
+pub use play_controls::{PlayControlAction, PlayControls};
+pub use play_state::EditorPlayState;
 pub use selection::Selection;
+pub use status_bar::{StatusBar, StatusBarStats, STATUS_BAR_HEIGHT};
+pub use theme::EditorTheme;
 pub use toolbar::{EditorTool, Toolbar};
 pub use viewport::SceneViewport;
 pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInputResult};
@@ -70,14 +84,17 @@ pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInpu
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
+        CommandHistory, EditorCommand,
         component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
         inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
-        DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState, EditorTool,
-        EditableFieldStyle, EditableInspector, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode,
-        GridRenderer, HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
-        PickableEntity, RigidBodyEditResult, SceneViewport, Selection, SelectionRect,
-        SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig, ViewportInputHandler,
-        ViewportInputResult, AABB,
+        DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
+        EditorPlayState, EditorPreferences, EditorTool, EditableFieldStyle, EditableInspector,
+        EditorTheme, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer,
+        HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
+        PickableEntity, StatusBar, StatusBarStats, STATUS_BAR_HEIGHT,
+        PlayControlAction, PlayControls, RigidBodyEditResult, SceneViewport, Selection,
+        SelectionRect, SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig,
+        ViewportInputHandler, ViewportInputResult, AABB,
     };
 }

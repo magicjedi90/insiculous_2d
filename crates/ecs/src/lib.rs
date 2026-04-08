@@ -1,14 +1,14 @@
 //! Simple entity-component-system for the insiculous_2d game engine.
 //!
-//! This crate provides a minimal ECS implementation with archetype-based
-//! component storage for optimal performance.
+//! This crate provides a minimal ECS implementation with HashMap-based
+//! per-type component storage.
 //!
 //! # Module Visibility Strategy
 //!
 //! This crate uses two visibility patterns intentionally:
 //!
 //! - **Private modules** (`mod` + `pub use *`): Core infrastructure types like
-//!   [`EntityId`], [`Component`], [`World`], and archetypes. These are re-exported
+//!   [`EntityId`], [`Component`], [`World`], and query types. These are re-exported
 //!   at the crate root for convenient access while keeping implementation details hidden.
 //!
 //! - **Public modules** (`pub mod` + `pub use *`): Domain-specific modules like
@@ -18,39 +18,47 @@
 //! All public types are accessible from the crate root: `use ecs::EntityId;`
 
 // Core infrastructure - private modules, re-exported at crate root
-mod archetype;
 mod component;
 mod entity;
+mod entity_builder;
+mod query;
 mod world;
 
 // Domain modules - public for documentation, also re-exported at crate root
 pub mod audio_components;
 pub mod behavior;
 pub mod component_registry;
+pub mod event;
 pub mod generation;
 pub mod hierarchy;
-pub mod hierarchy_ext;
+pub mod hierarchy_extension;
 pub mod hierarchy_system;
+pub mod resource;
 pub mod sprite_components;
 pub mod sprite_system;
+pub mod state_machine;
 pub mod system;
 
 pub mod prelude;
 
 // Re-export all public items at crate root for convenient access
-pub use archetype::*;
+pub use query::*;
 pub use audio_components::*;
 pub use behavior::*;
 pub use component::*;
 pub use component_registry::{global_registry, ComponentMeta};
 pub use ecs_macros::ComponentMeta as DeriveComponentMeta;
 pub use entity::*;
+pub use entity_builder::*;
+pub use event::EventBus;
 pub use generation::*;
 pub use hierarchy::*;
-pub use hierarchy_ext::*;
+pub use hierarchy_extension::*;
 pub use hierarchy_system::*;
+pub use resource::ResourceStorage;
 pub use sprite_components::*;
 pub use sprite_system::*;
+pub use state_machine::{HierarchicalStateMachine, StateMachine};
 pub use system::*;
 pub use world::*;
 

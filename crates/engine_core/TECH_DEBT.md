@@ -1,12 +1,12 @@
 # Technical Debt: engine_core
 
-Last audited: January 2026
+Last audited: February 2026
 
 ## Summary
 - DRY violations: 5
-- SRP violations: 3
+- SRP violations: 3 (1 resolved)
 - KISS violations: 1 (1 resolved)
-- Architecture issues: 3
+- Architecture issues: 3 (1 resolved)
 
 ---
 
@@ -23,16 +23,10 @@ Last audited: January 2026
 - **Suggested fix:** Extract into a helper method `get_audio_manager_or_placeholder()` or refactor to handle optional audio in a single place.
 - **Priority:** Medium
 
-### [DRY-002] Duplicate coordinate transformation logic in ui_integration.rs
+### ~~[DRY-002] Duplicate coordinate transformation logic in ui_integration.rs~~ ✅ RESOLVED
 - **File:** `ui_integration.rs`
-- **Lines:** 39-41, 75-76, 93-96, 130-131, 143-144, 161-162, 184-185
-- **Issue:** The coordinate transformation from screen space to world space is repeated 7 times:
-  ```rust
-  let center_x = bounds.x + bounds.width / 2.0 - window_size.x / 2.0;
-  let center_y = window_size.y / 2.0 - (bounds.y + bounds.height / 2.0);
-  ```
-- **Suggested fix:** Extract to a helper function `screen_to_world_coords(x, y, width, height, window_size) -> Vec2`.
-- **Priority:** Medium
+- **Resolution:** Extracted two helper functions: `screen_rect_center_to_world(bounds, window_size)` and `screen_point_to_world(x, y, window_size)`. All 7 instances of inline coordinate math replaced.
+- **Resolved:** February 2026
 
 ### [DRY-003] Duplicate GameContext creation pattern
 - **File:** `game.rs`
@@ -41,32 +35,15 @@ Last audited: January 2026
 - **Suggested fix:** Create a factory method `create_game_context()` or use a builder pattern.
 - **Priority:** Low (refactoring was started but this remains)
 
-### [DRY-004] Repeated hex color parsing error handling
+### ~~[DRY-004] Repeated hex color parsing error handling~~ ✅ RESOLVED
 - **File:** `scene_loader.rs`
-- **Lines:** 497-503, 505-511
-- **Issue:** The hex color parsing error handling pattern is duplicated twice for 6-char and 8-char cases:
-  ```rust
-  .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))?
-  ```
-- **Suggested fix:** Extract to a helper function `parse_hex_byte(hex, start, end)` that handles the error mapping.
-- **Priority:** Low
+- **Resolution:** Extracted `parse_hex_byte(hex, start) -> Result<u8, SceneLoadError>` helper function. Both 6-char and 8-char hex color parsing branches now use this helper.
+- **Resolved:** February 2026
 
-### [DRY-005] Duplicate surface error recovery pattern
+### ~~[DRY-005] Duplicate surface error recovery pattern~~ ✅ RESOLVED
 - **File:** `render_manager.rs`
-- **Lines:** 131-138, 168-175
-- **Issue:** The surface recreation logic after a surface error is duplicated:
-  ```rust
-  Err(RendererError::SurfaceError(_)) => {
-      if let Err(e) = renderer.recreate_surface() {
-          log::error!("Failed to recreate surface: {}", e);
-          return Err(e);
-      }
-      log::debug!("Surface recreated after loss");
-      Ok(())
-  }
-  ```
-- **Suggested fix:** Extract to a helper method `handle_surface_error(&mut self)` on RenderManager.
-- **Priority:** Low
+- **Resolution:** Extracted `handle_render_error(renderer, error) -> Result<(), RendererError>` helper method. Both `render()` and `render_basic()` now delegate to this helper for error handling.
+- **Resolved:** February 2026
 
 ---
 
@@ -92,12 +69,10 @@ Last audited: January 2026
 - **Suggested fix:** Extract each behavior into separate handler methods or a trait-based pattern.
 - **Priority:** Medium (readability concern, performance is already optimized)
 
-### [SRP-003] EngineApplication duplicates GameRunner functionality
-- **File:** `application.rs`
-- **Lines:** 28-311
-- **Issue:** `EngineApplication` provides similar functionality to `GameRunner` but with a different API pattern (scene-based vs trait-based). This creates parallel code paths.
-- **Suggested fix:** Consider deprecating `EngineApplication` in favor of the simpler `Game` trait API, or clearly document the use cases for each.
-- **Priority:** Low (documented as "deprecated" in training.md but code still active)
+### ~~[SRP-003] EngineApplication duplicates GameRunner functionality~~ ✅ RESOLVED
+- **File:** `application.rs` (deleted)
+- **Resolution:** `EngineApplication` deleted entirely. `application.rs` removed, deprecated re-export removed from `lib.rs`, reference removed from `prelude.rs`. Game API (`Game` trait + `run_game()`) is the only API.
+- **Resolved:** February 2026
 
 ---
 
@@ -118,17 +93,10 @@ Last audited: January 2026
 
 ## Architecture Issues
 
-### [ARCH-001] Dual API pattern creates confusion
-- **Files:** `game.rs`, `application.rs`
-- **Issue:** Two parallel APIs exist:
-  1. `Game` trait + `run_game()` (recommended, simpler)
-  2. `EngineApplication` (older, more complex)
-  Both are fully exported and documented, which may confuse users.
-- **Suggested fix:**
-  - Clearly mark `EngineApplication` as deprecated in code
-  - Move it to a `legacy` module
-  - Update lib.rs to not re-export it by default
-- **Priority:** Medium
+### ~~[ARCH-001] Dual API pattern creates confusion~~ ✅ RESOLVED
+- **Files:** `game.rs` (kept), `application.rs` (deleted)
+- **Resolution:** `EngineApplication` deleted entirely. Only `Game` trait + `run_game()` API exists. No dual API confusion.
+- **Resolved:** February 2026
 
 ### [ARCH-002] Timer vs GameLoopManager overlap
 - **Files:** `timing.rs` (Timer), `game_loop_manager.rs` (GameLoopManager)
@@ -170,11 +138,11 @@ These issues from ANALYSIS.md have been resolved:
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 20 |
-| Total lines | ~3,200 |
-| Test coverage | 53 tests (100% pass rate) |
-| High priority issues | 1 |
-| Medium priority issues | 5 |
+| Total source files | 19 |
+| Total lines | ~2,900 |
+| Test coverage | 67 tests (100% pass rate) |
+| High priority issues | 0 |
+| Medium priority issues | 4 |
 | Low priority issues | 7 |
 
 ---
@@ -186,7 +154,7 @@ These issues from ANALYSIS.md have been resolved:
 
 ### Short-term Improvements
 2. **Fix DRY-001 and DRY-002** - Common patterns that could be extracted
-3. **Address ARCH-001** - Deprecate EngineApplication to reduce confusion
+3. ~~**Address ARCH-001** - Deprecate EngineApplication to reduce confusion~~ ✅ DONE - EngineApplication deleted
 
 ### Technical Debt Backlog
 - SRP-001: Extract glyph caching from GameRunner
@@ -201,13 +169,12 @@ These issues from ANALYSIS.md have been resolved:
 |-------------|-------------------|--------|
 | KISS-001: Glyph cache color | Medium: "Glyph texture key collision" | Known, unresolved |
 | SRP-001: GameRunner | Completed "SRP refactoring" | Partially resolved, more extraction possible |
-| ARCH-001: Dual API | Not tracked | New finding |
+| ARCH-001: Dual API | Tracked | ✅ Resolved - EngineApplication deleted |
 | DRY-002: Coord transform | Not tracked | New finding |
 | ARCH-002: Timer overlap | Not tracked | New finding |
 
 **New issues to add to PROJECT_ROADMAP.md:**
-- DRY-002: Coordinate transformation duplication in ui_integration.rs
-- ARCH-001: EngineApplication deprecation needed
+- ~~ARCH-001: EngineApplication deprecation needed~~ ✅ RESOLVED - Deleted entirely
 - ARCH-002: Timer/GameLoopManager consolidation
 
 ---
@@ -239,3 +206,40 @@ These features would enhance the engine but are not required for current functio
 - Visual debugger for entity/component state
 - Performance profiler integration
 - Hot-reloading for assets and scenes
+
+---
+
+## New Findings (February 2026 Audit)
+
+3 issues found and FIXED during this audit. 4 remaining new issues documented below.
+
+### Recently Fixed (This Audit)
+- ✅ **LOGIC-001**: `partial_cmp().unwrap()` crash risk in depth sorting → Fixed: replaced with `total_cmp()`
+- ✅ **DRY-006 + DRY-007**: GameContext construction + placeholder audio duplicated 3x → Fixed: consolidated into `initialize_and_update()`
+- ✅ **ARCH-004**: Duplicate UIManager methods (context_mut + ui_context) → Fixed: consolidated to single `ui_context()`
+
+### Remaining New Issues
+
+### LOGIC-002: Unsafe unwrap() on asset_manager outside guard scope
+- **File:** `src/game.rs:345, 370` (now consolidated)
+- **Issue:** `asset_manager.as_mut().unwrap()` outside explicit guard; relies on caller check
+- **Suggested fix:** Use `.ok_or()` or add local guard
+- **Priority:** Medium | **Effort:** Small
+
+### SRP-004: GameRunner glyph texture caching crosses concerns
+- **File:** `src/game.rs:221-267`
+- **Issue:** prepare_glyph_textures mixes UI iteration, texture creation, and caching
+- **Suggested fix:** Move to UIManager or create GlyphTextureCache struct
+- **Priority:** Medium | **Effort:** Medium
+
+### LOGIC-003: Lifecycle manager uses unwrap() on 12 lock operations
+- **File:** `src/lifecycle.rs`
+- **Issue:** All RwLock/Mutex operations use `.unwrap()` - panics on poison
+- **Suggested fix:** Use `.map_err()` or switch to `parking_lot::Mutex`
+- **Priority:** Medium | **Effort:** Medium
+
+### KISS-003: Over-engineered sync in LifecycleManager
+- **File:** `src/lifecycle.rs:74-77`
+- **Issue:** Clone creates independent RwLock instances rather than sharing state
+- **Suggested fix:** Document Clone behavior or simplify threading model
+- **Priority:** Medium | **Effort:** Small

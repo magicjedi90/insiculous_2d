@@ -5,7 +5,7 @@
 
 use crate::entity::EntityId;
 use crate::hierarchy::{GlobalTransform2D, Parent};
-use crate::hierarchy_ext::WorldHierarchyExt;
+use crate::hierarchy_extension::WorldHierarchyExt;
 use crate::sprite_components::Transform2D;
 use crate::system::System;
 use crate::world::World;
@@ -75,8 +75,9 @@ impl Default for TransformHierarchySystem {
 }
 
 impl System for TransformHierarchySystem {
-    fn name(&self) -> &str {
-        "TransformHierarchySystem"
+    fn initialize(&mut self, _world: &mut World) -> Result<(), String> {
+        log::debug!("TransformHierarchySystem initialized");
+        Ok(())
     }
 
     fn update(&mut self, world: &mut World, _delta_time: f32) {
@@ -106,14 +107,13 @@ impl System for TransformHierarchySystem {
         }
     }
 
-    fn initialize(&mut self, _world: &mut World) -> Result<(), String> {
-        log::debug!("TransformHierarchySystem initialized");
-        Ok(())
-    }
-
     fn shutdown(&mut self, _world: &mut World) -> Result<(), String> {
         log::debug!("TransformHierarchySystem shut down");
         Ok(())
+    }
+
+    fn name(&self) -> &str {
+        "TransformHierarchySystem"
     }
 }
 

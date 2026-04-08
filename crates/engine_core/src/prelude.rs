@@ -14,9 +14,8 @@ pub use crate::{
     scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, BehaviorData, SceneLoadError},
     scene_loader::{SceneLoader, SceneInstance},
     // Behavior system
-    behavior_runner::BehaviorRunner,
-    // Advanced API
-    application::EngineApplication,
+    behavior_runner::{BehaviorRunner, EntityCollected},
+    // Game loop
     game_loop::{GameLoop, GameLoopConfig},
     init,
     timing::Timer,
@@ -34,6 +33,11 @@ pub use glam::{Vec2, Vec4};
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::Sprite;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
+pub use ecs::hierarchy_system::TransformHierarchySystem;
+pub use ecs::WorldHierarchyExt;
+pub use ecs::System;
+pub use ecs::behavior::Behavior;
+pub use ecs::{StateMachine, HierarchicalStateMachine, EventBus, ResourceStorage};
 
 // Re-export input types (KeyCode re-exported through input crate, not directly from winit)
 pub use input::prelude::KeyCode;
