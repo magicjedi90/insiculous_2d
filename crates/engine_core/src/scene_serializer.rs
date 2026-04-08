@@ -33,6 +33,7 @@ pub fn world_to_scene_data(
     SceneData {
         name: scene_name.to_string(),
         physics: physics_settings,
+        editor: None,
         prefabs: std::collections::HashMap::new(),
         entities,
     }
