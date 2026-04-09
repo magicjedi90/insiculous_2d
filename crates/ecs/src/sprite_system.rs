@@ -122,10 +122,10 @@ impl System for SpriteRenderSystem {
                 None => continue,
             };
 
-            // Get sprite (required)
+            // Get sprite (required, must be visible)
             let sprite = match world.get::<Sprite>(entity_id) {
-                Some(s) => s.clone(),
-                None => continue,
+                Some(s) if s.visible => s.clone(),
+                _ => continue,
             };
 
             // Get animation (optional)

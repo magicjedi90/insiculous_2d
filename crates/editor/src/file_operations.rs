@@ -101,7 +101,7 @@ pub fn load_scene(
     Ok(instance)
 }
 
-/// Reset editor for a new empty scene.
+/// Reset the editor for a new empty scene.
 ///
 /// Note: The caller is responsible for clearing the world.
 pub fn new_scene(editor: &mut EditorContext) {

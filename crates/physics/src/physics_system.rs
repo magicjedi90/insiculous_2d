@@ -47,6 +47,8 @@ pub struct PhysicsSystem {
     max_delta_time: f32,
     /// Callbacks for collision events (supports multiple listeners)
     collision_callbacks: Vec<CollisionCallback>,
+    /// Deferred velocities for entities not yet synced to Rapier
+    pending_velocities: Vec<(EntityId, Vec2, f32)>,
 }
 
 impl PhysicsSystem {
@@ -63,6 +65,7 @@ impl PhysicsSystem {
             fixed_timestep: 1.0 / 60.0,
             max_delta_time: 0.1,
             collision_callbacks: Vec::new(),
+            pending_velocities: Vec::new(),
         }
     }
 
@@ -113,7 +116,18 @@ impl PhysicsSystem {
     /// from the restored ECS component values.
     pub fn clear(&mut self) {
         self.physics_world.clear();
+        self.pending_velocities.clear();
         self.time_accumulator = 0.0;
+    }
+
+    /// Remove an entity from both the physics world and the ECS world.
+    ///
+    /// This is the recommended way to destroy physics entities — it ensures
+    /// both systems stay in sync and clears any pending deferred velocities.
+    pub fn destroy_entity(&mut self, world: &mut World, entity: EntityId) {
+        self.physics_world.remove_entity(entity);
+        world.remove_entity(&entity).ok();
+        self.pending_velocities.retain(|(e, _, _)| *e != entity);
     }
 
     /// Get a reference to the physics world
@@ -156,9 +170,17 @@ impl PhysicsSystem {
         self.physics_world.collision_events()
     }
 
-    /// Set the velocity of a rigid body
+    /// Set the velocity of a rigid body.
+    ///
+    /// If the entity hasn't been synced to the physics world yet (e.g., just
+    /// spawned this frame), the velocity is buffered and applied automatically
+    /// during the next `update()` call.
     pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
-        self.physics_world.set_body_velocity(entity, linear, angular);
+        if self.physics_world.has_rigid_body(entity) {
+            self.physics_world.set_body_velocity(entity, linear, angular);
+        } else {
+            self.pending_velocities.push((entity, linear, angular));
+        }
     }
 
     /// Get the velocity of a rigid body
@@ -283,6 +305,11 @@ impl System for PhysicsSystem {
         let entities: Vec<EntityId> = world.entities();
         for entity in entities {
             self.sync_entity_to_physics(world, entity);
+        }
+
+        // Flush deferred velocities for newly synced entities
+        for (entity, linear, angular) in self.pending_velocities.drain(..) {
+            self.physics_world.set_body_velocity(entity, linear, angular);
         }
 
         // Fixed timestep physics updates

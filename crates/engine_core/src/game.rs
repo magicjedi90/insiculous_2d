@@ -83,6 +83,7 @@ pub trait Game: Sized + 'static {
             let sprite = ctx.world.get::<EcsSprite>(entity_id);
 
             if let Some(ecs_sprite) = sprite {
+                if !ecs_sprite.visible { continue; }
                 // Use GlobalTransform2D if available (for hierarchical entities),
                 // otherwise fall back to local Transform2D
                 let (position, rotation, scale) = if let Some(global) = ctx.world.get::<ecs::hierarchy::GlobalTransform2D>(entity_id) {

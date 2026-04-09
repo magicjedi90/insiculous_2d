@@ -57,9 +57,14 @@ pub struct Sprite {
     pub color: Vec4,
     /// Layer depth for sorting (higher values render on top)
     pub depth: f32,
+    /// Whether this sprite is visible (invisible sprites are skipped during rendering)
+    #[serde(default = "default_visible")]
+    pub visible: bool,
     /// Texture handle (from renderer::TextureHandle)
     pub texture_handle: u32,
 }
+
+fn default_visible() -> bool { true }
 
 impl Default for Sprite {
     fn default() -> Self {
@@ -70,6 +75,7 @@ impl Default for Sprite {
             tex_region: [0.0, 0.0, 1.0, 1.0], // Full texture
             color: Vec4::ONE, // White
             depth: 0.0,
+            visible: true,
             texture_handle: 0,
         }
     }
@@ -117,6 +123,12 @@ impl Sprite {
     /// Set depth
     pub fn with_depth(mut self, depth: f32) -> Self {
         self.depth = depth;
+        self
+    }
+
+    /// Set visibility
+    pub fn with_visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
         self
     }
 }

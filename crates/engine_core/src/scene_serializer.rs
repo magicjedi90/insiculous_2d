@@ -354,6 +354,7 @@ mod tests {
             scale: Vec2::new(3.0, 4.0),
             color: Vec4::new(1.0, 0.0, 0.0, 1.0),
             depth: 10.0,
+            visible: true,
             tex_region: [0.0, 0.0, 1.0, 1.0],
         };
         world.add_component(&entity, sprite).ok();
@@ -707,6 +708,7 @@ mod tests {
                     scale: Vec2::new(1.5, 1.5),
                     color: Vec4::new(0.5, 0.6, 0.7, 1.0),
                     depth: 5.0,
+                    visible: true,
                     tex_region: [0.0, 0.0, 1.0, 1.0],
                 },
             )

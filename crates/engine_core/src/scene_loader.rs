@@ -315,6 +315,7 @@ impl SceneLoader {
                     scale: Vec2::new(scale.0, scale.1),
                     color: glam::Vec4::new(color.0, color.1, color.2, color.3),
                     depth: *depth,
+                    visible: true,
                     tex_region: [0.0, 0.0, 1.0, 1.0],
                 };
                 let _ = world.add_component(&entity_id, sprite);

@@ -35,6 +35,7 @@ fn test_sprite_default() {
     assert_eq!(sprite.tex_region, [0.0, 0.0, 1.0, 1.0]);
     assert_eq!(sprite.color, Vec4::ONE);
     assert_eq!(sprite.depth, 0.0);
+    assert!(sprite.visible);
     assert_eq!(sprite.texture_handle, 0);
 }
 
@@ -417,7 +418,7 @@ fn test_sprite_component_meta() {
 
     assert_eq!(<Sprite as ComponentMeta>::type_name(), "Sprite");
     let fields = <Sprite as ComponentMeta>::field_names();
-    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "texture_handle"]);
+    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "visible", "texture_handle"]);
 }
 
 #[test]
