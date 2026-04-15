@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::chaos_mode::ChaosMode;
+
 /// Configuration for the game window and engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
@@ -19,6 +21,10 @@ pub struct GameConfig {
     pub clear_color: [f32; 4],
     /// Whether the window is resizable
     pub resizable: bool,
+    /// Project-wide gameplay intensity theme. Each game decides what a given
+    /// variant means; the engine just carries the selection.
+    #[serde(default)]
+    pub chaos_mode: ChaosMode,
 }
 
 impl Default for GameConfig {
@@ -30,6 +36,7 @@ impl Default for GameConfig {
             target_fps: 60,
             clear_color: [0.1, 0.1, 0.15, 1.0],
             resizable: true,
+            chaos_mode: ChaosMode::Normal,
         }
     }
 }
@@ -61,6 +68,13 @@ impl GameConfig {
         self.target_fps = fps;
         self
     }
+
+    /// Set the starting chaos mode. Games that let the player pick at runtime
+    /// typically leave this at the default and mutate their own field.
+    pub fn with_chaos_mode(mut self, mode: ChaosMode) -> Self {
+        self.chaos_mode = mode;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -75,6 +89,13 @@ mod tests {
         assert_eq!(config.height, 600);
         assert_eq!(config.target_fps, 60);
         assert!(config.resizable);
+        assert_eq!(config.chaos_mode, ChaosMode::Normal);
+    }
+
+    #[test]
+    fn test_game_config_with_chaos_mode() {
+        let config = GameConfig::new("Test").with_chaos_mode(ChaosMode::Insiculous);
+        assert_eq!(config.chaos_mode, ChaosMode::Insiculous);
     }
 
     #[test]

@@ -570,8 +570,13 @@ impl PhysicsWorld {
         }
     }
 
-    /// Set the velocity of a rigid body
-    pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
+    /// Set the velocity of a rigid body.
+    ///
+    /// Note: if the entity hasn't been synced to Rapier yet (e.g., just
+    /// spawned this frame), this will silently no-op. Callers that need
+    /// deferred-safe behavior should use [`PhysicsSystem::set_velocity`]
+    /// instead, which buffers until the body is live.
+    pub fn set_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
         let vel = self.pixels_to_meters(linear);
 
         if let Some(&handle) = self.entity_to_body.get(&entity) {

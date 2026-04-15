@@ -6,7 +6,9 @@
 //!
 //! [`PhysicsSystem`] provides several methods that delegate directly to [`PhysicsWorld`]:
 //! - `set_gravity()` / `gravity()`
-//! - `apply_impulse()` / `apply_force()`
+//! - `set_velocity()` — the single, universal "launch / move this body at
+//!   velocity V" API. Safe on bodies spawned this frame (defers until synced).
+//! - `apply_force()`
 //! - `raycast()`
 //! - `collision_events()`
 //!
@@ -14,11 +16,18 @@
 //!
 //! ```ignore
 //! // With pass-through (cleaner):
-//! physics_system.apply_impulse(entity, Vec2::new(0.0, 100.0));
+//! physics_system.set_velocity(entity, Vec2::new(0.0, 100.0), 0.0);
 //!
 //! // Without pass-through:
-//! physics_system.physics_world_mut().apply_impulse(entity, Vec2::new(0.0, 100.0));
+//! physics_system.physics_world_mut().set_velocity(entity, Vec2::new(0.0, 100.0), 0.0);
 //! ```
+//!
+//! Note: the legacy `apply_impulse` pass-through was removed — every callsite
+//! in the workspace was semantically "start this body at velocity V" rather
+//! than a mass-aware momentum delta, and having two functions for the same
+//! intent was a footgun (impulse silently no-ops on same-frame spawns).
+//! `PhysicsWorld::apply_impulse` remains for the rare case that genuinely
+//! needs mass-aware impulse semantics on a live body.
 //!
 //! Users who need advanced physics operations can still access the underlying
 //! [`PhysicsWorld`] via [`physics_world()`](PhysicsSystem::physics_world) and
@@ -150,11 +159,6 @@ impl PhysicsSystem {
         self.physics_world.gravity()
     }
 
-    /// Apply an impulse to an entity
-    pub fn apply_impulse(&mut self, entity: EntityId, impulse: Vec2) {
-        self.physics_world.apply_impulse(entity, impulse);
-    }
-
     /// Apply a force to an entity
     pub fn apply_force(&mut self, entity: EntityId, force: Vec2) {
         self.physics_world.apply_force(entity, force);
@@ -170,14 +174,16 @@ impl PhysicsSystem {
         self.physics_world.collision_events()
     }
 
-    /// Set the velocity of a rigid body.
+    /// Set the velocity of a rigid body — the universal "launch / move this
+    /// body at velocity V" API.
     ///
-    /// If the entity hasn't been synced to the physics world yet (e.g., just
-    /// spawned this frame), the velocity is buffered and applied automatically
-    /// during the next `update()` call.
-    pub fn set_body_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
+    /// Safe to call on entities spawned this same frame: if the body hasn't
+    /// been synced into Rapier yet, the velocity is buffered and applied
+    /// automatically during the next `update()`. This is the one function
+    /// games should reach for when starting bodies moving.
+    pub fn set_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
         if self.physics_world.has_rigid_body(entity) {
-            self.physics_world.set_body_velocity(entity, linear, angular);
+            self.physics_world.set_velocity(entity, linear, angular);
         } else {
             self.pending_velocities.push((entity, linear, angular));
         }
@@ -201,7 +207,7 @@ impl PhysicsSystem {
     /// Reset a body's position and zero its velocity.
     pub fn reset_body(&mut self, entity: EntityId, position: Vec2) {
         self.physics_world.set_body_transform(entity, position, 0.0);
-        self.physics_world.set_body_velocity(entity, Vec2::ZERO, 0.0);
+        self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
     }
 
     /// Sync a single entity from ECS to physics world
@@ -309,7 +315,7 @@ impl System for PhysicsSystem {
 
         // Flush deferred velocities for newly synced entities
         for (entity, linear, angular) in self.pending_velocities.drain(..) {
-            self.physics_world.set_body_velocity(entity, linear, angular);
+            self.physics_world.set_velocity(entity, linear, angular);
         }
 
         // Fixed timestep physics updates
@@ -558,7 +564,7 @@ mod tests {
         system.initialize(&mut world).unwrap();
         system.update(&mut world, 1.0 / 60.0);
 
-        system.set_body_velocity(entity, Vec2::new(200.0, 100.0), 0.0);
+        system.set_velocity(entity, Vec2::new(200.0, 100.0), 0.0);
         let (vel, _) = system.get_body_velocity(entity).expect("body should exist");
         assert!((vel.x - 200.0).abs() < 1.0, "x velocity should be ~200, got {}", vel.x);
         assert!((vel.y - 100.0).abs() < 1.0, "y velocity should be ~100, got {}", vel.y);
@@ -598,7 +604,7 @@ mod tests {
         system.initialize(&mut world).unwrap();
         system.update(&mut world, 1.0 / 60.0);
 
-        system.set_body_velocity(entity, Vec2::new(999.0, 999.0), 0.0);
+        system.set_velocity(entity, Vec2::new(999.0, 999.0), 0.0);
         system.reset_body(entity, Vec2::new(100.0, 200.0));
 
         let (vel, _) = system.get_body_velocity(entity).expect("body should exist");

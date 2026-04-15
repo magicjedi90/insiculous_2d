@@ -362,6 +362,7 @@ impl<G: Game> GameRunner<G> {
                 ui: self.ui_manager.ui_context(),
                 delta_time,
                 window_size,
+                chaos_mode: self.config.chaos_mode,
             };
 
             if !self.initialized {
@@ -530,6 +531,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             ui: &mut self.ui_manager.ui_context(),
                             delta_time: 0.0,
                             window_size,
+                            chaos_mode: self.config.chaos_mode,
                         };
 
                         match event.state {

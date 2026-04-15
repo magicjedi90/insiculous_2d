@@ -8,6 +8,7 @@ pub use crate::{
     game::{Game, run_game},
     contexts::{GameContext, RenderContext, GlyphCacheKey},
     game_config::GameConfig,
+    chaos_mode::ChaosMode,
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
     // Scene serialization

@@ -92,9 +92,10 @@ Last audited: January 2026
 - **File:** `physics_system.rs`
 - **Resolution:** Added module-level documentation explaining the API design:
   - Pass-through methods exist intentionally for **API ergonomics**
-  - `physics_system.apply_impulse(...)` is cleaner than `physics_system.physics_world_mut().apply_impulse(...)`
+  - `physics_system.set_velocity(...)` is cleaner than `physics_system.physics_world_mut().set_velocity(...)`
   - Users who need advanced operations can still access `PhysicsWorld` via `physics_world()` / `physics_world_mut()`
 - **Resolved:** January 2026
+- **Follow-up (April 2026):** Collapsed `set_body_velocity` + `apply_impulse` into a single `set_velocity` on the game-facing `PhysicsSystem` API. Every callsite in the workspace was semantically "launch this body at velocity V"; `apply_impulse` was a silent footgun on same-frame spawns. `PhysicsWorld::apply_impulse` remains for the rare genuine mass-aware momentum delta (used by `behavior_runner` for jump impulses).
 
 ### ~~[ARCH-002] Collision callback stored as `Option<Box<dyn FnMut>>`~~ ✅ RESOLVED
 - **File:** `physics_system.rs`

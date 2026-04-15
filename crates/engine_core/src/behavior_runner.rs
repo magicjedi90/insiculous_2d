@@ -287,7 +287,7 @@ impl BehaviorRunner {
                     }
                 } else {
                     // Dynamic bodies: set velocity and let physics handle movement
-                    physics.physics_world_mut().set_body_velocity(entity, vel, 0.0);
+                    physics.set_velocity(entity, vel, 0.0);
                 }
             }
         } else {
@@ -299,10 +299,15 @@ impl BehaviorRunner {
             }
         }
 
-        // Apply impulses AFTER velocity commands (so jumps aren't overwritten)
+        // Apply impulses AFTER velocity commands (so jumps aren't overwritten).
+        // This is one of the few places true impulse semantics matter (a jump
+        // adds to existing horizontal velocity rather than clobbering it), so
+        // we reach down to PhysicsWorld::apply_impulse directly — there is no
+        // PhysicsSystem-level impulse API (games use set_velocity as the
+        // universal "move this body" call).
         if let Some(ref mut physics) = physics {
             for (entity, impulse) in impulse_commands {
-                physics.apply_impulse(entity, impulse);
+                physics.physics_world_mut().apply_impulse(entity, impulse);
             }
         }
 

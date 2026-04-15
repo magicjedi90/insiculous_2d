@@ -307,7 +307,12 @@ SceneLoader::load_and_instantiate("scene.ron", &mut world, &mut assets)?;
 **Files:** `scene_loader.rs`, `scene_data.rs`, `assets/scenes/*.ron`
 
 ### Physics Integration Pattern
-ECS-friendly 2D physics via rapier2d:
+ECS-friendly 2D physics via rapier2d. Game-facing movement API is a single
+function: **`PhysicsSystem::set_velocity(entity, linear, angular)`** — use it
+for every "launch / move this body" case. Safe on entities spawned the same
+frame (velocity buffered, applied once the body syncs). The older
+`apply_impulse` pass-through is gone; if a behavior genuinely needs mass-aware
+impulse semantics, reach into `physics_world_mut().apply_impulse(...)`.
 
 ```rust
 // Add physics components
@@ -367,6 +372,33 @@ if input.is_action_active(&GameAction::Jump) {
 ```
 
 **Files:** `input/input_mapping.rs`, `input/input_handler.rs`
+
+### Chaos Mode Pattern (Cross-Game Theme)
+Every game built on the engine is expected to support a four-tier intensity
+theme: **Normal / Insane / Ridiculous / Insiculous** (= both insane and
+ridiculous). The engine carries the *selection*; each game decides what the
+variants *mean*.
+
+```rust
+use engine_core::prelude::*;
+
+// Startup: set once via the config...
+let config = GameConfig::new("My Game").with_chaos_mode(ChaosMode::Insane);
+
+// ...or let the player pick at runtime and store on your own struct.
+// Branch gameplay with the helper predicates:
+if self.chaos_mode.is_insane()     { /* per-game "insane" behavior */ }
+if self.chaos_mode.is_ridiculous() { /* per-game "ridiculous" behavior */ }
+
+// Iterate all four variants for menus:
+for mode in ChaosMode::ALL { println!("{}", mode.label()); }
+```
+
+`is_insane()` / `is_ridiculous()` both return true for Insiculous, so wiring
+both flags independently gives you "both behaviors at once" for Insiculous
+mode for free.
+
+**Files:** `crates/engine_core/src/chaos_mode.rs`, `game_config.rs`, `contexts.rs`
 
 ### Resource Acquisition Is Initialization (RAII)
 Used throughout for resource management:

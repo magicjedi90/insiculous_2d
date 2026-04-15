@@ -63,6 +63,18 @@ This engine is designed to be developed collaboratively with AI agents. Follow t
 5. **Run `cargo test -p <crate>`** after each change to catch regressions fast
 6. **Run `cargo test --workspace`** before considering work complete
 
+## Recurring Themes
+
+### ChaosMode (engine_core)
+Project-wide "Normal / Insane / Ridiculous / Insiculous" intensity selector
+carried on `GameConfig.chaos_mode` and mirrored on `GameContext.chaos_mode`.
+The engine ships *no* gameplay logic for the variants — each game interprets
+them per its own mechanics (Pong: Insane doubles ball speed per paddle hit,
+Ridiculous starts with 2 balls, Insiculous = both). Helpers: `ChaosMode::ALL`,
+`is_insane()`, `is_ridiculous()`, `label()`. Games that let the player pick at
+runtime keep their own field as the source of truth; the engine field is for
+games that set the mode once at startup via `GameConfig::with_chaos_mode()`.
+
 ## Architecture
 
 ### Manager Pattern + File Refactoring (January 2026) - COMPLETE

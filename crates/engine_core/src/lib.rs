@@ -40,6 +40,7 @@ pub mod ui_manager;
 pub mod game_config;
 pub mod contexts;
 pub mod ui_integration;
+pub mod chaos_mode;
 
 pub mod prelude;
 
@@ -60,6 +61,7 @@ pub use window_manager::*;
 pub use game_loop_manager::*;
 pub use ui_manager::*;
 pub use game_config::*;
+pub use chaos_mode::ChaosMode;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

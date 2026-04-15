@@ -11,6 +11,7 @@ use ui::UIContext;
 use renderer::{sprite::SpriteBatcher, Camera, texture::TextureHandle};
 use std::collections::HashMap;
 use crate::assets::AssetManager;
+use crate::chaos_mode::ChaosMode;
 
 /// Key for caching glyph textures.
 ///
@@ -54,6 +55,10 @@ pub struct GameContext<'a> {
     pub delta_time: f32,
     /// Current window size
     pub window_size: Vec2,
+    /// Project-wide gameplay intensity theme (mirrored from `GameConfig`).
+    /// Games that let the player pick at runtime typically keep their own
+    /// field and ignore this one.
+    pub chaos_mode: ChaosMode,
 }
 
 /// Render context passed to the render method.

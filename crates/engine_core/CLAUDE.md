@@ -4,9 +4,10 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 
 ## Key Types
 - `Game` trait — `init()`, `update()`, `on_key_pressed()` — the public API for games
-- `GameConfig` — window title, size, clear color
+- `GameConfig` — window title, size, clear color, **`chaos_mode`**
 - `run_game(game, config)` — entry point, creates window + event loop
-- `GameContext` — passed to Game methods: world, input, assets, ui, physics, delta_time
+- `GameContext` — passed to Game methods: world, input, assets, ui, physics, delta_time, **chaos_mode**
+- `ChaosMode` — cross-game Normal/Insane/Ridiculous/Insiculous theme (engine carries the selection, games define the meaning)
 - Managers: `GameLoopManager`, `UIManager`, `RenderManager`, `WindowManager`, `SceneManager`
 
 ## File Map
@@ -27,6 +28,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `lifecycle.rs` — FSM for scene lifecycle
 - `timing.rs` — Timer utilities
 - `contexts.rs` — GameContext, RenderContext
+- `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
 - `ui_integration.rs` — UI-to-renderer bridge
 - `prelude.rs` — Re-exports for `use engine_core::prelude::*`
 
