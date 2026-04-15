@@ -34,11 +34,10 @@ PhysicsSystem
 - Presets: `player_platformer()`, `pushable()`, `platform()`, `bouncy()`
 
 ## Known Tech Debt
-- Missing friction/kinematic/sensor tests
 - PhysicsWorld handles too many rapier types (future SRP refactor)
 
 ## Testing
-- 28 tests, run with `cargo test -p physics`
+- 44 passing, 3 ignored — `cargo test -p physics`
 - Pure math/simulation — no GPU needed
 
 ## Godot Oracle — When Stuck

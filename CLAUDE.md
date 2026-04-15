@@ -29,7 +29,7 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
 2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
 3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (598+ tests, 0 failures)
+4. **Verify**: `cargo test --workspace` must pass (791 tests, 0 failures, 36 ignored GPU/window)
 5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
 6. **Release**: Remove the lock file
 

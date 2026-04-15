@@ -49,7 +49,7 @@ Query types: Single<T>, Pair<T, U>, Triple<T, U, V>
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 110 tests, run with `cargo test -p ecs`
+- 156 passing, 10 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 
