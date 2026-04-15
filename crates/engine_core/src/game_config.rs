@@ -25,6 +25,11 @@ pub struct GameConfig {
     /// variant means; the engine just carries the selection.
     #[serde(default)]
     pub chaos_mode: ChaosMode,
+    /// Optional path to persist achievement unlock state (JSON). When set, the
+    /// engine creates the `AchievementManager` with this save path so unlocks
+    /// survive restarts. When `None`, achievements are in-memory only.
+    #[serde(default)]
+    pub achievement_save_path: Option<String>,
 }
 
 impl Default for GameConfig {
@@ -37,6 +42,7 @@ impl Default for GameConfig {
             clear_color: [0.1, 0.1, 0.15, 1.0],
             resizable: true,
             chaos_mode: ChaosMode::Normal,
+            achievement_save_path: None,
         }
     }
 }
@@ -73,6 +79,13 @@ impl GameConfig {
     /// typically leave this at the default and mutate their own field.
     pub fn with_chaos_mode(mut self, mode: ChaosMode) -> Self {
         self.chaos_mode = mode;
+        self
+    }
+
+    /// Persist achievement unlocks to this JSON path so they survive restarts.
+    /// Parent directories are created on first save.
+    pub fn with_achievement_save_path(mut self, path: impl Into<String>) -> Self {
+        self.achievement_save_path = Some(path.into());
         self
     }
 }

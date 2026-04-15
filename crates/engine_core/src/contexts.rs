@@ -12,6 +12,7 @@ use renderer::{sprite::SpriteBatcher, Camera, texture::TextureHandle};
 use std::collections::HashMap;
 use crate::assets::AssetManager;
 use crate::chaos_mode::ChaosMode;
+use crate::achievements::AchievementManager;
 
 /// Key for caching glyph textures.
 ///
@@ -59,6 +60,9 @@ pub struct GameContext<'a> {
     /// Games that let the player pick at runtime typically keep their own
     /// field and ignore this one.
     pub chaos_mode: ChaosMode,
+    /// Achievement / trophy manager. Register achievements in `init()`, then
+    /// call `ctx.achievements.unlock("id")` from gameplay code.
+    pub achievements: &'a mut AchievementManager,
 }
 
 /// Render context passed to the render method.

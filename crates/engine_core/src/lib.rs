@@ -41,6 +41,7 @@ pub mod game_config;
 pub mod contexts;
 pub mod ui_integration;
 pub mod chaos_mode;
+pub mod achievements;
 
 pub mod prelude;
 
@@ -62,6 +63,7 @@ pub use game_loop_manager::*;
 pub use ui_manager::*;
 pub use game_config::*;
 pub use chaos_mode::ChaosMode;
+pub use achievements::{Achievement, AchievementManager, AchievementError, DEFAULT_TOAST_DURATION};
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

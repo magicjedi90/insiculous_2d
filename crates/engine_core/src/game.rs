@@ -49,6 +49,7 @@ use crate::ui_integration::render_ui_commands;
 use ui::DrawCommand;
 use crate::contexts::{GameContext, RenderContext, GlyphCacheKey};
 use crate::assets::AssetManager;
+use crate::achievements::AchievementManager;
 use crate::render_manager::RenderManager;
 use crate::window_manager::{WindowConfig, WindowManager};
 use crate::Scene;
@@ -188,6 +189,8 @@ struct GameRunner<G: Game> {
     glyph_textures: HashMap<GlyphCacheKey, TextureHandle>,
     /// Main game scene containing ECS world
     scene: Scene,
+    /// Achievement / trophy manager
+    achievements: AchievementManager,
     /// Whether the game's init() has been called
     initialized: bool,
 }
@@ -208,6 +211,11 @@ impl<G: Game> GameRunner<G> {
             }
         };
 
+        let achievements = match &config.achievement_save_path {
+            Some(path) => AchievementManager::with_save_path(path),
+            None => AchievementManager::in_memory(),
+        };
+
         Self {
             game,
             config,
@@ -220,6 +228,7 @@ impl<G: Game> GameRunner<G> {
             game_loop_manager: GameLoopManager::new(),
             glyph_textures: HashMap::new(),
             scene: Scene::new("main"),
+            achievements,
             initialized: false,
         }
     }
@@ -363,6 +372,7 @@ impl<G: Game> GameRunner<G> {
                 delta_time,
                 window_size,
                 chaos_mode: self.config.chaos_mode,
+                achievements: &mut self.achievements,
             };
 
             if !self.initialized {
@@ -371,6 +381,11 @@ impl<G: Game> GameRunner<G> {
             }
 
             self.game.update(&mut ctx);
+
+            // Draw achievement toasts on top of whatever the game drew.
+            self.achievements
+                .draw_toasts(self.ui_manager.ui_context(), window_size);
+            self.achievements.tick(delta_time);
         } else if !self.initialized {
             self.initialized = true;
         }
@@ -532,6 +547,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             delta_time: 0.0,
                             window_size,
                             chaos_mode: self.config.chaos_mode,
+                            achievements: &mut self.achievements,
                         };
 
                         match event.state {
