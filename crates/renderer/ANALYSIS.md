@@ -1,168 +1,194 @@
 # Renderer Analysis
 
-## Review (January 19, 2026)
+## Audit Note (April 15, 2026)
 
-### Summary
-- WGPU-based 2D renderer focused on sprite batching, instancing, and texture management.
-- Exposes a streamlined `init()` async constructor and `run_with_app()` helper.
-- Re-exports `wgpu` and key sprite/texture types for downstream crates.
+This file was audited against the actual source in `crates/renderer/src/`. Items
+removed because the underlying code has changed or the note no longer
+load-bearing:
+- "Bind groups created every frame" issue — camera bind group and texture bind
+  groups are now cached (`SpritePipeline::camera_bind_group` and
+  `texture_bind_group_cache`)
+- "Previously Fixed Issues" section covering ECS texture handle integration and
+  early 2026 sprite rendering fixes (ancient history)
+- Test-coverage enumeration and the test-plan template (inventory churns with
+  every test addition; the live count lives in `cargo test -p renderer` output)
+- Production-readiness scoring that duplicated information in `AGENTS.md` /
+  `PROJECT_ROADMAP.md`
+- The "Review (January 19, 2026)" preamble (superseded by Current State)
 
-### Strengths
-- Sprite batching and camera utilities provide a solid 2D baseline.
-- API surface is clearly organized into sprite/texture modules and prelude exports.
-- Uses `common::Time` to keep timing types centralized.
-
-### Risks & Follow-ups
-- Resource cleanup strategy is unclear; consider drop hooks for GPU resources.
-- `SpritePipeline` bundles many responsibilities; splitting into smaller structs will help.
-- Device/queue accessor duplication could be simplified for clarity.
-
-## Current State (Updated: January 2026)
-The renderer crate provides WGPU-based 2D sprite rendering with instancing, batching, and camera support.
-
-**Test Count: 62 tests** (Comprehensive coverage added January 2026)
-
----
-
-## Test Coverage (Added January 2026)
-
-### Sprite Tests (26 tests in sprite.rs)
-- Sprite builder pattern (position, rotation, scale, color, depth, tex_region)
-- Sprite default values and texture handle assignment
-- SpriteBatch operations (add, sort by depth, clear, len/is_empty)
-- SpriteBatcher grouping by texture, sprite counting, sort all batches
-
-### Camera2D Tests (14 tests in sprite_data.rs)
-- Default and custom camera creation
-- View matrix (identity, with position, with zoom)
-- Projection matrix for orthographic rendering
-- Screen-to-world and world-to-screen coordinate conversion
-- CameraUniform GPU data generation
-
-### Texture System Tests (22 tests in texture.rs)
-- TextureHandle creation, default, equality, hashing, copy
-- TextureLoadConfig and SamplerConfig defaults and customization
-- TextureError display messages
-- AtlasRegion creation with and without data
-- TextureAtlasBuilder operations (new, padding, add regions, chaining)
-
-### GPU Data Tests (7 tests in sprite_data.rs)
-- SpriteVertex creation and bytemuck compatibility
-- SpriteInstance creation and bytemuck compatibility
-- Vertex buffer layout descriptors
+Items kept because they still reflect real code or capture design rationale
+useful for future work: SRP tension in `SpritePipeline`, duplicated
+device/queue accessors, remaining `#[allow(dead_code)]` suppressions, glyph
+texture cache memory issue (cross-crate with UI), architectural overview,
+design-decision notes.
 
 ---
 
-## Remaining Issues
+## Current State (Updated: April 2026)
 
-### Medium Severity
+WGPU 28.0.0 backend with instanced sprite rendering. 62 unit tests, 1 ignored
+doctest. Sprite visibility is enforced upstream in the ECS `Sprite` component
+(see `ecs/sprite_components.rs` — `visible: bool`); the renderer receives only
+visible sprites in its batches.
 
-#### 1. SRP Violation: SpritePipeline
-**Location**: `src/sprite.rs` lines 224-251
-**Issue**: SpritePipeline struct holds too many GPU resources:
-- Render pipeline
-- Pipeline layout
-- Vertex buffer
-- Instance buffer
-- Index buffer
-- Camera uniform buffer
-- Camera bind group layout
-- Texture bind group layout
-- Sampler
-- Arc<Device>
+**File sizes (April 2026):**
 
-**Impact**: Difficult to test, modify, or reason about.
-
-**Recommended Fix**: Split into:
-- `PipelineResources` - GPU pipeline and layouts
-- `BufferManager` - Vertex, instance, index buffers
-- `CameraManager` - Camera uniform and bind group
-
-#### 2. Redundant Device/Queue Accessors
-**Location**: `src/renderer.rs` lines 268-285
-**Issue**: Both Arc-returning and borrowed versions of same data:
-```rust
-pub fn device(&self) -> Arc<Device> { Arc::clone(&self.device) }
-pub fn device_ref(&self) -> &Device { &self.device }
-pub fn queue(&self) -> Arc<Queue> { Arc::clone(&self.queue) }
-pub fn queue_ref(&self) -> &Queue { &self.queue }
-```
-
-**Impact**: API confusion, callers unsure which to use.
-
-**Recommended Fix**: Keep only one accessor pattern (prefer `&Device` with explicit `Arc::clone` when needed).
-
-#### ~~3. Bind Groups Created Every Frame~~ ✅ RESOLVED
-**Resolution**: Camera bind group is now created once and reused. Texture bind groups are cached per texture handle.
-
----
-
-## Dead Code Identified
-
-### #[allow(dead_code)] Suppressions in SpritePipeline
-
-| Location | Field | Status |
-|----------|-------|--------|
-| `sprite.rs:164` | `max_sprites_per_batch` | Field created but never read |
-| `sprite.rs:230` | `pipeline_layout` | Created for pipeline but not used after |
-| `sprite.rs:233` | `camera_bind_group_layout` | Created but accessed via render pass |
-| `sprite.rs:246` | `sampler` | Created and stored but accessed via bind group |
-
-**Recommendation**: Either use these fields or remove the storage (keep only what's needed for bind group creation).
-
----
-
-## Working Features
-
-### Rendering Pipeline
-- **Instanced Rendering**: Hardware-accelerated sprite rendering using WGPU instancing
-- **Sprite Batching**: Automatic grouping by texture handle
-- **Depth Sorting**: Proper alpha blending with depth-based sorting
-- **Camera System**: 2D orthographic camera with view/projection matrices
-- **White Texture**: Built-in 1x1 white texture for colored sprites
-
-### Texture Management
-- Handle-based texture access
-- **File Loading**: PNG, JPEG, BMP, GIF format support via `image` crate
-- **Programmatic Textures**: Solid colors and checkerboard patterns
-- Texture atlas support
-- WGPU 28.0.0 compatible using `TexelCopyBufferLayout`
-
-### ECS Integration
-- Sprite components for entity-based rendering
-- Transform2D components for position/rotation/scale
-- Camera2D components for viewport configuration
-- **Fixed**: ECS sprites now use their assigned texture handles (not hardcoded white)
+| File | Lines | Notes |
+|------|-------|-------|
+| `sprite.rs` | 1021 | Exceeds the project's 600-line guideline — candidate for splitting (see "SRP Violation" below) |
+| `texture.rs` | 696 | Also over 600 lines |
+| `sprite_data.rs` | 502 | GPU data structures + `DynamicBuffer` |
+| `render_pipeline_inspector.rs` | 434 | Diagnostic/telemetry helper — see note below |
+| `renderer.rs` | 428 | Device/queue/surface lifecycle |
 
 ---
 
 ## Architecture
 
 ```
-Renderer
+Renderer (renderer.rs)
 ├── Surface Management (WGPU 28.0.0)
 ├── Device and Queue (Arc-wrapped for sharing)
-└── White Texture Resource
+└── White Texture Resource (built-in 1x1 white for colored sprites)
 
-SpritePipeline
+SpritePipeline (sprite.rs)
 ├── Render Pipeline (shader + vertex layout)
 ├── Vertex Buffer (quad geometry)
-├── Instance Buffer (per-sprite data)
-├── Index Buffer (quad indices)
+├── Instance Buffer (DynamicBuffer<SpriteInstance>)
+├── Index Buffer (quad indices, 6 u16)
 ├── Camera Uniform Buffer
-├── Bind Group Layouts
-└── Sampler
+├── Cached Camera Bind Group      ← created once, buffer updated via write_buffer
+├── Cached Texture Bind Groups    (HashMap<TextureHandle, BindGroup>)
+├── Bind Group Layouts (camera + texture)
+└── Sampler (default, currently unused after bind-group-cache refactor)
 
-SpriteBatcher
-├── Texture-based Grouping
-├── Depth Sorting
+SpriteBatcher (sprite.rs)
+├── Texture-based Grouping (HashMap<TextureHandle, SpriteBatch>)
+├── Depth Sorting (per-batch)
 └── Instance Collection
 
-TextureManager
+TextureManager (texture.rs)
 ├── Handle Registry
 ├── Texture Cache
 └── Atlas Builder
 ```
+
+### Design Decisions
+
+**`Renderer` bundles init + render** (`renderer.rs` module docs). WGPU's
+surface, device, and queue share lifetimes, so splitting init and render into
+separate structs would add complexity without clear benefit for a 2D engine.
+Documented intentionally in the module header.
+
+**Bind groups cached, buffers updated.** Camera uniform uses
+`queue.write_buffer` rather than recreating the bind group each frame. Texture
+bind groups are created lazily on first use per handle via
+`cache_texture_bind_groups` and reused thereafter. Cache invalidation is
+manual — call `invalidate_texture_cache(handle)` when a texture is unloaded.
+
+**Surface format hardcoded to `Bgra8UnormSrgb`** in the sprite pipeline's color
+target (`sprite.rs` around line 391) even though the surface picks
+`surface_caps.formats[0]` in `Renderer::new`. If a platform reports a different
+preferred format the pipeline will mismatch. Low-priority: works on every
+platform we've tested so far.
+
+---
+
+## Known Issues
+
+### SRP Violation: SpritePipeline
+
+`SpritePipeline` still holds ~13 fields (pipeline, layout, vertex/instance/index
+buffers, camera buffer + bind group + layout, texture bind group layout +
+cache, sampler, max_sprites_per_batch, Arc<Device>). `sprite.rs` is 1021 lines
+— above the project's 600-line guideline.
+
+Suggested split when this crate is next revisited:
+- `PipelineResources` — render pipeline, pipeline layout, bind group layouts
+- `BufferManager` — vertex, instance, index buffers
+- `CameraManager` — camera uniform buffer + cached bind group
+- `TextureBindCache` — the `HashMap<TextureHandle, BindGroup>` + layout
+
+Pull `SpriteBatcher` / `SpriteBatch` / `Sprite` and `TextureAtlas` into their
+own modules while at it.
+
+### Redundant Device/Queue Accessors
+
+`Renderer` exposes both `device()` (returns `Arc<Device>`) and `device_ref()`
+(returns `&Device`), likewise for the queue. Doc comments disambiguate, but
+callers still guess. Consolidation candidate: keep only `&Device` / `&Queue`
+and require callers to `Arc::clone` explicitly when they need ownership.
+
+### `#[allow(dead_code)]` Suppressions
+
+Current suppressions (not all truly dead — some are retention for potential
+future use):
+
+| File:line | Field | Justification in code |
+|-----------|-------|-----------------------|
+| `sprite.rs:164` | `SpriteBatcher::max_sprites_per_batch` | "Reserved for future batch splitting optimization" |
+| `sprite.rs:228` | `SpritePipeline::layout` (pipeline layout) | "Keep for potential pipeline recreation" |
+| `sprite.rs:247` | `SpritePipeline::sampler` | "Kept for potential future use (e.g., default sampler fallback)" |
+| `sprite_data.rs:212` | `DynamicBuffer::usage` | "Stored for potential buffer recreation" |
+| `texture.rs:386` | `create_placeholder_texture` | "Reserved for future error handling" |
+
+Either wire them in (batch splitting when `sprite_count > max_sprites_per_batch`,
+placeholder texture on load failure) or delete. The retention-for-maybe comments
+accumulate cruft over time.
+
+### Resource Cleanup
+
+No explicit GPU resource destruction on renderer shutdown. WGPU resources are
+Arc-wrapped and will drop, but we have no test that a full teardown is
+leak-free. Low priority — headless tests don't exercise this path.
+
+### Glyph Texture Cache Wastes Memory (Cross-crate)
+
+The glyph-texture cache key (upstream in the UI→renderer bridge — see
+`engine_core/ui_integration.rs`) includes color. Rasterizing glyphs is
+color-independent; only the final sprite tint should carry color. The same
+glyph in a different color allocates a fresh texture atlas entry. Owner: UI
+integration, not renderer proper, but it inflates our texture resource table.
+Tracked here because the waste shows up in the renderer's texture cache.
+
+### `render_pipeline_inspector.rs` — Diagnostic Module
+
+A 434-line diagnostic logger (operation types, surface/encoder/draw-call
+instrumentation) that is not re-exported from `lib.rs` prelude and not used by
+the main render path. Either:
+- Promote it to an opt-in `renderer::diagnostic` module with tests and docs, or
+- Archive it — dead code is worse than no code.
+
+---
+
+## Future Enhancements (Not Blocking)
+
+- GPU resource cleanup on drop, with a teardown test
+- Async texture loading (currently synchronous, blocks main thread)
+- Automatic surface format detection (drop the hardcoded `Bgra8UnormSrgb`)
+- Frustum culling for large scenes
+- Text rendering as first-class (currently goes through UI glyph raster →
+  sprite path)
+- Post-processing pipeline (bloom, chromatic aberration, etc.)
+- Integration test harness that validates end-to-end rendering without a real
+  GPU (software rasterizer backend, or golden-image tests on CI with a virtual
+  display)
+
+---
+
+## Cross-Crate Interactions
+
+- **`engine_core/render_manager.rs`** owns the `Renderer` + `SpritePipeline`
+  lifetime. The `RenderManager::render()` wiring calls into
+  `render_with_sprites`.
+- **`engine_core/ui_integration.rs`** builds the glyph texture cache and
+  translates UI draw commands into sprite batches. Glyph-texture cache key
+  lives here (see note above).
+- **`ecs/sprite_components.rs`** defines `Sprite`, `Transform2D`, `Camera`.
+  The `visible` flag on `Sprite` is filtered upstream — the renderer does not
+  see invisible sprites.
+- **`common::Time`** is the shared timing type; renderer does not maintain its
+  own.
 
 ---
 
@@ -170,151 +196,18 @@ TextureManager
 
 ```rust
 // Create pipeline
-let sprite_pipeline = SpritePipeline::new(renderer.device(), 1000);
+let sprite_pipeline = SpritePipeline::new(renderer.device_ref(), 1000);
 
-// Create sprites
+// Batch sprites
 let mut batcher = SpriteBatcher::new(1000);
 batcher.add_sprite(&sprite);
 
-// Collect batches
+// Collect batches (owned clone to decouple from batcher mutability)
 let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
 let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
 
-// Render (instance buffer is updated internally)
+// Render (instance buffer upload happens inside render_with_sprites)
 renderer.render_with_sprites(&mut sprite_pipeline, &camera, &textures, &batch_refs)?;
 ```
 
----
-
-## Previously Fixed Issues
-
-### ECS Texture Handle Integration (January 2026)
-**Issue**: Default `Game::render()` hardcoded `TextureHandle { id: 0 }` for all sprites.
-**Fix**: Now uses `ecs_sprite.texture_handle` correctly.
-**Result**: Loaded textures render correctly on sprites.
-
-### Sprite Rendering (January 2026)
-**Fixes Applied**:
-1. Restored proper shader from backup
-2. Added `prepare_sprites()` call to upload instance data before drawing
-3. Fixed mutability of sprite_pipeline parameter
-
----
-
-## Known Issues
-
-### Medium Priority
-- **Resource Cleanup**: No systematic GPU resource destruction (potential memory leaks)
-- **Surface Format**: Hardcoded `Bgra8UnormSrgb` may not work on all platforms
-- **Synchronous Loading**: Texture loading blocks main thread
-
-### Low Priority
-- No frustum culling
-- No text rendering
-- No post-processing effects
-
----
-
-## Future Enhancements
-
-These features would enhance the renderer but are not required for current functionality:
-
-### Rendering Features
-- GPU resource cleanup on drop for proper shutdown
-- End-to-end integration tests for rendering pipeline
-- Async texture loading with background processing
-- Automatic surface format detection and optimization
-- Additional shader effects (lighting, shadows, post-processing)
-
-### Long-term (Features)
-6. Add frustum culling
-7. Add text rendering
-8. Add post-processing pipeline
-
----
-
-## Test Plan Template
-
-When adding tests, use this structure:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod sprite_tests {
-        #[test]
-        fn sprite_builder_sets_position() {
-            let sprite = Sprite::new(TextureHandle { id: 0 })
-                .with_position(Vec2::new(100.0, 200.0));
-            assert_eq!(sprite.position(), Vec2::new(100.0, 200.0));
-        }
-
-        #[test]
-        fn sprite_default_color_is_white() {
-            let sprite = Sprite::new(TextureHandle { id: 0 });
-            assert_eq!(sprite.color(), Vec4::ONE);
-        }
-    }
-
-    mod camera_tests {
-        #[test]
-        fn camera_creates_orthographic_projection() {
-            let camera = Camera2D::new(800.0, 600.0);
-            let proj = camera.projection_matrix();
-            // Verify orthographic matrix properties
-        }
-    }
-
-    mod batcher_tests {
-        #[test]
-        fn batcher_groups_by_texture() {
-            let mut batcher = SpriteBatcher::new(100);
-            // Add sprites with different textures
-            // Verify batches are grouped correctly
-        }
-    }
-}
-```
-
----
-
-## Production Readiness Assessment
-
-### Working
-- Instanced sprite rendering
-- Texture loading and management
-- Camera system
-- Color tinting
-- ECS integration
-- **62 unit tests** covering core functionality
-
-### Remaining Gaps
-- No integration tests for full rendering pipeline
-- No performance benchmarks
-- No GPU resource cleanup on drop
-
-### Production Ready For
-- Basic 2D sprite rendering
-- Texture-based sprite batching
-- Camera coordinate transformations
-
-### Still Needed For Production
-1. Integration tests validate rendering pipeline end-to-end
-2. GPU resource cleanup implemented
-3. Performance benchmarks established
-
----
-
-## Conclusion
-
-The renderer provides functional 2D sprite rendering with **comprehensive test coverage** (62 tests). The test suite covers:
-- Sprite creation and builder patterns
-- SpriteBatch and SpriteBatcher operations
-- Camera2D matrices and coordinate transformations
-- Texture system configuration and error handling
-- GPU data structures (vertex, instance, uniform)
-
-**Next Priority**: Add integration tests for end-to-end rendering validation.
-
-Run `cargo run --example hello_world` to see working sprite rendering with WASD movement.
+Run `cargo run --example hello_world` to see working sprite rendering.

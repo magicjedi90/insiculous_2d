@@ -1,145 +1,88 @@
 # Engine Core Analysis
 
-## Review (January 19, 2026)
+## Audit Note (2026-04-15)
 
-### Summary
-- Central orchestration crate tying together windowing, rendering, input, audio, ECS, and UI.
-- Uses focused managers (`RenderManager`, `WindowManager`, `GameLoopManager`, `UIManager`) and optional physics.
-- Provides the primary `Game` API and scene lifecycle management.
+This document was audited against the current codebase. Pruned as completed or
+stale:
+- SRP refactoring TODOs for `GameRunner` / `EngineApplication` (managers
+  extracted; `EngineApplication` was deleted entirely — only the `Game` trait
+  and `run_game()` API remain)
+- File extraction phases 1–5 (all completed: `game_config.rs`, `contexts.rs`,
+  `ui_integration.rs`, `scene_manager.rs`, behavior optimization)
+- Dead-code / debug-`println!` fix items (resolved, verified via grep of
+  `src/`)
+- Out-of-date test counts (was reported as 33 → now 110 passing, 8 ignored)
+- Step-by-step "Phase N COMPLETED" checklists that no longer serve as forward
+  guidance
 
-### Strengths
-- Clear integration surface for game code via `GameContext` and `RenderContext`.
-- Feature-gated physics keeps dependencies optional.
-- Recent refactors improved separation of concerns with dedicated modules.
-
-### Risks & Follow-ups
-- `EngineApplication` and `game.rs` remain large; keep pushing responsibilities into dedicated managers.
-- Dependency surface is broad; watch for cyclical coupling between UI/renderer/audio systems.
-- Ensure new features keep the default game loop deterministic and testable.
-
-## Current State (Updated: January 2026)
-The engine_core crate provides lifecycle management, scene management, timing, and a simplified Game API for the Insiculous 2D game engine. Core functionality is stable with proper memory safety and thread-safe operations.
-
-**Test Count: 33 tests** (all passing)
+Kept as reference material: architectural rationale, crate boundary decisions,
+integration diagram, cross-game theme notes, performance notes, forward-looking
+tech debt.
 
 ---
 
-## Critical Issues Identified
+## Current State (2026-04-15)
 
-### High Severity
+The `engine_core` crate is the orchestration layer tying together windowing,
+rendering, input, audio, ECS, UI, and (feature-gated) physics. It owns the
+public `Game` trait and `run_game()` entry point, and delegates its concerns to
+focused manager structs.
 
-#### 1. SRP Violation: GameRunner (game.rs)
-**Location**: `src/game.rs` lines 221-469
-**Issue**: GameRunner struct handles 7+ distinct responsibilities:
-- Window creation and management
-- Renderer initialization
-- Input handling
-- Asset management
-- Game loop control
-- Scene lifecycle management
-- Event dispatching
+- **Test count:** 110 passing, 8 ignored (GPU/window), 0 failed
+- **`game.rs` size:** 577 lines (orchestration only — down from 862 pre-refactor)
+- **Public API surface:** `Game` trait + `GameContext` + `GameConfig` +
+  `run_game()`. `EngineApplication` is gone.
 
-**Impact**: High coupling makes testing difficult and modifications risky. Changes to one concern may break others.
+### Module Layout
 
-**Recommended Fix**: Extract responsibilities into separate structs:
-- `WindowManager` for window operations
-- `RenderManager` for renderer lifecycle
-- `AssetLoader` for asset management
-- Keep `GameRunner` focused on orchestration only
-
-#### 2. SRP Violation: EngineApplication (application.rs)
-**Location**: `src/application.rs` lines 13-346
-**Issue**: Over 300 lines mixing unrelated concerns:
-- Scene stack management (push/pop)
-- Renderer initialization
-- Window creation
-- Game loop timing
-- Input handling
-- Scene updates and rendering
-
-**Impact**: Difficult to reason about, test, or modify safely.
-
-**Recommended Fix**: Apply Facade pattern - EngineApplication should delegate to specialized managers.
-
-#### 3. ~~Debug println!() in Production Code~~ - FIXED (January 2026)
-**Location**: `src/behavior.rs` line 243
-**Status**: RESOLVED - Replaced with `log::info!()`
-
-#### 4. Excessive .clone() in Behavior Update Loop
-**Location**: `src/behavior.rs` lines 96-102
-**Issue**: Heavy cloning in update loop before processing:
-```rust
-world.get::<Behavior>(entity).cloned()
-world.get::<Transform2D>(entity).cloned()
-world.get::<BehaviorState>(entity).cloned()
 ```
-**Count**: 40+ clone operations per frame in behavior system.
-
-**Impact**: Unnecessary memory allocations every frame, potential performance bottleneck.
-
-**Recommended Fix**: Use references where possible, only clone when mutation is needed.
-
-### Medium Severity
-
-#### 5. ~~Redundant GameContext Creation~~ - FIXED (January 2026)
-**Location**: `src/game.rs`
-**Status**: RESOLVED - Added `window_size()` helper method, removed duplicate code
-
-#### 6. ~~Double-Check Pattern in Asset Manager Access~~ - FIXED (January 2026)
-**Location**: `src/game.rs`
-**Status**: RESOLVED - Single check for entire frame
-
----
-
-## Dead Code Identified
-
-### ~~Confirmed Dead Code~~ - FIXED (January 2026)
-
-| Location | Code | Status |
-|----------|------|--------|
-| ~~`application.rs:253`~~ | ~~`extract_sprite_data()` method~~ | REMOVED |
-| `behavior.rs` | Multiple #[allow(dead_code)] | Several helper functions marked but not used |
-
-**Note**: The `extract_sprite_data()` method has been removed from `application.rs`.
-
----
-
-## Test Coverage Analysis
-
-**Total Tests**: 33 (all passing)
-
-### Test File Breakdown
-```
-tests/
-├── init.rs:           2 tests
-├── timing.rs:         5 tests
-├── game_loop.rs:      4 tests
-├── lifecycle.rs:      9 tests
-├── scene_lifecycle.rs: 8 tests
-└── scene_runs.rs:     1 test
-
-src/ (inline tests)
-├── scene_loader.rs:   5 tests
-├── scene_data.rs:     3 tests
-├── behavior.rs:       2 tests
-├── assets.rs:         2 tests
-└── game.rs:           2 tests
+game.rs                 Game trait, GameRunner orchestration, run_game() entry
+game_config.rs          GameConfig builder (title, size, clear color, chaos_mode)
+contexts.rs             GameContext, RenderContext, GlyphCacheKey
+game_loop.rs            GameLoop config + timer wrapper
+game_loop_manager.rs    Frame timing / delta calculation
+ui_manager.rs           UI lifecycle + draw command collection
+ui_integration.rs       UI DrawCommand -> Sprite bridge; screen-to-world helpers
+render_manager.rs       Renderer + sprite pipeline lifecycle, error handling
+window_manager.rs       Window creation, size tracking, DPI
+scene.rs                Scene lifecycle / world coordination
+scene_manager.rs        Scene stack + loading coordination
+scene_loader.rs         RON -> World (prefabs, entities, component instantiation)
+scene_saver.rs          World -> RON file I/O (paired with scene_serializer)
+scene_serializer.rs     World -> SceneData (used by editor save path)
+scene_data.rs           SceneData / PrefabData / EntityData / EditorSettings
+assets.rs               Texture/font loading; handle_to_path reverse lookup
+behavior_runner.rs      Entity behavior iteration (optimized for refs)
+lifecycle.rs            FSM for scene lifecycle states
+timing.rs               Timer utility
+chaos_mode.rs           Normal/Insane/Ridiculous/Insiculous enum + helpers
+achievements.rs         Engine-wide achievement registration + toasts + persistence
+prelude.rs              Re-exports for `use engine_core::prelude::*`
 ```
 
-### Test Quality Issues - RESOLVED ✅
-
-All tests now contain comprehensive assertions and validation logic:
-- `game_loop.rs`: Complete assertions for creation, configuration, start/stop, and timing
-- `timing.rs`: Full validation of timer creation, reset, update, and time conversion
-- All other test files: Proper assertions validating actual behavior
-
-**Status**: All TODO comments have been replaced with meaningful assertions that validate behavior rather than just setup.
-
 ---
 
-## Simple Game API
+## Architecture
 
-The engine provides a `Game` trait that hides all winit/window complexity:
+### Manager Pattern
+
+Responsibilities extracted from the original monolithic `GameRunner` into
+focused managers, each with one job:
+
+| Manager            | Responsibility                                         |
+|--------------------|--------------------------------------------------------|
+| `GameLoopManager`  | Frame timing, delta calculation                        |
+| `UIManager`        | Begin/end UI frame, collect draw commands              |
+| `RenderManager`    | Renderer + sprite pipeline lifecycle, error recovery   |
+| `WindowManager`    | Window creation, resize tracking, DPI                  |
+| `SceneManager`     | Scene stack (push/pop/active), lifecycle               |
+
+`GameRunner::update_and_render()` is pure orchestration — it delegates each
+step to the appropriate manager and the user's `Game` impl.
+
+### Game API
+
+The only public way to run a game:
 
 ```rust
 use engine_core::prelude::*;
@@ -147,357 +90,171 @@ use engine_core::prelude::*;
 struct MyGame;
 
 impl Game for MyGame {
-    fn init(&mut self, ctx: &mut GameContext) {
-        // Create entities, load assets
-    }
-
-    fn update(&mut self, ctx: &mut GameContext) {
-        // Game logic - access input, ECS world, delta time
-    }
-
-    // render() has a default implementation that extracts sprites from ECS
+    fn init(&mut self, ctx: &mut GameContext) { /* load assets, spawn entities */ }
+    fn update(&mut self, ctx: &mut GameContext) { /* per-frame logic */ }
+    // render() has a default impl that extracts sprites from ECS
 }
 
 fn main() {
-    run_game(MyGame, GameConfig::default()).unwrap();
+    run_game(MyGame, GameConfig::new("My Game")).unwrap();
 }
 ```
 
-**Key Features:**
-- `GameConfig` for window settings (title, size, clear color, FPS)
-- `GameContext` provides access to input, ECS world, delta time
-- `RenderContext` for custom sprite rendering
-- Default `render()` implementation extracts sprites from ECS
-- ESC key automatically exits the game
-- Scene lifecycle managed internally
+- `GameContext` exposes: `world`, `input`, `assets`, `ui`, `physics`,
+  `delta_time`, `chaos_mode`
+- ESC is **not** hard-coded to exit anymore — it flows to
+  `Game::on_key_pressed()` so the editor (and games that want a pause menu) can
+  intercept it
+- Scene lifecycle is fully managed internally via `SceneManager` +
+  `LifecycleManager`
+
+### Save/Load Pipeline
+
+Two parallel paths — the place most likely to need future work:
+
+1. **Runtime / game loading** — `SceneLoader::load_and_instantiate(path, world,
+   assets)` reads a RON file via `scene_data.rs` structs and instantiates
+   prefabs+entities into the world.
+2. **Editor saving** — `scene_serializer::world_to_scene_data(world, name,
+   physics, texture_path_fn)` is the inverse: walks the world, produces a
+   `SceneData` which the editor writes via `scene_saver`.
+
+The texture handle → path mapping is carried on `AssetManager.handle_to_path`,
+populated during `load_texture()`. Programmatic textures (`#white`,
+`#solid:RRGGBB`) round-trip through sentinel strings.
+
+**Known limitation:** `scene_loader.rs:475` has a TODO noting that full dynamic
+component instantiation requires type-erased component addition on `World`. The
+current loader dispatches on built-in component names explicitly.
+
+### Crate Boundary Decisions
+
+- **UI integration lives here, not in `renderer` or `ui`.**
+  - `ui` defines `DrawCommand` (renderer-agnostic)
+  - `renderer` defines `Sprite` (UI-agnostic)
+  - `engine_core` owns the bridge in `ui_integration.rs`
+  - This keeps `renderer` and `ui` independently testable and avoids a circular
+    dep. When in doubt about where cross-cutting glue goes, bias toward
+    `engine_core`.
+- **Physics is feature-gated.** Games that don't need Rapier2d should not pay
+  the compile cost. `GameContext.physics` is optional accordingly.
+- **`editor_integration` (separate crate) wraps `engine_core` — not the other
+  way around.** `engine_core` has no knowledge of the editor.
 
 ---
 
-## Previously Resolved Issues
+## Cross-Game Themes (carried by engine_core)
 
-### Critical Issues - FIXED
+### ChaosMode
 
-1. **Memory Safety in Application Handler**: Removed tokio, replaced with `pollster::block_on`
-2. **Async Runtime Confusion**: Eliminated tokio dependency, simplified async handling
-3. **Scene Initialization Race Conditions**: Comprehensive lifecycle management with state validation
+`ChaosMode` (`Normal` / `Insane` / `Ridiculous` / `Insiculous`) is carried on
+`GameConfig.chaos_mode` and mirrored on `GameContext.chaos_mode`. The engine
+ships **no** gameplay logic for the variants — each game interprets them. See
+`crates/engine_core/src/chaos_mode.rs`:
 
-### Serious Design Flaws - FIXED
+- `ChaosMode::ALL` for menu iteration
+- `is_insane()` / `is_ridiculous()` both return true for `Insiculous`, so
+  independently wiring both flags gives "both behaviors" for Insiculous for
+  free
+- `label()` for display strings
 
-4. **Tight Coupling Between Renderer and Application**: Extracted rendering logic to dedicated systems
-5. **No Separation of Concerns**: Clear architectural boundaries between systems
-6. **Hardcoded Dependencies**: Abstracted interfaces and dependency injection
+### Achievements
+
+Engine-wide achievement system (`achievements.rs`). Games register definitions
+at startup, unlock by id during play; the engine handles JSON persistence and
+in-game toast rendering. Deliberately in `engine_core` (not per-game) so that
+later tooling (editor badge UI, Steam export, etc.) has a single entry point.
 
 ---
 
-## New Features Implemented
+## Performance Notes
 
-### Asset Management System (January 2026)
-```rust
-impl Game for MyGame {
-    fn init(&mut self, ctx: &mut GameContext) {
-        let player_tex = ctx.assets.load_texture("player.png").unwrap();
-        let red_tex = ctx.assets.create_solid_color(32, 32, [255, 0, 0, 255]).unwrap();
-        let debug_tex = ctx.assets.create_checkerboard(64, 64,
-            [100, 100, 100, 255], [150, 150, 150, 255], 8).unwrap();
-    }
-}
+### Behavior System (optimized)
+
+`behavior_runner.rs` originally cloned `Behavior`, `Transform2D`, and
+`BehaviorState` per entity per frame (~80 allocations/frame at 40 entities).
+Post-optimization:
+
+- Entities iterated directly (no collection step)
+- Components accessed by reference (`world.get::<Behavior>(entity)` without
+  `.cloned()`)
+- `BehaviorState` cloned only when mutation requires it — only one `.cloned()`
+  call remains in the file, and it is justified by the state mutation path
+
+Result: ~85% fewer allocations per frame, verified by tests in
+`tests/behavior_optimization.rs`.
+
+### Bind Group Caching
+
+Camera bind group is cached in the renderer; texture bind groups are cached per
+handle. The glyph texture cache still keys on `(glyph_id, color)`, which wastes
+memory when the same glyph is drawn in multiple colors — see the crate's
+`TECH_DEBT.md` for details.
+
+---
+
+## Known Tech Debt / Future Work
+
+See `crates/engine_core/TECH_DEBT.md` for the live list. Headline items that
+may influence `engine_core` architecture:
+
+- **Dynamic component instantiation in `scene_loader`** — currently dispatches
+  on built-in component names. A fully generic approach needs type-erased
+  component addition on `World` (tracked via TODO at `scene_loader.rs:475`).
+  Until that lands, every new built-in component requires loader changes.
+- **Glyph cache keying on color** — wastes texture memory. Should separate
+  glyph geometry from tinting (tint via shader uniform).
+- **`GameRunner` size** — still ~580 lines in `game.rs`. Further extraction
+  candidates: input manager, event dispatch. Push on this only if a concrete
+  responsibility emerges; premature extraction adds indirection without
+  benefit.
+- **Dependency surface is broad** — `engine_core` depends on
+  `ecs + renderer + input + ui + audio + physics(opt)`. Watch for any
+  temptation to let those crates depend on each other transitively through
+  `engine_core`.
+
+---
+
+## Godot Oracle References
+
+When design decisions around the orchestration layer get murky:
+
+- Game loop iteration cadence: `main/main.cpp` — `iteration()` method
+- Scene resource loading / packing: `scene/resources/packed_scene.cpp`
+- Asset / resource caching: `core/io/resource_loader.cpp`
+- FSM for scene lifecycle: `scene/main/scene_tree.cpp`
+
+Use `WebFetch` against
+`https://github.com/godotengine/godot/blob/master/<path>`. Study the patterns —
+don't transliterate the C++.
+
+---
+
+## Integration Diagram
+
+```
+                 run_game(game, config)
+                         |
+                         v
+                    GameRunner
+                    /    |    \
+                   /     |     \
+        WindowManager  GameLoopManager  RenderManager
+                          |
+                          v
+                    GameContext  <-- passed to Game::update()
+                    /  |  \  \
+                  ECS UI In Assets  (+ physics if enabled)
+                          |
+                          v
+                    UIManager (per-frame begin/end)
+                          |
+                          v
+                    ui_integration (DrawCommand -> Sprite)
+                          |
+                          v
+                    RenderManager.render(batches, textures)
 ```
 
-### Scene Serialization (RON Format)
-- `SceneData` - Root structure with physics settings, prefabs, entities
-- `PrefabData` - Reusable entity templates
-- `SceneLoader::load_and_instantiate()` - Load scenes into ECS world
-- Texture references: `#white`, `#solid:RRGGBB`, or file paths
-
-### Comprehensive Lifecycle Management
-- **7-State Lifecycle**: Created -> Initializing -> Initialized -> Running -> ShuttingDown -> ShutDown -> Error
-- **State Validation**: All transitions validated
-- **Thread-Safe Operations**: RwLock and Mutex protection
-- **Error Recovery**: Systems can recover from error states
-
----
-
-## Current Architecture
-
-```
-EngineApplication
-├── Renderer (WGPU 28.0.0 compatible)
-├── Scene Stack (Multiple scenes with lifecycle management)
-│   └── Active Scene
-│       ├── World (ECS with generation tracking)
-│       ├── LifecycleManager (Thread-safe state management)
-│       └── SystemRegistry (Panic-safe system execution)
-├── GameLoop (Configurable timing and FPS)
-├── InputHandler (Event queue + mapping system)
-└── Camera2D (2D rendering configuration)
-```
-
----
-
-## Recommended Fixes (Priority Order)
-
-### Immediate (High Priority - COMPLETED ✅)
-1. ~~Replace `println!()` with `log::info!()` in behavior.rs:243~~ - DONE
-2. ~~Remove `extract_sprite_data()` function (dead code)~~ - DONE
-3. ~~Extract helper method for GameContext creation~~ - DONE
-4. ~~**Complete SRP refactoring for GameRunner.update_and_render()**~~ - DONE (January 2026)
-   - ✅ Extracted 6 focused methods from single 110-line method
-   - ✅ Each method has single responsibility (5-25 lines each)
-   - ✅ Total responsibilities reduced from 8+ to 1 (orchestration only)
-   - ✅ All tests pass, example works correctly
-
-### Performance Optimizations Completed ✅
-5. ~~Reduce clone() calls in behavior update loop~~ - DONE (~85% reduction)
-6. ~~Fix double-check pattern in asset_manager access~~ - DONE
-7. ~~Complete TODO comments in test files~~ - DONE ✅
-
-### Remaining Architecture Work
-8. EngineApplication cleanup - Apply Facade pattern (currently 346 lines)
-9. Add missing integration tests
-
-These items are tracked in TECH_DEBT.md under respective categories.
-
----
-
-## SRP Refactoring - COMPLETED (January 2026)
-
-### Overview
-Extract shared responsibilities from `GameRunner` and `EngineApplication` into focused manager structs. **COMPLETE** - Managers extracted and orchestration layer refactored.
-
-### Completed Work ✅
-
-#### 1. RenderManager (`render_manager.rs`)
-**Single Responsibility**: Manage renderer lifecycle and sprite rendering pipeline.
-
-```rust
-pub struct RenderManager {
-    renderer: Option<Renderer>,
-    sprite_pipeline: Option<SpritePipeline>,
-    camera: Camera2D,
-}
-```
-
-**Status**: ✅ Implemented and tested (4 tests)
-
-#### 2. WindowManager (`window_manager.rs`)
-**Single Responsibility**: Window creation and lifecycle.
-
-```rust
-pub struct WindowManager {
-    window: Option<Arc<Window>>,
-    config: WindowConfig,
-}
-```
-
-**Status**: ✅ Implemented and tested (5 tests)
-
-#### 3. GameLoopManager (`game_loop_manager.rs`)
-**Single Responsibility**: Frame timing and delta calculation.
-
-**Status**: ✅ Implemented and tested (4 tests)
-
-#### 4. UIManager (`ui_manager.rs`)
-**Single Responsibility**: UI lifecycle and draw command collection.
-
-**Status**: ✅ Implemented and tested (2 tests)
-
-#### 5. GameRunner Refactoring - COMPLETED
-**Location**: `src/game.rs` lines 586-700+ (was 114+ lines, now 25 lines)
-
-**Before**:
-- Single `update_and_render()` method with 110+ lines
-- 8+ mixed responsibilities
-- Difficult to test or modify
-
-**After**:
-- `update_and_render()` - 25 lines, pure orchestration
-- `update_audio()` - Audio updates only
-
-## Deep Dive: game.rs Refactoring - PHASES 1-3 COMPLETED (January 2026)
-
-### ✅ Phase 1: Extract Configuration - COMPLETE
-
-**Action**: Created `src/game_config.rs` (92 lines)
-- Extracted `GameConfig` struct, `Default` impl, and builder methods
-- Added comprehensive tests
-- Re-exported through prelude for backward compatibility
-- **Result**: game.rs -57 lines, configuration now in focused module
-
-### ✅ Phase 2: Extract Contexts - COMPLETE
-
-**Action**: Created `src/contexts.rs` (74 lines)
-- Extracted `GameContext`, `RenderContext`, and `GlyphCacheKey`
-- Added module documentation
-- Re-exported through prelude
-- **Result**: game.rs -74 lines, contexts now in dedicated module
-
-### ✅ Phase 3: Extract UI Rendering Integration - COMPLETE
-
-**Action**: Created `src/ui_integration.rs` (194 lines)
-- Extracted `render_ui_commands()` function (153 lines)
-- Extracted `render_ui_rect()` helper (13 lines)
-- Added comprehensive module documentation
-- Updated default `Game::render()` to call extracted function
-- **Result**: game.rs -166 lines, UI/Renderer integration now in dedicated module
-- **Architecture benefit**: UI and Renderer crates remain decoupled
-
-### 📊 Final Results
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `game.rs` | **553 lines** | Game trait, GameRunner orchestration, tests |
-| `game_config.rs` | 92 lines | Configuration (extracted) |
-| `contexts.rs` | 74 lines | Context definitions (extracted) |
-| `ui_integration.rs` | 194 lines | UI-to-Renderer bridge (extracted) |
-| **Total** | **913 lines** | Same functionality, better organized |
-
-**Reduction**: game.rs from 862 → 553 lines (-309 lines, -36% reduction)
-
-### 🎯 Architecture Improvements
-
-1. **Better Separation of Concerns**: Each module has a single, clear purpose
-2. **Improved Readability**: Files are smaller and focused
-3. **Enhanced Maintainability**: Changes are isolated to relevant modules
-4. **Decoupled Design**: UI and Renderer crates remain independent
-5. **Testability**: Each module can be tested in isolation
-6. **DRY Compliance**: Eliminated code mixing and duplication
-
-### ✅ Verification Results
-
-- **All tests pass**: 236+ tests across workspace (100% success rate)
-- **Examples work**: `cargo run --example hello_world` - verified ✅
-- **No regressions**: Full backward compatibility maintained
-- **Compilation**: Clean builds with no warnings
-- **API stability**: All public APIs unchanged through prelude re-exports
-
-### 🔍 Architectural Decision: UI Integration Location
-
-**Decision**: Keep UI rendering integration in `engine_core` as `ui_integration.rs`
-
-**Rationale**:
-- `ui` crate defines `DrawCommand` (renderer-agnostic ✅)
-- `renderer` crate defines `Sprite` (UI-agnostic ✅)
-- `engine_core` provides the Game API which needs both
-- Integration naturally belongs in the orchestration layer
-- Avoids circular dependencies between ui/renderer
-- Maintains clean crate boundaries
-
-**Alternative considered**: Could have been in renderer as feature-gated UI support
-**Decision**: Keep separation cleaner - renderer stays UI-agnostic, ui stays renderer-agnostic
-
-### 📋 Remaining Work
-
-#### Phase 4: EngineApplication Cleanup - ✅ COMPLETED (January 2026)
-**Location**: `src/application.rs` (311 lines), `src/scene_manager.rs` (153 lines)
-**Action**: Extracted SceneManager from EngineApplication
-**Results**: 
-- Created `SceneManager` with 153 lines (5 tests)
-- EngineApplication now delegates scene operations
-- Scene stack logic isolated in dedicated module
-- All 236+ tests pass ✅
-
-**SceneManager provides**:
-- Scene stack management (`push`, `pop`, `active`)
-- Scene lifecycle management
-- Clean API with comprehensive tests
-- Maintains 100% backward compatibility
-
-#### Phase 5: Behavior System Optimization (Medium Priority) (Medium Priority)
-**Location**: `src/behavior_runner.rs` and `src/behavior.rs`
-- Reduce excessive `clone()` calls (40+ per frame)
-- Use references where possible
-- **Impact**: Performance improvement
-- **Risk**: Low (localized changes)
-- **Time**: ~45 minutes
-
-#### Phase 6: Test Suite Enhancement (Low Priority)
-- Complete TODO assertions in tests
-- Add integration tests for refactored flow
-- Achieve >200 meaningful assertions
-- **Risk**: Very low
-- **Time**: ~30 minutes
-
-### ✅ Success Metrics - All Achieved
-
-- [x] game.rs: 862 → 553 lines (-36%)
-- [x] New focused modules: 3 created (game_config, contexts, ui_integration)
-- [x] Test pass rate: 100% (236+/236 tests)
-- [x] Example functionality: Fully operational
-- [x] Public API: 100% backward compatible
-- [x] Compilation: Clean with no warnings
-- [x] SRP compliance: Each module has single responsibility
-- [x] DRY compliance: Eliminated code duplication
-
-### 🏆 Phase 5: COMPLETED (January 2026) ✅
-
-**Action**: Optimized behavior system to eliminate excessive clone() calls
-**Results**:
-- **Before**: 80+ allocations per frame (40 entities × 2 clones)
-- **After**: <10 allocations per frame (~85% reduction)
-- All 6 behavior types optimized: PlayerPlatformer, PlayerTopDown, ChaseTagged, Patrol, FollowEntity, FollowTagged, Collectible
-- **Performance**: Significant improvement in behavior-heavy scenes
-
-**Key Optimizations**:
-1. Removed collection step - iterate entities directly
-2. References instead of clones: `world.get::<Behavior>(entity)` (no .cloned())
-3. Minimal cloning: Only clone BehaviorState when necessary
-4. In-place state updates when possible
-
-**Verification**:
-- ✅ All 181 workspace tests pass
-- ✅ Behavior demo compiles and runs
-- ✅ Hello world example works correctly
-- ✅ New optimization tests validate performance improvements
-- ✅ Zero regressions, 100% backward compatible
-
----
-
-## Updated Priority List
-
-### ✅ Completed (January 2026)
-1. ✅ SRP refactoring for GameRunner.update_and_render() (7 methods extracted)
-2. ✅ Manager extraction (RenderManager, WindowManager, GameLoopManager, UIManager)
-3. ✅ Phase 1: Extract Configuration → game_config.rs (92 lines)
-4. ✅ Phase 2: Extract Contexts → contexts.rs (74 lines)
-5. ✅ Phase 3: Extract UI Rendering → ui_integration.rs (194 lines)
-6. ✅ Phase 4: SceneManager extraction → scene_manager.rs (153 lines)
-7. ✅ Phase 5: Behavior optimization → ~85% fewer allocations
-8. ✅ All tests pass (181+ tests, 100% success rate)
-9. ✅ Examples work correctly
-
-### 📋 Planned
-1. Complete ANALYSIS.md for all crates
-2. Add integration tests for refactored flows
-3. EngineApplication further cleanup (if needed)
-4. InputManager extraction (if needed)
-
----
-
-## Conclusion
-
-The engine_core crate has been successfully refactored through 5 major phases:
-
-**SRP & Architecture**: Managers extracted, game.rs reduced 36%, SceneManager created
-**Performance**: Behavior system optimized, ~85% fewer allocations per frame  
-**Quality**: 181+ tests passing, 100% backward compatible
-**Documentation**: Complete analysis and verification
-
-**Phases Completed**:
-1. ✅ GameRunner refactoring (7 methods extracted)
-2. ✅ Manager extraction (4 managers, 15 tests)
-3. ✅ File extraction (4 modules, 513 lines, 7 tests)
-4. ✅ Performance optimization (behavior system, ~85% reduction)
-5. ✅ Test quality completion - All TODO comments replaced with proper assertions
-
-**Status**: Production-ready, highly performant, excellent maintainability.
-
-**Performance Metrics**:
-- Behavior allocations: 80+/frame → <10/frame (-85%)
-- Test coverage: 100% pass rate (181+ tests)
-- Compilation: Clean, no warnings
-- Examples: All working correctly
-
-**Next Priorities**:
-1. Complete ANALYSIS.md for all crates
-2. Add integration tests
-3. Further EngineApplication cleanup (if needed)
+Scene operations flow through `SceneManager`, which owns the scene stack and
+delegates lifecycle transitions to `LifecycleManager`.

@@ -1,20 +1,35 @@
 # Audio Crate Analysis
 
-## Review (January 19, 2026)
+## Audit (April 15, 2026)
 
-### Summary
+**Removed:**
+- Stale ECS component path — `audio_components.rs` no longer lives in this crate; it moved to `crates/ecs/src/audio_components.rs`. Path references updated throughout.
+- Stale file count ("5 source files") — corrected to 4 (`lib.rs`, `manager.rs`, `sound.rs`, `error.rs`).
+- Incorrect `symphonia` listed as a direct dependency — it is pulled in via rodio's `symphonia-all` feature.
+
+**Kept:**
+- All architectural sections (AudioManager design, SoundHandle/SoundSettings rationale, ECS component descriptions, attenuation formula).
+- Known limitations (by-design tradeoffs) and future enhancement ideas — these remain valuable roadmap references.
+- Strengths/Risks review, expanded with current implementation notes.
+
+## Review Summary
+
 - Provides `AudioManager`-centric playback over `rodio` with cached sound data and simple playback controls.
-- Exposes ECS-facing audio components for positional attenuation and one-shot effects.
-- Dependencies are minimal (`rodio`, `log`, `thiserror`) and keep the surface area focused.
+- ECS-facing audio components (`AudioSource`, `AudioListener`, `PlaySoundEffect`) live in the `ecs` crate (not this one) to avoid a circular dep; spatial attenuation math is implemented on `AudioSource`.
+- Dependencies are minimal (`rodio` 0.20 with `symphonia-all` feature, `log`, `thiserror`) and keep the surface area focused.
 
 ### Strengths
 - Straightforward API for SFX and music with `SoundHandle` + `SoundSettings` builder patterns.
-- ECS integration keeps audio concerns consistent with other engine systems.
-- Clear separation between asset loading/caching and playback management.
+- Clean separation between asset loading/caching (`AudioManager::load_sound`) and playback (`play_with_settings`).
+- ECS components use builder pattern and serialize via serde, integrating with the scene serializer and editor inspector.
+- Cached raw bytes (`Arc<Vec<u8>>`) allow a sound to be replayed any number of times without re-reading from disk.
 
 ### Risks & Follow-ups
 - All audio is eagerly loaded into memory; consider optional streaming for large music tracks.
-- Spatial audio is limited to attenuation math (no real 3D processing); document the limitation in API docs.
+- Spatial audio is limited to attenuation math (no real 3D processing, no stereo panning); API docs should document this limitation clearly.
+- `set_sfx_volume` only affects future sounds, not currently playing ones — intentional but could surprise callers (see inline note in `manager.rs`).
+- `ActiveSound.handle` is currently `#[allow(dead_code)]`, reserved for a future "stop by handle" API.
+- `PlaybackState` enum is declared but not yet wired into the public API.
 - Track whether multiple music tracks or mixing buses are needed as the project grows.
 
 ## Overview
@@ -35,54 +50,63 @@ The main audio system that handles:
 
 **Design Decisions:**
 - Uses `rodio` for cross-platform audio playback
-- Sounds are cached in memory as raw bytes for efficient replay
-- Active sounds are tracked for cleanup via `update()`
+- Sounds are cached in memory as raw bytes (`Arc<Vec<u8>>`) for efficient replay
+- Each play constructs a fresh `Decoder` from the cached bytes so multiple instances of the same sound can overlap
+- Active sounds are tracked in a `Vec<ActiveSound>` and reaped on `update()` when their sinks empty
 - Non-blocking audio playback via rodio's sink system
+- `OutputStream` is kept alive via a `_stream` field (dropping it would kill all audio)
 
 #### SoundHandle (`sound.rs`)
 Unique identifier for loaded sounds:
-- Auto-incrementing IDs using atomic counter
+- Auto-incrementing IDs via `AtomicU32` (thread-safe counter starting at 1)
+- `id` field is `pub(crate)`; external access via `id()` accessor
 - Used to reference cached sounds for playback
 
 #### SoundSettings (`sound.rs`)
 Configuration for individual sound playback:
-- Volume (0.0 to 1.0)
-- Speed/pitch (1.0 = normal)
+- Volume (0.0 to 1.0, clamped)
+- Speed/pitch (minimum 0.1, no upper clamp)
 - Looping flag
 - Builder pattern for fluent configuration
 
-### ECS Integration (`ecs/audio_components.rs`)
+#### PlaybackState (`sound.rs`)
+Enum: `Playing` / `Paused` / `Stopped`. Currently declared but not plumbed through the public API — reserved for a future "query sound state" feature.
+
+### ECS Integration (`crates/ecs/src/audio_components.rs`)
+
+ECS-facing audio components live in the `ecs` crate (not this one) to avoid a circular dep: `audio` is a leaf crate that the engine wires together, while `ecs` owns component storage.
 
 #### AudioSource
 Component for entities that emit sounds:
-- Sound ID reference
+- Sound ID reference (matches `SoundHandle::id()`)
 - Volume, pitch, looping settings
+- `play_on_spawn` / `playing` flags for state-driven playback
 - Spatial audio support with:
-  - Max distance
-  - Reference distance
-  - Rolloff factor
-- Distance attenuation calculation
+  - Max distance (silence beyond)
+  - Reference distance (full volume within)
+  - Rolloff factor (inverse-distance model)
+- `calculate_attenuation(distance)` — inverse distance attenuation:
+  `attenuation = reference_distance / (reference_distance + rolloff_factor * (distance - reference_distance))`
 
 #### AudioListener
 Component for the entity that "hears" sounds:
-- Active flag (only one listener per scene)
+- Active flag (only one listener should be active per scene)
 - Listener-specific volume multiplier
 
 #### PlaySoundEffect
 One-shot sound effect request component:
 - Designed for event-based sounds (jump, explosion)
-- Auto-removed after processing by audio system
+- Expected to be consumed/removed after processing by an audio system
 
 ## Dependencies
 
-- `rodio` 0.20 - Audio playback (via cpal backend)
-- `symphonia` - Audio format decoding (WAV, MP3, OGG, FLAC)
+- `rodio` 0.20 with `symphonia-all` feature — audio playback + format decoding
 - `log` - Logging
 - `thiserror` - Error handling
 
 ## Supported Formats
 
-Via symphonia integration:
+Via `rodio`'s `symphonia-all` feature:
 - WAV
 - MP3
 - OGG/Vorbis
@@ -117,23 +141,27 @@ ctx.audio.set_music_volume(0.6);
 
 ## Test Coverage
 
-- 3 unit tests in `manager.rs` (SoundSettings, SoundHandle)
-- 7 unit tests in `audio_components.rs` (AudioSource, AudioListener, spatial attenuation)
+- 3 unit tests in `manager.rs` (SoundSettings builder/clamping, SoundHandle uniqueness)
+- 7 unit tests in `crates/ecs/src/audio_components.rs` (AudioSource builder/spatial/attenuation, AudioListener, PlaySoundEffect)
+- Run with `cargo test -p audio` for audio-crate tests only; ECS component tests run under `cargo test -p ecs`
 
 ## Known Limitations
 
 These are intentional design decisions, not technical debt:
 
 1. **No streaming for large files** - All sounds loaded into memory for instant playback
-2. **No 3D/spatial audio processing** - Only attenuation calculation provided (requires integration with 3rd party library)
+2. **No 3D/spatial audio processing** - Only attenuation calculation provided; no stereo panning or HRTF (would require 3rd party library)
 3. **No audio effects** - No reverb, echo, or other DSP effects (use external audio tools)
 4. **Single music track** - Only one music track at a time (sufficient for most 2D games)
+5. **No "stop by handle" API** - Individual active sounds cannot be stopped once started; `stop_all()` is all-or-nothing. Groundwork is in place (`ActiveSound.handle`) if needed.
+6. **SFX volume changes don't affect in-flight sounds** - Only master/music volume changes propagate to currently playing sinks.
 
 ## Future Enhancements
 
 1. Add streaming for large music files
-2. Implement actual spatial audio positioning  
+2. Implement actual spatial audio positioning (stereo panning based on listener orientation)
 3. Add crossfade for music transitions
-4. Add audio effects processing
-5. Support for audio buses/groups
+4. Add audio effects processing (reverb, low-pass filter for occlusion)
+5. Support for audio buses/groups (group SFX, ambience, UI separately)
 6. Audio occlusion for environments
+7. Wire up `PlaybackState` so callers can query individual sound state

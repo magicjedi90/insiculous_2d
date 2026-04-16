@@ -1,261 +1,166 @@
 # Input System Analysis
 
-## Review (January 19, 2026)
-
-### Summary
-- Input handling built around `InputHandler`, event queueing, and `InputEvent` abstractions.
-- Supports keyboard, mouse, and gamepad input with an input mapping layer and thread-safe wrapper.
-- Winit integration keeps window events centralized.
-
-### Strengths
-- Clean public API via module re-exports; ergonomic `init()` helper.
-- Thread-safe wrapper enables multi-threaded usage without leaking internals.
-- Input mapping supports action-based gameplay bindings.
-
-### Risks & Follow-ups
-- Gamepad analog dead zone handling and timing tests remain thin; add coverage or configuration.
-- Document the expected update cadence (`process_queued_events`) to avoid misuse.
-- Consider exposing configuration for input smoothing or higher-level gestures.
-
-## Current State (Updated: January 2026)
-The input crate provides comprehensive input handling with event queuing, input mapping, thread safety, and window event loop integration.
-
-**Test Count: 60 tests** (all passing)
+## Audit Note (April 15, 2026)
+Pruned after audit: removed the "TODO comments in tests" issue (fixed long ago
+by commit `dbc42c4`), the obsolete `EngineApplication` wiring diagram (that
+type no longer exists — `GameRunner` in `engine_core/src/game.rs` owns the
+window-event and per-frame plumbing now), and the grab-bag "Future
+Enhancements" laundry list (haptics, voice, motion, recording/playback, etc.)
+that was aspirational rather than analytical. Kept: the Winit coupling
+rationale, the frame lifecycle contract, dead-zone and timing gaps (still
+real), the `bind_input_to_multiple_actions` reverse-lookup asymmetry, and the
+thread-safe wrapper design. Test count corrected from 60 to the verified **56
+passing** (`cargo test -p input`).
 
 ---
 
-## Critical Issues Identified
+## Summary
+- Input handling built around `InputHandler`, a per-frame event queue, and the
+  `InputEvent` enum.
+- Covers keyboard, mouse, and multi-gamepad input; action-layer mapping sits
+  on top of device state.
+- Winit `WindowEvent`s are the sole ingress point; a `ThreadSafeInputHandler`
+  wraps everything in `Arc<Mutex<>>` for cross-thread access.
 
-### Medium Severity
-
-#### 1. ✅ COMPLETED - Tests with TODO Comments Instead of Assertions
-**Location**: Multiple test files
-**Issue**: ✅ **FIXED** - All 36 TODO comments have been replaced with proper assertion logic.
-
-**Files Affected**:
-- `keyboard.rs`: 4 TODO comments → ✅ All replaced with assertions
-- `mouse.rs`: 12 TODO comments → ✅ All replaced with assertions  
-- `input_handler.rs`: 8 TODO comments → ✅ All replaced with assertions
-- `gamepad.rs`: 10 TODO comments → ✅ All replaced with assertions
-
-**Impact**: ✅ **RESOLVED** - All tests now have meaningful assertions that validate expected behavior.
-
-**Status**: ✅ **COMPLETED** - All TODO comments removed and replaced with proper assertions.
-
-#### 2. No Gamepad Analog Stick Dead Zone Tests
-**Location**: `tests/gamepad.rs`
-**Issue**: No tests for analog stick dead zone configuration or normalization.
-
-**Impact**: Dead zone behavior unvalidated, may cause issues in games.
-
-**Recommended Fix**: Add tests for:
-- Dead zone threshold configuration
-- Analog value normalization
-- Edge case handling (exactly at threshold)
-
-#### 3. No Input Event Timing Tests
-**Location**: Test suite
-**Issue**: No tests verify proper timing of input events across frames.
-
-**Impact**: Subtle timing bugs may go undetected.
-
-**Recommended Fix**: Add tests for:
-- Frame-accurate input state transitions
-- Event queue ordering
-- Multiple events in single frame handling
+## Current State (April 2026)
+**Test Count**: 56 passing, 0 failing, 0 ignored (doc-tests are `ignore`'d by
+design — they contain pseudocode snippets).
 
 ---
 
-## Test Coverage Analysis
+## Architecture
 
-**Total Tests**: 60 (all passing)
-
-### Test File Breakdown
+### Module Layout
 ```
-tests/
-├── thread_safe_input.rs:        10 tests
-├── input_mapping.rs:            10 tests
-├── input_handler_integration.rs: 8 tests
-├── input_event_queue.rs:         7 tests
-├── gamepad.rs:                   6 tests
-├── mouse.rs:                     5 tests
-├── keyboard.rs:                  5 tests
-└── input_handler.rs:             5 tests
-```
-
-### Test Quality Assessment
-
-**Strengths:**
-- Comprehensive thread safety testing (10 tests)
-- Good input mapping coverage (10 tests)
-- Integration tests verify full pipeline
-
-**Gaps:**
-- Gamepad analog stick dead zones not tested
-- Input event timing not tested
-- ✅ **FIXED** - No more incomplete assertions (all TODO comments replaced)
-- No joystick axis tests
-
----
-
-## Previously Resolved Issues
-
-### Critical Issues - FIXED
-
-1. **Event Integration**: `EngineApplication::window_event()` properly forwards events to `input_handler.handle_window_event(&event)`
-
-2. **Input State Updates**: `EngineApplication::frame()` calls `self.input_handler.update()` at start of every frame
-
-3. **Window Event Handling**: `InputHandler::handle_window_event()` converts winit events to internal `InputEvent` enum
-
-4. **Thread Safety**: `ThreadSafeInputHandler` wrapper with `Arc<Mutex<InputHandler>>`
-
-### High Priority Features - IMPLEMENTED
-
-5. **Input Mapping System**: Complete `InputMapping` system with `InputSource` -> `GameAction` bindings
-
-6. **Event-Based Input**: `InputEvent` enum, event queue with `VecDeque<InputEvent>`, frame-based processing
-
----
-
-## Current Architecture
-
-### System Architecture
-```
-EngineApplication
-├── InputHandler (integrated with window event loop)
-│   ├── Event Queue (VecDeque<InputEvent>)
-│   ├── Input Mapping (InputSource -> GameAction)
-│   ├── Keyboard State (HashSet-based tracking)
-│   ├── Mouse State (position, buttons, wheel)
-│   └── Gamepad Manager (multi-gamepad support)
-└── ThreadSafeInputHandler (Arc<Mutex<InputHandler>>)
+crates/input/src/
+├── lib.rs              — re-exports + init() + InputError
+├── input_handler.rs    — InputHandler, InputEvent, frame lifecycle
+├── input_mapping.rs    — InputMapping, InputSource, GameAction
+├── keyboard.rs         — KeyboardState + winit physical-key conversion
+├── mouse.rs            — MouseState (position, buttons, wheel, delta)
+├── gamepad.rs          — GamepadState, GamepadManager (per-id)
+├── thread_safe.rs      — Arc<Mutex<InputHandler>> wrapper
+└── prelude.rs          — curated public surface
 ```
 
 ### Event Flow
-1. **Event Capture**: Winit events -> `EngineApplication::window_event()`
-2. **Event Queuing**: `InputHandler::handle_window_event()` -> `queue_event()`
-3. **Frame Processing**: `EngineApplication::frame()` -> `input_handler.update()`
-4. **Event Processing**: `process_queued_events()` -> `process_event()`
-5. **State Updates**: Individual device state updates
-6. **Action Mapping**: `is_action_active()` queries with mapping resolution
+1. Host calls `input.handle_window_event(&winit_event)` — enqueued, not
+   applied.
+2. At frame start, host calls `input.process_queued_events()` — drains the
+   `VecDeque<InputEvent>` into device state (handles just-pressed/just-released
+   transitions).
+3. Game logic reads state: `is_key_pressed`, `is_key_just_pressed`,
+   `is_action_active`, etc.
+4. At frame end, host calls `input.end_frame()` — clears the `just_*` sets on
+   every device.
+5. `update()` is a convenience that does steps 2 and 4 together; the split
+   pair is preferred so `just_*` flags are observable for an entire frame.
+
+Current host wiring lives in `engine_core/src/game.rs` (`GameRunner`):
+`handle_window_event` at line 513, `process_queued_events` at line 328. There
+is no `EngineApplication` class — the older ANALYSIS text that described one
+was stale.
 
 ### API Quality
-- **Consistent Naming**: `is_key_pressed()`, `is_action_active()`, etc.
-- **Frame-Aware**: `is_key_just_pressed()` works correctly with update cycle
-- **Type Safety**: Strong typing with enums for all input types
-- **Error Handling**: Proper `Result<T, E>` for thread-safe operations
+- Consistent naming: `is_*_pressed` / `is_*_just_pressed` / `is_*_just_released`.
+- Strong enum typing throughout (`GameAction`, `InputSource`, `GamepadButton`,
+  `GamepadAxis`).
+- Thread-safe wrapper returns `Result<T, InputThreadError>` on every call so
+  callers see mutex poisoning rather than panicking.
 
 ---
 
-## Features Implemented
+## Design Notes & Tradeoffs
 
-### Input Mapping System
-```rust
-// Create custom bindings
-let mut handler = InputHandler::new();
+### Winit Coupling Is Intentional
+`InputEvent` carries `winit::keyboard::KeyCode` and `winit::event::MouseButton`
+directly (see `input_handler.rs` doc comment above the enum). The reasoning:
 
-// Bind keyboard key to action
-handler.bind_action(GameAction::MoveUp, InputSource::Key(KeyCode::KeyW));
+- Winit is the de-facto Rust windowing crate; replacing it is unlikely.
+- Skipping an abstraction layer means no conversion overhead and no
+  duplicate enum maintenance.
+- If a non-winit backend ever appears, the conversion can be added at the
+  boundary inside `handle_window_event` without changing the public API.
 
-// Bind multiple inputs to same action
-handler.bind_action(GameAction::MoveUp, InputSource::Key(KeyCode::ArrowUp));
+This is a deliberate simplicity-over-portability tradeoff. Document the choice
+when porting is discussed.
 
-// Check action state
-if handler.is_action_active(&GameAction::MoveUp) {
-    // Move up
-}
-```
+### One-Input-Many-Actions Asymmetry
+`InputMapping` supports binding a single `InputSource` to multiple
+`GameAction`s via `bind_input_to_multiple_actions`. Because the reverse
+lookup (`get_action`) is a single-valued `HashMap<InputSource, GameAction>`,
+it only returns the **first** action for a multi-bound input. Forward lookup
+(`get_bindings(action)`) and `is_action_active()` are correct for all actions.
 
-### Thread-Safe Input
-```rust
-use input::ThreadSafeInputHandler;
+Recommendation baked into the doc comments: prefer
+`InputHandler::is_action_active()` over `get_action()` when you need to know
+whether an action fires.
 
-let handler = ThreadSafeInputHandler::new();
+### Frame Lifecycle Contract
+The module-level doc on `input_handler.rs` is the canonical description.
+Diverging from it (e.g., calling `end_frame` before reading `just_pressed`)
+silently breaks one-shot detection. The `update()` shortcut hides this
+footgun by fusing the two steps; keep it available for trivial use cases but
+steer non-trivial callers to the split form.
 
-// From any thread
-if handler.is_key_pressed(KeyCode::Space).unwrap() {
-    // Handle space press
-}
-```
-
-### Event Queue System
-```rust
-// Events are queued and processed per-frame
-handler.queue_event(InputEvent::KeyPressed(KeyCode::Space));
-handler.update(); // Process all queued events
-```
-
----
-
-## Remaining Issues & Gaps
-
-### Medium Priority (Still Missing)
-1. **Gesture Recognition**: No double-click, drag, pinch-to-zoom support
-2. **Input Recording/Playback**: No system for recording input sequences
-3. **Haptic Feedback**: No controller vibration support
-4. **Touch Input**: No multi-touch or mobile input support
-
-### Low Priority (Nice to Have)
-5. **Motion Controls**: No gyroscope/accelerometer support
-6. **Voice Input**: No speech recognition
-7. **Advanced Input Filtering**: No dead zone configuration for analog sticks
-8. **Input History**: No queryable input history or pattern detection
-
-### Minor Issues
-9. **Gamepad Axis Dead Zones**: No configurable dead zones
-10. **Input Normalization**: No handling of different keyboard layouts
-11. **Advanced Context Management**: No context stack or priority system
-
-### ✅ **COMPLETED Issues**
-- **Test Assertions**: All 36 TODO comments replaced with proper assertions across all test files
+### Thread-Safe Wrapper Scope
+`ThreadSafeInputHandler` mirrors the full `InputHandler` API behind a
+`Mutex`. It returns owned clones for state snapshots (`keyboard_state()`,
+`mouse_state()`, `gamepad_manager()`) rather than guard references — callers
+can release the lock immediately and work on the snapshot. This is the right
+shape for a read-mostly integration, but it means each snapshot is an
+allocation; if a hot loop ever reads state from another thread, reconsider.
 
 ---
 
-## Future Enhancements
+## Known Gaps
 
-These features would enhance the input system but are not required for current functionality:
+### Gamepad Analog Dead Zones
+`GamepadState::axis_value` returns the raw axis value verbatim. There is no
+configurable dead-zone threshold, no radial-vs-axial normalization, and no
+tests covering either. Games that need clean stick input currently have to
+filter the raw value themselves. Adding a `DeadZoneConfig` on
+`GamepadManager` (with per-axis thresholds) plus a `normalized_axis_value`
+accessor would be the minimal fix.
 
-### Input Features
-- Gamepad dead zone configuration and calibration
-- Input event timing and latency measurement
-- Gesture recognition (double-click, swipe, pinch)
-- Input recording and playback for debugging
-- Touch input support for mobile devices
+### Event Timing / Frame-Accurate Tests
+No test asserts ordering guarantees when multiple events of different kinds
+arrive in one frame (e.g., press + move + release of the same mouse button).
+The queue is a `VecDeque` so FIFO is structurally guaranteed, but a test
+that locks that in would catch future regressions.
 
-### Long-term (Features)
-7. Haptic feedback (controller vibration)
-8. Context stack management
-9. Chord detection (Ctrl+Shift+Key combinations)
-
----
-
-## Production Readiness Assessment
-
-### Stable
-- **Core Functionality**: All essential input features implemented and tested
-- **Thread Safety**: Proper synchronization for multi-threaded access
-- **Event Integration**: Integrated with window event loop
-- **Input Mapping**: Action-based input system with configurable bindings
-- **Test Coverage**: 60 tests covering input functionality
-
-### Minor Gaps
-- ✅ **FIXED** - No more incomplete assertions (all TODO comments replaced)
-- No analog stick dead zone tests
-- No input event timing tests
+### Keyboard Layout Normalization
+`convert_physical_key` maps winit physical keys directly; there's no
+accommodation for logical-key remapping (AZERTY, Dvorak, etc.). Games that
+care currently have to wire `WindowEvent::KeyboardInput.logical_key`
+themselves, which isn't exposed through our `InputEvent`. Not urgent — most
+2D game input is positional — but worth noting if the engine grows a text
+input story.
 
 ---
 
-## Conclusion
+## Future Directions (if/when needed)
+These are not debt, just features that don't exist yet:
 
-The input system provides **solid input handling** for 2D game development:
+- **Dead-zone configuration** (see gap above — smallest concrete next step).
+- **Gesture recognition** (double-click, drag, pinch). Would live as a layer
+  above `InputEvent`, not inside it.
+- **Chord detection** (Ctrl+Shift+Key). `InputMapping` doesn't model
+  modifier+key as a unit today.
+- **Context stack** (modal overlays that consume input before gameplay sees
+  it). Currently every consumer has to check its own "am I active" flag.
+- **Touch / multi-touch** if the engine ever targets mobile.
+- **Haptic output** (controller rumble) — would need a new trait since
+  `InputHandler` is strictly read-side today.
 
-- Event queue integration with window loop
-- Keyboard, mouse, and gamepad support
-- Action-based input mapping system
-- Thread-safe wrapper for concurrent access
-- 60 tests covering core functionality
+---
 
-**Status**: Production-ready for standard keyboard/mouse/gamepad input. Test quality could be improved by replacing TODO comments with actual assertions.
+## Production Readiness
+Stable for keyboard / mouse / gamepad in desktop games:
+- Core event pipeline and per-frame state transitions are covered by 56
+  tests.
+- Thread-safe wrapper has dedicated concurrency tests.
+- Action mapping supports the common one-action-many-inputs case cleanly.
 
-Advanced features like gestures and touch input can be added as needed.
+The gaps above (dead zones, multi-event ordering, layout normalization) are
+all additive — none require breaking changes to close.
