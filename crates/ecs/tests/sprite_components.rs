@@ -418,7 +418,7 @@ fn test_sprite_component_meta() {
 
     assert_eq!(<Sprite as ComponentMeta>::type_name(), "Sprite");
     let fields = <Sprite as ComponentMeta>::field_names();
-    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "visible", "texture_handle"]);
+    assert_eq!(fields, &["offset", "rotation", "scale", "tex_region", "color", "depth", "visible", "emissive", "texture_handle"]);
 }
 
 #[test]

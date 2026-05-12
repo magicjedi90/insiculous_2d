@@ -73,12 +73,14 @@ pub struct SpriteInstance {
     pub tex_region: [f32; 4],
     /// Color tint
     pub color: [f32; 4],
-    /// Layer depth for sorting
+    /// Layer depth for sorting (and depth-test once HDR pipeline is enabled)
     pub depth: f32,
+    /// Emissive intensity — 0.0 = no glow, >0.0 amplifies RGB above 1.0 so bloom picks it up
+    pub emissive: f32,
 }
 
 impl SpriteInstance {
-    /// Create a new sprite instance
+    /// Create a new sprite instance with no emission
     pub fn new(
         position: Vec2,
         rotation: f32,
@@ -87,6 +89,19 @@ impl SpriteInstance {
         color: Vec4,
         depth: f32,
     ) -> Self {
+        Self::with_emissive(position, rotation, scale, tex_region, color, depth, 0.0)
+    }
+
+    /// Create a new sprite instance with explicit emissive intensity
+    pub fn with_emissive(
+        position: Vec2,
+        rotation: f32,
+        scale: Vec2,
+        tex_region: [f32; 4],
+        color: Vec4,
+        depth: f32,
+        emissive: f32,
+    ) -> Self {
         Self {
             position: position.to_array(),
             rotation,
@@ -94,6 +109,7 @@ impl SpriteInstance {
             tex_region,
             color: color.to_array(),
             depth,
+            emissive,
         }
     }
 
@@ -137,6 +153,12 @@ impl SpriteInstance {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 13]>() as wgpu::BufferAddress,
                     shader_location: 8,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                // Emissive intensity
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 14]>() as wgpu::BufferAddress,
+                    shader_location: 9,
                     format: wgpu::VertexFormat::Float32,
                 },
             ],
@@ -313,6 +335,21 @@ mod tests {
         assert_eq!(instance.tex_region, [0.0, 0.0, 1.0, 1.0]);
         assert_eq!(instance.color, [1.0, 0.5, 0.0, 1.0]);
         assert_eq!(instance.depth, 5.0);
+        assert_eq!(instance.emissive, 0.0);
+    }
+
+    #[test]
+    fn test_sprite_instance_with_emissive() {
+        let instance = SpriteInstance::with_emissive(
+            Vec2::new(10.0, 20.0),
+            0.0,
+            Vec2::ONE,
+            [0.0, 0.0, 1.0, 1.0],
+            Vec4::ONE,
+            0.0,
+            2.5,
+        );
+        assert_eq!(instance.emissive, 2.5);
     }
 
     #[test]
@@ -325,18 +362,17 @@ mod tests {
             Vec4::ONE,
             0.0,
         );
-        // Verify bytemuck traits work
         let _bytes: &[u8] = bytemuck::bytes_of(&instance);
-        // 2*4 + 1*4 + 2*4 + 4*4 + 4*4 + 1*4 = 56 bytes
-        assert_eq!(std::mem::size_of::<SpriteInstance>(), 56);
+        // 2*4 + 1*4 + 2*4 + 4*4 + 4*4 + 1*4 + 1*4 = 60 bytes
+        assert_eq!(std::mem::size_of::<SpriteInstance>(), 60);
     }
 
     #[test]
     fn test_sprite_instance_desc_attributes() {
         let desc = SpriteInstance::desc();
         assert_eq!(desc.step_mode, wgpu::VertexStepMode::Instance);
-        assert_eq!(desc.attributes.len(), 6); // position, rotation, scale, tex_region, color, depth
-        assert_eq!(desc.array_stride, 56);
+        assert_eq!(desc.attributes.len(), 7); // + emissive
+        assert_eq!(desc.array_stride, 60);
     }
 
     // ==================== Camera2D Tests ====================

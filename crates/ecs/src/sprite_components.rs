@@ -60,6 +60,11 @@ pub struct Sprite {
     /// Whether this sprite is visible (invisible sprites are skipped during rendering)
     #[serde(default = "default_visible")]
     pub visible: bool,
+    /// Emissive intensity — 0.0 disables glow, larger values bloom more strongly.
+    /// `#[serde(default)]` keeps existing scene files (written before this field
+    /// existed) loading cleanly.
+    #[serde(default)]
+    pub emissive: f32,
     /// Texture handle (from renderer::TextureHandle)
     pub texture_handle: u32,
 }
@@ -76,6 +81,7 @@ impl Default for Sprite {
             color: Vec4::ONE, // White
             depth: 0.0,
             visible: true,
+            emissive: 0.0,
             texture_handle: 0,
         }
     }
@@ -129,6 +135,12 @@ impl Sprite {
     /// Set visibility
     pub fn with_visible(mut self, visible: bool) -> Self {
         self.visible = visible;
+        self
+    }
+
+    /// Set emissive intensity (0.0 disables glow, larger values bloom more).
+    pub fn with_emissive(mut self, emissive: f32) -> Self {
+        self.emissive = emissive;
         self
     }
 }

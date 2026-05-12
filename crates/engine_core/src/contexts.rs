@@ -8,11 +8,12 @@ use ecs::World;
 use input::InputHandler;
 use audio::AudioManager;
 use ui::UIContext;
-use renderer::{sprite::SpriteBatcher, Camera, texture::TextureHandle};
+use renderer::{line_pipeline::LineVertex, sprite::SpriteBatcher, Camera, texture::TextureHandle};
 use std::collections::HashMap;
 use crate::assets::AssetManager;
 use crate::chaos_mode::ChaosMode;
 use crate::achievements::AchievementManager;
+use crate::particles::ParticleManager;
 
 /// Key for caching glyph textures.
 ///
@@ -63,6 +64,16 @@ pub struct GameContext<'a> {
     /// Achievement / trophy manager. Register achievements in `init()`, then
     /// call `ctx.achievements.unlock("id")` from gameplay code.
     pub achievements: &'a mut AchievementManager,
+    /// Particle system. Spawn bursts directly with
+    /// `ctx.particles.spawn_burst(pos, &config)`, or attach a
+    /// [`ParticleEmitter`](crate::particles::ParticleEmitter) component to
+    /// any entity with a `Transform2D` for continuous emission.
+    pub particles: &'a mut ParticleManager,
+    /// Line-list vertex buffer for the line render pipeline. Pairs of
+    /// vertices form line segments. Cleared each frame before `update()`.
+    /// Typical use: step a [`GridMesh`](crate::grid::GridMesh) and append
+    /// its `build_line_vertices()` output here, or push debug-draw segments.
+    pub lines: &'a mut Vec<LineVertex>,
 }
 
 /// Render context passed to the render method.

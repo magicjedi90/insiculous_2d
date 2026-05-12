@@ -8,7 +8,10 @@ use winit::{
     window::Window,
 };
 
+pub mod bloom;
 mod error;
+pub mod line_pipeline;
+pub mod render_targets;
 mod renderer;
 pub mod sprite;
 pub mod sprite_data;

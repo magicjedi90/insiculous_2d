@@ -1,4 +1,6 @@
-// Instanced sprite rendering shader with camera support
+// Instanced sprite rendering shader with camera and emissive support.
+// Writes to an HDR target (Rgba16Float). Bright pixels — driven by the
+// per-instance `emissive` attribute — are picked up by the bloom pipeline.
 
 // Camera uniform
 struct Camera {
@@ -30,7 +32,8 @@ struct InstanceInput {
     @location(5) scale: vec2<f32>,           // Sprite scale
     @location(6) tex_region: vec4<f32>,      // Texture region [u, v, width, height]
     @location(7) color: vec4<f32>,           // Color tint
-    @location(8) depth: f32,                 // Depth for sorting
+    @location(8) depth: f32,                 // Depth (0 = near, 1 = far in NDC after camera)
+    @location(9) emissive: f32,              // Emissive intensity
 }
 
 // Output to fragment shader
@@ -38,9 +41,9 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) color: vec4<f32>,
+    @location(2) emissive: f32,
 }
 
-// Vertex shader
 @vertex
 fn vs_main(
     vertex: VertexInput,
@@ -48,55 +51,47 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
 
-    // Build sprite transformation matrix
     let cos_r = cos(instance.rotation);
     let sin_r = sin(instance.rotation);
 
-    // Rotation matrix
     let rot_matrix = mat3x3<f32>(
         vec3<f32>(cos_r, -sin_r, 0.0),
         vec3<f32>(sin_r,  cos_r, 0.0),
         vec3<f32>(0.0,    0.0,   1.0)
     );
 
-    // Scale matrix
     let scale_matrix = mat3x3<f32>(
         vec3<f32>(instance.scale.x, 0.0, 0.0),
         vec3<f32>(0.0, instance.scale.y, 0.0),
         vec3<f32>(0.0, 0.0, 1.0)
     );
 
-    // Combine rotation and scale
     let transform_matrix = rot_matrix * scale_matrix;
 
-    // Transform vertex position
     let local_pos = transform_matrix * vec3<f32>(vertex.position.xy, 0.0);
     let world_pos = vec4<f32>(local_pos.xy + instance.world_position, instance.depth, 1.0);
 
-    // Transform by camera view-projection matrix
     out.clip_position = camera.view_projection * world_pos;
 
-    // Calculate texture coordinates based on texture region
     let base_uv = vertex.tex_coords;
     out.tex_coords = vec2<f32>(
         instance.tex_region.x + base_uv.x * instance.tex_region.z,
         instance.tex_region.y + base_uv.y * instance.tex_region.w
     );
 
-    // Combine vertex color with instance color
     out.color = vertex.color * instance.color;
+    out.emissive = instance.emissive;
 
     return out;
 }
 
-// Fragment shader
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Sample texture
     let tex_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
-
-    // For colored sprites without textures, we want to use the vertex color directly
-    // If texture is white (1,1,1,1), this gives us the vertex color
-    // If texture has alpha, we preserve it
-    return vec4<f32>(tex_color.rgb * in.color.rgb, tex_color.a * in.color.a);
+    let base_rgb = tex_color.rgb * in.color.rgb;
+    // emissive multiplies RGB so values exceed 1.0 and the bright-pass picks them up.
+    // 1.0 + 4.0*intensity scales linearly without a hard threshold.
+    let glow_factor = 1.0 + in.emissive * 4.0;
+    let out_rgb = base_rgb * glow_factor;
+    return vec4<f32>(out_rgb, tex_color.a * in.color.a);
 }

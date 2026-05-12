@@ -17,6 +17,10 @@ pub use crate::{
     scene_loader::{SceneLoader, SceneInstance},
     // Behavior system
     behavior_runner::{BehaviorRunner, EntityCollected},
+    // Particle system (CPU pool; spawn bursts or attach a ParticleEmitter)
+    particles::{Particle, ParticleConfig, ParticleEmitter, ParticleManager, ParticleSystem},
+    // Spring-mass grid (Geometry-Wars style deforming background)
+    grid::{GridImpulse, GridMesh},
     // Game loop
     game_loop::{GameLoop, GameLoopConfig},
     init,
@@ -46,6 +50,7 @@ pub use input::prelude::KeyCode;
 
 // Re-export renderer types
 pub use renderer::{TextureHandle, TextureLoadConfig};
+pub use renderer::line_pipeline::LineVertex;
 
 // Re-export audio types
 pub use audio::{AudioManager, SoundHandle, SoundSettings, PlaybackState};

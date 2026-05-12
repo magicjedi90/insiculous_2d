@@ -30,7 +30,10 @@ use winit::{
     window::Window
 };
 
+use crate::bloom::{BloomConfig, BloomPipeline};
 use crate::error::RendererError;
+use crate::line_pipeline::{LinePipeline, LineVertex};
+use crate::render_targets::RenderTargets;
 
 /// The main renderer struct - now with proper lifetime management
 pub struct Renderer {
@@ -43,6 +46,17 @@ pub struct Renderer {
     clear_color: wgpu::Color,
     /// White texture resource for colored sprites (multiply by white instead of transparent black)
     white_texture: Option<crate::sprite_data::TextureResource>,
+    /// HDR color + depth + bloom ping-pong textures.
+    render_targets: RenderTargets,
+    /// Bloom post-processing pipeline (extract -> blur -> composite).
+    bloom_pipeline: BloomPipeline,
+    /// Runtime-tunable bloom knobs.
+    bloom_config: BloomConfig,
+    /// Pipeline + buffer for line-list geometry (e.g. the spring-mass grid).
+    line_pipeline: LinePipeline,
+    /// Number of line vertices uploaded by the most recent `set_lines` call.
+    /// Reset to 0 when no lines are drawn this frame.
+    line_vertex_count: u32,
 }
 
 impl Renderer {
@@ -88,10 +102,17 @@ impl Renderer {
             .await
             .map_err(|e| RendererError::DeviceCreationError(e.to_string()))?;
 
-        // Configure surface
+        // Configure surface. The bloom composite pass writes the final tonemapped
+        // color and relies on the GPU's automatic linear -> sRGB conversion when
+        // writing to an sRGB swapchain, so we prefer an sRGB surface format.
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
-        let format = surface_caps.formats[0];
+        let format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -120,6 +141,12 @@ impl Renderer {
         // Create white texture for colored sprites
         let white_texture = Self::create_white_texture_resource(&device, &queue);
 
+        // Build offscreen targets + post-processing pipelines sized to the initial window.
+        let render_targets = RenderTargets::new(&device, size.width, size.height);
+        let bloom_pipeline = BloomPipeline::new(&device, format);
+        let bloom_config = BloomConfig::default();
+        let line_pipeline = LinePipeline::new(&device, LinePipeline::DEFAULT_CAPACITY);
+
         Ok(Self {
             window,
             surface,
@@ -128,13 +155,39 @@ impl Renderer {
             queue,
             config,
             clear_color: wgpu::Color {
-                r: 0.392, // Cornflower blue (100/255)
-                g: 0.584, // (149/255)
-                b: 0.929, // (237/255)
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
                 a: 1.0,
             },
             white_texture: Some(white_texture),
+            render_targets,
+            bloom_pipeline,
+            bloom_config,
+            line_pipeline,
+            line_vertex_count: 0,
         })
+    }
+
+    /// Read-only view of the bloom tunables.
+    pub fn bloom_config(&self) -> &BloomConfig {
+        &self.bloom_config
+    }
+
+    /// Mutable access to the bloom tunables (threshold, intensity, etc.).
+    pub fn bloom_config_mut(&mut self) -> &mut BloomConfig {
+        &mut self.bloom_config
+    }
+
+    /// Upload line vertices for the next render. Pairs of vertices form line
+    /// segments. The line pipeline draws these into the HDR target after
+    /// sprites and before bloom, so emissive lines bloom.
+    ///
+    /// Call every frame — vertices are not retained across frames; an empty
+    /// slice (or no call at all) means no lines render this frame.
+    pub fn set_lines(&mut self, vertices: &[LineVertex]) {
+        self.line_vertex_count = vertices.len() as u32;
+        self.line_pipeline.upload_vertices(&self.queue, vertices);
     }
 
     /// Set the clear color
@@ -241,7 +294,11 @@ impl Renderer {
         self.render_with_sprites_internal(sprite_pipeline, camera, &combined_texture_resources, sprite_batches)
     }
 
-    /// Internal method to render sprites with the combined texture resources
+    /// Internal method to render sprites with the combined texture resources.
+    ///
+    /// Sprite pass draws into the HDR offscreen target. The bloom pipeline
+    /// then extracts bright pixels, blurs them, and composites the result
+    /// to the swapchain.
     fn render_with_sprites_internal(
         &self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
@@ -255,28 +312,44 @@ impl Renderer {
             None => return Ok(()),
         };
 
-        // Create a view
-        let view = frame
+        // Swapchain view: final destination for the composite pass.
+        let swapchain_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create a command encoder
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
-        // Update camera - do this before rendering
         sprite_pipeline.update_camera(&self.queue, camera);
-        
-        // Draw sprites directly - this will handle clearing and drawing in one render pass
-        sprite_pipeline.draw(&mut encoder, camera, texture_resources, sprite_batches, &view, self.clear_color);
+        self.line_pipeline.update_camera(&self.queue, camera);
 
-        // Submit the command buffer
+        // Pass 1: sprites -> HDR color (+ depth).
+        sprite_pipeline.draw(
+            &mut encoder,
+            texture_resources,
+            sprite_batches,
+            &self.render_targets,
+            self.clear_color,
+        );
+
+        // Pass 2: lines (e.g. the spring-mass grid) on top of sprites in HDR.
+        // No-op when `set_lines` wasn't called this frame.
+        self.line_pipeline.draw(&mut encoder, &self.render_targets, self.line_vertex_count);
+
+        // Pass 3..N: bloom (extract -> blur -> composite to swapchain).
+        self.bloom_pipeline.run(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &self.render_targets,
+            &swapchain_view,
+            &self.bloom_config,
+        );
+
         self.queue.submit(std::iter::once(encoder.finish()));
-
-        // Present the frame
         frame.present();
 
         Ok(())
@@ -344,12 +417,13 @@ impl Renderer {
         &self.surface
     }
 
-    /// Resize the surface
+    /// Resize the surface and recreate the offscreen HDR / depth / bloom targets.
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
+            self.render_targets.resize(&self.device, width, height);
         }
     }
 

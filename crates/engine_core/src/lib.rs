@@ -42,6 +42,8 @@ pub mod contexts;
 pub mod ui_integration;
 pub mod chaos_mode;
 pub mod achievements;
+pub mod particles;
+pub mod grid;
 
 pub mod prelude;
 

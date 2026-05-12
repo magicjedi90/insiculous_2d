@@ -10,6 +10,8 @@ use glam::Vec2;
 use winit::window::Window;
 
 use renderer::{
+    bloom::BloomConfig,
+    line_pipeline::LineVertex,
     sprite::{SpriteBatch, SpriteBatcher, SpritePipeline},
     sprite_data::TextureResource,
     texture::TextureHandle,
@@ -218,6 +220,25 @@ impl RenderManager {
     /// Get adapter info string for debugging.
     pub fn adapter_info(&self) -> Option<String> {
         self.renderer.as_ref().map(|r| r.adapter_info())
+    }
+
+    /// Read-only view of the bloom configuration.
+    pub fn bloom_config(&self) -> Option<&BloomConfig> {
+        self.renderer.as_ref().map(|r| r.bloom_config())
+    }
+
+    /// Mutable access to the bloom configuration — tune threshold, intensity,
+    /// iteration count, or disable bloom entirely.
+    pub fn bloom_config_mut(&mut self) -> Option<&mut BloomConfig> {
+        self.renderer.as_mut().map(|r| r.bloom_config_mut())
+    }
+
+    /// Upload line vertices for the next frame. Pairs of vertices form line
+    /// segments. Empty slice (or no call) draws no lines this frame.
+    pub fn set_lines(&mut self, vertices: &[LineVertex]) {
+        if let Some(renderer) = &mut self.renderer {
+            renderer.set_lines(vertices);
+        }
     }
 }
 

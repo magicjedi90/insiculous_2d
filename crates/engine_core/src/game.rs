@@ -102,7 +102,8 @@ pub trait Game: Sized + 'static {
                     .with_rotation(rotation)
                     .with_scale(scale * ecs_sprite.scale * 80.0)
                     .with_color(ecs_sprite.color)
-                    .with_depth(ecs_sprite.depth);
+                    .with_depth(ecs_sprite.depth)
+                    .with_emissive(ecs_sprite.emissive);
 
                 ctx.sprites.add_sprite(&renderer_sprite);
             }
@@ -128,6 +129,29 @@ pub trait Game: Sized + 'static {
 
     /// Called when the game is about to exit. Clean up resources here.
     fn on_exit(&mut self) {}
+}
+
+/// Append the manager's alive particles to a [`SpriteBatcher`].
+///
+/// Called from the engine after `Game::render` so particles always render,
+/// regardless of whether the game overrides the default render impl.
+fn append_particle_sprites(
+    batcher: &mut SpriteBatcher,
+    particles: &crate::particles::ParticleManager,
+) {
+    for p in particles.iter_alive() {
+        let color = crate::particles::ParticleManager::current_color(p);
+        let scale = crate::particles::ParticleManager::current_scale(p);
+        let sprite = renderer::Sprite::new(TextureHandle { id: p.texture })
+            .with_position(p.position)
+            .with_rotation(p.rotation)
+            .with_scale(Vec2::splat(scale))
+            .with_color(color)
+            .with_emissive(p.emissive)
+            // Just behind UI (positive depth) so particles glow on top of gameplay.
+            .with_depth(0.5);
+        batcher.add_sprite(&sprite);
+    }
 }
 
 /// Run a game with the given configuration.
@@ -191,6 +215,12 @@ struct GameRunner<G: Game> {
     scene: Scene,
     /// Achievement / trophy manager
     achievements: AchievementManager,
+    /// CPU-pooled particle system. Lives across frames so emitters can
+    /// accumulate over time and spawn bursts can persist for their lifetime.
+    particles: crate::particles::ParticleManager,
+    /// Line vertex buffer that the game fills each frame and the engine
+    /// uploads to the renderer. Cleared before every `update()`.
+    lines: Vec<renderer::line_pipeline::LineVertex>,
     /// Whether the game's init() has been called
     initialized: bool,
 }
@@ -229,6 +259,8 @@ impl<G: Game> GameRunner<G> {
             glyph_textures: HashMap::new(),
             scene: Scene::new("main"),
             achievements,
+            particles: crate::particles::ParticleManager::default(),
+            lines: Vec::new(),
             initialized: false,
         }
     }
@@ -362,6 +394,10 @@ impl<G: Game> GameRunner<G> {
         let mut placeholder_audio = AudioManager::new().ok();
         let audio = audio_manager.or(placeholder_audio.as_mut());
 
+        // Clear the line buffer at the start of the frame so games push fresh
+        // vertices each update (typical case: grid.build_line_vertices()).
+        self.lines.clear();
+
         if let Some(audio) = audio {
             let mut ctx = GameContext {
                 input: &self.input,
@@ -373,6 +409,8 @@ impl<G: Game> GameRunner<G> {
                 window_size,
                 chaos_mode: self.config.chaos_mode,
                 achievements: &mut self.achievements,
+                particles: &mut self.particles,
+                lines: &mut self.lines,
             };
 
             if !self.initialized {
@@ -381,6 +419,19 @@ impl<G: Game> GameRunner<G> {
             }
 
             self.game.update(&mut ctx);
+
+            // Step the particle system after the game's update — emitter
+            // accumulators see the latest transforms, and pool stepping
+            // happens once per frame.
+            crate::particles::ParticleSystem::update(
+                &mut self.scene.world,
+                &mut self.particles,
+                delta_time,
+            );
+
+            // Forward the line vertices the game pushed during update to the
+            // renderer. Empty buffer == no lines drawn this frame.
+            self.render_manager.set_lines(&self.lines);
 
             // Draw achievement toasts on top of whatever the game drew.
             self.achievements
@@ -422,6 +473,11 @@ impl<G: Game> GameRunner<G> {
             };
             self.game.render(&mut ctx);
         }
+
+        // Append particle sprites into the game batcher. Particles render
+        // after gameplay sprites so they appear on top of static objects
+        // but below UI.
+        append_particle_sprites(&mut game_batcher, &self.particles);
 
         // Phase 2: UI sprites — separate batcher
         let mut ui_batcher = SpriteBatcher::new(1000);
@@ -548,6 +604,8 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             window_size,
                             chaos_mode: self.config.chaos_mode,
                             achievements: &mut self.achievements,
+                            particles: &mut self.particles,
+                            lines: &mut self.lines,
                         };
 
                         match event.state {

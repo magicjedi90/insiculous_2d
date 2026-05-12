@@ -8,6 +8,7 @@ use wgpu::util::DeviceExt;
 
 use crate::sprite_data::{SpriteVertex, SpriteInstance, Camera, CameraUniform, TextureResource, DynamicBuffer};
 use crate::texture::{TextureHandle, SamplerConfig};
+use crate::render_targets::{HDR_FORMAT, DEPTH_FORMAT, RenderTargets};
 
 /// A single sprite to be rendered
 #[derive(Debug, Clone)]
@@ -24,6 +25,8 @@ pub struct Sprite {
     pub color: Vec4,
     /// Layer depth for sorting (higher values render on top)
     pub depth: f32,
+    /// Emissive intensity — 0.0 disables glow, values above 0.0 produce HDR output that bloom picks up
+    pub emissive: f32,
     /// Texture handle
     pub texture_handle: TextureHandle,
 }
@@ -37,6 +40,7 @@ impl Default for Sprite {
             tex_region: [0.0, 0.0, 1.0, 1.0], // Full texture
             color: Vec4::ONE, // White
             depth: 0.0,
+            emissive: 0.0,
             texture_handle: TextureHandle::default(),
         }
     }
@@ -87,15 +91,22 @@ impl Sprite {
         self
     }
 
+    /// Set emissive intensity (0.0 disables glow, larger values bloom more strongly)
+    pub fn with_emissive(mut self, emissive: f32) -> Self {
+        self.emissive = emissive;
+        self
+    }
+
     /// Convert to sprite instance for batching
     pub fn to_instance(&self) -> SpriteInstance {
-        SpriteInstance::new(
+        SpriteInstance::with_emissive(
             self.position,
             self.rotation,
             self.scale,
             self.tex_region,
             self.color,
             self.depth,
+            self.emissive,
         )
     }
 }
@@ -388,7 +399,9 @@ impl SpritePipeline {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    // Sprites render to the HDR offscreen target. The bloom
+                    // composite is what writes the final sRGB swapchain.
+                    format: HDR_FORMAT,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -401,7 +414,17 @@ impl SpritePipeline {
                 cull_mode: None, // Don't cull sprites
                 ..Default::default()
             },
-            depth_stencil: None,
+            // Real depth buffer. depth_write_enabled=true plus alpha blending
+            // means the user still needs to sort transparent sprites
+            // back-to-front, but opaque depth ordering Just Works once any
+            // 3D-ish features arrive.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -490,17 +513,25 @@ impl SpritePipeline {
         self.texture_bind_group_cache.clear();
     }
 
-    /// Draw sprites using this pipeline
+    /// Draw sprites into the HDR target.
     ///
-    /// Uses cached bind groups for improved performance. Call `cache_texture_bind_groups`
-    /// before drawing if new textures have been loaded.
+    /// `targets` provides the HDR color view (Rgba16Float) and matching depth
+    /// view. `clear_color` is applied to the HDR target — it's treated as a
+    /// linear RGB color, so values >1.0 are valid and bloom.
+    ///
+    /// The camera uniform is uploaded separately via
+    /// [`update_camera`](Self::update_camera) before this call; the caller is
+    /// responsible for that.
+    ///
+    /// Uses cached bind groups for improved performance. Call
+    /// [`cache_texture_bind_groups`] before drawing if new textures have been
+    /// loaded.
     pub fn draw(
         &mut self,
         encoder: &mut CommandEncoder,
-        _camera: &Camera,
         texture_resources: &HashMap<TextureHandle, TextureResource>,
         batches: &[&SpriteBatch],
-        target: &TextureView,
+        targets: &RenderTargets,
         clear_color: wgpu::Color,
     ) {
         log::debug!("SPRITE DRAW: batches={}, clear_color={:?}", batches.len(), clear_color);
@@ -520,11 +551,11 @@ impl SpritePipeline {
             }
         }
 
-        // Begin render pass with clearing
+        // Begin render pass: clear HDR color + depth, draw sprites with depth-test.
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sprite Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
+                view: &targets.hdr_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -532,7 +563,14 @@ impl SpritePipeline {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &targets.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
