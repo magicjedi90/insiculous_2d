@@ -33,6 +33,8 @@
 //! [`PhysicsWorld`] via [`physics_world()`](PhysicsSystem::physics_world) and
 //! [`physics_world_mut()`](PhysicsSystem::physics_world_mut).
 
+use std::collections::HashSet;
+
 use glam::Vec2;
 
 use ecs::{EntityId, System, World};
@@ -43,6 +45,13 @@ use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 
 /// Type alias for collision callback to reduce complexity
 type CollisionCallback = Box<dyn FnMut(&CollisionData) + Send + Sync>;
+
+/// Maximum number of fixed-timestep catch-up steps in a single update.
+///
+/// Bounds the work done after a stall regardless of how small the
+/// configured `fixed_timestep` is; leftover accumulated time is dropped
+/// rather than simulated, trading a small slowdown for stability.
+const MAX_STEPS_PER_UPDATE: u32 = 8;
 
 /// Physics system that steps the simulation and syncs transforms
 pub struct PhysicsSystem {
@@ -58,6 +67,8 @@ pub struct PhysicsSystem {
     collision_callbacks: Vec<CollisionCallback>,
     /// Deferred velocities for entities not yet synced to Rapier
     pending_velocities: Vec<(EntityId, Vec2, f32)>,
+    /// Deferred body resets for entities not yet synced to Rapier
+    pending_resets: Vec<(EntityId, Vec2)>,
 }
 
 impl PhysicsSystem {
@@ -75,6 +86,7 @@ impl PhysicsSystem {
             max_delta_time: 0.1,
             collision_callbacks: Vec::new(),
             pending_velocities: Vec::new(),
+            pending_resets: Vec::new(),
         }
     }
 
@@ -126,6 +138,7 @@ impl PhysicsSystem {
     pub fn clear(&mut self) {
         self.physics_world.clear();
         self.pending_velocities.clear();
+        self.pending_resets.clear();
         self.time_accumulator = 0.0;
     }
 
@@ -137,6 +150,7 @@ impl PhysicsSystem {
         self.physics_world.remove_entity(entity);
         world.remove_entity(&entity).ok();
         self.pending_velocities.retain(|(e, _, _)| *e != entity);
+        self.pending_resets.retain(|(e, _)| *e != entity);
     }
 
     /// Get a reference to the physics world
@@ -205,9 +219,17 @@ impl PhysicsSystem {
     }
 
     /// Reset a body's position and zero its velocity.
+    ///
+    /// Safe to call on entities spawned this same frame: if the body hasn't
+    /// been synced into Rapier yet, the reset is buffered and applied during
+    /// the next `update()` (after the sync, before any pending velocities).
     pub fn reset_body(&mut self, entity: EntityId, position: Vec2) {
-        self.physics_world.set_body_transform(entity, position, 0.0);
-        self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
+        if self.physics_world.has_rigid_body(entity) {
+            self.physics_world.set_body_transform(entity, position, 0.0);
+            self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
+        } else {
+            self.pending_resets.push((entity, position));
+        }
     }
 
     /// Sync a single entity from ECS to physics world
@@ -309,21 +331,55 @@ impl System for PhysicsSystem {
 
         // Get all entities and sync new ones to physics
         let entities: Vec<EntityId> = world.entities();
+
+        // Garbage-collect physics state for entities that were removed from
+        // the ECS directly (world.remove_entity) without going through
+        // destroy_entity — otherwise their rapier bodies keep simulating
+        // and colliding invisibly forever.
+        let alive: HashSet<EntityId> = entities.iter().copied().collect();
+        for entity in self.physics_world.tracked_entities() {
+            if !alive.contains(&entity) {
+                log::debug!(
+                    "Removing orphaned physics state for despawned entity {:?}",
+                    entity
+                );
+                self.physics_world.remove_entity(entity);
+            }
+        }
+        self.pending_velocities.retain(|(e, _, _)| alive.contains(e));
+        self.pending_resets.retain(|(e, _)| alive.contains(e));
+
         for entity in entities {
             self.sync_entity_to_physics(world, entity);
         }
 
-        // Flush deferred velocities for newly synced entities
+        // Flush deferred resets first, then velocities, so the common
+        // "reset then launch" pattern lands with the velocity intact.
+        for (entity, position) in self.pending_resets.drain(..) {
+            self.physics_world.set_body_transform(entity, position, 0.0);
+            self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
+        }
         for (entity, linear, angular) in self.pending_velocities.drain(..) {
             self.physics_world.set_velocity(entity, linear, angular);
         }
 
-        // Fixed timestep physics updates
+        // Fixed timestep physics updates, capped to avoid a death spiral
+        // where catch-up steps make the frame even slower.
         self.time_accumulator += dt;
 
-        while self.time_accumulator >= self.fixed_timestep {
+        let mut steps = 0;
+        while self.time_accumulator >= self.fixed_timestep && steps < MAX_STEPS_PER_UPDATE {
             self.physics_world.step(self.fixed_timestep);
             self.time_accumulator -= self.fixed_timestep;
+            steps += 1;
+        }
+        if steps == MAX_STEPS_PER_UPDATE && self.time_accumulator >= self.fixed_timestep {
+            log::warn!(
+                "Physics fell behind: dropping {:.3}s of accumulated time after {} steps",
+                self.time_accumulator,
+                steps
+            );
+            self.time_accumulator = 0.0;
         }
 
         // Sync physics results back to ECS
@@ -393,6 +449,105 @@ mod tests {
         // Check physics world has the entity
         assert!(system.physics_world().has_rigid_body(entity));
         assert!(system.physics_world().has_collider(entity));
+    }
+
+    #[test]
+    fn test_direct_world_removal_cleans_up_physics_state() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::ZERO)).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+        assert!(system.physics_world().has_rigid_body(entity));
+
+        // Bypass destroy_entity — remove straight from the ECS, and leave a
+        // pending velocity behind to make sure it gets pruned too.
+        system.set_velocity(entity, Vec2::new(100.0, 0.0), 0.0);
+        world.remove_entity(&entity).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+
+        assert!(
+            !system.physics_world().has_rigid_body(entity),
+            "orphaned rapier body should be garbage-collected"
+        );
+        assert!(
+            !system.physics_world().has_collider(entity),
+            "orphaned rapier collider should be garbage-collected"
+        );
+        assert!(system.pending_velocities.is_empty());
+    }
+
+    #[test]
+    fn test_reset_body_is_deferred_for_same_frame_spawns() {
+        let mut world = World::new();
+        let mut system = PhysicsSystem::new();
+
+        // Spawn and immediately reset + launch, before any update() sync.
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::new(50.0, 50.0))).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+        world.add_component(&entity, Collider::box_collider(8.0, 8.0)).unwrap();
+
+        system.reset_body(entity, Vec2::ZERO);
+        system.set_velocity(entity, Vec2::new(200.0, 0.0), 0.0);
+        assert_eq!(system.pending_resets.len(), 1, "reset should be buffered");
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 1.0 / 60.0);
+
+        // Reset moved the body to origin, then the launch velocity applied.
+        let (velocity, _) = system.get_body_velocity(entity).unwrap();
+        assert!(
+            velocity.x > 100.0,
+            "deferred reset must not clobber a deferred launch velocity (got {:?})",
+            velocity
+        );
+        let pos = world.get::<Transform2D>(entity).unwrap().position;
+        assert!(pos.x < 25.0, "body should have been reset toward origin (got {:?})", pos);
+        assert!(system.pending_resets.is_empty());
+    }
+
+    #[test]
+    fn test_catch_up_steps_are_capped_after_a_stall() {
+        let mut world = World::new();
+        // Tiny fixed timestep: a 0.1s update would need 100 catch-up steps
+        // uncapped; the cap drops the excess instead of simulating it.
+        let mut system = PhysicsSystem::new().with_fixed_timestep(1.0 / 1000.0);
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Transform2D::new(Vec2::new(0.0, 100.0))).unwrap();
+        world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+
+        system.initialize(&mut world).unwrap();
+        system.update(&mut world, 0.1);
+
+        // At most MAX_STEPS_PER_UPDATE steps of 1ms ran, so at most 8ms of
+        // gravity was simulated (~0.03 units of fall), not 100ms (~4.9 units).
+        let y = world.get::<Transform2D>(entity).unwrap().position.y;
+        let fallen = 100.0 - y;
+        let max_simulated = MAX_STEPS_PER_UPDATE as f32 * (1.0 / 1000.0);
+        let max_fall = 0.5 * 980.0 * max_simulated * max_simulated + 1.0;
+        assert!(
+            fallen <= max_fall,
+            "fell {} units; catch-up steps were not capped",
+            fallen
+        );
+
+        // The dropped backlog must not be simulated later: a follow-up tiny
+        // update should run at most one step.
+        let y_before = world.get::<Transform2D>(entity).unwrap().position.y;
+        system.update(&mut world, 1.0 / 1000.0);
+        let y_after = world.get::<Transform2D>(entity).unwrap().position.y;
+        assert!(
+            (y_before - y_after).abs() < 0.01,
+            "accumulated backlog leaked into the next update"
+        );
     }
 
     #[test]

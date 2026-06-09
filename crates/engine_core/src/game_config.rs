@@ -30,6 +30,11 @@ pub struct GameConfig {
     /// survive restarts. When `None`, achievements are in-memory only.
     #[serde(default)]
     pub achievement_save_path: Option<String>,
+    /// Base directory for asset loading. Relative asset paths passed to
+    /// `GameContext::assets` are resolved against this. When `None`, the
+    /// default is `assets` relative to the current working directory.
+    #[serde(default)]
+    pub asset_base_path: Option<String>,
 }
 
 impl Default for GameConfig {
@@ -43,6 +48,7 @@ impl Default for GameConfig {
             resizable: true,
             chaos_mode: ChaosMode::Normal,
             achievement_save_path: None,
+            asset_base_path: None,
         }
     }
 }
@@ -86,6 +92,14 @@ impl GameConfig {
     /// Parent directories are created on first save.
     pub fn with_achievement_save_path(mut self, path: impl Into<String>) -> Self {
         self.achievement_save_path = Some(path.into());
+        self
+    }
+
+    /// Resolve relative asset paths against this directory instead of
+    /// `assets/` under the current working directory. Use an absolute path
+    /// so the game runs correctly regardless of where it's launched from.
+    pub fn with_asset_base_path(mut self, path: impl Into<String>) -> Self {
+        self.asset_base_path = Some(path.into());
         self
     }
 }

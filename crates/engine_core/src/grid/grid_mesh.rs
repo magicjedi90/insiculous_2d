@@ -49,9 +49,15 @@ pub struct GridMesh {
     line_scratch: Vec<LineVertex>,
     /// Pre-allocated spring-force scratch reused every substep.
     force_scratch: Vec<Vec2>,
-    /// Visual params.
+    /// Visual params. The alpha component of `color` controls grid
+    /// translucency — fade it to 0 to hide the grid while keeping the
+    /// simulation running.
     pub color: Vec4,
     pub emissive: f32,
+    /// When `false`, [`build_line_vertices`](Self::build_line_vertices)
+    /// returns an empty slice and no lines render. The simulation still
+    /// steps (so re-enabling later resumes a settled grid).
+    pub visible: bool,
     /// Spring stiffness (force per unit of stretch). Higher = faster ripples,
     /// lower = wobblier.
     pub stiffness: f32,
@@ -84,6 +90,7 @@ impl GridMesh {
             force_scratch,
             color: Vec4::new(0.2, 0.5, 1.0, 0.8),
             emissive: 0.6,
+            visible: true,
             stiffness: 24.0,
             damping: 0.08,
             rest_pull: 1.0,
@@ -95,6 +102,19 @@ impl GridMesh {
     pub fn with_emissive(mut self, emissive: f32) -> Self { self.emissive = emissive; self }
     pub fn with_stiffness(mut self, stiffness: f32) -> Self { self.stiffness = stiffness; self }
     pub fn with_damping(mut self, damping: f32) -> Self { self.damping = damping; self }
+
+    /// Replace just the alpha of the grid's color. Useful for fading the
+    /// grid in/out without touching the RGB tint.
+    pub fn with_alpha(mut self, alpha: f32) -> Self { self.color.w = alpha.clamp(0.0, 1.0); self }
+
+    /// Same as [`with_alpha`](Self::with_alpha) but on `&mut self` for
+    /// imperative fading from gameplay code.
+    pub fn set_alpha(&mut self, alpha: f32) { self.color.w = alpha.clamp(0.0, 1.0); }
+
+    /// Builder variant of the [`visible`](Self::visible) field. Set to false
+    /// to start the grid hidden — useful for games that toggle it on certain
+    /// events (boss fights, menus, etc.).
+    pub fn with_visible(mut self, visible: bool) -> Self { self.visible = visible; self }
 
     /// Number of mass points.
     pub fn node_count(&self) -> usize { self.nodes.len() }
@@ -181,8 +201,15 @@ impl GridMesh {
     ///
     /// Uses the grid's `color` and `emissive` for every vertex. For a
     /// per-edge color (e.g. based on stretch), call manually.
+    ///
+    /// Returns an empty slice when [`visible`](Self::visible) is `false` or
+    /// the color is fully transparent — skipping the per-spring loop
+    /// entirely so a hidden grid costs nothing to "render".
     pub fn build_line_vertices(&mut self) -> &[LineVertex] {
         self.line_scratch.clear();
+        if !self.visible || self.color.w <= 0.0 {
+            return &self.line_scratch;
+        }
         let color = self.color.to_array();
         let emissive = self.emissive;
         for s in &self.springs {
@@ -341,5 +368,42 @@ mod tests {
         let mut g = GridMesh::new(4, 3, 1.0, Vec2::ZERO);
         let verts = g.build_line_vertices();
         assert_eq!(verts.len(), g.spring_count() * 2);
+    }
+
+    #[test]
+    fn invisible_grid_produces_no_vertices() {
+        let mut g = GridMesh::new(4, 3, 1.0, Vec2::ZERO);
+        g.visible = false;
+        assert_eq!(g.build_line_vertices().len(), 0);
+    }
+
+    #[test]
+    fn transparent_grid_produces_no_vertices() {
+        let mut g = GridMesh::new(4, 3, 1.0, Vec2::ZERO).with_alpha(0.0);
+        assert_eq!(g.build_line_vertices().len(), 0);
+    }
+
+    #[test]
+    fn alpha_clamped_to_unit_range() {
+        let g = GridMesh::new(3, 3, 1.0, Vec2::ZERO).with_alpha(2.5);
+        assert_eq!(g.color.w, 1.0);
+        let g = GridMesh::new(3, 3, 1.0, Vec2::ZERO).with_alpha(-0.4);
+        assert_eq!(g.color.w, 0.0);
+    }
+
+    #[test]
+    fn hidden_grid_still_simulates() {
+        // Re-enabling a hidden grid should resume from the same physics
+        // state, so invisible grids must keep stepping normally.
+        let mut g = GridMesh::new(5, 5, 10.0, Vec2::ZERO);
+        g.visible = false;
+        let center_idx = 12;
+        g.apply_impulse(&GridImpulse::Point {
+            position: g.nodes[center_idx].rest,
+            force: Vec2::new(0.0, 100.0),
+            radius: 5.0,
+        });
+        g.step(0.05);
+        assert!(g.nodes[center_idx].position.y > g.nodes[center_idx].rest.y);
     }
 }

@@ -385,6 +385,20 @@ impl PhysicsWorld {
         self.remove_collider(entity);
     }
 
+    /// All entities that currently have a rigid body or collider here.
+    ///
+    /// Used by `PhysicsSystem` to garbage-collect physics state for entities
+    /// that were removed from the ECS without going through `destroy_entity`.
+    pub fn tracked_entities(&self) -> Vec<EntityId> {
+        let mut entities: Vec<EntityId> = self.entity_to_body.keys().copied().collect();
+        for entity in self.entity_to_collider.keys() {
+            if !self.entity_to_body.contains_key(entity) {
+                entities.push(*entity);
+            }
+        }
+        entities
+    }
+
     /// Step the physics simulation
     pub fn step(&mut self, delta_time: f32) {
         self.integration_parameters.dt = delta_time;

@@ -57,9 +57,10 @@ pub struct GameContext<'a> {
     pub delta_time: f32,
     /// Current window size
     pub window_size: Vec2,
-    /// Project-wide gameplay intensity theme (mirrored from `GameConfig`).
-    /// Games that let the player pick at runtime typically keep their own
-    /// field and ignore this one.
+    /// Project-wide gameplay intensity theme. Seeded from `GameConfig` and
+    /// **read-write**: assign to it when the player picks a mode at runtime
+    /// and the engine persists the change, so `ctx.chaos_mode` is always the
+    /// current selection on later frames (no stale startup value).
     pub chaos_mode: ChaosMode,
     /// Achievement / trophy manager. Register achievements in `init()`, then
     /// call `ctx.achievements.unlock("id")` from gameplay code.

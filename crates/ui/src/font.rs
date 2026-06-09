@@ -113,6 +113,14 @@ pub struct LayoutGlyph {
     pub info: GlyphInfo,
 }
 
+/// Maximum number of cached rasterized glyphs.
+///
+/// Dynamic text (scores, timers, animated sizes) keeps adding new
+/// (font, char, size) combinations forever; without a bound the cache grows
+/// for the lifetime of the process. When the limit is hit the cache is
+/// cleared and rebuilt from live text — a one-frame re-rasterization cost.
+const MAX_CACHED_GLYPHS: usize = 4096;
+
 /// Font manager for loading fonts and rasterizing glyphs.
 pub struct FontManager {
     /// Loaded fonts by handle
@@ -240,8 +248,22 @@ impl FontManager {
             font_size,
         };
 
+        self.evict_cache_if_full();
+
         self.glyph_cache.insert(key, glyph_info);
         Ok(self.glyph_cache.get(&key).unwrap())
+    }
+
+    /// Bound the glyph cache: evict everything once full rather than growing
+    /// without limit. Live text repopulates it within a frame.
+    fn evict_cache_if_full(&mut self) {
+        if self.glyph_cache.len() >= MAX_CACHED_GLYPHS {
+            log::debug!(
+                "Glyph cache reached {} entries; clearing",
+                self.glyph_cache.len()
+            );
+            self.glyph_cache.clear();
+        }
     }
 
     /// Layout a string of text, returning positions and glyph info for each character.
@@ -394,6 +416,56 @@ mod tests {
         assert_eq!(key1, key2);
         assert_ne!(key1, key3);
         assert_ne!(key1, key4);
+    }
+
+    #[test]
+    fn test_glyph_cache_evicts_when_full() {
+        let mut manager = FontManager::new();
+        let dummy = GlyphInfo {
+            rasterized: RasterizedGlyph {
+                bitmap: Vec::new(),
+                width: 0,
+                height: 0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                advance: 0.0,
+            },
+            character: 'a',
+            font_size: 16.0,
+        };
+        // Fill to the limit with unique keys (size_tenths varies per entry).
+        for i in 0..MAX_CACHED_GLYPHS {
+            let key = GlyphKey::new(1, 'a', i as f32 * 0.1);
+            manager.glyph_cache.insert(key, dummy.clone());
+        }
+        assert_eq!(manager.glyph_cache.len(), MAX_CACHED_GLYPHS);
+
+        manager.evict_cache_if_full();
+        assert!(
+            manager.glyph_cache.is_empty(),
+            "cache at the limit should be cleared, not grow further"
+        );
+    }
+
+    #[test]
+    fn test_glyph_cache_keeps_entries_below_limit() {
+        let mut manager = FontManager::new();
+        let dummy = GlyphInfo {
+            rasterized: RasterizedGlyph {
+                bitmap: Vec::new(),
+                width: 0,
+                height: 0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                advance: 0.0,
+            },
+            character: 'a',
+            font_size: 16.0,
+        };
+        manager.glyph_cache.insert(GlyphKey::new(1, 'a', 16.0), dummy);
+
+        manager.evict_cache_if_full();
+        assert_eq!(manager.glyph_cache.len(), 1, "below the limit nothing is evicted");
     }
 
     #[test]

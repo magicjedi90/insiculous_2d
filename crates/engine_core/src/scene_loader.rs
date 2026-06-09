@@ -118,15 +118,26 @@ impl SceneLoader {
                         named_entities.get(entity_name),
                         named_entities.get(parent_name),
                     ) {
-                        world.set_parent(entity_id, parent_id).ok();
+                        if let Err(e) = world.set_parent(entity_id, parent_id) {
+                            log::warn!(
+                                "Scene load: failed to parent '{}' under '{}': {}",
+                                entity_name, parent_name, e
+                            );
+                        }
 
                         // Add GlobalTransform2D component if the entity has Transform2D
                         if world.get::<Transform2D>(entity_id).is_some() {
-                            let _ = world.add_component(
-                                &entity_id,
+                            Self::add_component_logged(
+                                world,
+                                entity_id,
                                 ecs::hierarchy::GlobalTransform2D::default(),
                             );
                         }
+                    } else {
+                        log::warn!(
+                            "Scene load: entity '{}' references parent '{}' but one of them was not found by name",
+                            entity_name, parent_name
+                        );
                     }
                 }
             }
@@ -141,6 +152,24 @@ impl SceneLoader {
             entities,
             entity_count,
         })
+    }
+
+    /// Add a component during scene instantiation, logging failures (e.g.
+    /// duplicate components in a malformed scene file) instead of silently
+    /// dropping them and loading a half-formed entity.
+    fn add_component_logged<T: ecs::Component>(
+        world: &mut World,
+        entity_id: EntityId,
+        component: T,
+    ) {
+        if let Err(e) = world.add_component(&entity_id, component) {
+            log::warn!(
+                "Scene load: failed to add {} to entity {:?}: {}",
+                std::any::type_name::<T>(),
+                entity_id,
+                e
+            );
+        }
     }
 
     /// Recursively create an entity and its inline children
@@ -162,11 +191,16 @@ impl SceneLoader {
 
         // Set up parent relationship if specified
         if let Some(parent) = parent_id {
-            world.set_parent(entity_id, parent).ok();
+            if let Err(e) = world.set_parent(entity_id, parent) {
+                log::warn!(
+                    "Scene load: failed to parent entity {:?} under {:?}: {}",
+                    entity_id, parent, e
+                );
+            }
 
             // Add GlobalTransform2D component for hierarchical entities
             if world.get::<Transform2D>(entity_id).is_some() {
-                let _ = world.add_component(&entity_id, ecs::hierarchy::GlobalTransform2D::default());
+                Self::add_component_logged(world, entity_id, ecs::hierarchy::GlobalTransform2D::default());
             }
         }
 
@@ -296,7 +330,7 @@ impl SceneLoader {
                     rotation: *rotation,
                     scale: Vec2::new(scale.0, scale.1),
                 };
-                let _ = world.add_component(&entity_id, transform);
+                Self::add_component_logged(world, entity_id, transform);
             }
 
             ComponentData::Sprite {
@@ -319,7 +353,7 @@ impl SceneLoader {
                     emissive: 0.0,
                     tex_region: [0.0, 0.0, 1.0, 1.0],
                 };
-                let _ = world.add_component(&entity_id, sprite);
+                Self::add_component_logged(world, entity_id, sprite);
             }
 
             ComponentData::Camera2D {
@@ -338,7 +372,7 @@ impl SceneLoader {
                     near: -1000.0,
                     far: 1000.0,
                 };
-                let _ = world.add_component(&entity_id, camera);
+                Self::add_component_logged(world, entity_id, camera);
             }
 
             ComponentData::SpriteAnimation {
@@ -358,7 +392,7 @@ impl SceneLoader {
                     current_frame: 0,
                     time_accumulator: 0.0,
                 };
-                let _ = world.add_component(&entity_id, animation);
+                Self::add_component_logged(world, entity_id, animation);
             }
 
             ComponentData::RigidBody {
@@ -389,7 +423,7 @@ impl SceneLoader {
                     rigid_body.can_rotate = *can_rotate;
                     rigid_body.ccd_enabled = *ccd_enabled;
 
-                    let _ = world.add_component(&entity_id, rigid_body);
+                    Self::add_component_logged(world, entity_id, rigid_body);
                 }
 
                 #[cfg(not(feature = "physics"))]
@@ -441,7 +475,7 @@ impl SceneLoader {
                     collider.friction = *friction;
                     collider.restitution = *restitution;
 
-                    let _ = world.add_component(&entity_id, collider);
+                    Self::add_component_logged(world, entity_id, collider);
                 }
 
                 #[cfg(not(feature = "physics"))]
@@ -456,7 +490,7 @@ impl SceneLoader {
 
             ComponentData::Behavior(behavior_data) => {
                 let behavior: ecs::behavior::Behavior = behavior_data.into();
-                let _ = world.add_component(&entity_id, behavior);
+                Self::add_component_logged(world, entity_id, behavior);
             }
 
             ComponentData::Dynamic { component_type, data } => {

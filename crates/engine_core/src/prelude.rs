@@ -21,6 +21,8 @@ pub use crate::{
     particles::{Particle, ParticleConfig, ParticleEmitter, ParticleManager, ParticleSystem},
     // Spring-mass grid (Geometry-Wars style deforming background)
     grid::{GridImpulse, GridMesh},
+    // Debug-draw helpers (collider outlines, etc.)
+    debug,
     // Game loop
     game_loop::{GameLoop, GameLoopConfig},
     init,

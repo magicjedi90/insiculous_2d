@@ -44,6 +44,7 @@ pub mod chaos_mode;
 pub mod achievements;
 pub mod particles;
 pub mod grid;
+pub mod debug;
 
 pub mod prelude;
 

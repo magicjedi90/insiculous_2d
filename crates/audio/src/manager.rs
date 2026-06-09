@@ -24,6 +24,14 @@ struct ActiveSound {
     handle: SoundHandle,
 }
 
+/// Live connection to an audio output device.
+struct AudioOutput {
+    /// Audio output stream (must be kept alive).
+    _stream: OutputStream,
+    /// Handle to the output stream for creating sinks.
+    handle: OutputStreamHandle,
+}
+
 /// Manages audio playback for the game engine.
 ///
 /// The AudioManager handles:
@@ -31,11 +39,13 @@ struct ActiveSound {
 /// - Playing sounds with configurable settings
 /// - Managing active sound instances
 /// - Background music with crossfade
+///
+/// A manager can run in *disabled* mode (no audio device available): sounds
+/// still load and validate, playback calls succeed as no-ops. This keeps
+/// games runnable on headless machines and in CI.
 pub struct AudioManager {
-    /// Audio output stream (must be kept alive).
-    _stream: OutputStream,
-    /// Handle to the output stream for creating sinks.
-    stream_handle: OutputStreamHandle,
+    /// Output device connection. `None` means disabled mode — playback no-ops.
+    output: Option<AudioOutput>,
     /// Cached sound data by handle.
     sounds: HashMap<u32, SoundData>,
     /// Currently active sound instances.
@@ -60,16 +70,47 @@ impl AudioManager {
 
         log::debug!("Audio system initialized");
 
-        Ok(Self {
+        Ok(Self::with_output(Some(AudioOutput {
             _stream: stream,
-            stream_handle,
+            handle: stream_handle,
+        })))
+    }
+
+    /// Create a disabled audio manager that has no output device.
+    ///
+    /// Sounds can still be loaded (and are decode-validated); all playback
+    /// calls succeed silently. Use this when audio hardware is unavailable.
+    pub fn disabled() -> Self {
+        Self::with_output(None)
+    }
+
+    /// Create an audio manager, falling back to disabled mode if no audio
+    /// device is available. Never fails — the game keeps running either way.
+    pub fn new_or_disabled() -> Self {
+        match Self::new() {
+            Ok(manager) => manager,
+            Err(e) => {
+                log::warn!("Failed to initialize audio: {}. Audio will be disabled.", e);
+                Self::disabled()
+            }
+        }
+    }
+
+    /// Whether an output device is connected. `false` means playback no-ops.
+    pub fn is_enabled(&self) -> bool {
+        self.output.is_some()
+    }
+
+    fn with_output(output: Option<AudioOutput>) -> Self {
+        Self {
+            output,
             sounds: HashMap::new(),
             active_sounds: Vec::new(),
             music_sink: None,
             master_volume: 1.0,
             sfx_volume: 1.0,
             music_volume: 1.0,
-        })
+        }
     }
 
     /// Load a sound from a file path.
@@ -133,7 +174,12 @@ impl AudioManager {
         let sound_data = self.sounds.get(&handle.id)
             .ok_or(AudioError::InvalidHandle(handle.id))?;
 
-        let sink = Sink::try_new(&self.stream_handle)
+        // Disabled mode: handle was validated above, playback is a no-op.
+        let Some(output) = &self.output else {
+            return Ok(());
+        };
+
+        let sink = Sink::try_new(&output.handle)
             .map_err(|e| AudioError::StreamError(e.to_string()))?;
 
         // Create a decoder from the cached bytes
@@ -184,7 +230,12 @@ impl AudioManager {
         let source = Decoder::new(BufReader::new(file))
             .map_err(|e| AudioError::DecodeError(format!("{}: {}", path.display(), e)))?;
 
-        let sink = Sink::try_new(&self.stream_handle)
+        // Disabled mode: file was validated above, playback is a no-op.
+        let Some(output) = &self.output else {
+            return Ok(());
+        };
+
+        let sink = Sink::try_new(&output.handle)
             .map_err(|e| AudioError::StreamError(e.to_string()))?;
 
         let effective_volume = volume * self.music_volume * self.master_volume;
@@ -327,5 +378,61 @@ mod tests {
         let handle1 = SoundHandle::new();
         let handle2 = SoundHandle::new();
         assert_ne!(handle1.id, handle2.id);
+    }
+
+    /// Minimal valid WAV file (44-byte header + one silent 16-bit sample).
+    fn tiny_wav() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&38u32.to_le_bytes()); // chunk size
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
+        bytes.extend_from_slice(&44100u32.to_le_bytes()); // sample rate
+        bytes.extend_from_slice(&88200u32.to_le_bytes()); // byte rate
+        bytes.extend_from_slice(&2u16.to_le_bytes()); // block align
+        bytes.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&2u32.to_le_bytes()); // data size
+        bytes.extend_from_slice(&0i16.to_le_bytes()); // one silent sample
+        bytes
+    }
+
+    #[test]
+    fn test_disabled_manager_reports_not_enabled() {
+        let manager = AudioManager::disabled();
+        assert!(!manager.is_enabled());
+    }
+
+    #[test]
+    fn test_disabled_manager_loads_and_plays_as_noop() {
+        let mut manager = AudioManager::disabled();
+        let handle = manager.load_sound_from_bytes(tiny_wav()).unwrap();
+        assert!(manager.play(&handle).is_ok());
+        assert_eq!(manager.active_sound_count(), 0, "no-op playback must not track sinks");
+    }
+
+    #[test]
+    fn test_disabled_manager_still_rejects_invalid_handles() {
+        let mut manager = AudioManager::disabled();
+        let bogus = SoundHandle::new();
+        assert!(manager.play(&bogus).is_err());
+    }
+
+    #[test]
+    fn test_disabled_manager_music_controls_are_safe() {
+        let mut manager = AudioManager::disabled();
+        manager.stop_music();
+        manager.pause_music();
+        manager.resume_music();
+        assert!(!manager.is_music_playing());
+        manager.update();
+    }
+
+    #[test]
+    fn test_new_or_disabled_never_fails() {
+        // With or without an audio device, construction must succeed.
+        let _manager = AudioManager::new_or_disabled();
     }
 }

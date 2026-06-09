@@ -141,6 +141,7 @@ impl AssetManager {
         config: TextureLoadConfig,
     ) -> Result<TextureHandle, AssetError> {
         let path = path.as_ref();
+        let original_path_string = path.to_string_lossy().to_string();
         let full_path = if path.is_relative() {
             Path::new(&self.config.base_path).join(path)
         } else {
@@ -152,6 +153,7 @@ impl AssetManager {
         }
 
         let handle = self.texture_manager.load_texture(&full_path, config)?;
+        self.handle_to_path.insert(handle.id, original_path_string);
 
         Ok(handle)
     }
