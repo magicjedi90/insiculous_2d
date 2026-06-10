@@ -3,6 +3,29 @@
 // Re-export Color from common crate
 pub use common::Color;
 
+/// Named palette constants shared by the style defaults so each color is
+/// defined exactly once per theme.
+mod palette {
+    pub mod dark {
+        pub const SURFACE: u32 = 0x3A3A3A;
+        pub const SURFACE_HOVERED: u32 = 0x4A4A4A;
+        pub const SURFACE_PRESSED: u32 = 0x2A2A2A;
+        pub const BORDER: u32 = 0x5A5A5A;
+        pub const BORDER_SUBTLE: u32 = 0x4A4A4A;
+        pub const ACCENT: u32 = 0x4A90D9;
+    }
+    pub mod light {
+        pub const SURFACE: u32 = 0xE0E0E0;
+        pub const SURFACE_HOVERED: u32 = 0xD0D0D0;
+        pub const SURFACE_PRESSED: u32 = 0xC0C0C0;
+        pub const SURFACE_DISABLED: u32 = 0xF0F0F0;
+        pub const PANEL: u32 = 0xF5F5F5;
+        pub const BORDER: u32 = 0xB0B0B0;
+        pub const BORDER_SUBTLE: u32 = 0xD0D0D0;
+        pub const ACCENT: u32 = 0x4A90D9;
+    }
+}
+
 /// Style configuration for buttons.
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
@@ -30,12 +53,13 @@ pub struct ButtonStyle {
 
 impl Default for ButtonStyle {
     fn default() -> Self {
+        use palette::dark;
         Self {
-            background: Color::from_hex(0x3A3A3A),
-            background_hovered: Color::from_hex(0x4A4A4A),
-            background_pressed: Color::from_hex(0x2A2A2A),
-            background_disabled: Color::from_hex(0x2A2A2A),
-            border: Color::from_hex(0x5A5A5A),
+            background: Color::from_hex(dark::SURFACE),
+            background_hovered: Color::from_hex(dark::SURFACE_HOVERED),
+            background_pressed: Color::from_hex(dark::SURFACE_PRESSED),
+            background_disabled: Color::from_hex(dark::SURFACE_PRESSED),
+            border: Color::from_hex(dark::BORDER),
             border_width: 1.0,
             corner_radius: 4.0,
             text_color: Color::WHITE,
@@ -62,9 +86,10 @@ pub struct PanelStyle {
 
 impl Default for PanelStyle {
     fn default() -> Self {
+        use palette::dark;
         Self {
-            background: Color::from_hex(0x2A2A2A).with_alpha(0.9),
-            border: Color::from_hex(0x4A4A4A),
+            background: Color::from_hex(dark::SURFACE_PRESSED).with_alpha(0.9),
+            border: Color::from_hex(dark::BORDER_SUBTLE),
             border_width: 1.0,
             corner_radius: 4.0,
             padding: 8.0,
@@ -93,14 +118,54 @@ pub struct SliderStyle {
 
 impl Default for SliderStyle {
     fn default() -> Self {
+        use palette::dark;
         Self {
-            track_background: Color::from_hex(0x3A3A3A),
-            track_fill: Color::from_hex(0x4A90D9),
+            track_background: Color::from_hex(dark::SURFACE),
+            track_fill: Color::from_hex(dark::ACCENT),
             track_height: 6.0,
             thumb_color: Color::WHITE,
             thumb_hovered: Color::LIGHT_GRAY,
-            thumb_pressed: Color::from_hex(0x4A90D9),
+            thumb_pressed: Color::from_hex(dark::ACCENT),
             thumb_radius: 8.0,
+        }
+    }
+}
+
+/// Style configuration for text input fields (e.g. `float_input`).
+#[derive(Debug, Clone)]
+pub struct TextInputStyle {
+    /// Background color in normal state
+    pub background: Color,
+    /// Background color when hovered or focused
+    pub background_focused: Color,
+    /// Border color in normal state
+    pub border: Color,
+    /// Border color when hovered or focused
+    pub border_focused: Color,
+    /// Border width in pixels
+    pub border_width: f32,
+    /// Corner radius in pixels
+    pub corner_radius: f32,
+    /// Text color
+    pub text_color: Color,
+    /// Font size in pixels
+    pub font_size: f32,
+    /// Horizontal padding between the border and the text
+    pub padding: f32,
+}
+
+impl Default for TextInputStyle {
+    fn default() -> Self {
+        Self {
+            background: Color::new(0.15, 0.15, 0.18, 1.0),
+            background_focused: Color::new(0.2, 0.2, 0.25, 1.0),
+            border: Color::new(0.3, 0.3, 0.35, 1.0),
+            border_focused: Color::new(0.4, 0.6, 1.0, 1.0),
+            border_width: 1.0,
+            corner_radius: 2.0,
+            text_color: Color::WHITE,
+            font_size: 13.0,
+            padding: 4.0,
         }
     }
 }
@@ -138,6 +203,8 @@ pub struct Theme {
     pub slider: SliderStyle,
     /// Text style
     pub text: TextStyle,
+    /// Text input style
+    pub text_input: TextInputStyle,
 }
 
 
@@ -149,13 +216,14 @@ impl Theme {
 
     /// Create a light theme.
     pub fn light() -> Self {
+        use palette::light;
         Self {
             button: ButtonStyle {
-                background: Color::from_hex(0xE0E0E0),
-                background_hovered: Color::from_hex(0xD0D0D0),
-                background_pressed: Color::from_hex(0xC0C0C0),
-                background_disabled: Color::from_hex(0xF0F0F0),
-                border: Color::from_hex(0xB0B0B0),
+                background: Color::from_hex(light::SURFACE),
+                background_hovered: Color::from_hex(light::SURFACE_HOVERED),
+                background_pressed: Color::from_hex(light::SURFACE_PRESSED),
+                background_disabled: Color::from_hex(light::SURFACE_DISABLED),
+                border: Color::from_hex(light::BORDER),
                 border_width: 1.0,
                 corner_radius: 4.0,
                 text_color: Color::BLACK,
@@ -163,25 +231,36 @@ impl Theme {
                 padding: 8.0,
             },
             panel: PanelStyle {
-                background: Color::from_hex(0xF5F5F5).with_alpha(0.95),
-                border: Color::from_hex(0xD0D0D0),
+                background: Color::from_hex(light::PANEL).with_alpha(0.95),
+                border: Color::from_hex(light::BORDER_SUBTLE),
                 border_width: 1.0,
                 corner_radius: 4.0,
                 padding: 8.0,
             },
             slider: SliderStyle {
-                track_background: Color::from_hex(0xD0D0D0),
-                track_fill: Color::from_hex(0x4A90D9),
+                track_background: Color::from_hex(light::SURFACE_HOVERED),
+                track_fill: Color::from_hex(light::ACCENT),
                 track_height: 6.0,
                 thumb_color: Color::WHITE,
-                thumb_hovered: Color::from_hex(0xF0F0F0),
-                thumb_pressed: Color::from_hex(0x4A90D9),
+                thumb_hovered: Color::from_hex(light::SURFACE_DISABLED),
+                thumb_pressed: Color::from_hex(light::ACCENT),
                 thumb_radius: 8.0,
             },
             text: TextStyle {
                 color: Color::BLACK,
                 font_size: 16.0,
                 line_height: 1.2,
+            },
+            text_input: TextInputStyle {
+                background: Color::from_hex(light::PANEL),
+                background_focused: Color::WHITE,
+                border: Color::from_hex(light::BORDER),
+                border_focused: Color::from_hex(light::ACCENT),
+                border_width: 1.0,
+                corner_radius: 2.0,
+                text_color: Color::BLACK,
+                font_size: 13.0,
+                padding: 4.0,
             },
         }
     }

@@ -13,18 +13,17 @@ ui.end_frame(); // collects draw commands
 ```
 
 ## File Map
-- `context.rs` — UIContext, widget methods (button, slider, label, panel, text_input, float_input)
-- `font.rs` — FontManager (loading, rasterization, glyph cache, layout)
-- `draw.rs` — Draw command generation
-- `interaction.rs` — Widget state, mouse hit detection
-- `rect.rs` — UIRect layout utilities
-- `style.rs` — Color, Theme definitions
+- `context.rs` — UIContext, widget methods (button, slider, label, panel, checkbox, float_input)
+- `font.rs` — FontManager (loading, rasterization, glyph cache, layout); bitmaps shared via `Arc<[u8]>`
+- `draw.rs` — Draw command generation (`Rect` re-exported from `common`)
+- `interaction.rs` — Widget state, mouse hit detection, focus, per-widget persistent state
+- `style.rs` — Theme definitions (`Color` re-exported from `common`), private palette consts
 
 ## Known Tech Debt
-- FontManager has too many responsibilities (load + raster + cache + layout)
+- See `TECH_DEBT.md` — open: FontManager responsibilities (SRP-001), context.rs over 600-line rule (SRP-002), numeric-only text input (JUN-T1)
 
 ## Testing
-- 60 tests, run with `cargo test -p ui`
+- 68 tests, run with `cargo test -p ui`
 
 ## Godot Oracle
 - Immediate-mode patterns: Godot doesn't use immediate-mode, but see `scene/gui/control.cpp` for widget lifecycle

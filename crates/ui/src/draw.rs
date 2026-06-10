@@ -3,14 +3,18 @@
 //! This module defines the draw primitives that the UI system generates.
 //! These are converted to sprites by the renderer integration layer.
 
+use std::sync::Arc;
 use glam::Vec2;
 use crate::{Color, Rect};
 
 /// Data for rendering a single glyph.
+///
+/// The bitmap is shared with the font glyph cache via `Arc` — cloning draw
+/// data never copies pixel data.
 #[derive(Debug, Clone)]
 pub struct GlyphDrawData {
     /// Glyph bitmap data (grayscale, one byte per pixel)
-    pub bitmap: Vec<u8>,
+    pub bitmap: Arc<[u8]>,
     /// Width of the glyph bitmap
     pub width: u32,
     /// Height of the glyph bitmap
@@ -98,7 +102,12 @@ pub enum DrawCommand {
 }
 
 impl DrawCommand {
-    /// Get the depth of this draw command for sorting.
+    /// Get the depth assigned to this draw command.
+    ///
+    /// Depth increases with submission order and is intended for the renderer's
+    /// depth buffer, not for reordering. Commands MUST be consumed in submission
+    /// order: clip commands (`PushClipRect`/`PopClipRect`) carry no depth and
+    /// sorting by depth would tear clip pairs apart.
     pub fn depth(&self) -> f32 {
         match self {
             DrawCommand::Rect { depth, .. } => *depth,
@@ -113,12 +122,14 @@ impl DrawCommand {
     }
 }
 
+/// Base depth for UI draw commands: UI renders on top of game content
+/// (< camera far=1000).
+const UI_BASE_DEPTH: f32 = 900.0;
+
 /// A draw list that collects all UI draw commands for a frame.
 #[derive(Debug, Clone, Default)]
 pub struct DrawList {
     commands: Vec<DrawCommand>,
-    /// Base depth for all commands in this list
-    base_depth: f32,
 }
 
 impl DrawList {
@@ -126,15 +137,6 @@ impl DrawList {
     pub fn new() -> Self {
         Self {
             commands: Vec::new(),
-            base_depth: 900.0, // UI renders on top of game content (< camera far=1000)
-        }
-    }
-
-    /// Create a new draw list with a custom base depth.
-    pub fn with_base_depth(base_depth: f32) -> Self {
-        Self {
-            commands: Vec::new(),
-            base_depth,
         }
     }
 
@@ -142,7 +144,7 @@ impl DrawList {
     /// Each command gets slightly increasing depth to maintain draw order.
     #[inline]
     fn next_depth(&self) -> f32 {
-        self.base_depth + self.commands.len() as f32 * 0.001
+        UI_BASE_DEPTH + self.commands.len() as f32 * 0.001
     }
 
     /// Clear all draw commands.
@@ -215,26 +217,6 @@ impl DrawList {
         });
     }
 
-    /// Add text - convenience method that takes raw parameters.
-    /// Creates a TextDrawData with empty glyphs (use text() with TextDrawData for actual rendering).
-    pub fn text_simple(&mut self, text: impl Into<String>, position: Vec2, color: Color, font_size: f32) {
-        let text_str = text.into();
-        // Estimate width based on character count (rough approximation)
-        let estimated_width = text_str.len() as f32 * font_size * 0.6;
-        self.commands.push(DrawCommand::Text {
-            data: TextDrawData {
-                text: text_str,
-                position,
-                color,
-                font_size,
-                width: estimated_width,
-                height: font_size,
-                glyphs: Vec::new(), // Empty - will be rendered as placeholder if no glyphs
-            },
-            depth: self.next_depth(),
-        });
-    }
-
     /// Add a filled circle.
     pub fn circle(&mut self, center: Vec2, radius: f32, color: Color) {
         self.commands.push(DrawCommand::Circle {
@@ -275,15 +257,6 @@ impl DrawList {
         if border_width > 0.0 {
             self.rect_border_rounded(bounds, border, border_width, corner_radius);
         }
-    }
-
-    /// Draw a button.
-    #[allow(clippy::too_many_arguments)]
-    pub fn button(&mut self, bounds: Rect, background: Color, border: Color, border_width: f32, corner_radius: f32, label: &str, text_color: Color, font_size: f32) {
-        self.panel(bounds, background, border, border_width, corner_radius);
-        // Center text in button
-        let text_pos = bounds.center();
-        self.text_placeholder(label, text_pos, text_color, font_size);
     }
 
     /// Draw a slider track and thumb.
@@ -344,21 +317,6 @@ mod tests {
     }
 
     #[test]
-    fn test_draw_list_text_simple() {
-        let mut list = DrawList::new();
-        list.text_simple("Hello", Vec2::new(10.0, 20.0), Color::WHITE, 16.0);
-
-        if let DrawCommand::Text { data, .. } = &list.commands()[0] {
-            assert_eq!(data.text, "Hello");
-            assert_eq!(data.position, Vec2::new(10.0, 20.0));
-            assert_eq!(data.font_size, 16.0);
-            assert!(data.glyphs.is_empty()); // text_simple creates empty glyphs
-        } else {
-            panic!("Expected Text command");
-        }
-    }
-
-    #[test]
     fn test_draw_list_text_placeholder() {
         let mut list = DrawList::new();
         list.text_placeholder("World", Vec2::new(50.0, 60.0), Color::RED, 24.0);
@@ -385,7 +343,7 @@ mod tests {
             height: 32.0,
             glyphs: vec![
                 GlyphDrawData {
-                    bitmap: vec![255; 16],
+                    bitmap: Arc::from([255u8; 16]),
                     width: 4,
                     height: 4,
                     x: 0.0,

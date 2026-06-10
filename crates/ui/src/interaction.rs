@@ -100,10 +100,6 @@ impl Default for InteractionResult {
 pub struct WidgetPersistentState {
     /// Whether the widget was seen this frame (for garbage collection)
     pub seen_this_frame: bool,
-    /// Custom float value (e.g., slider position, scroll offset)
-    pub float_value: f32,
-    /// Custom boolean value (e.g., checkbox state, expanded state)
-    pub bool_value: bool,
     /// Custom string value (e.g., text input content)
     pub string_value: String,
 }
@@ -287,9 +283,12 @@ impl InteractionManager {
             self.active_widget = None;
         }
 
-        // Garbage collect persistent state for widgets not seen this frame
-        // Only remove after several frames of not being seen (allows for animation, etc.)
-        self.persistent_state.retain(|_, state| state.seen_this_frame);
+        // Garbage collect persistent state for widgets not submitted this frame.
+        // The focused widget's state is kept even when unseen so a text input
+        // doesn't lose its edit buffer if its panel skips a frame.
+        let focus = self.focus_widget;
+        self.persistent_state
+            .retain(|id, state| state.seen_this_frame || focus == Some(*id));
     }
 
     /// Get the current input state.
@@ -387,21 +386,6 @@ impl InteractionManager {
         }
     }
 
-    /// Process interaction for a draggable widget (like a slider thumb).
-    /// Returns the drag delta if dragging.
-    pub fn interact_draggable(&mut self, id: WidgetId, bounds: Rect, enabled: bool) -> (InteractionResult, Option<Vec2>) {
-        let result = self.interact(id, bounds, enabled);
-
-        let drag_delta = if result.dragging {
-            // Calculate drag delta from previous frame position
-            // For now, just use the current mouse position relative to bounds center
-            Some(self.input.mouse_pos - bounds.center())
-        } else {
-            None
-        };
-
-        (result, drag_delta)
-    }
 }
 
 #[cfg(test)]
@@ -456,14 +440,44 @@ mod tests {
         let id = WidgetId::from_str("test_widget");
 
         let state = manager.get_state(id);
-        state.float_value = 42.0;
-        state.bool_value = true;
         state.string_value = "hello".to_string();
 
         let state = manager.get_state_if_exists(id).unwrap();
-        assert_eq!(state.float_value, 42.0);
-        assert!(state.bool_value);
+        assert!(state.seen_this_frame);
         assert_eq!(state.string_value, "hello");
+    }
+
+    #[test]
+    fn test_unseen_widget_state_is_garbage_collected() {
+        let mut manager = InteractionManager::new();
+        let id = WidgetId::from_str("transient");
+
+        manager.get_state(id).string_value = "data".to_string();
+        manager.end_frame();
+        assert!(manager.get_state_if_exists(id).is_some(), "seen state survives the frame");
+
+        // Next frame: widget never submitted
+        manager.begin_frame(&InputHandler::new());
+        manager.end_frame();
+        assert!(manager.get_state_if_exists(id).is_none(), "unseen state is collected");
+    }
+
+    #[test]
+    fn test_focused_widget_state_survives_unseen_frame() {
+        let mut manager = InteractionManager::new();
+        let id = WidgetId::from_str("text_input");
+
+        manager.get_state(id).string_value = "editing".to_string();
+        manager.set_focus(id);
+        manager.end_frame();
+
+        // Next frame: widget not submitted (e.g., panel skipped a frame),
+        // but it holds focus so its edit buffer must be retained.
+        manager.begin_frame(&InputHandler::new());
+        manager.end_frame();
+
+        let state = manager.get_state_if_exists(id).expect("focused state retained");
+        assert_eq!(state.string_value, "editing");
     }
 
     #[test]

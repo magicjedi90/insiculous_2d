@@ -4,6 +4,7 @@
 //! using the fontdue library for CPU-side font rendering.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use fontdue::{Font, FontSettings};
 use glam::Vec2;
 
@@ -43,10 +44,13 @@ pub struct FontMetrics {
 
 
 /// Rasterized glyph data ready for rendering.
+///
+/// The bitmap is shared via `Arc` so cloning a glyph (cache → layout → draw
+/// command) never copies pixel data.
 #[derive(Debug, Clone)]
 pub struct RasterizedGlyph {
     /// Glyph bitmap data (grayscale, one byte per pixel)
-    pub bitmap: Vec<u8>,
+    pub bitmap: Arc<[u8]>,
     /// Width of the bitmap in pixels
     pub width: u32,
     /// Height of the bitmap in pixels
@@ -175,14 +179,6 @@ impl FontManager {
         self.load_font(&font_data)
     }
 
-    /// Load the embedded default font (a simple built-in font for fallback).
-    /// This uses a subset of the Roboto font embedded in the binary.
-    pub fn load_default_font(&mut self) -> Result<FontHandle, FontError> {
-        // Use a simple embedded font - we'll embed a minimal font
-        // For now, return an error if no font data is available
-        Err(FontError::LoadError("No embedded font available. Load a TTF/OTF file.".to_string()))
-    }
-
     /// Get the default font handle.
     pub fn default_font(&self) -> Option<FontHandle> {
         self.default_font
@@ -221,37 +217,36 @@ impl FontManager {
     ) -> Result<&GlyphInfo, FontError> {
         let key = GlyphKey::new(handle.id, character, font_size);
 
-        // Check cache first
-        if self.glyph_cache.contains_key(&key) {
-            return Ok(self.glyph_cache.get(&key).unwrap());
+        // Cache miss: rasterize before inserting (eviction may clear the map,
+        // so the entry API can't be combined with the fallible font lookup).
+        if !self.glyph_cache.contains_key(&key) {
+            let font = self.fonts.get(&handle.id)
+                .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
+
+            let (metrics, bitmap) = font.rasterize(character, font_size);
+
+            let glyph_info = GlyphInfo {
+                rasterized: RasterizedGlyph {
+                    bitmap: bitmap.into(),
+                    width: metrics.width as u32,
+                    height: metrics.height as u32,
+                    offset_x: metrics.xmin as f32,
+                    // Convert from fontdue coords (ymin = bottom of glyph, +Y = up)
+                    // to UI coords (offset_y = top of glyph relative to baseline, +Y = down)
+                    // Top in fontdue = ymin + height, flip sign for UI = -(ymin + height)
+                    offset_y: -(metrics.ymin as f32 + metrics.height as f32),
+                    advance: metrics.advance_width,
+                },
+                character,
+                font_size,
+            };
+
+            self.evict_cache_if_full();
+            self.glyph_cache.insert(key, glyph_info);
         }
 
-        // Rasterize the glyph
-        let font = self.fonts.get(&handle.id)
-            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
-
-        let (metrics, bitmap) = font.rasterize(character, font_size);
-
-        let glyph_info = GlyphInfo {
-            rasterized: RasterizedGlyph {
-                bitmap,
-                width: metrics.width as u32,
-                height: metrics.height as u32,
-                offset_x: metrics.xmin as f32,
-                // Convert from fontdue coords (ymin = bottom of glyph, +Y = up)
-                // to UI coords (offset_y = top of glyph relative to baseline, +Y = down)
-                // Top in fontdue = ymin + height, flip sign for UI = -(ymin + height)
-                offset_y: -(metrics.ymin as f32 + metrics.height as f32),
-                advance: metrics.advance_width,
-            },
-            character,
-            font_size,
-        };
-
-        self.evict_cache_if_full();
-
-        self.glyph_cache.insert(key, glyph_info);
-        Ok(self.glyph_cache.get(&key).unwrap())
+        self.glyph_cache.get(&key)
+            .ok_or_else(|| FontError::RasterizeError(format!("Glyph cache lookup failed for '{}'", character)))
     }
 
     /// Bound the glyph cache: evict everything once full rather than growing
@@ -283,21 +278,15 @@ impl FontManager {
         text: &str,
         font_size: f32,
     ) -> Result<TextLayout, FontError> {
-        // Verify font exists first
-        if !self.fonts.contains_key(&handle.id) {
-            return Err(FontError::NotFound(format!("Font {} not found", handle.id)));
-        }
+        let font = self.fonts.get(&handle.id)
+            .ok_or_else(|| FontError::NotFound(format!("Font {} not found", handle.id)))?;
 
-        // Get line metrics (need font reference)
-        let line_metrics = {
-            let font = self.fonts.get(&handle.id).unwrap();
-            font.horizontal_line_metrics(font_size).unwrap_or_else(|| fontdue::LineMetrics {
-                ascent: font_size * 0.8,
-                descent: font_size * -0.2,
-                line_gap: 0.0,
-                new_line_size: font_size * 1.2,
-            })
-        };
+        let line_metrics = font.horizontal_line_metrics(font_size).unwrap_or_else(|| fontdue::LineMetrics {
+            ascent: font_size * 0.8,
+            descent: font_size * -0.2,
+            line_gap: 0.0,
+            new_line_size: font_size * 1.2,
+        });
 
         let mut glyphs = Vec::new();
         let mut cursor_x = 0.0f32;
@@ -423,7 +412,7 @@ mod tests {
         let mut manager = FontManager::new();
         let dummy = GlyphInfo {
             rasterized: RasterizedGlyph {
-                bitmap: Vec::new(),
+                bitmap: Arc::from([]),
                 width: 0,
                 height: 0,
                 offset_x: 0.0,
@@ -452,7 +441,7 @@ mod tests {
         let mut manager = FontManager::new();
         let dummy = GlyphInfo {
             rasterized: RasterizedGlyph {
-                bitmap: Vec::new(),
+                bitmap: Arc::from([]),
                 width: 0,
                 height: 0,
                 offset_x: 0.0,
@@ -471,7 +460,7 @@ mod tests {
     #[test]
     fn test_rasterized_glyph() {
         let glyph = RasterizedGlyph {
-            bitmap: vec![255; 16],
+            bitmap: Arc::from([255u8; 16]),
             width: 4,
             height: 4,
             offset_x: 0.0,

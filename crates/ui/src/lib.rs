@@ -51,7 +51,7 @@ pub use interaction::{
     InputState, InteractionManager, InteractionResult, WidgetId, WidgetPersistentState, WidgetState,
 };
 pub use common::Rect;
-pub use style::{ButtonStyle, Color, PanelStyle, SliderStyle, TextStyle, Theme};
+pub use style::{ButtonStyle, Color, PanelStyle, SliderStyle, TextInputStyle, TextStyle, Theme};
 
 /// Prelude module for convenient imports.
 pub mod prelude {

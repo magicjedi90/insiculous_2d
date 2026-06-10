@@ -1,12 +1,13 @@
 # Technical Debt: ui
 
-Last audited: January 2026
+Last audited: June 2026
 
 ## Summary
-- DRY violations: 4 (3 resolved)
-- SRP violations: 2
-- KISS violations: 1
-- Architecture issues: 3 (2 resolved)
+- DRY violations: 7 (all resolved)
+- SRP violations: 2 (open: SRP-001 FontManager, SRP-002/context.rs size)
+- KISS violations: 1 (resolved)
+- Architecture issues: 3 (2 resolved, ARCH-003 open)
+- June 2026 audit: 10 new findings, 8 fixed, 2 tracked (see bottom)
 
 ---
 
@@ -36,17 +37,18 @@ Last audited: January 2026
   ```
 - **Resolved:** January 2026
 
-### [DRY-004] Repeated font check and placeholder fallback
+### ~~[DRY-004] Repeated font check and placeholder fallback~~ ✅ RESOLVED
 - **File:** `context.rs`
-- **Lines:** 211-249, 252-279
-- **Issue:** Both `label_styled()` and `label_with_font()` have similar structure:
-  1. Attempt font layout
-  2. On success: create TextDrawData and push
-  3. On failure: push placeholder
+- **Resolution:** The pattern had grown to 4 copies (`label_styled`, `label_with_font`,
+  `button_styled`, `draw_float_input_box`, plus `label_in_bounds`). Extracted:
+  - `draw_text_with_font(font: Option<FontHandle>, ...)` — the layout-or-placeholder tail
+  - `draw_text_at_baseline(...)` — same, with the default font
+  - `text_pos_in_bounds(text, bounds, align, font_size, padding)` — measure → align → vertically center → baseline
+  - `estimate_text_size(text, font_size)` — single home for the no-font character-count heuristic
+    (was 5 scattered copies of `len() * font_size * 0.6` / `* 0.3` / `* 0.8` magic numbers)
 
-  The main difference is `label_styled` checks for default font first.
-- **Suggested fix:** Create a private helper `fn render_text_with_font(&mut self, text: &str, position: Vec2, color: Color, font_size: f32, font: FontHandle)` that handles the common logic.
-- **Priority:** Medium
+  All text-drawing widgets now route through these helpers.
+- **Resolved:** June 2026
 
 ---
 
@@ -70,33 +72,25 @@ Last audited: January 2026
   - `GlyphCache` - Glyph caching
 - **Priority:** Medium (but working well, so low urgency)
 
-### [SRP-002] UIContext has large widget methods
-- **File:** `context.rs`
-- **Lines:** 153-479
-- **Issue:** `UIContext` has ~330 lines of widget methods. Each widget method does:
-  1. Interaction handling
-  2. Style lookup
-  3. State-based color selection
-  4. Draw command generation
-
-  While reasonable for immediate-mode UI, the file is large.
-- **Suggested fix:** Consider extracting widget implementations to a `widgets.rs` module with helper structs.
-- **Priority:** Low (idiomatic for immediate-mode UI)
+### [SRP-002] context.rs exceeds the 600-line project rule
+- **File:** `context.rs` (~990 lines, ~280 of which are inline tests)
+- **Issue:** The widget methods themselves are now short (June 2026 helper extraction),
+  but the file still violates the project's 600-line guideline.
+- **Suggested fix:** Split `impl UIContext` across modules — e.g. `text.rs` (label/measure
+  family) and `widgets.rs` (button/slider/checkbox/float_input) — and/or move the inline
+  test module to `tests/`. Pure mechanical move, no API change.
+- **Priority:** Medium (deferred from June 2026 audit by scope decision)
 
 ---
 
 ## KISS Violations
 
-### [KISS-001] WidgetPersistentState has unused flexibility
+### ~~[KISS-001] WidgetPersistentState has unused flexibility~~ ✅ RESOLVED
 - **File:** `interaction.rs`
-- **Lines:** 98-109
-- **Issue:** `WidgetPersistentState` stores generic values (`float_value`, `bool_value`, `string_value`) that can be used for any widget. However, this flexibility is only used for garbage collection (the `seen_this_frame` flag). The other fields are:
-  - Set in tests
-  - Never used by actual widgets
-
-  The slider stores its value in the caller, not in persistent state.
-- **Suggested fix:** Either use this for actual widget state persistence or simplify to just track widget lifetime.
-- **Priority:** Low (not causing problems)
+- **Resolution:** Deleted `float_value` and `bool_value` (set only in tests, never read by
+  widgets). Kept `string_value` (used by `float_input`'s edit buffer) and `seen_this_frame`
+  (GC flag).
+- **Resolved:** June 2026
 
 ---
 
@@ -148,15 +142,15 @@ These issues from ANALYSIS.md have been resolved:
 
 ## Metrics
 
-| Metric | Value |
-|--------|-------|
-| Total source files | 7 |
-| Total lines | ~1,500 |
-| Test coverage | 39 tests (100% pass rate) |
-| `#[allow(...)]` | 2 instances (clippy lints in draw.rs) |
+| Metric | Value (June 2026) |
+|--------|-------------------|
+| Total source files | 6 |
+| Total source lines | ~2,000 (incl. inline tests) |
+| Test coverage | 68 tests (100% pass rate) |
+| `#[allow(...)]` | 2 (`clippy::too_many_arguments` on `DrawList::slider`, `clippy::should_implement_trait` on `WidgetId::from_str`) |
 | High priority issues | 0 |
-| Medium priority issues | 3 |
-| Low priority issues | 6 |
+| Medium priority issues | 3 (SRP-001, SRP-002, JUN-T1) |
+| Low priority issues | 3 (ARCH-003, JUN-T2, JUN-T3) |
 
 ---
 
@@ -167,13 +161,15 @@ None required - the crate is well-structured with no high-priority issues.
 
 ### Short-term Improvements
 1. ~~**Fix DRY-001** - Extract glyph-to-draw-data conversion helper~~ ✅ DONE
-2. **Fix DRY-004** - Extract common text rendering logic
+2. ~~**Fix DRY-004** - Extract common text rendering logic~~ ✅ DONE (June 2026)
 3. ~~**Address ARCH-001** - Review glyph caching strategy with engine_core~~ ✅ RESOLVED
 
 ### Technical Debt Backlog
 - SRP-001: Consider FontManager refactoring if it grows
+- SRP-002: Split context.rs to satisfy the 600-line rule
 - ~~ARCH-002: Clean up rect.rs re-export~~ ✅ DONE
 - ARCH-003: Reduce TextDrawData redundancy
+- JUN-T1: General text input (character events)
 
 ---
 
@@ -219,8 +215,51 @@ The identified issues are mostly minor DRY violations and architectural consider
 - **Resolution:** Extracted `baseline_y(&self, text_top, font_size, font_handle) -> f32` helper method. Both `button_styled()` and `label_in_bounds()` now use this helper.
 - **Resolved:** February 2026
 
-### [DRY-007] Theme color hex values scattered
-- **File:** `src/style.rs:34-72`
-- **Issue:** Color constants duplicated between ButtonStyle, PanelStyle, and light theme defaults
-- **Suggested fix:** Define theme_colors constants module
-- **Priority:** Low | **Effort:** Small
+### ~~[DRY-007] Theme color hex values scattered~~ ✅ RESOLVED
+- **File:** `src/style.rs`
+- **Resolution:** Added a private `palette` module with named `dark`/`light` constants
+  (`SURFACE`, `SURFACE_HOVERED`, `BORDER`, `ACCENT`, …). All style `Default` impls and
+  `Theme::light()` now reference the palette; each hex value is defined once per theme.
+- **Resolved:** June 2026
+
+---
+
+## June 2026 Audit (DRY/SRP/KISS/best-practices/reusability)
+
+Scope decision: fix correctness, DRY, dead-code, and theming issues; defer structural
+splits (SRP-001, SRP-002) as tracked debt.
+
+### Fixed
+
+| ID | Issue | Resolution |
+|----|-------|------------|
+| JUN-001 | `unwrap()` outside tests in `font.rs` (`rasterize_glyph` double-lookup ×2, `layout_text` after `contains_key`) — violated workspace rule | Restructured around single fallible lookups with `ok_or_else` |
+| JUN-002 | Per-frame double glyph-bitmap clone: `layout_text` cloned `GlyphInfo` (incl. `Vec<u8>` bitmap) per glyph, then `layout_to_draw_data` cloned the bitmap again — two heap copies per glyph per label per frame | `RasterizedGlyph.bitmap` and `GlyphDrawData.bitmap` are now `Arc<[u8]>`; clones are O(1) refcount bumps. Downstream `&glyph.bitmap` coerces to `&[u8]` unchanged |
+| JUN-003 | Persistent-state GC dropped a focused widget's state (e.g. `float_input` edit buffer) the moment it skipped a frame; comment falsely claimed a multi-frame grace period | `end_frame` retains the focused widget's state even when unseen; comment now describes the real policy. Regression tests added |
+| JUN-004 | `DrawCommand::depth()` returns `0.0` for clip commands — sorting by depth would tear `PushClipRect`/`PopClipRect` pairs apart | Documented the consume-in-submission-order contract on `depth()` (current consumer `engine_core::ui_integration` already iterates in order) |
+| JUN-005 | Dead public API with zero workspace callers | Deleted: `DrawList::button()`, `DrawList::text_simple()` (fake `Text` with empty glyphs), `DrawList::with_base_depth()` (base depth folded into `UI_BASE_DEPTH` const), `InteractionManager::interact_draggable()` (misleading "delta" = offset-from-center), `FontManager::load_default_font()` (stub that always errored) |
+| JUN-006 | `float_input` duplicated commit logic ×3 (parse + clamp + unfocus + draw + return) inside an 80-line state machine | Extracted `commit_float_input()` and `draw_float_value()`; Enter/Tab and click-outside share one path |
+| JUN-007 | Theme bypass: `draw_float_input_box` hardcoded 4 colors, `font_size 13.0`, `padding 4.0`; `label_in_bounds`/`checkbox_labeled` hardcoded `8.0` padding — widgets couldn't be reskinned via `Theme` | Added `TextInputStyle` to `Theme` (dark + light variants); paddings routed through `theme.panel.padding` / `theme.button.padding` |
+| JUN-008 | Cosmetic: `font_metrics` returned `crate::font::FontMetrics` instead of the re-export; pre-existing clippy lints in tests (`len() >= 1`, `3.14` approx-PI) | Fixed |
+
+### New tracked items
+
+### [JUN-T1] Text input is numeric-only and keyboard-layout-blind
+- **File:** `interaction.rs` (`keycode_to_char`, `InputState::from_input_handler`)
+- **Issue:** `InputState` synthesizes typed characters from a hardcoded list of digit/period/minus
+  keycodes. General text input (entity names, search boxes) is impossible, and the physical-key →
+  char mapping ignores keyboard layouts. A real text widget needs winit character events plumbed
+  through `InputHandler`.
+- **Priority:** Medium (blocks editor rename/search widgets) | **Effort:** Medium (input crate change)
+
+### [JUN-T2] `scroll_delta` is captured but no widget consumes it
+- **File:** `interaction.rs`
+- **Issue:** `InputState.scroll_delta` is snapshotted every frame but there is no scroll-area
+  widget; consumers (editor panels) implement their own scrolling.
+- **Suggested fix:** Either add a `scroll_area` widget or drop the field until one exists.
+- **Priority:** Low
+
+### [JUN-T3] No layout helpers
+- **Issue:** Every caller hand-places absolute `Rect`s; there is no row/column/anchor layout.
+  Fine for the current consumers, but a reusability gap for game UIs at scale. Phase 2+ concern.
+- **Priority:** Low (roadmap)
