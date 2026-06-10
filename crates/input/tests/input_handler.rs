@@ -70,8 +70,7 @@ fn test_mouse_access() {
     // Assert that the position was updated
     assert_eq!(mouse_mut.position().x, 10.0);
     assert_eq!(mouse_mut.position().y, 20.0);
-    assert_eq!(mouse_mut.previous_position().x, 0.0);
-    assert_eq!(mouse_mut.previous_position().y, 0.0);
+    assert_eq!(mouse_mut.movement_delta(), (10.0, 20.0));
 }
 
 #[test]

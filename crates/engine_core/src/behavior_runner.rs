@@ -11,8 +11,7 @@ use glam::Vec2;
 use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::sprite_components::Transform2D;
 use ecs::{EntityId, World};
-use input::GameAction;
-use input::InputHandler;
+use input::{GameAction, InputHandler, InputMapping};
 use physics::{PhysicsSystem, RigidBody, RigidBodyType};
 
 /// Event emitted when a collectible entity is picked up.
@@ -56,6 +55,8 @@ pub struct EntityCollected {
 pub struct BehaviorRunner {
     /// Named entity lookup (populated from SceneInstance)
     named_entities: HashMap<String, EntityId>,
+    /// Action bindings for input-driven behaviors (engine default preset)
+    actions: InputMapping<GameAction>,
 }
 
 impl Default for BehaviorRunner {
@@ -65,11 +66,18 @@ impl Default for BehaviorRunner {
 }
 
 impl BehaviorRunner {
-    /// Create a new behavior runner
+    /// Create a new behavior runner with the engine's default action bindings
     pub fn new() -> Self {
         Self {
             named_entities: HashMap::new(),
+            actions: InputMapping::with_default_bindings(),
         }
+    }
+
+    /// Get a mutable reference to the action bindings used by input-driven
+    /// behaviors (e.g. to rebind `PlayerControlled` movement keys)
+    pub fn actions_mut(&mut self) -> &mut InputMapping<GameAction> {
+        &mut self.actions
     }
 
     /// Set named entities from a SceneInstance
@@ -126,8 +134,8 @@ impl BehaviorRunner {
 
                         // Calculate horizontal velocity only - let physics handle Y (gravity + jumps)
                         let mut vel_x = 0.0;
-                        if input.is_action_active(&GameAction::MoveLeft) { vel_x = -move_speed; }
-                        if input.is_action_active(&GameAction::MoveRight) { vel_x = *move_speed; }
+                        if self.actions.is_active(GameAction::MoveLeft, input) { vel_x = -move_speed; }
+                        if self.actions.is_active(GameAction::MoveRight, input) { vel_x = *move_speed; }
 
                         // For platformers, only set X velocity - preserve Y for physics
                         if let Some(ref physics) = physics {
@@ -153,10 +161,10 @@ impl BehaviorRunner {
                 Behavior::PlayerTopDown { move_speed, tag } => {
                         // Calculate movement velocity from input
                         let mut vel = Vec2::ZERO;
-                        if input.is_action_active(&GameAction::MoveUp) { vel.y += *move_speed; }
-                        if input.is_action_active(&GameAction::MoveDown) { vel.y -= *move_speed; }
-                        if input.is_action_active(&GameAction::MoveLeft) { vel.x -= *move_speed; }
-                        if input.is_action_active(&GameAction::MoveRight) { vel.x += *move_speed; }
+                        if self.actions.is_active(GameAction::MoveUp, input) { vel.y += *move_speed; }
+                        if self.actions.is_active(GameAction::MoveDown, input) { vel.y -= *move_speed; }
+                        if self.actions.is_active(GameAction::MoveLeft, input) { vel.x -= *move_speed; }
+                        if self.actions.is_active(GameAction::MoveRight, input) { vel.x += *move_speed; }
 
                         // Normalize diagonal movement
                         if vel.length_squared() > 0.0 {

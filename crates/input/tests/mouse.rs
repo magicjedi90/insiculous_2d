@@ -13,44 +13,56 @@ fn test_mouse_state_creation() {
     assert!(!mouse.is_button_just_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_released(MouseButton::Left));
     assert_eq!(mouse.wheel_delta(), 0.0);
+    assert_eq!(mouse.movement_delta(), (0.0, 0.0));
 }
 
 #[test]
-fn test_mouse_position() {
-    // Test updating the mouse position
+fn test_mouse_position_updates_and_delta() {
     let mut mouse = MouseState::new();
 
     // Update the position
     mouse.update_position(10.0, 20.0);
 
-    // Assert that the position was updated
+    // Assert that the position was updated and the delta reflects the move
     assert_eq!(mouse.position().x, 10.0);
     assert_eq!(mouse.position().y, 20.0);
+    assert_eq!(mouse.movement_delta(), (10.0, 20.0));
+}
 
-    // The previous position should still be (0, 0)
-    assert_eq!(mouse.previous_position().x, 0.0);
-    assert_eq!(mouse.previous_position().y, 0.0);
+#[test]
+fn test_movement_delta_accumulates_within_frame() {
+    let mut mouse = MouseState::new();
 
-    // The movement delta should be (10, 20)
-    let (dx, dy) = mouse.movement_delta();
-    assert_eq!(dx, 10.0);
-    assert_eq!(dy, 20.0);
+    // Multiple move events in one frame (e.g. high polling rate mouse)
+    mouse.update_position(10.0, 0.0);
+    mouse.update_position(15.0, 5.0);
+    mouse.update_position(12.0, 8.0);
 
-    // Update the position again
-    mouse.update_position(15.0, 25.0);
+    // Delta should be the full frame movement, not just the last segment
+    assert_eq!(mouse.position().x, 12.0);
+    assert_eq!(mouse.position().y, 8.0);
+    assert_eq!(mouse.movement_delta(), (12.0, 8.0));
+}
 
-    // Assert that the position was updated
-    assert_eq!(mouse.position().x, 15.0);
-    assert_eq!(mouse.position().y, 25.0);
+#[test]
+fn test_movement_delta_resets_each_frame() {
+    let mut mouse = MouseState::new();
 
-    // The previous position should now be (10, 20)
-    assert_eq!(mouse.previous_position().x, 10.0);
-    assert_eq!(mouse.previous_position().y, 20.0);
+    // Move during frame 1
+    mouse.update_position(10.0, 20.0);
+    assert_eq!(mouse.movement_delta(), (10.0, 20.0));
 
-    // The movement delta should be (5, 5)
-    let (dx, dy) = mouse.movement_delta();
-    assert_eq!(dx, 5.0);
-    assert_eq!(dy, 5.0);
+    // End frame 1 — delta must reset even though the mouse stays still
+    mouse.clear_frame_state();
+    assert_eq!(mouse.movement_delta(), (0.0, 0.0));
+
+    // Frame 2 with no movement still reports zero delta
+    mouse.clear_frame_state();
+    assert_eq!(mouse.movement_delta(), (0.0, 0.0));
+
+    // Frame 3: a new move is measured relative to the current position
+    mouse.update_position(13.0, 24.0);
+    assert_eq!(mouse.movement_delta(), (3.0, 4.0));
 }
 
 #[test]
@@ -66,8 +78,8 @@ fn test_mouse_button_press_and_release() {
     assert!(mouse.is_button_just_pressed(MouseButton::Left));
     assert!(!mouse.is_button_just_released(MouseButton::Left));
 
-    // Update to clear the "just pressed" state
-    mouse.update();
+    // Clear per-frame state to reset the "just pressed" flag
+    mouse.clear_frame_state();
 
     // Assert that the button is still pressed but not just pressed
     assert!(mouse.is_button_pressed(MouseButton::Left));
@@ -82,8 +94,8 @@ fn test_mouse_button_press_and_release() {
     assert!(!mouse.is_button_just_pressed(MouseButton::Left));
     assert!(mouse.is_button_just_released(MouseButton::Left));
 
-    // Update to clear the "just released" state
-    mouse.update();
+    // Clear per-frame state to reset the "just released" flag
+    mouse.clear_frame_state();
 
     // Assert that the button is not pressed and not just released
     assert!(!mouse.is_button_pressed(MouseButton::Left));
@@ -102,10 +114,12 @@ fn test_mouse_wheel() {
     // Assert that the wheel delta was updated
     assert_eq!(mouse.wheel_delta(), 1.0);
 
-    // Update to clear the wheel delta
-    mouse.update();
+    // Multiple scroll events in one frame accumulate
+    mouse.update_wheel_delta(0.5);
+    assert_eq!(mouse.wheel_delta(), 1.5);
 
-    // Assert that the wheel delta was cleared
+    // End of frame clears the wheel delta
+    mouse.clear_frame_state();
     assert_eq!(mouse.wheel_delta(), 0.0);
 
     // Update the wheel delta again

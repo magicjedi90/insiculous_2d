@@ -1,29 +1,38 @@
 //! Unified input handling.
 //!
+//! [`InputHandler`] owns raw device state: keyboard, mouse, and gamepads.
+//! Semantic action mapping lives in [`crate::InputMapping`], which games own
+//! and evaluate against this handler's state.
+//!
 //! # Frame Lifecycle
 //!
 //! The input system follows a specific frame lifecycle:
 //!
 //! 1. **Event Collection** (automatic): Window events are queued via `handle_window_event()`
 //! 2. **Event Processing** (start of frame): Call `process_queued_events()` to update input state
-//! 3. **Game Logic**: Read input state via `is_key_pressed()`, `is_action_active()`, etc.
-//! 4. **State Reset** (end of frame): Call `end_frame()` to clear just_pressed/just_released flags
+//! 3. **Game Logic**: Read input state via `is_key_pressed()`, `InputMapping::is_active()`, etc.
+//! 4. **State Reset** (end of frame): Call `end_frame()` to clear per-frame state
+//!    (just_pressed/just_released flags, mouse movement and wheel deltas)
 //!
 //! ```ignore
 //! // Typical frame loop:
 //! input.process_queued_events();  // Process this frame's input
 //! // ... game logic reads input state ...
-//! input.end_frame();              // Clear just_pressed/just_released for next frame
+//! input.end_frame();              // Clear per-frame state for next frame
 //! ```
 //!
 //! For simple use cases, `update()` combines steps 2 and 4 into one call.
 
 use crate::gamepad::GamepadManager;
-use crate::keyboard::{KeyboardState, convert_physical_key};
+use crate::input_mapping::InputSource;
+use crate::keyboard::{convert_physical_key, KeyboardState};
 use crate::mouse::MouseState;
-use crate::input_mapping::{InputMapping, InputSource, GameAction};
-use winit::event::{WindowEvent, ElementState};
 use std::collections::VecDeque;
+use winit::event::{ElementState, WindowEvent};
+
+/// Approximate pixels per scroll "line", used to normalize trackpad/pixel
+/// scroll deltas to the same scale as mouse wheel line deltas.
+const SCROLL_PIXELS_PER_LINE: f32 = 16.0;
 
 /// Input events that can be queued for processing.
 ///
@@ -62,7 +71,7 @@ pub enum InputEvent {
     GamepadAxisUpdated(u32, crate::gamepad::GamepadAxis, f32),
 }
 
-/// A unified handler for all input types
+/// A unified handler for all input device state
 #[derive(Debug, Default)]
 pub struct InputHandler {
     /// Keyboard state
@@ -73,95 +82,53 @@ pub struct InputHandler {
     gamepads: GamepadManager,
     /// Event queue for buffering input events
     event_queue: VecDeque<InputEvent>,
-    /// Input mapping configuration
-    input_mapping: InputMapping,
 }
 
 impl InputHandler {
     /// Create a new input handler
     pub fn new() -> Self {
-        Self {
-            keyboard: KeyboardState::new(),
-            mouse: MouseState::new(),
-            gamepads: GamepadManager::new(),
-            event_queue: VecDeque::new(),
-            input_mapping: InputMapping::new(),
-        }
+        Self::default()
     }
 
-    /// Get a reference to the input mapping
-    pub fn input_mapping(&self) -> &InputMapping {
-        &self.input_mapping
-    }
-
-    /// Get a mutable reference to the input mapping
-    pub fn input_mapping_mut(&mut self) -> &mut InputMapping {
-        &mut self.input_mapping
-    }
-
-    // ================== Input Source Helpers ==================
+    // ================== Input Source Checks ==================
 
     /// Check if an input source is currently pressed
-    fn is_input_pressed(&self, source: &InputSource) -> bool {
+    pub fn is_source_pressed(&self, source: &InputSource) -> bool {
         match source {
             InputSource::Keyboard(key) => self.keyboard.is_key_pressed(*key),
             InputSource::Mouse(button) => self.mouse.is_button_pressed(*button),
             InputSource::Gamepad(id, button) => self
                 .gamepads
                 .get_gamepad(*id)
-                .map_or(false, |g| g.is_button_pressed(*button)),
+                .is_some_and(|g| g.is_button_pressed(*button)),
         }
     }
 
     /// Check if an input source was just pressed this frame
-    fn is_input_just_pressed(&self, source: &InputSource) -> bool {
+    pub fn is_source_just_pressed(&self, source: &InputSource) -> bool {
         match source {
             InputSource::Keyboard(key) => self.keyboard.is_key_just_pressed(*key),
             InputSource::Mouse(button) => self.mouse.is_button_just_pressed(*button),
             InputSource::Gamepad(id, button) => self
                 .gamepads
                 .get_gamepad(*id)
-                .map_or(false, |g| g.is_button_just_pressed(*button)),
+                .is_some_and(|g| g.is_button_just_pressed(*button)),
         }
     }
 
     /// Check if an input source was just released this frame
-    fn is_input_just_released(&self, source: &InputSource) -> bool {
+    pub fn is_source_just_released(&self, source: &InputSource) -> bool {
         match source {
             InputSource::Keyboard(key) => self.keyboard.is_key_just_released(*key),
             InputSource::Mouse(button) => self.mouse.is_button_just_released(*button),
             InputSource::Gamepad(id, button) => self
                 .gamepads
                 .get_gamepad(*id)
-                .map_or(false, |g| g.is_button_just_released(*button)),
+                .is_some_and(|g| g.is_button_just_released(*button)),
         }
     }
 
-    // ================== Action Checking ==================
-
-    /// Check if a game action is currently active (any bound input is pressed)
-    pub fn is_action_active(&self, action: &GameAction) -> bool {
-        self.input_mapping
-            .get_bindings(action)
-            .iter()
-            .any(|source| self.is_input_pressed(source))
-    }
-
-    /// Check if a game action was just activated this frame
-    pub fn is_action_just_activated(&self, action: &GameAction) -> bool {
-        self.input_mapping
-            .get_bindings(action)
-            .iter()
-            .any(|source| self.is_input_just_pressed(source))
-    }
-
-    /// Check if a game action was just deactivated this frame
-    pub fn is_action_just_deactivated(&self, action: &GameAction) -> bool {
-        self.input_mapping
-            .get_bindings(action)
-            .iter()
-            .any(|source| self.is_input_just_released(source))
-    }
+    // ================== Event Queue ==================
 
     /// Queue an input event for later processing
     pub fn queue_event(&mut self, event: InputEvent) {
@@ -175,10 +142,10 @@ impl InputHandler {
     /// since the last call, updating keyboard, mouse, and gamepad state.
     ///
     /// After calling this, you can read current input state via methods like
-    /// `is_key_pressed()`, `is_key_just_pressed()`, `is_action_active()`, etc.
+    /// `is_key_pressed()`, `is_key_just_pressed()`, or evaluate actions via
+    /// [`crate::InputMapping`].
     ///
-    /// At the end of the frame, call `end_frame()` to reset the "just pressed"
-    /// and "just released" flags for the next frame.
+    /// At the end of the frame, call `end_frame()` to reset per-frame state.
     pub fn process_queued_events(&mut self) {
         while let Some(event) = self.event_queue.pop_front() {
             self.process_event(event);
@@ -207,19 +174,13 @@ impl InputHandler {
                 self.mouse.update_wheel_delta(delta);
             }
             InputEvent::GamepadButtonPressed(id, button) => {
-                if let Some(gamepad) = self.gamepads.get_gamepad_mut(id) {
-                    gamepad.handle_button_press(button);
-                }
+                self.gamepads.get_or_register(id).handle_button_press(button);
             }
             InputEvent::GamepadButtonReleased(id, button) => {
-                if let Some(gamepad) = self.gamepads.get_gamepad_mut(id) {
-                    gamepad.handle_button_release(button);
-                }
+                self.gamepads.get_or_register(id).handle_button_release(button);
             }
             InputEvent::GamepadAxisUpdated(id, axis, value) => {
-                if let Some(gamepad) = self.gamepads.get_gamepad_mut(id) {
-                    gamepad.update_axis(axis, value);
-                }
+                self.gamepads.get_or_register(id).update_axis(axis, value);
             }
         }
     }
@@ -247,10 +208,13 @@ impl InputHandler {
                 self.queue_event(InputEvent::MouseMoved(position.x as f32, position.y as f32));
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                // Convert scroll delta to a simple float
+                // Normalize both variants to "lines" so scroll speed is
+                // consistent across mice (LineDelta) and trackpads (PixelDelta)
                 let scroll_delta = match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, y) => *y,
-                    winit::event::MouseScrollDelta::PixelDelta(position) => position.y as f32,
+                    winit::event::MouseScrollDelta::PixelDelta(position) => {
+                        position.y as f32 / SCROLL_PIXELS_PER_LINE
+                    }
                 };
                 self.queue_event(InputEvent::MouseWheelScrolled(scroll_delta));
             }
@@ -259,6 +223,8 @@ impl InputHandler {
             }
         }
     }
+
+    // ================== Frame Lifecycle ==================
 
     /// Convenience method that processes events and resets state in one call.
     ///
@@ -273,25 +239,15 @@ impl InputHandler {
     /// input.end_frame();              // At end of frame
     /// ```
     pub fn update(&mut self) {
-        // Process any queued input events first
         self.process_queued_events();
-
-        // Then update all input states (clears just pressed/released states)
-        self.keyboard.update();
-        self.mouse.update();
-        self.gamepads.update();
+        self.end_frame();
     }
 
-    /// Reset input state for the next frame.
+    /// Reset per-frame input state for the next frame.
     ///
-    /// Clears "just pressed" and "just released" flags from all input devices.
-    /// Call this at the **end** of each frame, after all game logic has had a
-    /// chance to check input state.
-    ///
-    /// # When to Use
-    ///
-    /// Use `end_frame()` when you've separately called `process_queued_events()` at
-    /// the start of the frame. This is the recommended pattern for game loops:
+    /// Clears "just pressed" / "just released" flags and per-frame mouse
+    /// deltas (movement, wheel). Call this at the **end** of each frame,
+    /// after all game logic has had a chance to check input state.
     ///
     /// ```ignore
     /// // Start of frame
@@ -306,10 +262,12 @@ impl InputHandler {
     /// input.end_frame();
     /// ```
     pub fn end_frame(&mut self) {
-        self.keyboard.update();
-        self.mouse.update();
-        self.gamepads.update();
+        self.keyboard.clear_frame_state();
+        self.mouse.clear_frame_state();
+        self.gamepads.clear_frame_state();
     }
+
+    // ================== Device Accessors ==================
 
     /// Get a reference to the keyboard state
     pub fn keyboard(&self) -> &KeyboardState {
@@ -341,6 +299,8 @@ impl InputHandler {
         &mut self.gamepads
     }
 
+    // ================== Convenience Queries ==================
+
     /// Check if a specific key is currently pressed
     pub fn is_key_pressed(&self, key: winit::keyboard::KeyCode) -> bool {
         self.keyboard.is_key_pressed(key)
@@ -371,12 +331,12 @@ impl InputHandler {
         self.mouse.position()
     }
 
-    /// Get mouse movement delta since last frame
+    /// Get mouse movement delta accumulated this frame
     pub fn mouse_movement_delta(&self) -> (f32, f32) {
         self.mouse.movement_delta()
     }
 
-    /// Get mouse wheel scroll delta
+    /// Get mouse wheel scroll delta accumulated this frame
     pub fn mouse_wheel_delta(&self) -> f32 {
         self.mouse.wheel_delta()
     }

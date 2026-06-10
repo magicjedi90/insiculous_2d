@@ -326,14 +326,19 @@ if ctx.input.is_key_just_pressed(KeyCode::Enter) {
 // Mouse position
 let mouse_pos = ctx.input.mouse_position();
 
-// Action-based input (with default WASD bindings)
-if ctx.input.is_action_active(&GameAction::MoveLeft) {
+// Action-based input: define your own actions, own the mapping in your game
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum MyAction { MoveLeft, Fire }
+
+let mut actions = InputMapping::new();
+actions.bind(MyAction::MoveLeft, InputSource::Keyboard(KeyCode::KeyA));
+actions.bind(MyAction::Fire, InputSource::Mouse(MouseButton::Left));
+
+if actions.is_active(MyAction::MoveLeft, ctx.input) {
     // Move left
 }
-
-// Check action activation
-if ctx.input.is_action_just_activated(&GameAction::Action1) {
-    // Primary action triggered
+if actions.just_activated(MyAction::Fire, ctx.input) {
+    // Fire triggered this frame
 }
 ```
 

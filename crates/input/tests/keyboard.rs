@@ -29,7 +29,7 @@ fn test_key_press_and_release() {
     assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after press event");
 
     // AFTER UPDATE: Key should be pressed but not just-pressed
-    keyboard.update();
+    keyboard.clear_frame_state();
     assert!(keyboard.is_key_pressed(KeyCode::KeyA), "Key should still be pressed after update");
     assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed after update");
     assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after update");
@@ -41,7 +41,7 @@ fn test_key_press_and_release() {
     assert!(keyboard.is_key_just_released(KeyCode::KeyA), "Key should be just-released after release event");
 
     // AFTER FINAL UPDATE: Key should be completely released
-    keyboard.update();
+    keyboard.clear_frame_state();
     assert!(!keyboard.is_key_pressed(KeyCode::KeyA), "Key should not be pressed after final update");
     assert!(!keyboard.is_key_just_pressed(KeyCode::KeyA), "Key should not be just-pressed after final update");
     assert!(!keyboard.is_key_just_released(KeyCode::KeyA), "Key should not be just-released after final update");
@@ -99,7 +99,7 @@ fn test_key_press_idempotence() {
     assert!(keyboard.is_key_just_pressed(KeyCode::KeyA));
 
     // Update to clear the "just pressed" state
-    keyboard.update();
+    keyboard.clear_frame_state();
 
     // Press the key again (while it's already pressed)
     keyboard.handle_key_press(KeyCode::KeyA);

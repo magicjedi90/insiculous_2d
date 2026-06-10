@@ -1,50 +1,55 @@
-//! Input mapping system for binding inputs to game actions.
+//! Input mapping system for binding inputs to game-defined actions.
 //!
 //! # Binding Model
 //!
-//! The input mapping system supports two lookup directions:
+//! [`InputMapping`] is generic over the action type: **games define their own
+//! action enums** and the engine never dictates what actions exist. Any
+//! `Copy + Eq + Hash` type works:
 //!
-//! - **Action → Inputs**: "What inputs trigger this action?" (`get_bindings()`)
-//! - **Input → Action**: "What action does this input trigger?" (`get_action()`)
+//! ```
+//! use input::{InputMapping, InputSource, InputHandler};
+//! use winit::keyboard::KeyCode;
 //!
-//! ## One-to-Many: Multiple Inputs per Action (Recommended)
+//! #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+//! enum MyAction {
+//!     Jump,
+//!     Shoot,
+//! }
 //!
-//! The common case is binding multiple inputs to a single action:
-//! ```ignore
-//! // Both W and Up arrow trigger MoveUp
-//! mapping.bind_input(InputSource::Keyboard(KeyCode::KeyW), GameAction::MoveUp);
-//! mapping.bind_input(InputSource::Keyboard(KeyCode::ArrowUp), GameAction::MoveUp);
+//! let mut actions = InputMapping::new();
+//! actions.bind(MyAction::Jump, InputSource::Keyboard(KeyCode::Space));
+//! actions.bind(MyAction::Jump, InputSource::Keyboard(KeyCode::KeyW));
 //!
-//! // get_bindings returns both inputs
-//! mapping.get_bindings(&GameAction::MoveUp); // [KeyW, ArrowUp]
+//! let input = InputHandler::new();
+//! assert!(!actions.is_active(MyAction::Jump, &input));
 //! ```
 //!
-//! ## One-to-Many: Multiple Actions per Input (Advanced)
+//! The mapping stores one source of truth: action → bound input sources.
+//! One action can have many sources, and one source may be bound to many
+//! actions (just call `bind` for each action).
 //!
-//! You can bind one input to multiple actions via `bind_input_to_multiple_actions()`.
-//! **Note**: The reverse lookup `get_action()` only returns the *first* action:
+//! A new mapping is **empty** — no bindings are applied implicitly. For the
+//! engine's built-in [`GameAction`] preset (WASD/arrows movement, etc.), use
+//! [`InputMapping::with_default_bindings`].
 //!
-//! ```ignore
-//! // Space triggers both Jump and Confirm
-//! mapping.bind_input_to_multiple_actions(
-//!     InputSource::Keyboard(KeyCode::Space),
-//!     vec![GameAction::Action1, GameAction::Select]
-//! );
+//! # Activation Semantics
 //!
-//! // Forward lookup: Both actions recognize Space as a trigger
-//! mapping.get_bindings(&GameAction::Action1); // [Space]
-//! mapping.get_bindings(&GameAction::Select);  // [Space]
+//! Action state is evaluated against an [`InputHandler`]'s device state:
 //!
-//! // Reverse lookup: Only returns first action
-//! mapping.get_action(&InputSource::Keyboard(KeyCode::Space)); // Some(Action1)
-//! ```
-//!
-//! For most games, checking `is_action_active()` is preferred over `get_action()`.
+//! - [`InputMapping::is_active`] — any bound source is currently pressed
+//! - [`InputMapping::just_activated`] — the action is active this frame and
+//!   was inactive last frame (pressing a second source while one is already
+//!   held does **not** re-trigger)
+//! - [`InputMapping::just_deactivated`] — the action is inactive this frame
+//!   and was active last frame (releasing one source while another is still
+//!   held does **not** trigger)
 
-use std::collections::HashMap;
-use winit::keyboard::KeyCode;
-use winit::event::MouseButton;
 use crate::gamepad::GamepadButton;
+use crate::input_handler::InputHandler;
+use std::collections::HashMap;
+use std::hash::Hash;
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
 
 /// Represents different types of input sources
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,7 +62,12 @@ pub enum InputSource {
     Gamepad(u32, GamepadButton),
 }
 
-/// Represents a game action that can be bound to inputs
+/// Built-in action preset for the engine's data-driven behaviors and demos.
+///
+/// This is **optional** — games are encouraged to define their own action
+/// enums and use them with [`InputMapping`] directly. The engine uses this
+/// preset for scene-defined behaviors (e.g. `PlayerControlled` movement),
+/// bound via [`InputMapping::with_default_bindings`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameAction {
     /// Movement actions
@@ -78,180 +88,171 @@ pub enum GameAction {
     Custom(u32),
 }
 
-/// Input mapping configuration
+/// Maps game-defined actions to the input sources that trigger them.
+///
+/// See the [module documentation](self) for the binding model and semantics.
 #[derive(Debug, Clone)]
-pub struct InputMapping {
-    /// Maps input sources to game actions
-    bindings: HashMap<InputSource, GameAction>,
-    /// Maps game actions to input sources (for reverse lookup)
-    action_bindings: HashMap<GameAction, Vec<InputSource>>,
+pub struct InputMapping<A: Copy + Eq + Hash> {
+    /// Action → bound input sources (single source of truth)
+    bindings: HashMap<A, Vec<InputSource>>,
 }
 
-impl Default for InputMapping {
+impl<A: Copy + Eq + Hash> Default for InputMapping<A> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl InputMapping {
-    /// Create a new input mapping with default bindings
+impl<A: Copy + Eq + Hash> InputMapping<A> {
+    /// Create a new, empty input mapping (no implicit default bindings)
     pub fn new() -> Self {
-        let mut mapping = Self {
+        Self {
             bindings: HashMap::new(),
-            action_bindings: HashMap::new(),
-        };
-        
-        // Set up default bindings
-        mapping.set_default_bindings();
-        mapping
+        }
     }
 
-    /// Set default input bindings for common actions
-    pub fn set_default_bindings(&mut self) {
-        // Movement
-        self.bind_input(InputSource::Keyboard(KeyCode::KeyW), GameAction::MoveUp);
-        self.bind_input(InputSource::Keyboard(KeyCode::ArrowUp), GameAction::MoveUp);
-        self.bind_input(InputSource::Keyboard(KeyCode::KeyS), GameAction::MoveDown);
-        self.bind_input(InputSource::Keyboard(KeyCode::ArrowDown), GameAction::MoveDown);
-        self.bind_input(InputSource::Keyboard(KeyCode::KeyA), GameAction::MoveLeft);
-        self.bind_input(InputSource::Keyboard(KeyCode::ArrowLeft), GameAction::MoveLeft);
-        self.bind_input(InputSource::Keyboard(KeyCode::KeyD), GameAction::MoveRight);
-        self.bind_input(InputSource::Keyboard(KeyCode::ArrowRight), GameAction::MoveRight);
-
-        // Actions
-        self.bind_input(InputSource::Keyboard(KeyCode::Space), GameAction::Action1);
-        self.bind_input(InputSource::Mouse(MouseButton::Left), GameAction::Action1);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::A), GameAction::Action1);
-        
-        self.bind_input(InputSource::Keyboard(KeyCode::Enter), GameAction::Action2);
-        self.bind_input(InputSource::Mouse(MouseButton::Right), GameAction::Action2);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::B), GameAction::Action2);
-        
-        self.bind_input(InputSource::Keyboard(KeyCode::ShiftLeft), GameAction::Action3);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::X), GameAction::Action3);
-        
-        self.bind_input(InputSource::Keyboard(KeyCode::ControlLeft), GameAction::Action4);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::Y), GameAction::Action4);
-
-        // UI
-        self.bind_input(InputSource::Keyboard(KeyCode::Escape), GameAction::Menu);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::Start), GameAction::Menu);
-        
-        self.bind_input(InputSource::Keyboard(KeyCode::Tab), GameAction::Select);
-        self.bind_input(InputSource::Gamepad(0, GamepadButton::Select), GameAction::Select);
+    /// Bind an input source to an action.
+    ///
+    /// An action can have multiple sources, and a source can be bound to
+    /// multiple actions. Binding the same (action, source) pair twice is a no-op.
+    pub fn bind(&mut self, action: A, source: InputSource) {
+        let sources = self.bindings.entry(action).or_default();
+        if !sources.contains(&source) {
+            sources.push(source);
+        }
     }
 
-    /// Remove an existing binding for the given input source, cleaning up action_bindings.
-    fn remove_existing_binding(&mut self, input: &InputSource) {
-        if let Some(old_action) = self.bindings.remove(input) {
-            if let Some(sources) = self.action_bindings.get_mut(&old_action) {
-                sources.retain(|&s| s != *input);
-                if sources.is_empty() {
-                    self.action_bindings.remove(&old_action);
-                }
+    /// Remove one source from an action's bindings
+    pub fn unbind(&mut self, action: A, source: &InputSource) {
+        if let Some(sources) = self.bindings.get_mut(&action) {
+            sources.retain(|s| s != source);
+            if sources.is_empty() {
+                self.bindings.remove(&action);
             }
         }
     }
 
-    /// Bind an input source to a game action
-    pub fn bind_input(&mut self, input: InputSource, action: GameAction) {
-        // Remove any existing binding for this input
-        self.remove_existing_binding(&input);
-
-        // Add the new binding
-        self.bindings.insert(input, action);
-        self.action_bindings.entry(action).or_default().push(input);
+    /// Remove all bindings for an action
+    pub fn unbind_action(&mut self, action: A) {
+        self.bindings.remove(&action);
     }
 
-    /// Bind an input source to multiple game actions.
-    ///
-    /// This allows one input to trigger multiple actions simultaneously.
-    /// For example, you might want the Space key to trigger both "Jump" and "Confirm".
-    ///
-    /// # Lookup Behavior
-    ///
-    /// - `get_bindings(action)` will return the input for ALL specified actions
-    /// - `get_action(input)` will only return the **first** action in the list
-    ///
-    /// This asymmetry exists because the reverse lookup uses a single-value HashMap.
-    /// For most use cases, you should check actions via `InputHandler::is_action_active()`
-    /// rather than using `get_action()`.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// mapping.bind_input_to_multiple_actions(
-    ///     InputSource::Keyboard(KeyCode::Space),
-    ///     vec![GameAction::Action1, GameAction::Select]
-    /// );
-    ///
-    /// // Both actions now respond to Space
-    /// assert!(input.is_action_active(&GameAction::Action1)); // true when Space pressed
-    /// assert!(input.is_action_active(&GameAction::Select));  // true when Space pressed
-    /// ```
-    pub fn bind_input_to_multiple_actions(&mut self, input: InputSource, actions: Vec<GameAction>) {
-        // Remove any existing binding for this input
-        self.remove_existing_binding(&input);
-
-        // Bind to the first action for the reverse lookup (limitation: only first action returned by get_action)
-        if let Some(first_action) = actions.first() {
-            self.bindings.insert(input, *first_action);
-        }
-
-        // Add bindings for all actions (all actions will respond to this input)
-        for action in actions {
-            self.action_bindings.entry(action).or_default().push(input);
-        }
+    /// Remove a source from every action it is bound to
+    pub fn unbind_source(&mut self, source: &InputSource) {
+        self.bindings.retain(|_, sources| {
+            sources.retain(|s| s != source);
+            !sources.is_empty()
+        });
     }
 
-    /// Unbind an input source
-    pub fn unbind_input(&mut self, input: &InputSource) {
-        if let Some(action) = self.bindings.remove(input) {
-            if let Some(sources) = self.action_bindings.get_mut(&action) {
-                sources.retain(|&s| &s != input);
-                // If the action has no more bindings, remove it entirely
-                if sources.is_empty() {
-                    self.action_bindings.remove(&action);
-                }
-            }
-        }
+    /// Get all input sources bound to an action
+    pub fn bindings(&self, action: A) -> &[InputSource] {
+        self.bindings
+            .get(&action)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
-    /// Unbind all inputs for a specific action
-    pub fn unbind_action(&mut self, action: &GameAction) {
-        if let Some(sources) = self.action_bindings.remove(action) {
-            for source in sources {
-                self.bindings.remove(&source);
-            }
-        }
+    /// Get all actions a source is bound to
+    pub fn actions_for(&self, source: &InputSource) -> Vec<A> {
+        self.bindings
+            .iter()
+            .filter(|(_, sources)| sources.contains(source))
+            .map(|(action, _)| *action)
+            .collect()
     }
 
-    /// Get the action bound to an input source.
-    ///
-    /// **Note**: If the input was bound to multiple actions via
-    /// `bind_input_to_multiple_actions()`, this only returns the *first* action.
-    /// For checking if an action is triggered, prefer `InputHandler::is_action_active()`.
-    pub fn get_action(&self, input: &InputSource) -> Option<&GameAction> {
-        self.bindings.get(input)
+    /// Check if an action has at least one bound source
+    pub fn has_binding(&self, action: A) -> bool {
+        self.bindings.contains_key(&action)
     }
 
-    /// Get all input sources bound to an action.
-    ///
-    /// This is the recommended way to query bindings, as it correctly returns
-    /// all inputs that trigger the action, including those bound via
-    /// `bind_input_to_multiple_actions()`.
-    pub fn get_bindings(&self, action: &GameAction) -> &[InputSource] {
-        self.action_bindings.get(action).map(|v| v.as_slice()).unwrap_or(&[])
-    }
-
-    /// Check if an action is currently bound to any input
-    pub fn has_binding(&self, action: &GameAction) -> bool {
-        self.action_bindings.contains_key(action)
+    /// Check if the mapping has no bindings at all
+    pub fn is_empty(&self) -> bool {
+        self.bindings.is_empty()
     }
 
     /// Clear all bindings
-    pub fn clear_bindings(&mut self) {
+    pub fn clear(&mut self) {
         self.bindings.clear();
-        self.action_bindings.clear();
+    }
+
+    // ================== Action State Evaluation ==================
+
+    /// Check if an action is currently active (any bound source is pressed)
+    pub fn is_active(&self, action: A, input: &InputHandler) -> bool {
+        self.bindings(action)
+            .iter()
+            .any(|source| input.is_source_pressed(source))
+    }
+
+    /// Check if an action became active this frame.
+    ///
+    /// Returns `false` if the action was already active last frame (e.g.
+    /// pressing W while ArrowUp is held does not re-trigger MoveUp).
+    pub fn just_activated(&self, action: A, input: &InputHandler) -> bool {
+        self.is_active(action, input) && !self.was_active(action, input)
+    }
+
+    /// Check if an action became inactive this frame.
+    ///
+    /// Returns `false` if another bound source is still held (e.g. releasing
+    /// W while ArrowUp is held keeps MoveUp active).
+    pub fn just_deactivated(&self, action: A, input: &InputHandler) -> bool {
+        !self.is_active(action, input) && self.was_active(action, input)
+    }
+
+    /// Whether the action was active on the previous frame.
+    ///
+    /// A source was pressed last frame if it is currently pressed but not
+    /// just-pressed, or if it was just released this frame.
+    fn was_active(&self, action: A, input: &InputHandler) -> bool {
+        self.bindings(action).iter().any(|source| {
+            (input.is_source_pressed(source) && !input.is_source_just_pressed(source))
+                || input.is_source_just_released(source)
+        })
+    }
+}
+
+impl InputMapping<GameAction> {
+    /// Create a mapping pre-populated with the engine's default [`GameAction`]
+    /// bindings (WASD + arrows movement, Space/Enter/Shift/Ctrl actions,
+    /// Escape menu, Tab select, gamepad 0 equivalents).
+    pub fn with_default_bindings() -> Self {
+        let mut mapping = Self::new();
+
+        // Movement
+        mapping.bind(GameAction::MoveUp, InputSource::Keyboard(KeyCode::KeyW));
+        mapping.bind(GameAction::MoveUp, InputSource::Keyboard(KeyCode::ArrowUp));
+        mapping.bind(GameAction::MoveDown, InputSource::Keyboard(KeyCode::KeyS));
+        mapping.bind(GameAction::MoveDown, InputSource::Keyboard(KeyCode::ArrowDown));
+        mapping.bind(GameAction::MoveLeft, InputSource::Keyboard(KeyCode::KeyA));
+        mapping.bind(GameAction::MoveLeft, InputSource::Keyboard(KeyCode::ArrowLeft));
+        mapping.bind(GameAction::MoveRight, InputSource::Keyboard(KeyCode::KeyD));
+        mapping.bind(GameAction::MoveRight, InputSource::Keyboard(KeyCode::ArrowRight));
+
+        // Actions
+        mapping.bind(GameAction::Action1, InputSource::Keyboard(KeyCode::Space));
+        mapping.bind(GameAction::Action1, InputSource::Mouse(MouseButton::Left));
+        mapping.bind(GameAction::Action1, InputSource::Gamepad(0, GamepadButton::A));
+
+        mapping.bind(GameAction::Action2, InputSource::Keyboard(KeyCode::Enter));
+        mapping.bind(GameAction::Action2, InputSource::Mouse(MouseButton::Right));
+        mapping.bind(GameAction::Action2, InputSource::Gamepad(0, GamepadButton::B));
+
+        mapping.bind(GameAction::Action3, InputSource::Keyboard(KeyCode::ShiftLeft));
+        mapping.bind(GameAction::Action3, InputSource::Gamepad(0, GamepadButton::X));
+
+        mapping.bind(GameAction::Action4, InputSource::Keyboard(KeyCode::ControlLeft));
+        mapping.bind(GameAction::Action4, InputSource::Gamepad(0, GamepadButton::Y));
+
+        // UI
+        mapping.bind(GameAction::Menu, InputSource::Keyboard(KeyCode::Escape));
+        mapping.bind(GameAction::Menu, InputSource::Gamepad(0, GamepadButton::Start));
+
+        mapping.bind(GameAction::Select, InputSource::Keyboard(KeyCode::Tab));
+        mapping.bind(GameAction::Select, InputSource::Gamepad(0, GamepadButton::Select));
+
+        mapping
     }
 }

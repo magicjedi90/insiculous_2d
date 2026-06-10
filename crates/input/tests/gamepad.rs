@@ -27,7 +27,7 @@ fn test_gamepad_button_press_and_release() {
     assert!(!gamepad.is_button_just_released(GamepadButton::A));
 
     // Update to clear the "just pressed" state
-    gamepad.update();
+    gamepad.clear_frame_state();
 
     // Assert that the button is still pressed but not just pressed
     assert!(gamepad.is_button_pressed(GamepadButton::A));
@@ -43,7 +43,7 @@ fn test_gamepad_button_press_and_release() {
     assert!(gamepad.is_button_just_released(GamepadButton::A));
 
     // Update to clear the "just released" state
-    gamepad.update();
+    gamepad.clear_frame_state();
 
     // Assert that the button is not pressed and not just released
     assert!(!gamepad.is_button_pressed(GamepadButton::A));
@@ -146,7 +146,7 @@ fn test_gamepad_manager_update() {
     assert!(gamepad.is_button_just_pressed(GamepadButton::A));
 
     // Update the manager
-    manager.update();
+    manager.clear_frame_state();
 
     // Get a reference to the gamepad again
     let gamepad = manager.get_gamepad(0).unwrap();

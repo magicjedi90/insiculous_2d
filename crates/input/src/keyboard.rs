@@ -1,17 +1,12 @@
 //! Keyboard input handling.
 
-use std::collections::HashSet;
+use crate::button_tracker::ButtonTracker;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Represents the state of a keyboard
 #[derive(Debug, Default, Clone)]
 pub struct KeyboardState {
-    /// Currently pressed keys
-    pressed_keys: HashSet<KeyCode>,
-    /// Keys that were just pressed this frame
-    just_pressed: HashSet<KeyCode>,
-    /// Keys that were just released this frame
-    just_released: HashSet<KeyCode>,
+    keys: ButtonTracker<KeyCode>,
 }
 
 impl KeyboardState {
@@ -22,37 +17,32 @@ impl KeyboardState {
 
     /// Update the keyboard state with a key press event
     pub fn handle_key_press(&mut self, key: KeyCode) {
-        if !self.pressed_keys.contains(&key) {
-            self.just_pressed.insert(key);
-        }
-        self.pressed_keys.insert(key);
+        self.keys.press(key);
     }
 
     /// Update the keyboard state with a key release event
     pub fn handle_key_release(&mut self, key: KeyCode) {
-        self.pressed_keys.remove(&key);
-        self.just_released.insert(key);
+        self.keys.release(key);
     }
 
     /// Check if a key is currently pressed
     pub fn is_key_pressed(&self, key: KeyCode) -> bool {
-        self.pressed_keys.contains(&key)
+        self.keys.is_pressed(key)
     }
 
     /// Check if a key was just pressed this frame
     pub fn is_key_just_pressed(&self, key: KeyCode) -> bool {
-        self.just_pressed.contains(&key)
+        self.keys.is_just_pressed(key)
     }
 
     /// Check if a key was just released this frame
     pub fn is_key_just_released(&self, key: KeyCode) -> bool {
-        self.just_released.contains(&key)
+        self.keys.is_just_released(key)
     }
 
     /// Clear the just pressed and just released sets for the next frame
-    pub fn update(&mut self) {
-        self.just_pressed.clear();
-        self.just_released.clear();
+    pub fn clear_frame_state(&mut self) {
+        self.keys.clear_frame_state();
     }
 }
 

@@ -12,16 +12,16 @@
 - **Renderer**: WGPU 28.0.0, instanced sprites, 62 tests
 - **Physics**: Rapier2d integration, 28 tests, presets
 - **UI**: Immediate-mode, 60 tests, fontdue integration
-- **Input**: Event-based, 56 tests, action mapping
+- **Input**: Event-based, 58 tests, generic action mapping (`InputMapping<A>`)
 - **Audio**: Rodio backend, 3 tests, spatial audio
 - **Engine Core**: Game API, managers, scene serializer, 85 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 196 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 72 tests
 
 ### Key Metrics
-- **Total Tests**: 876/876 passing (100% success rate)
+- **Total Tests**: 879/879 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
-- **Code Quality**: 37 ignored tests (GPU/window), 0 failures
+- **Code Quality**: 34 ignored tests (GPU/window), 0 failures
 
 ### Current Priority
 **Phase 1: Functional Editor** - Complete! See `PROJECT_ROADMAP.md` for full details.
@@ -152,7 +152,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 876/876 (100%)
-ignored: 37 (GPU/window)
+passed: 879/879 (100%)
+ignored: 34 (GPU/window)
 failed: 0
 ```

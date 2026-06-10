@@ -1,213 +1,162 @@
 # Technical Debt: input
 
-Last audited: January 2026
+Last audited: June 2026 (full audit + structural refactor)
 
 ## Summary
-- DRY violations: 3 (1 resolved)
-- SRP violations: 0 (1 resolved)
-- KISS violations: 0 (1 resolved)
-- Architecture issues: 2 (2 resolved/documented)
+- Behavioral bugs: 3 found, 3 fixed
+- DRY violations: 2 found, 2 fixed
+- SRP/architecture issues: 3 found, 3 fixed
+- Dead code: ~250 lines removed
+- Open items: 4 (all feature gaps or low-priority polish)
 
-**Overall Assessment:** The input crate is well-designed with clean architecture. Most issues are minor DRY violations from the necessary structural similarity between input device types.
-
----
-
-## DRY Violations
-
-### [DRY-001] Repeated input state tracking pattern across device types
-- **Files:** `keyboard.rs:7-15`, `mouse.rs:22-36`, `gamepad.rs:37-48`
-- **Issue:** All three device state structs use identical pattern for tracking input:
-  ```rust
-  pressed_keys/pressed_buttons: HashSet<...>,
-  just_pressed: HashSet<...>,
-  just_released: HashSet<...>,
-  ```
-  With identical methods: `handle_*_press()`, `handle_*_release()`, `is_*_pressed()`, `is_*_just_pressed()`, `is_*_just_released()`, `update()`.
-- **Suggested fix:** Consider a generic `InputStateTracker<T>` struct:
-  ```rust
-  pub struct InputStateTracker<T: Eq + Hash + Copy> {
-      pressed: HashSet<T>,
-      just_pressed: HashSet<T>,
-      just_released: HashSet<T>,
-  }
-  ```
-- **Priority:** Low (working pattern, abstraction may add complexity)
-
-### ~~[DRY-002] Repeated action checking pattern in input_handler.rs~~ ✅ RESOLVED
-- **File:** `input_handler.rs`
-- **Resolution:** Extracted three helper methods:
-  - `is_input_pressed(&self, source: &InputSource) -> bool`
-  - `is_input_just_pressed(&self, source: &InputSource) -> bool`
-  - `is_input_just_released(&self, source: &InputSource) -> bool`
-
-  The action methods now use `iter().any()` with these helpers:
-  ```rust
-  pub fn is_action_active(&self, action: &GameAction) -> bool {
-      self.input_mapping.get_bindings(action).iter().any(|s| self.is_input_pressed(s))
-  }
-  ```
-- **Resolved:** January 2026
-
-### ~~[DRY-003] Repeated unbind logic in input_mapping.rs~~ ✅ RESOLVED
-- **File:** `input_mapping.rs`
-- **Resolution:** Extracted `remove_existing_binding(&mut self, input: &InputSource)` helper method. Used in both `bind_input()` and `bind_input_to_multiple_actions()`. Also fixed inconsistency where `bind_input_to_multiple_actions` didn't clean up empty action entries.
-- **Resolved:** February 2026
+**Overall Assessment:** The June 2026 audit found the crate structurally sound
+but with two real behavioral bugs, a non-reusable action model, and significant
+dead weight. All were fixed in the same pass (see "Resolved" below). The crate
+now has: a generic `InputMapping<A>` so games define their own actions, a
+shared `ButtonTracker<T>` replacing three copies of the press-state pattern,
+and an `InputHandler` reduced to pure device state. Remaining items are
+feature gaps, not debt.
 
 ---
 
-## SRP Violations
+## Resolved (June 2026 Audit)
 
-### ~~[SRP-001] InputHandler has dual update methods~~ ✅ RESOLVED
-- **File:** `input_handler.rs`
-- **Resolution:** Comprehensive documentation added to clarify the frame lifecycle:
-  - Module-level doc explains the 4-step frame lifecycle (Event Collection → Event Processing → Game Logic → State Reset)
-  - `process_queued_events()` - clearly documented as "call at start of frame"
-  - `end_frame()` - clearly documented as "call at end of frame" with code examples
-  - `update()` - documented as convenience method combining both steps for simple use cases
+### [BUG-001] Stale mouse movement delta ✅ FIXED
+- **Was:** `MouseState::update()` never reset `previous_position`, so after the
+  mouse stopped moving, `movement_delta()` returned the last delta **forever**
+  (continuous camera/drag drift). Multiple `CursorMoved` events per frame also
+  collapsed to only the last segment.
+- **Fix:** `MouseState` now accumulates `frame_delta` across all move events in
+  a frame and zeroes it in `clear_frame_state()`. Wheel delta also accumulates
+  (was: overwritten per event). `previous_position()` removed.
+- **Regression tests:** `test_movement_delta_resets_each_frame`,
+  `test_movement_delta_accumulates_within_frame` (tests/mouse.rs)
 
-  The API is intentionally separated for fine-grained control in game loops.
+### [BUG-002] Multi-action bindings leaked on unbind/rebind ✅ FIXED
+- **Was:** `InputMapping` kept two HashMaps (input→action and action→inputs)
+  whose invariants desynced: `bind_input_to_multiple_actions` recorded only the
+  first action in the forward map, so `unbind_input`/rebinding left stale
+  bindings on the other actions (e.g. Space kept triggering `Select` after
+  being unbound).
+- **Fix:** Single source of truth — `HashMap<A, Vec<InputSource>>`. One source
+  bound to many actions is now just multiple `bind()` calls; `unbind_source()`
+  removes a source from *all* actions. `bind_input_to_multiple_actions` and
+  `get_action` (and their documented asymmetry) are gone.
+- **Regression test:** `test_unbind_source_removes_from_all_actions`
+
+### [BUG-003] Incorrect action edge semantics ✅ FIXED
+- **Was:** `is_action_just_deactivated` returned true if *any* bound source was
+  just released — an action could be "just deactivated" while still active
+  (release W while ArrowUp held). Same class of issue for re-triggering
+  `just_activated` on a second key press mid-hold.
+- **Fix:** `InputMapping::just_activated/just_deactivated` compare against
+  reconstructed previous-frame state (`was_active`): activation fires only on
+  the inactive→active edge, deactivation only on active→inactive.
+- **Regression tests:** `test_second_source_does_not_retrigger_activation`,
+  `test_releasing_one_source_keeps_action_active`
+
+### [ARCH-003] Engine-owned action enum (reusability) ✅ FIXED
+- **Was:** `GameAction` was a fixed engine enum (4 movement + 4 numbered
+  actions + UI); games could only extend via `Custom(u32)` magic numbers.
+  training.md documented a generic API that didn't exist. The editor crate had
+  already been forced to hand-roll its own `EditorInputMapping`.
+- **Fix:** `InputMapping<A: Copy + Eq + Hash>` is generic — games define their
+  own action enums. `GameAction` survives as an *optional preset* via
+  `InputMapping::with_default_bindings()`, used by `BehaviorRunner` for
+  scene-defined behaviors (rebindable via `BehaviorRunner::actions_mut()`).
+  `EditorInputMapping` now delegates to `InputMapping<EditorAction>`.
+
+### [ARCH-004] Implicit default bindings in `new()` ✅ FIXED
+- **Was:** `InputMapping::new()` silently bound WASD, left-click→Action1,
+  Escape→Menu — least-surprise violation for any game wanting its own scheme.
+- **Fix:** `new()` is empty; defaults are opt-in via `with_default_bindings()`.
+
+### [SRP-002] InputHandler owned the action mapping ✅ FIXED
+- **Was:** `InputHandler` mixed device state with one hardcoded
+  `InputMapping` + action query methods.
+- **Fix:** `InputHandler` is device state + event queue only. It exposes
+  `is_source_pressed/just_pressed/just_released(&InputSource)`; action
+  evaluation lives on `InputMapping` (`is_active(action, &input)`).
+
+### [DRY-001] Triplicated press-state tracking ✅ FIXED
+- **Was:** keyboard.rs, mouse.rs, gamepad.rs each reimplemented the identical
+  pressed/just_pressed/just_released HashSet pattern (~40 lines × 3).
+- **Fix:** Shared `ButtonTracker<T: Copy + Eq + Hash>` (button_tracker.rs)
+  composed by all three device states. Press-while-held no longer re-triggers
+  "just pressed" (OS key-repeat safe), tested once in one place.
+
+### [DRY-002 / DEAD-001/2/3] Dead weight removed ✅ FIXED
+- `ThreadSafeInputHandler` (158 lines, 17 hand-written lock wrappers): **deleted**
+  — no consumer existed anywhere in the workspace (engine_core holds a plain
+  `InputHandler`). Recreate if a real multi-threaded consumer appears (YAGNI).
+- `init()` + `InputError` (never constructed): **deleted**.
+- `InputThreadError::OperationError` (never constructed): gone with the module.
+- Redundant `pub use input_handler::InputEvent` re-export: removed.
+
+### [KISS-002] Misleading `update()` naming on device states ✅ FIXED
+- Device-state `update()` methods (which only cleared one-shot flags) renamed
+  to `clear_frame_state()`. `InputHandler::update()` (process + end_frame
+  convenience) and `end_frame()` keep their names and documented lifecycle.
+
+### Minor fixes in the same pass
+- Gamepads auto-register on first event (`GamepadManager::get_or_register`);
+  events for unknown gamepad IDs are no longer silently dropped.
+- Scroll `PixelDelta` normalized to lines (÷16 px) so trackpad and mouse-wheel
+  scroll speeds are comparable (was: raw pixel values ~100× line values).
+- 3 clippy `map_or(false, …)` warnings fixed (`is_some_and`); crate is
+  clippy-clean including tests.
+- `MousePosition` `Default` impl replaced with derive.
+- Docs updated to match reality: training.md "Input Mapping Pattern",
+  README.md input example, crates/input/CLAUDE.md (which referenced
+  nonexistent `InputSource::Key` / `ThreadSafeInput` names).
 
 ---
 
-## KISS Violations
+## Open Items
 
-### ~~[KISS-001] bind_input_to_multiple_actions has inconsistent behavior~~ ✅ RESOLVED
-- **File:** `input_mapping.rs`
-- **Resolution:** Comprehensive documentation added to clarify the intentional asymmetric behavior:
-  - Module-level docs explain the binding model and the limitation
-  - `bind_input_to_multiple_actions()` has detailed docs explaining that `get_action()` only returns the first action
-  - `get_action()` has a warning note about the limitation
-  - `get_bindings()` is documented as the recommended lookup method
-  - Users are guided to use `InputHandler::is_action_active()` for most use cases
+### [GAP-001] No gamepad backend — Medium priority
+The state model (`GamepadState`, auto-registration, `InputSource::Gamepad`
+bindings) is complete and tested, but nothing produces gamepad events: there is
+no gilrs (or similar) integration, and winit doesn't carry gamepad input. The
+default `Gamepad(0, …)` bindings in the preset are inert in practice.
+**Next step:** add a `gilrs` poll in the engine's event loop that translates to
+`InputEvent::GamepadButton*/GamepadAxisUpdated` and queues them on the handler.
+Dead-zone normalization for analog sticks should land with the backend.
 
-  The behavior is intentional (simpler data structure) and now well-documented.
+### [GAP-002] `MousePosition` / `(f32, f32)` instead of shared Vec2 — Low
+`MousePosition` duplicates a 2D vector type and `movement_delta()` returns a
+bare tuple; `common`/glam exist for this. Unifying touches `ui`, `editor`, and
+`editor_integration` call sites — do it as its own small cross-crate pass.
 
----
+### [GAP-003] No touch / gesture support — Low (feature gap)
+No tap/drag/pinch recognition, no `WindowEvent::Touch` handling. Track in
+PROJECT_ROADMAP.md if mobile/web targets become real.
 
-## Architecture Issues
-
-### ~~[ARCH-001] Dual error types for same domain~~ ✅ RESOLVED
-- **Files:** `lib.rs:32-42`, `thread_safe.rs:151-159`
-- **Resolution:** Added `From<InputThreadError>` implementation for `InputError`:
-  ```rust
-  #[error("Thread-safe input error: {0}")]
-  ThreadError(#[from] InputThreadError),
-  ```
-  This allows automatic conversion using `?` operator when needed.
-- **Resolved:** January 2026
-
-### ~~[ARCH-002] InputEvent uses winit types directly~~ ✅ DOCUMENTED
-- **File:** `input_handler.rs`
-- **Resolution:** Added documentation to `InputEvent` enum explaining the intentional design:
-  - **Winit is the standard** for Rust windowing and is unlikely to be replaced
-  - **Reduces mapping overhead** - no conversion layer needed
-  - **Full compatibility** - all winit key codes and mouse buttons supported automatically
-  - **Simpler codebase** - fewer types to maintain
-  - If abstraction becomes necessary, it can be added at the boundary without changing the public API
-- **Resolved:** January 2026
+### [GAP-004] Binding persistence — Low (feature gap)
+`InputMapping` has no save/load (e.g. serde on `InputSource` + user remapping
+UI). Needed eventually for "rebind keys" settings screens; serde derives on
+`InputSource`/`GamepadButton` are the first step.
 
 ---
 
-## Previously Resolved (Reference)
-
-These issues from ANALYSIS.md have been resolved:
-
-| Issue | Resolution |
-|-------|------------|
-| TODO comments in tests | FIXED: All 36 TODO comments replaced with assertions |
-| Event integration | FIXED: Properly forwarded in window event loop |
-| Thread safety | FIXED: ThreadSafeInputHandler wrapper |
-
----
-
-## Remaining Gaps (from ANALYSIS.md)
-
-These are **feature gaps**, not technical debt:
-- No gamepad analog stick dead zones
-- No input event timing tests
-- No gesture recognition (double-click, drag)
-- No touch input support
-- No haptic feedback
-
----
-
-## Metrics
+## Metrics (post-refactor)
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 8 |
-| Total lines | ~650 |
-| Test coverage | 60 tests (all passing) |
-| Error types | 2 (could be unified) |
-| High priority issues | 0 |
-| Medium priority issues | 2 |
-| Low priority issues | 3 |
+| Source files | 7 (`button_tracker`, `gamepad`, `input_handler`, `input_mapping`, `keyboard`, `mouse`, `prelude` + lib) |
+| Source lines | ~1,030 (was ~1,170 with less functionality) |
+| Tests | 58 passing (4 unit + 53 integration + 1 doc), 3 doc-ignored |
+| Clippy warnings | 0 (including `--all-targets`) |
+| Error types | 0 (none needed — no fallible APIs remain) |
+| Workspace impact | engine_core `BehaviorRunner` owns its `InputMapping<GameAction>`; editor `EditorInputMapping` delegates to `InputMapping<EditorAction>`; Pong unaffected (key-level API only) |
 
 ---
 
-## Recommendations
+## Historical (pre-June-2026 audits)
 
-### ✅ Completed
-1. ~~**Fix SRP-001** - Clarify `update()` vs `end_frame()` API~~ - Comprehensive documentation added
-2. ~~**Fix KISS-001** - Document or fix multi-action binding behavior~~ - Comprehensive documentation added
-
-### Short-term Improvements
-1. **Fix DRY-002** - Extract action binding check helper
-
-### Technical Debt Backlog
-- DRY-001: Consider generic InputStateTracker (optional, may over-abstract)
-- ARCH-001: Unify error types
-- ARCH-002: Abstract winit types (only if multi-platform windowing needed)
-
----
-
-## Cross-Reference with PROJECT_ROADMAP.md / ANALYSIS.md
-
-| This Report | ANALYSIS.md | Status |
-|-------------|-------------|--------|
-| TODO comments | ✅ COMPLETED - All replaced | Resolved |
-| Dead zone tests | "No Gamepad Analog Stick Dead Zone Tests" | Feature gap (not debt) |
-| DRY-002: Action checking | Not tracked | Open |
-| SRP-001: Dual update methods | Not tracked | ✅ RESOLVED - Documentation added |
-| KISS-001: Multi-action binding | Not tracked | ✅ RESOLVED - Documentation added |
-
----
-
-## Code Quality Notes
-
-### Strengths
-1. **Clean module separation** - Each device type has its own module
-2. **Good abstraction** - Action-based input system is well-designed
-3. **Thread safety** - Proper `Arc<Mutex<>>` wrapper for concurrent access
-4. **Comprehensive API** - Full keyboard, mouse, gamepad support
-5. **Good test coverage** - 60 tests covering core functionality
-6. **Event queue system** - Proper event buffering for frame-based processing
-
-### Minor Observations
-- The crate correctly re-exports winit types in prelude for convenience
-- Default bindings are sensible and well-organized
-- Event flow is well-documented in ANALYSIS.md
-
----
-
-## New Findings (February 2026 Audit)
-
-3 new issues (0 High, 1 Medium, 2 Low)
-
-### [DRY-002] 28 identical wrapper methods in ThreadSafeInputHandler
-- **File:** `src/thread_safe.rs:66-149`
-- **Issue:** Each method follows identical lock-call-wrap pattern
-- **Suggested fix:** Use a macro to generate wrapper methods
-- **Priority:** Medium | **Effort:** Medium
-
-### [ARCH-002] State getters clone large structures silently
-- **File:** `src/thread_safe.rs:133-148`
-- **Issue:** keyboard_state(), mouse_state(), gamepad_manager() return clones with no mutation persistence
-- **Suggested fix:** Document snapshot semantics; consider returning references
-- **Priority:** Low | **Effort:** Medium
-
-### [DEAD-001] Unused OperationError variant in InputThreadError
-- **File:** `src/thread_safe.rs:157-158`
-- **Issue:** OperationError variant never constructed or matched
-- **Suggested fix:** Remove unused variant
-- **Priority:** Low | **Effort:** Trivial
+The January/February 2026 audit items (DRY-002 action-check helpers, DRY-003
+unbind duplication, SRP-001 dual update methods, KISS-001 multi-action binding
+asymmetry, ARCH-001 dual error types) were either resolved then, or are now
+moot — the code they referred to was replaced or deleted by the June 2026
+restructure above. ARCH-002 (winit type coupling) remains an intentional,
+documented design choice on `InputEvent`.

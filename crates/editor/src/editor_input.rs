@@ -3,8 +3,7 @@
 //! Defines editor-specific actions and provides default key bindings.
 //! Uses the engine's input mapping system for configurable bindings.
 
-use input::{InputHandler, InputSource};
-use std::hash::Hash;
+use input::{InputHandler, InputMapping, InputSource};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
@@ -110,10 +109,13 @@ pub struct ButtonState {
 }
 
 /// Manages editor input bindings and state.
+///
+/// Thin wrapper around the engine's generic [`InputMapping`] that supplies
+/// the editor's default bindings and editor-specific state snapshots.
 #[derive(Debug)]
 pub struct EditorInputMapping {
     /// Key bindings for actions
-    bindings: std::collections::HashMap<EditorAction, Vec<InputSource>>,
+    bindings: InputMapping<EditorAction>,
 }
 
 impl Default for EditorInputMapping {
@@ -126,7 +128,7 @@ impl EditorInputMapping {
     /// Create a new editor input mapping with default bindings.
     pub fn new() -> Self {
         let mut mapping = Self {
-            bindings: std::collections::HashMap::new(),
+            bindings: InputMapping::new(),
         };
         mapping.set_default_bindings();
         mapping
@@ -177,69 +179,37 @@ impl EditorInputMapping {
 
     /// Bind an input source to an action.
     pub fn bind(&mut self, action: EditorAction, source: InputSource) {
-        self.bindings.entry(action).or_default().push(source);
+        self.bindings.bind(action, source);
     }
 
     /// Remove all bindings for an action.
     pub fn unbind(&mut self, action: EditorAction) {
-        self.bindings.remove(&action);
+        self.bindings.unbind_action(action);
     }
 
     /// Clear a specific binding from an action.
     pub fn unbind_source(&mut self, action: EditorAction, source: &InputSource) {
-        if let Some(sources) = self.bindings.get_mut(&action) {
-            sources.retain(|s| s != source);
-        }
+        self.bindings.unbind(action, source);
     }
 
     /// Get all bindings for an action.
     pub fn get_bindings(&self, action: EditorAction) -> &[InputSource] {
-        self.bindings.get(&action).map(|v| v.as_slice()).unwrap_or(&[])
-    }
-
-    /// Check if any binding for an action satisfies the given predicates.
-    fn check_action_with(
-        &self,
-        action: EditorAction,
-        input: &InputHandler,
-        key_check: impl Fn(&InputHandler, KeyCode) -> bool,
-        mouse_check: impl Fn(&InputHandler, MouseButton) -> bool,
-    ) -> bool {
-        self.get_bindings(action).iter().any(|source| match source {
-            InputSource::Keyboard(key) => key_check(input, *key),
-            InputSource::Mouse(button) => mouse_check(input, *button),
-            InputSource::Gamepad(_, _) => false,
-        })
+        self.bindings.bindings(action)
     }
 
     /// Check if an action is currently active (any bound input pressed).
     pub fn is_action_pressed(&self, action: EditorAction, input: &InputHandler) -> bool {
-        self.check_action_with(
-            action,
-            input,
-            |i, key| i.is_key_pressed(key),
-            |i, btn| i.is_mouse_button_pressed(btn),
-        )
+        self.bindings.is_active(action, input)
     }
 
-    /// Check if an action was just pressed this frame.
+    /// Check if an action became active this frame.
     pub fn is_action_just_pressed(&self, action: EditorAction, input: &InputHandler) -> bool {
-        self.check_action_with(
-            action,
-            input,
-            |i, key| i.is_key_just_pressed(key),
-            |i, btn| i.is_mouse_button_just_pressed(btn),
-        )
+        self.bindings.just_activated(action, input)
     }
 
-    /// Check if an action was just released this frame.
+    /// Check if an action became inactive this frame.
     pub fn is_action_just_released(&self, action: EditorAction, input: &InputHandler) -> bool {
-        self.check_action_with(
-            action,
-            input,
-            |i, key| i.is_key_just_released(key),
-            |i, btn| i.mouse().is_button_just_released(btn),
-        )
+        self.bindings.just_deactivated(action, input)
     }
 
     /// Update input state from InputHandler.

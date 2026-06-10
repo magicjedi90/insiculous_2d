@@ -1,6 +1,15 @@
 //! Gamepad input handling.
+//!
+//! # Backend Status
+//!
+//! This module tracks gamepad *state* but the engine currently has no gamepad
+//! backend (e.g. gilrs) producing [`crate::InputEvent`] gamepad events. Until a
+//! backend is wired up, gamepad state only changes if events are queued manually
+//! via [`crate::InputHandler::queue_event`]. Gamepads are auto-registered when
+//! their first event is processed.
 
-use std::collections::{HashMap, HashSet};
+use crate::button_tracker::ButtonTracker;
+use std::collections::HashMap;
 
 /// Represents a gamepad button
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,12 +46,8 @@ pub enum GamepadAxis {
 /// Represents the state of a single gamepad
 #[derive(Debug, Default, Clone)]
 pub struct GamepadState {
-    /// Currently pressed buttons
-    pressed_buttons: HashSet<GamepadButton>,
-    /// Buttons that were just pressed this frame
-    just_pressed: HashSet<GamepadButton>,
-    /// Buttons that were just released this frame
-    just_released: HashSet<GamepadButton>,
+    /// Button press state
+    buttons: ButtonTracker<GamepadButton>,
     /// Current axis values
     axis_values: HashMap<GamepadAxis, f32>,
 }
@@ -55,16 +60,12 @@ impl GamepadState {
 
     /// Update the gamepad state with a button press event
     pub fn handle_button_press(&mut self, button: GamepadButton) {
-        if !self.pressed_buttons.contains(&button) {
-            self.just_pressed.insert(button);
-        }
-        self.pressed_buttons.insert(button);
+        self.buttons.press(button);
     }
 
     /// Update the gamepad state with a button release event
     pub fn handle_button_release(&mut self, button: GamepadButton) {
-        self.pressed_buttons.remove(&button);
-        self.just_released.insert(button);
+        self.buttons.release(button);
     }
 
     /// Update an axis value
@@ -74,17 +75,17 @@ impl GamepadState {
 
     /// Check if a button is currently pressed
     pub fn is_button_pressed(&self, button: GamepadButton) -> bool {
-        self.pressed_buttons.contains(&button)
+        self.buttons.is_pressed(button)
     }
 
     /// Check if a button was just pressed this frame
     pub fn is_button_just_pressed(&self, button: GamepadButton) -> bool {
-        self.just_pressed.contains(&button)
+        self.buttons.is_just_pressed(button)
     }
 
     /// Check if a button was just released this frame
     pub fn is_button_just_released(&self, button: GamepadButton) -> bool {
-        self.just_released.contains(&button)
+        self.buttons.is_just_released(button)
     }
 
     /// Get the value of an axis
@@ -93,9 +94,8 @@ impl GamepadState {
     }
 
     /// Clear the just pressed and just released sets for the next frame
-    pub fn update(&mut self) {
-        self.just_pressed.clear();
-        self.just_released.clear();
+    pub fn clear_frame_state(&mut self) {
+        self.buttons.clear_frame_state();
     }
 }
 
@@ -132,10 +132,18 @@ impl GamepadManager {
         self.gamepad_states.get_mut(&id)
     }
 
-    /// Update all gamepad states
-    pub fn update(&mut self) {
+    /// Get a gamepad state, registering it if not yet known.
+    ///
+    /// Used by event processing so events for a new gamepad are never
+    /// silently dropped.
+    pub fn get_or_register(&mut self, id: u32) -> &mut GamepadState {
+        self.gamepad_states.entry(id).or_default()
+    }
+
+    /// Clear per-frame state on all gamepads
+    pub fn clear_frame_state(&mut self) {
         for state in self.gamepad_states.values_mut() {
-            state.update();
+            state.clear_frame_state();
         }
     }
 }

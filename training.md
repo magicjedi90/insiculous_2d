@@ -353,28 +353,42 @@ physics_system.update(&mut world, delta_time)?;
 **Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`, `physics/physics_system.rs`
 
 ### Input Mapping Pattern
-Action-based input bindings:
+Action-based input bindings. `InputMapping<A>` is generic — **games define their
+own action enums** and evaluate them against the engine's `InputHandler` device
+state. A new mapping is empty; nothing is bound implicitly.
 
 ```rust
-// Define actions
+use input::{InputMapping, InputSource};
+use winit::keyboard::KeyCode;
+
+// Define actions (any Copy + Eq + Hash type)
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum GameAction {
+enum MyAction {
     MoveUp,
     Jump,
     Shoot,
 }
 
-// Bind inputs to actions
-let mut input = InputHandler::new();
-input.bind_action(GameAction::MoveUp, InputSource::Key(KeyCode::KeyW));
-input.bind_action(GameAction::MoveUp, InputSource::Key(KeyCode::ArrowUp));
-input.bind_action(GameAction::Jump, InputSource::Key(KeyCode::Space));
+// Bind inputs to actions (own this mapping in your game struct)
+let mut actions = InputMapping::new();
+actions.bind(MyAction::MoveUp, InputSource::Keyboard(KeyCode::KeyW));
+actions.bind(MyAction::MoveUp, InputSource::Keyboard(KeyCode::ArrowUp));
+actions.bind(MyAction::Jump, InputSource::Keyboard(KeyCode::Space));
 
-// Check actions (instead of raw inputs)
-if input.is_action_active(&GameAction::Jump) {
-    // Player jumped
+// Check actions against device state (instead of raw inputs)
+if actions.is_active(MyAction::Jump, ctx.input) {
+    // Player is holding jump
+}
+if actions.just_activated(MyAction::Jump, ctx.input) {
+    // Jump became active this frame (strict edge: pressing a second
+    // bound key while one is already held does NOT re-trigger)
 }
 ```
+
+The engine ships an optional `GameAction` preset
+(`InputMapping::with_default_bindings()` — WASD/arrows movement, Space/Enter
+actions, gamepad 0 equivalents) used by scene-defined behaviors like
+`PlayerControlled`; rebind via `BehaviorRunner::actions_mut()`.
 
 **Files:** `input/input_mapping.rs`, `input/input_handler.rs`
 
