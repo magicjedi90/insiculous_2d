@@ -54,22 +54,24 @@ pub fn push_circle_outline(
     color: Vec4,
     emissive: f32,
 ) {
-    push_arc(lines, center, radius, 0.0, std::f32::consts::TAU, CIRCLE_SEGMENTS, color, emissive);
+    push_arc(lines, center, radius, 0.0, std::f32::consts::TAU, color, emissive);
 }
 
 /// Internal: walk an arc from `start_angle` to `start_angle + sweep`,
-/// emitting `segments` line segments. Used by circle + capsule cap drawing.
+/// emitting line segments. Segment density is derived from the sweep so a
+/// full circle uses [`CIRCLE_SEGMENTS`] and partial arcs scale down
+/// proportionally. Used by circle + capsule cap drawing.
 fn push_arc(
     lines: &mut Vec<LineVertex>,
     center: Vec2,
     radius: f32,
     start_angle: f32,
     sweep: f32,
-    segments: u32,
     color: Vec4,
     emissive: f32,
 ) {
-    let segments = segments.max(1);
+    let segments =
+        ((sweep.abs() / std::f32::consts::TAU * CIRCLE_SEGMENTS as f32).round() as u32).max(1);
     let step = sweep / segments as f32;
     let mut prev = center + Vec2::new(start_angle.cos(), start_angle.sin()) * radius;
     for i in 1..=segments {
@@ -109,9 +111,9 @@ pub fn push_capsule_y_outline(
         color, emissive,
     );
     // Top cap: arc from 0 (right side) sweeping +PI to the left side.
-    push_arc(lines, top_cap_center, radius, 0.0, std::f32::consts::PI, CIRCLE_SEGMENTS / 2, color, emissive);
+    push_arc(lines, top_cap_center, radius, 0.0, std::f32::consts::PI, color, emissive);
     // Bottom cap: arc from PI (left side) sweeping +PI back to the right side.
-    push_arc(lines, bot_cap_center, radius, std::f32::consts::PI, std::f32::consts::PI, CIRCLE_SEGMENTS / 2, color, emissive);
+    push_arc(lines, bot_cap_center, radius, std::f32::consts::PI, std::f32::consts::PI, color, emissive);
 }
 
 /// Draw an X-axis capsule outline. Same as [`push_capsule_y_outline`] but
@@ -138,8 +140,8 @@ pub fn push_capsule_x_outline(
         left_cap_center  + Vec2::new(0.0, -radius),
         color, emissive,
     );
-    push_arc(lines, right_cap_center, radius, -std::f32::consts::FRAC_PI_2, std::f32::consts::PI, CIRCLE_SEGMENTS / 2, color, emissive);
-    push_arc(lines, left_cap_center,  radius,  std::f32::consts::FRAC_PI_2, std::f32::consts::PI, CIRCLE_SEGMENTS / 2, color, emissive);
+    push_arc(lines, right_cap_center, radius, -std::f32::consts::FRAC_PI_2, std::f32::consts::PI, color, emissive);
+    push_arc(lines, left_cap_center,  radius,  std::f32::consts::FRAC_PI_2, std::f32::consts::PI, color, emissive);
 }
 
 /// Walk every entity with a [`Collider`] + `Transform2D` and push its outline

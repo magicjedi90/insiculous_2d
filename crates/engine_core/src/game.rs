@@ -56,13 +56,6 @@ use crate::Scene;
 
 use ecs::sprite_components::{Sprite as EcsSprite, Transform2D};
 
-/// Helper function to convert UI draw commands to sprites.
-///
-/// UI elements render in screen space (0,0 = top-left) at high depth values
-/// to appear on top of game content. Rectangles and circles use the white
-/// texture (handle 0) with color tinting. Text glyphs use cached glyph textures.
-
-
 /// The main game trait. Implement this to create your game.
 ///
 /// Only `update` is required - all other methods have default implementations.
@@ -602,7 +595,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             world: &mut self.scene.world,
                             assets: asset_manager,
                             audio: &mut self.audio_manager,
-                            ui: &mut self.ui_manager.ui_context(),
+                            ui: self.ui_manager.ui_context(),
                             delta_time: 0.0,
                             window_size,
                             chaos_mode: self.config.chaos_mode,

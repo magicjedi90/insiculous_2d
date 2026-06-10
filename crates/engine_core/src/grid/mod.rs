@@ -1,8 +1,15 @@
-//! Spring-mass grid module.
+//! Spring-mass grid — a general-purpose deformable grid effect.
 //!
 //! A grid of mass-points connected by springs, simulated on the CPU and
 //! rendered as glowing lines. Apply impulses with [`GridMesh::apply_impulse`]
-//! to deform the grid — paddle hits and explosions ripple outward.
+//! to deform the grid — gameplay events (hits, explosions, pickups) ripple
+//! outward Geometry-Wars style. This is an engine-level effect, usable by any
+//! game as a reactive background, and a candidate backing for editor grid
+//! visualization.
+//!
+//! The `Default` field values (stiffness, damping, color, glow) are starting
+//! points, not requirements — configure per game via the public fields or
+//! [`GridMesh::new`].
 //!
 //! Render path: each frame, build the line vertex buffer with
 //! [`GridMesh::build_line_vertices`] and hand it to

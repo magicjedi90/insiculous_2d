@@ -161,7 +161,7 @@ fn main() {
 }
 ```
 
-**Files:** `game.rs`, `game_loop.rs`, `GameContext` struct
+**Files:** `game.rs`, `game_loop_manager.rs`, `GameContext` struct
 
 ### ECS Pattern
 HashMap-based per-type component storage with type-safe queries:

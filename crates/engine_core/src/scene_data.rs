@@ -313,6 +313,70 @@ pub enum BehaviorData {
     },
 }
 
+/// Convert scene serialization data to the ECS component (load direction).
+///
+/// This pair of `From` impls is the single source of truth for
+/// `Behavior` ↔ `BehaviorData` conversion — both the scene loader and the
+/// scene serializer go through here. When adding a behavior variant, extend
+/// both impls and nothing else.
+impl From<&BehaviorData> for ecs::behavior::Behavior {
+    fn from(data: &BehaviorData) -> Self {
+        match data {
+            BehaviorData::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown, tag } => {
+                Self::PlayerPlatformer { move_speed: *move_speed, jump_impulse: *jump_impulse, jump_cooldown: *jump_cooldown, tag: tag.clone() }
+            }
+            BehaviorData::PlayerTopDown { move_speed, tag } => {
+                Self::PlayerTopDown { move_speed: *move_speed, tag: tag.clone() }
+            }
+            BehaviorData::FollowEntity { target_name, follow_distance, follow_speed } => {
+                Self::FollowEntity { target_name: target_name.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
+            BehaviorData::FollowTagged { target_tag, follow_distance, follow_speed } => {
+                Self::FollowTagged { target_tag: target_tag.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
+            BehaviorData::Patrol { point_a, point_b, speed, wait_time } => {
+                Self::Patrol { point_a: *point_a, point_b: *point_b, speed: *speed, wait_time: *wait_time }
+            }
+            BehaviorData::Collectible { score_value, despawn_on_collect, collector_tag } => {
+                Self::Collectible { score_value: *score_value, despawn_on_collect: *despawn_on_collect, collector_tag: collector_tag.clone() }
+            }
+            BehaviorData::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
+                Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
+            }
+        }
+    }
+}
+
+/// Convert the ECS component to scene serialization data (save direction).
+impl From<&ecs::behavior::Behavior> for BehaviorData {
+    fn from(behavior: &ecs::behavior::Behavior) -> Self {
+        use ecs::behavior::Behavior;
+        match behavior {
+            Behavior::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown, tag } => {
+                Self::PlayerPlatformer { move_speed: *move_speed, jump_impulse: *jump_impulse, jump_cooldown: *jump_cooldown, tag: tag.clone() }
+            }
+            Behavior::PlayerTopDown { move_speed, tag } => {
+                Self::PlayerTopDown { move_speed: *move_speed, tag: tag.clone() }
+            }
+            Behavior::FollowEntity { target_name, follow_distance, follow_speed } => {
+                Self::FollowEntity { target_name: target_name.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
+            Behavior::FollowTagged { target_tag, follow_distance, follow_speed } => {
+                Self::FollowTagged { target_tag: target_tag.clone(), follow_distance: *follow_distance, follow_speed: *follow_speed }
+            }
+            Behavior::Patrol { point_a, point_b, speed, wait_time } => {
+                Self::Patrol { point_a: *point_a, point_b: *point_b, speed: *speed, wait_time: *wait_time }
+            }
+            Behavior::Collectible { score_value, despawn_on_collect, collector_tag } => {
+                Self::Collectible { score_value: *score_value, despawn_on_collect: *despawn_on_collect, collector_tag: collector_tag.clone() }
+            }
+            Behavior::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
+                Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
+            }
+        }
+    }
+}
+
 // Default value functions
 fn default_scale() -> (f32, f32) {
     (1.0, 1.0)

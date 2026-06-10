@@ -271,6 +271,32 @@ impl LifecycleManager {
     }
 }
 
+/// A trait for objects that have a managed lifecycle
+pub trait Lifecycle: Send + Sync {
+    /// Initialize the system
+    fn initialize(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Start the system (transition to running state)
+    fn start(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Stop the system (transition from running to initialized)
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Shutdown the system
+    fn shutdown(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Get the lifecycle manager for this system
+    fn lifecycle(&self) -> &LifecycleManager;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,30 +324,4 @@ mod tests {
         manager.complete_shutdown().unwrap();
         assert_eq!(manager.current_state(), LifecycleState::ShutDown);
     }
-}
-
-/// A trait for objects that have a managed lifecycle
-pub trait Lifecycle: Send + Sync {
-    /// Initialize the system
-    fn initialize(&mut self) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Start the system (transition to running state)
-    fn start(&mut self) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Stop the system (transition from running to initialized)
-    fn stop(&mut self) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Shutdown the system
-    fn shutdown(&mut self) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Get the lifecycle manager for this system
-    fn lifecycle(&self) -> &LifecycleManager;
 }

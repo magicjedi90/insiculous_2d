@@ -24,7 +24,6 @@
 
 pub mod behavior_runner;
 mod game;
-mod game_loop;
 mod timing;
 mod scene;
 pub mod scene_manager;
@@ -51,7 +50,6 @@ pub mod prelude;
 // Re-export for convenience
 pub use behavior_runner::*;
 pub use game::*;
-pub use game_loop::*;
 pub use timing::*;
 pub use scene::*;
 pub use scene_manager::*;

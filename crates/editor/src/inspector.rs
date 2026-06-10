@@ -254,8 +254,8 @@ mod tests {
         let value = serde_json::json!(42.0);
         assert_eq!(format_simple_value(&value), "42.0");
 
-        let value = serde_json::json!(3.14159);
-        assert_eq!(format_simple_value(&value), "3.142");
+        let value = serde_json::json!(1.23456);
+        assert_eq!(format_simple_value(&value), "1.235");
     }
 
     #[test]

@@ -29,10 +29,7 @@ fn test_scene_lifecycle_states() {
     assert_eq!(state, LifecycleState::Initialized);
     assert!(operational);
     
-    // Use a different assertion approach
-    if initialized != true {
-        panic!("Expected initialized to be true, got: {:?}", initialized);
-    }
+    assert!(initialized, "Expected initialized to be true");
     
     assert!(!running);
     

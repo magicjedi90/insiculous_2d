@@ -177,85 +177,12 @@ fn extract_components(
         });
     }
 
-    // Behavior
+    // Behavior — conversion lives on `From<&Behavior> for BehaviorData` in scene_data.rs
     if let Some(b) = world.get::<ecs::behavior::Behavior>(entity) {
-        let behavior_data = behavior_to_data(b);
-        components.push(ComponentData::Behavior(behavior_data));
+        components.push(ComponentData::Behavior(BehaviorData::from(b)));
     }
 
     components
-}
-
-/// Convert an ECS Behavior to its serialization counterpart BehaviorData.
-fn behavior_to_data(behavior: &ecs::behavior::Behavior) -> BehaviorData {
-    match behavior {
-        ecs::behavior::Behavior::PlayerPlatformer {
-            move_speed,
-            jump_impulse,
-            jump_cooldown,
-            tag,
-        } => BehaviorData::PlayerPlatformer {
-            move_speed: *move_speed,
-            jump_impulse: *jump_impulse,
-            jump_cooldown: *jump_cooldown,
-            tag: tag.clone(),
-        },
-        ecs::behavior::Behavior::PlayerTopDown { move_speed, tag } => {
-            BehaviorData::PlayerTopDown {
-                move_speed: *move_speed,
-                tag: tag.clone(),
-            }
-        }
-        ecs::behavior::Behavior::FollowEntity {
-            target_name,
-            follow_distance,
-            follow_speed,
-        } => BehaviorData::FollowEntity {
-            target_name: target_name.clone(),
-            follow_distance: *follow_distance,
-            follow_speed: *follow_speed,
-        },
-        ecs::behavior::Behavior::FollowTagged {
-            target_tag,
-            follow_distance,
-            follow_speed,
-        } => BehaviorData::FollowTagged {
-            target_tag: target_tag.clone(),
-            follow_distance: *follow_distance,
-            follow_speed: *follow_speed,
-        },
-        ecs::behavior::Behavior::Patrol {
-            point_a,
-            point_b,
-            speed,
-            wait_time,
-        } => BehaviorData::Patrol {
-            point_a: *point_a,
-            point_b: *point_b,
-            speed: *speed,
-            wait_time: *wait_time,
-        },
-        ecs::behavior::Behavior::Collectible {
-            score_value,
-            despawn_on_collect,
-            collector_tag,
-        } => BehaviorData::Collectible {
-            score_value: *score_value,
-            despawn_on_collect: *despawn_on_collect,
-            collector_tag: collector_tag.clone(),
-        },
-        ecs::behavior::Behavior::ChaseTagged {
-            target_tag,
-            detection_range,
-            chase_speed,
-            lose_interest_range,
-        } => BehaviorData::ChaseTagged {
-            target_tag: target_tag.clone(),
-            detection_range: *detection_range,
-            chase_speed: *chase_speed,
-            lose_interest_range: *lose_interest_range,
-        },
-    }
 }
 
 /// Serialize SceneData to a pretty-printed RON string.

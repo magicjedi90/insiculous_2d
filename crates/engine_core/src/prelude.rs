@@ -23,8 +23,6 @@ pub use crate::{
     grid::{GridImpulse, GridMesh},
     // Debug-draw helpers (collider outlines, etc.)
     debug,
-    // Game loop
-    game_loop::{GameLoop, GameLoopConfig},
     init,
     timing::Timer,
     scene::Scene,

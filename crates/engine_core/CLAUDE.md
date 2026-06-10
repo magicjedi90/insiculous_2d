@@ -13,14 +13,13 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 ## File Map
 - `game.rs` — Game trait, GameConfig, run_game(), GameRunner orchestration (559 lines)
 - `game_config.rs` — GameConfig struct
-- `game_loop.rs`, `game_loop_manager.rs` — Frame timing and delta
+- `game_loop_manager.rs` — Frame timing and delta
 - `ui_manager.rs` — UI lifecycle and draw commands
 - `render_manager.rs` — Renderer lifecycle
 - `window_manager.rs` — Window creation
 - `scene.rs` — Scene lifecycle / world coordination
 - `scene_manager.rs` — Scene loading and entity instantiation
 - `scene_loader.rs` — RON → World deserialization
-- `scene_saver.rs` — File I/O for saved scenes
 - `scene_serializer.rs` — World → SceneData (inverse of scene_loader, used by editor save)
 - `scene_data.rs` — SceneData / PrefabData / EntityData structs
 - `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save

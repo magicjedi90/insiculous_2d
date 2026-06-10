@@ -49,7 +49,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - `commands.rs` — EditorCommand trait, CommandHistory, 11 concrete commands; `push_already_executed`, `try_merge_or_push`
 - `stored_component.rs` — StoredComponent enum for type-safe capture/restore
 - `world_snapshot.rs` — WorldSnapshot save/restore (used by play/stop)
-- `file_operations.rs` — Scene save/load file I/O
+- Scene save/load file I/O lives in `editor_integration` (via `engine_core::scene_serializer`), not in this crate
 
 ## Key Patterns
 - Inspector uses `serde_json::to_value()` to extract component fields generically
