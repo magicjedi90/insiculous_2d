@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::component::{Component, ComponentRegistry};
 use crate::entity::{Entity, EntityId};
+use crate::hierarchy::{Children, Parent};
 use crate::event::EventBus;
 use crate::generation::EntityGeneration;
 use crate::resource::ResourceStorage;
@@ -72,14 +73,25 @@ impl World {
         }
     }
 
-    /// Initialize the world
+    /// Run a system-registry operation with `self` handed to the systems.
+    ///
+    /// Temporarily swaps the registry out of `self` so systems can receive
+    /// `&mut World` without a double borrow (same pattern as `update`).
+    fn with_systems<R>(&mut self, f: impl FnOnce(&mut SystemRegistry, &mut World) -> R) -> R {
+        let mut temp_systems = SystemRegistry::new();
+        std::mem::swap(&mut self.systems, &mut temp_systems);
+        let result = f(&mut temp_systems, self);
+        std::mem::swap(&mut self.systems, &mut temp_systems);
+        result
+    }
+
+    /// Initialize the world, invoking every system's `initialize` hook
     pub fn initialize(&mut self) -> Result<(), EcsError> {
         if self.initialized {
             return Err(EcsError::AlreadyInitialized);
         }
 
-        // Initialize system registry
-        self.systems.initialize()?;
+        self.with_systems(|systems, world| systems.initialize(world))?;
 
         self.initialized = true;
         log::info!("World initialized with {} entities and {} systems",
@@ -87,7 +99,7 @@ impl World {
         Ok(())
     }
 
-    /// Start the world (begin running systems)
+    /// Start the world (begin running systems), invoking `start` hooks
     pub fn start(&mut self) -> Result<(), EcsError> {
         if !self.initialized {
             return Err(EcsError::NotInitialized);
@@ -97,31 +109,31 @@ impl World {
         }
 
         self.running = true;
-        self.systems.start()?;
+        self.with_systems(|systems, world| systems.start(world))?;
         log::info!("World started with {} active systems", self.systems.len());
         Ok(())
     }
 
-    /// Stop the world (pause systems)
+    /// Stop the world (pause systems), invoking `stop` hooks
     pub fn stop(&mut self) -> Result<(), EcsError> {
         if !self.running {
             return Err(EcsError::NotRunning);
         }
 
         self.running = false;
-        self.systems.stop()?;
+        self.with_systems(|systems, world| systems.stop(world))?;
         log::info!("World stopped");
         Ok(())
     }
 
-    /// Shutdown the world
+    /// Shutdown the world, invoking every system's `shutdown` hook
     pub fn shutdown(&mut self) -> Result<(), EcsError> {
         if self.running {
             self.stop()?;
         }
 
         if self.initialized {
-            self.systems.shutdown()?;
+            self.with_systems(|systems, world| systems.shutdown(world))?;
             self.initialized = false;
         }
 
@@ -167,7 +179,15 @@ impl World {
         id
     }
 
-    /// Remove an entity (with generation tracking)
+    /// Remove an entity (with generation tracking).
+    ///
+    /// Hierarchy links are cleaned up automatically: the entity is unlinked
+    /// from its parent's `Children` list, and its own children become root
+    /// entities (their `Parent` component is removed). To delete a whole
+    /// subtree instead, use `WorldHierarchyExt::remove_entity_hierarchy`.
+    ///
+    /// The dead generation entry is retained on purpose so later accesses
+    /// with the stale ID report "not alive" rather than "not found".
     pub fn remove_entity(&mut self, entity_id: &EntityId) -> Result<(), EcsError> {
         // Validate entity generation first
         if let Some(generation) = self.entity_generations.get_mut(entity_id) {
@@ -181,11 +201,37 @@ impl World {
             return Err(EcsError::EntityNotFound(*entity_id));
         }
 
+        self.detach_from_hierarchy(entity_id);
+
         // Remove components for this entity
         self.components.remove_all(entity_id);
 
         log::trace!("Removed entity {} with generation {}", entity_id.value(), entity_id.generation());
         Ok(())
+    }
+
+    /// Unlink an entity from the hierarchy prior to its removal.
+    ///
+    /// Uses component storage directly: the entity is already marked dead at
+    /// this point, so the validated accessors would refuse to touch it.
+    fn detach_from_hierarchy(&mut self, entity_id: &EntityId) {
+        // Remove the entity from its parent's Children list
+        let parent_id = self.components.get_typed::<Parent>(entity_id).map(|p| p.entity());
+        if let Some(parent_id) = parent_id {
+            if let Some(children) = self.components.get_typed_mut::<Children>(&parent_id) {
+                children.remove(entity_id);
+            }
+        }
+
+        // Orphan the entity's children to root
+        let child_ids: Vec<EntityId> = self
+            .components
+            .get_typed::<Children>(entity_id)
+            .map(|c| c.entities().to_vec())
+            .unwrap_or_default();
+        for child in &child_ids {
+            self.components.remove::<Parent>(child);
+        }
     }
 
     /// Get a reference to an entity
@@ -208,9 +254,7 @@ impl World {
         entity_id: &EntityId,
         component: T,
     ) -> Result<(), EcsError> {
-        if !self.entities.contains_key(entity_id) {
-            return Err(EcsError::EntityNotFound(*entity_id));
-        }
+        self.validate_entity(entity_id)?;
 
         self.components.add(*entity_id, component);
         Ok(())
@@ -218,9 +262,7 @@ impl World {
 
     /// Remove a component from an entity
     pub fn remove_component<T: Component>(&mut self, entity_id: &EntityId) -> Result<(), EcsError> {
-        if !self.entities.contains_key(entity_id) {
-            return Err(EcsError::EntityNotFound(*entity_id));
-        }
+        self.validate_entity(entity_id)?;
 
         if self.components.remove::<T>(entity_id).is_none() {
             return Err(EcsError::ComponentNotFound(*entity_id));
@@ -229,45 +271,21 @@ impl World {
         Ok(())
     }
 
-    /// Get a reference to a component for an entity (returns trait object)
-    pub fn get_component<T: Component>(
-        &self,
-        entity_id: &EntityId,
-    ) -> Result<&dyn Component, EcsError> {
-        if !self.entities.contains_key(entity_id) {
-            return Err(EcsError::EntityNotFound(*entity_id));
-        }
-
-        self.components
-            .get::<T>(entity_id)
-            .ok_or(EcsError::ComponentNotFound(*entity_id))
-    }
-
-    /// Get a mutable reference to a component for an entity (returns trait object)
-    pub fn get_component_mut<T: Component>(
-        &mut self,
-        entity_id: &EntityId,
-    ) -> Result<&mut dyn Component, EcsError> {
-        if !self.entities.contains_key(entity_id) {
-            return Err(EcsError::EntityNotFound(*entity_id));
-        }
-
-        self.components
-            .get_mut::<T>(entity_id)
-            .ok_or(EcsError::ComponentNotFound(*entity_id))
-    }
-
-    /// Get a typed reference to a component for an entity
+    /// Get a typed reference to a component for an entity.
+    ///
+    /// Returns `None` if the entity is dead, stale, or lacks the component.
     pub fn get<T: Component>(&self, entity_id: EntityId) -> Option<&T> {
-        if !self.entities.contains_key(&entity_id) {
+        if self.validate_entity(&entity_id).is_err() {
             return None;
         }
         self.components.get_typed::<T>(&entity_id)
     }
 
-    /// Get a typed mutable reference to a component for an entity
+    /// Get a typed mutable reference to a component for an entity.
+    ///
+    /// Returns `None` if the entity is dead, stale, or lacks the component.
     pub fn get_mut<T: Component>(&mut self, entity_id: EntityId) -> Option<&mut T> {
-        if !self.entities.contains_key(&entity_id) {
+        if self.validate_entity(&entity_id).is_err() {
             return None;
         }
         self.components.get_typed_mut::<T>(&entity_id)
@@ -275,15 +293,27 @@ impl World {
 
     /// Check if an entity has a component
     pub fn has_component<T: Component>(&self, entity_id: &EntityId) -> Result<bool, EcsError> {
-        if !self.entities.contains_key(entity_id) {
-            return Err(EcsError::EntityNotFound(*entity_id));
-        }
+        self.validate_entity(entity_id)?;
 
         Ok(self.components.has::<T>(entity_id))
     }
 
-    /// Add a system
-    pub fn add_system<S: crate::system::System + 'static>(&mut self, system: S) {
+    /// Add a system.
+    ///
+    /// Systems added after `initialize()`/`start()` get the missed
+    /// `initialize`/`start` hooks invoked immediately (failures are logged,
+    /// the system is added regardless).
+    pub fn add_system<S: crate::system::System + 'static>(&mut self, mut system: S) {
+        if self.initialized {
+            if let Err(e) = system.initialize(self) {
+                log::error!("System '{}' failed late initialization: {e}", system.name());
+            }
+        }
+        if self.running {
+            if let Err(e) = system.start(self) {
+                log::error!("System '{}' failed late start: {e}", system.name());
+            }
+        }
         self.systems.add(system);
     }
 
@@ -296,15 +326,7 @@ impl World {
             return Err(EcsError::NotRunning);
         }
 
-        // Extract systems into a temporary variable to avoid borrowing conflicts
-        let mut temp_systems = SystemRegistry::new();
-        std::mem::swap(&mut self.systems, &mut temp_systems);
-
-        // Update systems with the world
-        temp_systems.update_all(self, delta_time);
-
-        // Move systems back
-        std::mem::swap(&mut self.systems, &mut temp_systems);
+        self.with_systems(|systems, world| systems.update_all(world, delta_time));
 
         Ok(())
     }
@@ -314,9 +336,17 @@ impl World {
         self.entities.len()
     }
 
-    /// Get an iterator over all entity IDs
+    /// Get a snapshot of all entity IDs as an owned Vec.
+    ///
+    /// Useful when you need to mutate the world while iterating. For
+    /// read-only iteration prefer `entity_ids()`, which does not allocate.
     pub fn entities(&self) -> Vec<EntityId> {
         self.entities.keys().copied().collect()
+    }
+
+    /// Get a non-allocating iterator over all entity IDs.
+    pub fn entity_ids(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.entities.keys().copied()
     }
 
     /// Get the number of systems
@@ -365,13 +395,14 @@ impl World {
     /// ```
     pub fn query_entities<Q: QueryTypes>(&self) -> Vec<EntityId> {
         let required_types = Q::component_types();
-        self.entities()
-            .into_iter()
+        self.entities
+            .keys()
             .filter(|entity| {
                 required_types
                     .iter()
                     .all(|type_id| self.components.has_type(entity, *type_id))
             })
+            .copied()
             .collect()
     }
 
@@ -385,11 +416,21 @@ impl World {
         self.components.shutdown().ok();
     }
 
-    /// Create an entity with a specific ID (for snapshot restoration).
+    /// Create an entity with a specific ID (for snapshot restoration only).
     ///
-    /// Inserts the entity and its generation into the world. If an entity
-    /// with the same ID already exists, it will be overwritten.
+    /// Revives the ID's generation as alive: stale references carrying the
+    /// same `(id, generation)` will validate again afterwards. That is
+    /// intentional for play/stop snapshot restore — the entity legitimately
+    /// exists again — and safe because entity IDs are globally monotonic and
+    /// never recycled. Callers must `clear()` the world first or otherwise
+    /// guarantee the ID is unoccupied; overwriting a live entity loses its
+    /// components silently.
     pub fn create_entity_with_id(&mut self, id: EntityId) -> EntityId {
+        debug_assert!(
+            !self.entities.contains_key(&id),
+            "create_entity_with_id overwrote live entity {}",
+            id.value()
+        );
         let entity = Entity::with_id(id);
         let generation = EntityGeneration::with_generation(id.generation());
         self.entity_generations.insert(id, generation);

@@ -94,21 +94,22 @@ fn test_scene_with_schedule() {
         *update_count_clone.lock().unwrap() += 1;
     });
     
-    // Initialize scene and schedule
+    // Initialize scene and schedule (lifecycle hooks need a world to act on)
+    let mut hook_world = ecs::World::new();
     scene.initialize().unwrap();
     scene.start().unwrap();
-    schedule.initialize().unwrap();
-    schedule.start().unwrap();
-    
+    schedule.initialize(&mut hook_world).unwrap();
+    schedule.start(&mut hook_world).unwrap();
+
     // Update with schedule
     scene.update_with_schedule(&mut schedule, 0.016).unwrap();
     scene.update_with_schedule(&mut schedule, 0.016).unwrap();
-    
+
     assert_eq!(*update_count.lock().unwrap(), 2);
-    
+
     // Cleanup
-    schedule.stop().unwrap();
-    schedule.shutdown().unwrap();
+    schedule.stop(&mut hook_world).unwrap();
+    schedule.shutdown(&mut hook_world).unwrap();
     scene.stop().unwrap();
     scene.shutdown().unwrap();
 }

@@ -107,16 +107,12 @@ At current scene sizes (hundreds of entities, handful of components each), this 
 If we start pushing thousands of sprites or need a particle system, revisit archetype or SoA
 storage. Don't rush it — the current storage has let the editor move fast.
 
-### 2. `renderer` is a direct dependency of `ecs`
+### 2. `renderer` dependency — RESOLVED
 
-`sprite_components.rs` and `sprite_system.rs` import `renderer::{Sprite, Camera, TextureHandle}`.
-This means `ecs` cannot be built headless-of-renderer. Options if this becomes a problem
-(e.g., server-side simulation, or want to break a cycle):
-- Move sprite/camera components into `renderer` or a new `render_components` crate
-- Feature-gate rendering components behind a `render` feature on `ecs`
-- Introduce a trait-level abstraction so `ecs` defines the data, `renderer` defines the GPU side
-
-Not urgent — everything downstream of ecs also depends on renderer today.
+`ecs` no longer depends on `renderer`. The dead renderer-coupled code
+(`SpriteRenderSystem`, `convert_sprite`, `sprite_utils`, `SpriteRenderData`)
+was deleted; `ecs` now builds headless-of-renderer. Sprite/camera components
+are plain data; the renderer resolves `texture_handle` IDs on its side.
 
 ### 3. Query walks all entities
 
@@ -146,7 +142,6 @@ remembering when adding components to this crate.
 
 - **engine_core** — owns the `World`, drives `update()`, loads scenes via `scene_loader`
 - **physics** — reads/writes `RigidBody`, `Collider`, `Transform2D`; types defined here, semantics live in physics
-- **renderer** — consumed by `sprite_components`/`sprite_system` for GPU-facing types
 - **editor** — reads components via `ComponentMeta` for the inspector; uses hierarchy for the tree view
 - **editor_integration** — snapshots/restores the World for play/pause; needs every concrete
   component type hand-listed in `WorldSnapshot`
@@ -168,7 +163,7 @@ src/
 ├── hierarchy_extension.rs   WorldHierarchyExt trait
 ├── hierarchy_system.rs      TransformHierarchySystem
 ├── sprite_components.rs     Sprite, Name, re-exports Transform2D/Camera from common
-├── sprite_system.rs         SpriteRenderSystem, SpriteAnimationSystem
+├── sprite_system.rs         SpriteAnimationSystem
 ├── audio_components.rs      AudioSource, AudioListener, PlaySoundEffect
 ├── behavior.rs              Behavior trait, EntityTag
 ├── event.rs                 EventBus (typed per-frame messaging)

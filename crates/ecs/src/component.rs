@@ -76,16 +76,6 @@ impl ComponentStore {
             .and_then(|c| c.as_mut().as_any_mut().downcast_mut::<T>())
     }
 
-    /// Get a reference to a component for an entity (returns trait object)
-    pub fn get(&self, entity_id: &EntityId) -> Option<&dyn Component> {
-        self.components.get(entity_id).map(|c| c.as_ref())
-    }
-
-    /// Get a mutable reference to a component for an entity (returns trait object)
-    pub fn get_mut(&mut self, entity_id: &EntityId) -> Option<&mut dyn Component> {
-        self.components.get_mut(entity_id).map(|c| c.as_mut())
-    }
-
     /// Check if an entity has a component stored
     pub fn has_entity(&self, entity_id: &EntityId) -> bool {
         self.components.contains_key(entity_id)
@@ -124,40 +114,21 @@ impl ComponentRegistry {
 
     /// Register a component type
     pub fn register<T: Component>(&mut self) {
-        let type_id = TypeId::of::<T>();
-        if !self.storages.contains_key(&type_id) {
-            self.storages.insert(type_id, ComponentStore::new());
-        }
+        self.storages.entry(TypeId::of::<T>()).or_default();
     }
 
     /// Add a component for an entity
     pub fn add<T: Component>(&mut self, entity_id: EntityId, component: T) {
-        let type_id = TypeId::of::<T>();
-        if !self.storages.contains_key(&type_id) {
-            self.register::<T>();
-        }
-
-        if let Some(storage) = self.storages.get_mut(&type_id) {
-            storage.add(entity_id, component);
-        }
+        self.storages
+            .entry(TypeId::of::<T>())
+            .or_default()
+            .add(entity_id, component);
     }
 
     /// Remove a component for an entity
     pub fn remove<T: Component>(&mut self, entity_id: &EntityId) -> Option<Box<dyn Component>> {
         let type_id = TypeId::of::<T>();
         self.storages.get_mut(&type_id)?.remove(entity_id)
-    }
-
-    /// Get a reference to a component for an entity (returns trait object)
-    pub fn get<T: Component>(&self, entity_id: &EntityId) -> Option<&dyn Component> {
-        let type_id = TypeId::of::<T>();
-        self.storages.get(&type_id)?.get(entity_id)
-    }
-
-    /// Get a mutable reference to a component for an entity (returns trait object)
-    pub fn get_mut<T: Component>(&mut self, entity_id: &EntityId) -> Option<&mut dyn Component> {
-        let type_id = TypeId::of::<T>();
-        self.storages.get_mut(&type_id)?.get_mut(entity_id)
     }
 
     /// Get a typed reference to a component for an entity

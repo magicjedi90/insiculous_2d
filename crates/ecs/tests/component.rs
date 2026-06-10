@@ -27,7 +27,6 @@ fn test_component_in_world() {
     // Define a simple test component
     #[derive(Debug)]
     struct TestComponent {
-        #[allow(dead_code)]
         value: i32,
     }
 
@@ -41,11 +40,9 @@ fn test_component_in_world() {
 
     assert!(has_component);
 
-    // Get the component (this is a bit tricky since we need to downcast)
-    let _component = world.get_component::<TestComponent>(&entity_id).unwrap();
-
-    // Note: We can't directly access the value since we get a &dyn Component
-    // In a real test, we would need to implement methods on TestComponent to access its value
+    // Get the component back with typed access
+    let component = world.get::<TestComponent>(entity_id).unwrap();
+    assert_eq!(component.value, 42);
 }
 
 #[test]

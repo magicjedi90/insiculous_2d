@@ -91,25 +91,31 @@ impl SystemRegistry {
         }
     }
 
-    /// Initialize all systems
-    pub fn initialize(&mut self) -> Result<(), String> {
+    /// Initialize all systems, invoking each system's `initialize` hook.
+    ///
+    /// Propagates the first failure: a system that cannot initialize should
+    /// abort world startup.
+    pub fn initialize(&mut self, world: &mut World) -> Result<(), String> {
         if self.initialized {
             return Err("Systems already initialized".to_string());
         }
 
         log::info!("Initializing {} systems", self.systems.len());
-        
-        // Note: System initialization should be done when the world is available
-        // For now, we'll just mark as initialized since we can't create a dummy world
-        // The actual initialization should be done by the World when it's initializing
-        
+        for system in &mut self.systems {
+            system
+                .initialize(world)
+                .map_err(|e| format!("System '{}' failed to initialize: {e}", system.name()))?;
+        }
+
         self.initialized = true;
         log::info!("All systems initialized successfully");
         Ok(())
     }
 
-    /// Start all systems
-    pub fn start(&mut self) -> Result<(), String> {
+    /// Start all systems, invoking each system's `start` hook.
+    ///
+    /// Propagates the first failure.
+    pub fn start(&mut self, world: &mut World) -> Result<(), String> {
         if !self.initialized {
             return Err("Systems not initialized".to_string());
         }
@@ -118,36 +124,44 @@ impl SystemRegistry {
         }
 
         log::info!("Starting {} systems", self.systems.len());
-        
-        // Note: System start should be done when the world is available
-        // For now, we'll just mark as running since we can't create a dummy world
-        // The actual start should be done by the World when it's starting
-        
+        for system in &mut self.systems {
+            system
+                .start(world)
+                .map_err(|e| format!("System '{}' failed to start: {e}", system.name()))?;
+        }
+
         self.running = true;
         log::info!("All systems started successfully");
         Ok(())
     }
 
-    /// Stop all systems
-    pub fn stop(&mut self) -> Result<(), String> {
+    /// Stop all systems, invoking each system's `stop` hook.
+    ///
+    /// Hook failures are logged and skipped so every system gets a chance
+    /// to stop (teardown should be best-effort).
+    pub fn stop(&mut self, world: &mut World) -> Result<(), String> {
         if !self.running {
             return Err("Systems not running".to_string());
         }
 
         log::info!("Stopping {} systems", self.systems.len());
-        
-        // Note: System stop should be done when the world is available
-        // The actual stop should be done by the World when it's stopping
-        
+        for system in &mut self.systems {
+            if let Err(e) = system.stop(world) {
+                log::error!("System '{}' failed to stop: {e}", system.name());
+            }
+        }
+
         self.running = false;
         log::info!("All systems stopped");
         Ok(())
     }
 
-    /// Shutdown all systems
-    pub fn shutdown(&mut self) -> Result<(), String> {
+    /// Shutdown all systems, invoking each system's `shutdown` hook.
+    ///
+    /// Hook failures are logged and skipped (teardown is best-effort).
+    pub fn shutdown(&mut self, world: &mut World) -> Result<(), String> {
         if self.running {
-            self.stop()?;
+            self.stop(world)?;
         }
 
         if !self.initialized {
@@ -155,10 +169,12 @@ impl SystemRegistry {
         }
 
         log::info!("Shutting down {} systems", self.systems.len());
-        
-        // Note: System shutdown should be done when the world is available
-        // The actual shutdown should be done by the World when it's shutting down
-        
+        for system in &mut self.systems {
+            if let Err(e) = system.shutdown(world) {
+                log::error!("System '{}' failed to shut down: {e}", system.name());
+            }
+        }
+
         self.initialized = false;
         log::info!("All systems shut down");
         Ok(())

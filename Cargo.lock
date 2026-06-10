@@ -786,7 +786,6 @@ dependencies = [
  "glam",
  "log",
  "pollster",
- "renderer",
  "ron",
  "serde",
  "serde_json",

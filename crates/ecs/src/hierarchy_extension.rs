@@ -192,8 +192,7 @@ impl WorldHierarchyExt for World {
     }
 
     fn get_root_entities(&self) -> Vec<EntityId> {
-        self.entities()
-            .into_iter()
+        self.entity_ids()
             .filter(|id| self.get::<Parent>(*id).is_none())
             .collect()
     }
@@ -217,11 +216,29 @@ impl WorldHierarchyExt for World {
     }
 
     fn is_ancestor_of(&self, potential_ancestor: EntityId, entity: EntityId) -> bool {
-        self.get_ancestors(entity).contains(&potential_ancestor)
+        // Early-exit upward walk instead of materializing the ancestor list.
+        // The step cap guards against malformed cycles (e.g. a manually
+        // constructed Parent chain that bypassed set_parent's cycle check).
+        let mut current = entity;
+        let mut steps = self.entity_count();
+        while let Some(parent) = self.get_parent(current) {
+            if parent == potential_ancestor {
+                return true;
+            }
+            if steps == 0 {
+                log::warn!("is_ancestor_of: hierarchy cycle detected at entity {}", current.value());
+                return false;
+            }
+            steps -= 1;
+            current = parent;
+        }
+        false
     }
 
     fn is_descendant_of(&self, potential_descendant: EntityId, entity: EntityId) -> bool {
-        self.get_descendants(entity).contains(&potential_descendant)
+        // A descendant relationship is the ancestor relationship reversed;
+        // walk upward from the candidate instead of materializing the subtree.
+        self.is_ancestor_of(entity, potential_descendant)
     }
 
     fn remove_entity_hierarchy(&mut self, entity: &EntityId) -> Result<(), EcsError> {
@@ -233,10 +250,7 @@ impl WorldHierarchyExt for World {
             self.remove_entity(&descendant)?;
         }
 
-        // Remove the parent relationship
-        self.remove_parent(*entity)?;
-
-        // Remove the entity itself
+        // Remove the entity itself (remove_entity unlinks it from its parent)
         self.remove_entity(entity)?;
 
         Ok(())

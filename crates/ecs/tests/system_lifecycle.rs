@@ -149,21 +149,73 @@ fn test_system_registry_lifecycle() {
     assert_eq!(registry.len(), 2);
     
     // Initialize
-    registry.initialize().unwrap();
-    
+    registry.initialize(&mut world).unwrap();
+
     // Start
-    registry.start().unwrap();
-    
+    registry.start(&mut world).unwrap();
+
     // Update systems through world
     world.initialize().unwrap();
     world.start().unwrap();
     world.update(0.016).unwrap();
-    
+
     // Stop
-    registry.stop().unwrap();
-    
+    registry.stop(&mut world).unwrap();
+
     // Shutdown
-    registry.shutdown().unwrap();
+    registry.shutdown(&mut world).unwrap();
+}
+
+#[test]
+fn test_lifecycle_hooks_receive_world() {
+    struct ResourceWritingSystem;
+
+    struct InitMarker;
+    struct StartMarker;
+
+    impl System for ResourceWritingSystem {
+        fn initialize(&mut self, world: &mut World) -> Result<(), String> {
+            world.insert_resource(InitMarker);
+            Ok(())
+        }
+
+        fn start(&mut self, world: &mut World) -> Result<(), String> {
+            world.insert_resource(StartMarker);
+            Ok(())
+        }
+
+        fn update(&mut self, _world: &mut World, _delta_time: f32) {}
+
+        fn name(&self) -> &str {
+            "ResourceWritingSystem"
+        }
+    }
+
+    let mut world = World::new();
+    world.add_system(ResourceWritingSystem);
+
+    assert!(!world.has_resource::<InitMarker>());
+    world.initialize().unwrap();
+    assert!(world.has_resource::<InitMarker>(), "initialize hook must receive the real world");
+
+    assert!(!world.has_resource::<StartMarker>());
+    world.start().unwrap();
+    assert!(world.has_resource::<StartMarker>(), "start hook must receive the real world");
+}
+
+#[test]
+fn test_late_added_system_gets_missed_hooks() {
+    let mut world = World::new();
+    world.initialize().unwrap();
+    world.start().unwrap();
+
+    let system = TestSystem::new("LateSystem");
+    let initialized = system.initialized.clone();
+    let started = system.started.clone();
+    world.add_system(system);
+
+    assert!(*initialized.lock().unwrap(), "late-added system must be initialized immediately");
+    assert!(*started.lock().unwrap(), "late-added system must be started immediately");
 }
 
 #[test]
@@ -197,30 +249,31 @@ fn test_system_lifecycle_errors() {
 #[test]
 fn test_system_registry_error_handling() {
     let mut registry = SystemRegistry::new();
-    
+    let mut world = World::new();
+
     // Try to start without initialization
-    let result = registry.start();
+    let result = registry.start(&mut world);
     assert!(result.is_err());
-    
+
     // Initialize
-    registry.initialize().unwrap();
-    
+    registry.initialize(&mut world).unwrap();
+
     // Try to initialize twice
-    let result = registry.initialize();
+    let result = registry.initialize(&mut world);
     assert!(result.is_err());
-    
+
     // Start
-    registry.start().unwrap();
-    
+    registry.start(&mut world).unwrap();
+
     // Try to start twice
-    let result = registry.start();
+    let result = registry.start(&mut world);
     assert!(result.is_err());
-    
+
     // Stop
-    registry.stop().unwrap();
-    
+    registry.stop(&mut world).unwrap();
+
     // Try to stop twice
-    let result = registry.stop();
+    let result = registry.stop(&mut world);
     assert!(result.is_err());
 }
 
@@ -236,16 +289,16 @@ fn test_system_update_safety() {
     registry.update_all(&mut world, 0.016);
     
     // Initialize and start
-    registry.initialize().unwrap();
-    registry.start().unwrap();
-    
+    registry.initialize(&mut world).unwrap();
+    registry.start(&mut world).unwrap();
+
     // Update should work now
     world.initialize().unwrap();
     world.start().unwrap();
     world.update(0.016).unwrap();
-    
+
     // Stop and try to update (should log warning)
-    registry.stop().unwrap();
+    registry.stop(&mut world).unwrap();
     registry.update_all(&mut world, 0.016);
 }
 
@@ -269,8 +322,8 @@ fn test_panic_recovery_in_systems() {
     let mut world = World::new();
     
     registry.add(PanicSystem);
-    registry.initialize().unwrap();
-    registry.start().unwrap();
+    registry.initialize(&mut world).unwrap();
+    registry.start(&mut world).unwrap();
     
     world.initialize().unwrap();
     world.start().unwrap();

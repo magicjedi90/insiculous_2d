@@ -39,9 +39,6 @@ impl From<String> for Name {
     }
 }
 
-// Re-export types from renderer that we need
-use renderer::{Sprite as RendererSprite, Camera as RendererCamera2D};
-
 /// Sprite component that defines visual appearance
 #[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct Sprite {
@@ -65,7 +62,7 @@ pub struct Sprite {
     /// existed) loading cleanly.
     #[serde(default)]
     pub emissive: f32,
-    /// Texture handle (from renderer::TextureHandle)
+    /// Texture handle ID (resolved by the renderer)
     pub texture_handle: u32,
 }
 
@@ -269,41 +266,5 @@ impl crate::component_registry::ComponentMeta for Camera {
 
     fn field_names() -> &'static [&'static str] {
         &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]
-    }
-}
-
-/// Sprite renderer system data
-#[derive(Debug, Default)]
-pub struct SpriteRenderData {
-    /// Sprites to render this frame
-    pub sprites: Vec<RendererSprite>,
-    /// Camera data
-    pub camera: Option<RendererCamera2D>,
-}
-
-impl SpriteRenderData {
-    /// Create new sprite render data
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Add a sprite to render
-    pub fn add_sprite(&mut self, sprite: RendererSprite) {
-        self.sprites.push(sprite);
-    }
-
-    /// Set camera
-    pub fn set_camera(&mut self, camera: RendererCamera2D) {
-        self.camera = Some(camera);
-    }
-
-    /// Clear all sprites
-    pub fn clear(&mut self) {
-        self.sprites.clear();
-    }
-
-    /// Get sprite count
-    pub fn sprite_count(&self) -> usize {
-        self.sprites.len()
     }
 }

@@ -19,9 +19,9 @@
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 72 tests
 
 ### Key Metrics
-- **Total Tests**: 707/707 passing (100% success rate)
+- **Total Tests**: 876/876 passing (100% success rate)
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
-- **Code Quality**: 29 ignored tests (GPU/window), 0 failures
+- **Code Quality**: 37 ignored tests (GPU/window), 0 failures
 
 ### Current Priority
 **Phase 1: Functional Editor** - Complete! See `PROJECT_ROADMAP.md` for full details.
@@ -152,7 +152,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 707/707 (100%)
-ignored: 29 (GPU/window)
+passed: 876/876 (100%)
+ignored: 37 (GPU/window)
 failed: 0
 ```

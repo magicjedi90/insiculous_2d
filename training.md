@@ -177,9 +177,14 @@ let transforms = world.query_entities::<Single<Transform2D>>();
 let sprites_with_transform = world.query_entities::<Pair<Transform2D, Sprite>>();
 let full_entities = world.query_entities::<Triple<Transform2D, Sprite, RigidBody>>();
 
-// Type-safe component access
-if let Some((transform, sprite)) = world.get_two_mut::<(Transform2D, Sprite)>(entity) {
-    transform.position += sprite.velocity * delta_time;
+// Type-safe component access — get/get_mut take EntityId by value, return Option
+if let Some(transform) = world.get::<Transform2D>(entity) {
+    println!("position: {:?}", transform.position);
+}
+// To update one component from another, read first, then get_mut sequentially
+let offset = world.get::<Sprite>(entity).map(|s| s.offset);
+if let (Some(offset), Some(transform)) = (offset, world.get_mut::<Transform2D>(entity)) {
+    transform.position += offset;
 }
 
 // Efficient entity iteration
@@ -195,7 +200,7 @@ let descendants = world.get_descendants(root);
 let roots = world.get_root_entities();
 ```
 
-**Files:** `ecs/lib.rs`, `ecs/component.rs`, `ecs/entity.rs`, `ecs/world.rs`, `ecs/hierarchy_ext.rs`
+**Files:** `ecs/lib.rs`, `ecs/component.rs`, `ecs/entity.rs`, `ecs/world.rs`, `ecs/hierarchy_extension.rs`
 
 ### Immediate-Mode UI Pattern
 UI described every frame rather than retained state:

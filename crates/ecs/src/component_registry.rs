@@ -94,11 +94,16 @@ pub fn global_registry() -> &'static ComponentRegistry {
         let mut registry = ComponentRegistry::new();
 
         // Register built-in ECS components
-        use crate::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+        use crate::audio_components::{AudioListener, AudioSource, PlaySoundEffect};
+        use crate::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
         registry.register::<Transform2D>();
         registry.register::<Sprite>();
         registry.register::<SpriteAnimation>();
         registry.register::<Camera>();
+        registry.register::<Name>();
+        registry.register::<AudioSource>();
+        registry.register::<AudioListener>();
+        registry.register::<PlaySoundEffect>();
 
         registry
     })
@@ -188,14 +193,14 @@ mod tests {
     #[test]
     fn test_component_serialization() {
         let component = TestComponent {
-            value: 3.14,
+            value: 2.75,
             name: "serialized".to_string(),
         };
 
         let json = serde_json::to_string(&component).expect("serialize");
         let parsed: TestComponent = serde_json::from_str(&json).expect("deserialize");
 
-        assert_eq!(parsed.value, 3.14);
+        assert_eq!(parsed.value, 2.75);
         assert_eq!(parsed.name, "serialized");
     }
 
@@ -256,5 +261,44 @@ mod tests {
         assert!(registry.is_registered("Sprite"));
         assert!(registry.is_registered("SpriteAnimation"));
         assert!(registry.is_registered("Camera"));
+        assert!(registry.is_registered("Name"));
+        assert!(registry.is_registered("AudioSource"));
+        assert!(registry.is_registered("AudioListener"));
+        assert!(registry.is_registered("PlaySoundEffect"));
+    }
+
+    #[test]
+    fn test_global_registry_creates_audio_source_from_json() {
+        use crate::audio_components::AudioSource;
+        use serde_json::json;
+
+        let registry = global_registry();
+
+        let json = json!({
+            "sound_id": 7,
+            "volume": 0.5,
+            "pitch": 1.25,
+            "looping": true,
+            "play_on_spawn": false,
+            "playing": false,
+            "spatial": true,
+            "max_distance": 800.0,
+            "reference_distance": 80.0,
+            "rolloff_factor": 2.0
+        });
+
+        let component = registry
+            .create_component("AudioSource", json)
+            .expect("AudioSource should be creatable from JSON");
+        let source = component
+            .downcast_ref::<AudioSource>()
+            .expect("created component should downcast to AudioSource");
+
+        assert_eq!(source.sound_id, 7);
+        assert!((source.volume - 0.5).abs() < f32::EPSILON);
+        assert!((source.pitch - 1.25).abs() < f32::EPSILON);
+        assert!(source.looping);
+        assert!(source.spatial);
+        assert!((source.max_distance - 800.0).abs() < f32::EPSILON);
     }
 }

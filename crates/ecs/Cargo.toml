@@ -12,7 +12,6 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 glam = { workspace = true }
-renderer = { path = "../renderer" }
 
 [dev-dependencies]
 pollster = { workspace = true }

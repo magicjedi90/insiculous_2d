@@ -2,13 +2,15 @@
 //!
 //! These components allow entities to emit sounds and receive audio.
 
+use crate::component_registry::ComponentMeta;
+use ecs_macros::ComponentMeta as DeriveComponentMeta;
 use serde::{Deserialize, Serialize};
 
 /// Component for entities that can emit sounds.
 ///
 /// An AudioSource represents a point in the game world that can play sounds.
 /// When combined with a Transform2D, it enables positional audio effects.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct AudioSource {
     /// Sound handle ID (from AudioManager::load_sound)
     pub sound_id: u32,
@@ -148,7 +150,7 @@ impl AudioSource {
 /// Typically attached to the player or camera entity. There should only be
 /// one active AudioListener in a scene. The listener's position determines
 /// how spatial audio is processed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct AudioListener {
     /// Whether this listener is active (only one should be active at a time)
     pub active: bool,
@@ -188,7 +190,7 @@ impl AudioListener {
 ///
 /// This component triggers a sound effect to play once and then the component
 /// is typically removed. Useful for events like explosions, jumps, or pickups.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct PlaySoundEffect {
     /// Sound handle ID to play
     pub sound_id: u32,

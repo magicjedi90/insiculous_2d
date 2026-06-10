@@ -306,3 +306,138 @@ fn test_spawn_multiple_entities_independent() {
     assert!(!world.has_component::<Transform2D>(&e2).unwrap());
     assert!(world.has_component::<Sprite>(&e2).unwrap());
 }
+
+// --- Stale entity ID rejection (generation validation in component ops) ---
+
+#[test]
+fn test_stale_entity_id_rejected_by_component_ops() {
+    #[derive(Debug)]
+    struct Health(i32);
+
+    let mut world = World::new();
+    let entity = world.create_entity();
+    world.add_component(&entity, Health(10)).unwrap();
+    assert_eq!(world.get::<Health>(entity).map(|h| h.0), Some(10));
+    world.remove_entity(&entity).unwrap();
+
+    // The retained ID is now stale: every component operation must refuse it
+    assert!(world.add_component(&entity, Health(5)).is_err());
+    assert!(world.remove_component::<Health>(&entity).is_err());
+    assert!(world.has_component::<Health>(&entity).is_err());
+    assert!(world.get::<Health>(entity).is_none());
+    assert!(world.get_mut::<Health>(entity).is_none());
+}
+
+#[test]
+fn test_snapshot_restore_revives_entity_id() {
+    #[derive(Debug)]
+    struct Marker;
+
+    let mut world = World::new();
+    let entity = world.create_entity();
+    world.remove_entity(&entity).unwrap();
+
+    // Snapshot-restore contract: clear, then re-create with the same ID
+    world.clear();
+    let restored = world.create_entity_with_id(entity);
+
+    assert_eq!(restored, entity);
+    assert!(world.validate_entity(&entity).is_ok());
+    assert!(world.add_component(&entity, Marker).is_ok());
+    assert!(world.get::<Marker>(entity).is_some());
+}
+
+// --- Hierarchy cleanup on entity removal ---
+
+#[test]
+fn test_remove_entity_unlinks_from_parent_children() {
+    let mut world = World::new();
+    let parent = world.create_entity();
+    let child = world.create_entity();
+    world.set_parent(child, parent).unwrap();
+
+    world.remove_entity(&child).unwrap();
+
+    let children = world.get_children(parent).unwrap_or(&[]);
+    assert!(
+        !children.contains(&child),
+        "removed child must not linger in parent's Children list"
+    );
+}
+
+#[test]
+fn test_remove_parent_entity_orphans_children_to_root() {
+    let mut world = World::new();
+    let parent = world.create_entity();
+    let child_a = world.create_entity();
+    let child_b = world.create_entity();
+    world.set_parent(child_a, parent).unwrap();
+    world.set_parent(child_b, parent).unwrap();
+
+    world.remove_entity(&parent).unwrap();
+
+    assert_eq!(world.get_parent(child_a), None, "child must not keep a dangling Parent");
+    assert_eq!(world.get_parent(child_b), None, "child must not keep a dangling Parent");
+    let roots = world.get_root_entities();
+    assert!(roots.contains(&child_a));
+    assert!(roots.contains(&child_b));
+}
+
+#[test]
+fn test_remove_middle_of_chain_orphans_grandchild() {
+    let mut world = World::new();
+    let a = world.create_entity();
+    let b = world.create_entity();
+    let c = world.create_entity();
+    world.set_parent(b, a).unwrap();
+    world.set_parent(c, b).unwrap();
+
+    world.remove_entity(&b).unwrap();
+
+    assert_eq!(world.get_parent(c), None, "grandchild becomes a root");
+    assert!(world.get_children(a).unwrap_or(&[]).is_empty(), "a's children list is empty");
+    let roots = world.get_root_entities();
+    assert!(roots.contains(&a));
+    assert!(roots.contains(&c));
+}
+
+#[test]
+fn test_remove_entity_hierarchy_deep_chain_leaves_no_residue() {
+    let mut world = World::new();
+    let root = world.create_entity();
+    let mut current = root;
+    let mut all = vec![root];
+    for _ in 0..100 {
+        let child = world.create_entity();
+        world.set_parent(child, current).unwrap();
+        all.push(child);
+        current = child;
+    }
+
+    world.remove_entity_hierarchy(&root).unwrap();
+
+    assert_eq!(world.entity_count(), 0);
+    for id in &all {
+        assert!(world.validate_entity(id).is_err(), "entity {} should be dead", id.value());
+    }
+}
+
+#[test]
+fn test_deep_hierarchy_ancestor_descendant_queries() {
+    let mut world = World::new();
+    let root = world.create_entity();
+    let mut current = root;
+    for _ in 0..50 {
+        let child = world.create_entity();
+        world.set_parent(child, current).unwrap();
+        current = child;
+    }
+    let leaf = current;
+
+    assert!(world.is_ancestor_of(root, leaf));
+    assert!(world.is_descendant_of(leaf, root));
+    assert!(!world.is_ancestor_of(leaf, root));
+    assert!(!world.is_descendant_of(root, leaf));
+    assert_eq!(world.get_ancestors(leaf).len(), 50);
+    assert_eq!(world.get_descendants(root).len(), 50);
+}
