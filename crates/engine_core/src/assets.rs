@@ -263,11 +263,6 @@ impl AssetManager {
         self.texture_manager.textures()
     }
 
-    /// Get a cloned HashMap of all textures
-    pub fn textures_cloned(&self) -> HashMap<TextureHandle, TextureResource> {
-        self.texture_manager.textures_cloned()
-    }
-
     /// Set the base path for asset loading
     pub fn set_base_path(&mut self, path: impl Into<String>) {
         self.config.base_path = path.into();

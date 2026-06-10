@@ -60,9 +60,14 @@ impl RenderManager {
     /// # Returns
     /// * `Ok(())` on successful initialization
     /// * `Err(RendererError)` if initialization fails
-    pub fn init(&mut self, window: Arc<Window>, clear_color: [f32; 4]) -> Result<(), RendererError> {
+    pub fn init(
+        &mut self,
+        window: Arc<Window>,
+        clear_color: [f32; 4],
+        renderer_config: renderer::RendererConfig,
+    ) -> Result<(), RendererError> {
         // Use pollster for async execution
-        let mut renderer = pollster::block_on(renderer::init(window))?;
+        let mut renderer = pollster::block_on(renderer::init_with_config(window, renderer_config))?;
 
         renderer.set_clear_color(
             clear_color[0] as f64,
@@ -155,27 +160,31 @@ impl RenderManager {
     /// Render a frame using a SpriteBatcher.
     ///
     /// This is a convenience method that extracts batches from the batcher.
+    /// Batches are submitted in deterministic order (min depth, then texture
+    /// handle) — HashMap iteration order would make cross-batch draw order
+    /// vary between runs.
     pub fn render_batcher(
         &mut self,
         batcher: &SpriteBatcher,
         textures: &HashMap<TextureHandle, TextureResource>,
     ) -> Result<(), RendererError> {
-        let batches: Vec<SpriteBatch> = batcher.batches().values().cloned().collect();
-        let batch_refs: Vec<&SpriteBatch> = batches.iter().collect();
+        let mut batch_refs: Vec<&SpriteBatch> = batcher.batches().values().collect();
+        batch_refs.sort_by(|a, b| {
+            let min_depth = |batch: &SpriteBatch| {
+                batch
+                    .instances
+                    .iter()
+                    .map(|i| i.depth)
+                    .min_by(f32::total_cmp)
+                    .unwrap_or(0.0)
+            };
+            min_depth(a)
+                .total_cmp(&min_depth(b))
+                .then_with(|| a.texture_handle.id.cmp(&b.texture_handle.id))
+        });
         self.render(&batch_refs, textures)
     }
 
-    /// Perform a basic render without sprites (just clears the screen).
-    pub fn render_basic(&mut self) -> Result<(), RendererError> {
-        let renderer = self.renderer.as_mut().ok_or_else(|| {
-            RendererError::WindowCreationError("Renderer not initialized".to_string())
-        })?;
-
-        match renderer.render() {
-            Ok(_) => Ok(()),
-            Err(e) => Self::handle_render_error(renderer, e),
-        }
-    }
 
     /// Get the GPU device if the renderer is initialized.
     pub fn device(&self) -> Option<Arc<Device>> {

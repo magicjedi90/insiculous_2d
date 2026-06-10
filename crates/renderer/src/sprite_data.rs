@@ -196,69 +196,52 @@ impl TextureResource {
         }
     }
 
-    /// Create a solid color texture - simplified version without texture data upload
-    pub fn create_solid_color(
-        device: &Device,
-        _queue: &Queue,
-        _color: [u8; 4],
-        width: u32,
-        height: u32,
-    ) -> Self {
-        let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Solid Color Texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        }));
-
-        // Note: Texture data upload skipped due to WGPU 28.0.0 API changes
-        // In a real implementation, you would use the correct texture upload method
-        log::info!("Created solid color texture: {}x{} (data upload skipped)", width, height);
-
-        Self::new(device, texture)
-    }
 }
 
-/// Dynamic buffer for sprite data
+/// Dynamic buffer for sprite data.
+///
+/// Grows on demand: when [`update`](Self::update) receives more elements than
+/// the current capacity, the GPU buffer is recreated at the next power of two
+/// and the capacity updated. It never shrinks.
 pub struct DynamicBuffer<T> {
     buffer: Buffer,
     capacity: usize,
-    #[allow(dead_code)] // Stored for potential buffer recreation
     usage: wgpu::BufferUsages,
     _phantom: std::marker::PhantomData<T>,
 }
 
 impl<T: bytemuck::Pod> DynamicBuffer<T> {
-    /// Create a new dynamic buffer
+    /// Create a new dynamic buffer with the given initial capacity (in elements)
     pub fn new(device: &Device, capacity: usize, usage: wgpu::BufferUsages) -> Self {
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&format!("Dynamic Buffer<{}>", std::any::type_name::<T>())),
-            size: (capacity * std::mem::size_of::<T>()) as u64,
-            usage: usage | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         Self {
-            buffer,
+            buffer: Self::create_buffer(device, capacity, usage),
             capacity,
             usage,
             _phantom: std::marker::PhantomData,
         }
     }
 
-    /// Update buffer data
-    pub fn update(&mut self, queue: &Queue, data: &[T]) {
+    fn create_buffer(device: &Device, capacity: usize, usage: wgpu::BufferUsages) -> Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(&format!("Dynamic Buffer<{}>", std::any::type_name::<T>())),
+            size: (capacity * std::mem::size_of::<T>()) as u64,
+            usage: usage | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+    }
+
+    /// Update buffer data, growing the GPU buffer if `data` exceeds capacity
+    pub fn update(&mut self, device: &Device, queue: &Queue, data: &[T]) {
         if data.len() > self.capacity {
-            panic!("Buffer overflow: trying to write {} elements to buffer with capacity {}", 
-                   data.len(), self.capacity);
+            let new_capacity = data.len().next_power_of_two();
+            log::debug!(
+                "Growing Dynamic Buffer<{}> from {} to {} elements",
+                std::any::type_name::<T>(),
+                self.capacity,
+                new_capacity
+            );
+            self.buffer = Self::create_buffer(device, new_capacity, self.usage);
+            self.capacity = new_capacity;
         }
 
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(data));
@@ -524,16 +507,5 @@ mod tests {
         let _bytes: &[u8] = bytemuck::bytes_of(&uniform);
         // 16 floats for matrix (64) + 2 floats position (8) + 2 floats padding (8) = 80 bytes
         assert_eq!(std::mem::size_of::<CameraUniform>(), 80);
-    }
-
-    // ==================== TextureResource Tests ====================
-    // Note: TextureResource requires a GPU device, so only basic struct tests here
-
-    #[test]
-    fn test_texture_resource_dimensions() {
-        // TextureResource stores width and height
-        // Since we can't create one without a device, we just verify the struct fields exist
-        // by checking the type signature in docs would be sufficient
-        // This is a placeholder for integration tests that would need a GPU
     }
 }

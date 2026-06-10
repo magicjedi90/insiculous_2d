@@ -4,8 +4,10 @@
 //! HDR target. Bloom picks up emissive lines automatically — that's the
 //! signature Geometry Wars look.
 //!
-//! The pipeline shares the camera bind-group layout with the sprite pipeline,
-//! so a single camera uniform feeds both.
+//! The pipeline declares its own camera bind-group layout (identical in shape
+//! to the sprite pipeline's) and owns its own camera uniform buffer, so the
+//! camera is uploaded once per pipeline per frame. Extracting a shared
+//! `CameraBinding` is tracked in TECH_DEBT.md.
 
 use std::sync::Arc;
 
@@ -67,15 +69,14 @@ pub struct LinePipeline {
     vertex_buffer: DynamicBuffer<LineVertex>,
     camera_buffer: Buffer,
     camera_bind_group: BindGroup,
-    /// Stored to satisfy `Arc<Device>` borrows during bind-group creation.
-    #[allow(dead_code)]
+    /// Used to grow the vertex buffer when an upload exceeds its capacity.
     device: Arc<Device>,
 }
 
 impl LinePipeline {
-    /// Maximum number of vertices (not segments) the dynamic vertex buffer
-    /// can hold. Default is generous — a 60×40 grid with horizontal +
-    /// vertical springs is only ~9k vertices.
+    /// Initial number of vertices (not segments) the dynamic vertex buffer
+    /// holds; it grows on demand. Default is generous — a 60×40 grid with
+    /// horizontal + vertical springs is only ~9k vertices.
     pub const DEFAULT_CAPACITY: usize = 16_384;
 
     pub fn new(device: &Device, capacity: usize) -> Self {
@@ -184,20 +185,12 @@ impl LinePipeline {
     }
 
     /// Upload a fresh vertex set. Pairs of vertices form line segments.
+    /// The vertex buffer grows automatically if the set exceeds its capacity.
     pub fn upload_vertices(&mut self, queue: &Queue, vertices: &[LineVertex]) {
         if vertices.is_empty() {
             return;
         }
-        if vertices.len() > self.vertex_buffer.capacity() {
-            log::warn!(
-                "Line vertex overflow: {} > capacity {}; truncating",
-                vertices.len(),
-                self.vertex_buffer.capacity()
-            );
-            self.vertex_buffer.update(queue, &vertices[..self.vertex_buffer.capacity()]);
-        } else {
-            self.vertex_buffer.update(queue, vertices);
-        }
+        self.vertex_buffer.update(&self.device, queue, vertices);
     }
 
     /// Draw the uploaded vertices into the HDR target, with depth-test

@@ -20,7 +20,7 @@ use wgpu::{
 use crate::render_targets::{RenderTargets, HDR_FORMAT};
 
 /// Tunables for the bloom pipeline. Mutate at runtime via
-/// [`RenderManager::bloom_config_mut`](crate::RenderManager::bloom_config_mut).
+/// [`Renderer::bloom_config_mut`](crate::Renderer::bloom_config_mut).
 #[derive(Debug, Clone, Copy)]
 pub struct BloomConfig {
     /// Master switch — when false, the composite pass still runs (to do the
@@ -68,6 +68,16 @@ struct BlurParams {
     direction: [f32; 2],
 }
 
+/// Bind groups for all bloom passes, valid for one render-target size.
+/// Rebuilt whenever the surface (and therefore the targets) resizes.
+struct CachedBindGroups {
+    size: (u32, u32),
+    extract: BindGroup,
+    blur_h: BindGroup,
+    blur_v: BindGroup,
+    composite: BindGroup,
+}
+
 /// Owns the bloom render pipelines, samplers, and bind-group layouts.
 pub struct BloomPipeline {
     extract_pipeline: RenderPipeline,
@@ -82,8 +92,16 @@ pub struct BloomPipeline {
 
     /// Uniform buffer reused for the extract and composite passes.
     bloom_params_buffer: Buffer,
-    /// Uniform buffer reused for both horizontal and vertical blur passes.
-    blur_params_buffer: Buffer,
+    /// Per-direction blur uniform buffers. `queue.write_buffer` flushes all
+    /// writes at submit time — before any encoded pass executes — so a single
+    /// shared buffer rewritten between passes would make every pass read the
+    /// last write. One buffer per direction keeps each pass's params stable.
+    blur_params_h_buffer: Buffer,
+    blur_params_v_buffer: Buffer,
+
+    /// Bind groups cached per render-target size — creating them every frame
+    /// is the exact churn the sprite pipeline's texture cache avoids.
+    cached: Option<CachedBindGroups>,
 }
 
 impl BloomPipeline {
@@ -146,9 +164,14 @@ impl BloomPipeline {
             contents: bytemuck::bytes_of(&BloomParams { threshold: 1.0, knee: 0.5, intensity: 0.8, _pad: 0.0 }),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let blur_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Blur Params Buffer"),
+        let blur_params_h_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Blur Params Buffer (Horizontal)"),
             contents: bytemuck::bytes_of(&BlurParams { texel_size: [0.0, 0.0], direction: [1.0, 0.0] }),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let blur_params_v_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Blur Params Buffer (Vertical)"),
+            contents: bytemuck::bytes_of(&BlurParams { texel_size: [0.0, 0.0], direction: [0.0, 1.0] }),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -161,7 +184,9 @@ impl BloomPipeline {
             composite_layout,
             sampler,
             bloom_params_buffer,
-            blur_params_buffer,
+            blur_params_h_buffer,
+            blur_params_v_buffer,
+            cached: None,
         }
     }
 
@@ -170,7 +195,7 @@ impl BloomPipeline {
     /// `targets` holds the HDR + bloom ping-pong textures.
     /// `swapchain` is the destination view (sRGB).
     pub fn run(
-        &self,
+        &mut self,
         device: &Device,
         queue: &Queue,
         encoder: &mut CommandEncoder,
@@ -178,7 +203,7 @@ impl BloomPipeline {
         swapchain: &TextureView,
         config: &BloomConfig,
     ) {
-        // 1. Update uniform buffers.
+        // 1. Update the extract/composite params (tunable at runtime).
         let intensity = if config.enabled { config.intensity } else { 0.0 };
         queue.write_buffer(
             &self.bloom_params_buffer,
@@ -191,8 +216,73 @@ impl BloomPipeline {
             }),
         );
 
-        // 2. Extract bright pass: HDR -> bloom_ping (half-res).
-        let extract_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        // 2. (Re)build bind groups if the targets resized. This also rewrites
+        // the per-direction blur params, whose texel size only changes with
+        // the target size.
+        let size = (targets.width(), targets.height());
+        if self.cached.as_ref().map(|c| c.size) != Some(size) {
+            self.cached = Some(self.build_bind_groups(device, queue, targets));
+        }
+        let Some(cached) = self.cached.as_ref() else {
+            return;
+        };
+
+        // 3. Extract bright pass: HDR -> bloom_ping (half-res).
+        self.run_fullscreen_pass(
+            encoder,
+            &self.extract_pipeline,
+            &cached.extract,
+            &targets.bloom_ping_view,
+            "Bloom Extract",
+        );
+
+        // 4. Blur iterations — ping-pong horizontal then vertical. The
+        // bloom_ping texture holds the live state at the start and end of
+        // every iteration, so it's the source the composite pass reads.
+        //
+        // Each direction has its own uniform buffer. Sharing one buffer and
+        // rewriting it between passes would not work: write_buffer flushes at
+        // submit, before any pass runs, so every pass would see only the
+        // final write.
+        let iterations = config.blur_iterations.max(1);
+        for _ in 0..iterations {
+            // Horizontal: bloom_ping -> bloom_pong.
+            self.run_fullscreen_pass(encoder, &self.blur_pipeline, &cached.blur_h, &targets.bloom_pong_view, "Bloom Blur H");
+            // Vertical: bloom_pong -> bloom_ping.
+            self.run_fullscreen_pass(encoder, &self.blur_pipeline, &cached.blur_v, &targets.bloom_ping_view, "Bloom Blur V");
+        }
+
+        // 5. Composite HDR + bloom -> swapchain.
+        self.run_fullscreen_pass(
+            encoder,
+            &self.composite_pipeline,
+            &cached.composite,
+            swapchain,
+            "Bloom Composite",
+        );
+    }
+
+    /// Build the bind groups for the current render targets and write the
+    /// blur params (texel size + direction) for both directions.
+    fn build_bind_groups(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        targets: &RenderTargets,
+    ) -> CachedBindGroups {
+        let texel = [1.0 / targets.bloom_width() as f32, 1.0 / targets.bloom_height() as f32];
+        queue.write_buffer(
+            &self.blur_params_h_buffer,
+            0,
+            bytemuck::bytes_of(&BlurParams { texel_size: texel, direction: [1.0, 0.0] }),
+        );
+        queue.write_buffer(
+            &self.blur_params_v_buffer,
+            0,
+            bytemuck::bytes_of(&BlurParams { texel_size: texel, direction: [0.0, 1.0] }),
+        );
+
+        let extract = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Bloom Extract Bind Group"),
             layout: &self.extract_layout,
             entries: &[
@@ -201,26 +291,9 @@ impl BloomPipeline {
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
             ],
         });
-        self.run_fullscreen_pass(
-            encoder,
-            &self.extract_pipeline,
-            &extract_bind,
-            &targets.bloom_ping_view,
-            "Bloom Extract",
-        );
-
-        // 3. Blur iterations — ping-pong horizontal then vertical. The
-        // bloom_ping texture holds the live state at the start and end of
-        // every iteration, so it's the source the composite pass reads.
-        let texel = [1.0 / targets.bloom_width() as f32, 1.0 / targets.bloom_height() as f32];
-        let iterations = config.blur_iterations.max(1);
-        for _ in 0..iterations {
-            self.blur_horizontal(device, queue, encoder, targets, texel);
-            self.blur_vertical(device, queue, encoder, targets, texel);
-        }
-
-        // 4. Composite HDR + bloom -> swapchain.
-        let composite_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let blur_h = self.blur_bind_group(device, &self.blur_params_h_buffer, &targets.bloom_ping_view);
+        let blur_v = self.blur_bind_group(device, &self.blur_params_v_buffer, &targets.bloom_pong_view);
+        let composite = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Bloom Composite Bind Group"),
             layout: &self.composite_layout,
             entries: &[
@@ -230,59 +303,22 @@ impl BloomPipeline {
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.sampler) },
             ],
         });
-        self.run_fullscreen_pass(
-            encoder,
-            &self.composite_pipeline,
-            &composite_bind,
-            swapchain,
-            "Bloom Composite",
-        );
+
+        CachedBindGroups {
+            size: (targets.width(), targets.height()),
+            extract,
+            blur_h,
+            blur_v,
+            composite,
+        }
     }
 
-    /// Horizontal blur: source = `bloom_ping`, destination = `bloom_pong`.
-    fn blur_horizontal(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        encoder: &mut CommandEncoder,
-        targets: &RenderTargets,
-        texel: [f32; 2],
-    ) {
-        self.write_blur_params(queue, texel, [1.0, 0.0]);
-        let bind = self.blur_bind_group(device, &targets.bloom_ping_view);
-        self.run_fullscreen_pass(encoder, &self.blur_pipeline, &bind, &targets.bloom_pong_view, "Bloom Blur H");
-    }
-
-    /// Vertical blur: source = `bloom_pong`, destination = `bloom_ping`.
-    /// After a horizontal+vertical pair, `bloom_ping` holds the live blur
-    /// result that the composite pass reads.
-    fn blur_vertical(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        encoder: &mut CommandEncoder,
-        targets: &RenderTargets,
-        texel: [f32; 2],
-    ) {
-        self.write_blur_params(queue, texel, [0.0, 1.0]);
-        let bind = self.blur_bind_group(device, &targets.bloom_pong_view);
-        self.run_fullscreen_pass(encoder, &self.blur_pipeline, &bind, &targets.bloom_ping_view, "Bloom Blur V");
-    }
-
-    fn write_blur_params(&self, queue: &Queue, texel: [f32; 2], direction: [f32; 2]) {
-        queue.write_buffer(
-            &self.blur_params_buffer,
-            0,
-            bytemuck::bytes_of(&BlurParams { texel_size: texel, direction }),
-        );
-    }
-
-    fn blur_bind_group(&self, device: &Device, src_view: &TextureView) -> BindGroup {
+    fn blur_bind_group(&self, device: &Device, params: &Buffer, src_view: &TextureView) -> BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Bloom Blur Bind Group"),
             layout: &self.blur_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: self.blur_params_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 0, resource: params.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(src_view) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
             ],

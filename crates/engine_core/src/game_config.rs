@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::chaos_mode::ChaosMode;
 
+fn default_vsync() -> bool {
+    true
+}
+
 /// Configuration for the game window and engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
@@ -21,6 +25,11 @@ pub struct GameConfig {
     pub clear_color: [f32; 4],
     /// Whether the window is resizable
     pub resizable: bool,
+    /// Present frames with vsync. `true` (default) never tears and caps at
+    /// the display refresh rate; `false` requests the lowest-latency present
+    /// mode the platform offers.
+    #[serde(default = "default_vsync")]
+    pub vsync: bool,
     /// Project-wide gameplay intensity theme. Each game decides what a given
     /// variant means; the engine just carries the selection.
     #[serde(default)]
@@ -46,6 +55,7 @@ impl Default for GameConfig {
             target_fps: 60,
             clear_color: [0.1, 0.1, 0.15, 1.0],
             resizable: true,
+            vsync: true,
             chaos_mode: ChaosMode::Normal,
             achievement_save_path: None,
             asset_base_path: None,
@@ -78,6 +88,12 @@ impl GameConfig {
     /// Set target FPS
     pub fn with_fps(mut self, fps: u32) -> Self {
         self.target_fps = fps;
+        self
+    }
+
+    /// Enable or disable vsync (enabled by default)
+    pub fn with_vsync(mut self, vsync: bool) -> Self {
+        self.vsync = vsync;
         self
     }
 
@@ -116,7 +132,14 @@ mod tests {
         assert_eq!(config.height, 600);
         assert_eq!(config.target_fps, 60);
         assert!(config.resizable);
+        assert!(config.vsync);
         assert_eq!(config.chaos_mode, ChaosMode::Normal);
+    }
+
+    #[test]
+    fn test_game_config_with_vsync_disabled() {
+        let config = GameConfig::new("Test").with_vsync(false);
+        assert!(!config.vsync);
     }
 
     #[test]

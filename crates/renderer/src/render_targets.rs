@@ -23,7 +23,8 @@ const BLOOM_DOWNSAMPLE: u32 = 2;
 
 /// Owns the HDR color, depth, and bloom ping-pong textures.
 ///
-/// The textures are recreated whenever the surface resizes — see [`resize`].
+/// The textures are recreated whenever the surface resizes — see
+/// [`resize`](Self::resize).
 pub struct RenderTargets {
     /// Full-resolution HDR color target. Sprites + lines write here.
     pub hdr_color: Texture,

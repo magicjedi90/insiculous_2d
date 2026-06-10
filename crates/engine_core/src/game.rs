@@ -319,7 +319,11 @@ impl<G: Game> GameRunner<G> {
         })?;
 
         // Initialize render manager
-        self.render_manager.init(window, self.config.clear_color)?;
+        self.render_manager.init(
+            window,
+            self.config.clear_color,
+            renderer::RendererConfig { vsync: self.config.vsync },
+        )?;
         self.render_manager.set_viewport_size(
             self.config.width as f32,
             self.config.height as f32,
@@ -461,7 +465,7 @@ impl<G: Game> GameRunner<G> {
         // Phase 1: Game sprites — render into their own batcher so they never
         // share a batch with UI elements (which would cause UI panel backgrounds
         // to paint over game sprites due to painter's algorithm).
-        let mut game_batcher = SpriteBatcher::new(1000);
+        let mut game_batcher = SpriteBatcher::new();
         {
             let empty_commands: &[DrawCommand] = &[];
             let mut ctx = RenderContext {
@@ -481,7 +485,7 @@ impl<G: Game> GameRunner<G> {
         append_particle_sprites(&mut game_batcher, &self.particles);
 
         // Phase 2: UI sprites — separate batcher
-        let mut ui_batcher = SpriteBatcher::new(1000);
+        let mut ui_batcher = SpriteBatcher::new();
         render_ui_commands(&mut ui_batcher, ui_commands, window_size, &self.glyph_textures);
 
         // Collect and sort game batches (by depth then texture handle for stability)
@@ -500,8 +504,8 @@ impl<G: Game> GameRunner<G> {
 
         // Get textures from asset manager (need to reborrow after RenderContext)
         if let Some(asset_manager) = &self.asset_manager {
-            let textures = asset_manager.textures_cloned();
-            if let Err(e) = self.render_manager.render(&batch_refs, &textures) {
+            let textures = asset_manager.textures();
+            if let Err(e) = self.render_manager.render(&batch_refs, textures) {
                 log::error!("Render error: {}", e);
             }
         }

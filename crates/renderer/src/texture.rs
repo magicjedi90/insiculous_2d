@@ -35,6 +35,11 @@ pub struct TextureHandle {
 }
 
 impl TextureHandle {
+    /// Reserved handle for the renderer's built-in 1x1 white texture.
+    /// Sprites that want a flat color multiply their tint against it.
+    /// [`TextureManager`] starts allocating real handles at 1 to keep this free.
+    pub const WHITE: Self = Self { id: 0 };
+
     /// Create a new texture handle
     pub fn new(id: u32) -> Self {
         Self { id }
@@ -43,11 +48,14 @@ impl TextureHandle {
 
 
 /// Texture loading configuration
+///
+/// Note: mipmap generation is intentionally not offered. An earlier
+/// `generate_mipmaps` flag allocated a mip chain but never filled it, so
+/// minified sprites sampled uninitialized levels. Add it back only together
+/// with actual mip generation.
 #[derive(Debug, Clone)]
 #[derive(Default)]
 pub struct TextureLoadConfig {
-    /// Whether to generate mipmaps
-    pub generate_mipmaps: bool,
     /// Texture format (None to auto-detect)
     pub format: Option<TextureFormat>,
     /// Sampler configuration
@@ -128,7 +136,7 @@ impl TextureManager {
             device,
             queue,
             textures: HashMap::new(),
-            next_handle: 1, // 0 is reserved for default texture
+            next_handle: TextureHandle::WHITE.id + 1, // 0 is reserved for the white texture
             max_texture_dimension,
         }
     }
@@ -319,13 +327,6 @@ impl TextureManager {
         &self.textures
     }
 
-    /// Get a cloned HashMap of all textures
-    ///
-    /// Returns a new HashMap with cloned TextureResource values.
-    pub fn textures_cloned(&self) -> HashMap<TextureHandle, TextureResource> {
-        self.textures.clone()
-    }
-
     /// Create texture from RGBA data using write_texture directly with simplified layout
     fn create_texture_from_rgba(
         &self,
@@ -343,11 +344,7 @@ impl TextureManager {
                 height,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: if config.generate_mipmaps {
-                ((width.max(height) as f32).log2().floor() as u32) + 1
-            } else {
-                1
-            },
+            mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -382,107 +379,9 @@ impl TextureManager {
         })
     }
 
-    /// Create a placeholder texture (utility for debugging/fallback)
-    #[allow(dead_code)] // Reserved for future error handling
-    fn create_placeholder_texture(
-        &self,
-        width: u32,
-        height: u32,
-        color: &[u8; 4],
-    ) -> Result<TextureResource, TextureError> {
-        let data = vec![*color; (width * height) as usize];
-        self.create_texture_from_rgba(width, height, bytemuck::cast_slice(&data), TextureLoadConfig::default())
-    }
-
     /// Create sampler from config (delegates to SamplerConfig::create_sampler)
     fn create_sampler(&self, config: &SamplerConfig) -> Sampler {
         config.create_sampler(&self.device, Some("Texture Sampler"))
-    }
-}
-
-/// Builder for creating texture atlases
-pub struct TextureAtlasBuilder {
-    regions: Vec<AtlasRegion>,
-    max_width: u32,
-    max_height: u32,
-    padding: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct AtlasRegion {
-    pub name: String,
-    pub width: u32,
-    pub height: u32,
-    pub data: Option<Vec<u8>>, // RGBA data
-}
-
-impl TextureAtlasBuilder {
-    /// Create a new texture atlas builder
-    pub fn new(max_width: u32, max_height: u32) -> Self {
-        Self {
-            regions: Vec::new(),
-            max_width,
-            max_height,
-            padding: 2,
-        }
-    }
-
-    /// Set padding between atlas regions
-    pub fn with_padding(mut self, padding: u32) -> Self {
-        self.padding = padding;
-        self
-    }
-
-    /// Add a region to the atlas
-    pub fn add_region(mut self, name: String, width: u32, height: u32, data: Option<Vec<u8>>) -> Self {
-        self.regions.push(AtlasRegion {
-            name,
-            width,
-            height,
-            data,
-        });
-        self
-    }
-
-    /// Build the texture atlas
-    pub fn build(self, device: &Device, _queue: &Queue) -> Result<crate::sprite::TextureAtlas, TextureError> {
-        // Simple packing algorithm - for production, use a proper bin packing algorithm
-        let mut x = 0;
-        let mut y = 0;
-        let mut max_row_height = 0;
-        
-        let mut atlas_regions = Vec::new();
-
-        for region in &self.regions {
-            if x + region.width + self.padding > self.max_width {
-                // Move to next row
-                x = 0;
-                y += max_row_height + self.padding;
-                max_row_height = 0;
-            }
-
-            if y + region.height + self.padding > self.max_height {
-                return Err(TextureError::TextureCreationError("Atlas too small for all regions".to_string()));
-            }
-
-            atlas_regions.push((region.name.clone(), x, y, region.width, region.height));
-            
-            x += region.width + self.padding;
-            max_row_height = max_row_height.max(region.height);
-        }
-
-        let atlas_width = self.max_width;
-        let atlas_height = y + max_row_height + self.padding;
-
-        // Create the atlas texture
-        let mut atlas = crate::sprite::TextureAtlas::new(device, atlas_width, atlas_height);
-
-        // Add regions to atlas
-        for (name, x, y, width, height) in atlas_regions {
-            atlas.add_region(name, x, y, width, height, atlas_width, atlas_height);
-        }
-
-        Ok(atlas)
     }
 }
 
@@ -539,17 +438,7 @@ mod tests {
     #[test]
     fn test_texture_load_config_default() {
         let config = TextureLoadConfig::default();
-        assert!(!config.generate_mipmaps);
         assert!(config.format.is_none());
-    }
-
-    #[test]
-    fn test_texture_load_config_with_mipmaps() {
-        let config = TextureLoadConfig {
-            generate_mipmaps: true,
-            ..Default::default()
-        };
-        assert!(config.generate_mipmaps);
     }
 
     #[test]
@@ -619,79 +508,6 @@ mod tests {
         assert!(msg.contains("8192"));
     }
 
-    // ==================== AtlasRegion Tests ====================
-
-    #[test]
-    fn test_atlas_region_creation() {
-        let region = AtlasRegion {
-            name: "sprite1".to_string(),
-            width: 64,
-            height: 64,
-            data: None,
-        };
-
-        assert_eq!(region.name, "sprite1");
-        assert_eq!(region.width, 64);
-        assert_eq!(region.height, 64);
-        assert!(region.data.is_none());
-    }
-
-    #[test]
-    fn test_atlas_region_with_data() {
-        let data = vec![255u8; 64 * 64 * 4]; // RGBA data for 64x64 texture
-        let region = AtlasRegion {
-            name: "sprite2".to_string(),
-            width: 64,
-            height: 64,
-            data: Some(data.clone()),
-        };
-
-        assert!(region.data.is_some());
-        assert_eq!(region.data.unwrap().len(), 64 * 64 * 4);
-    }
-
-    // ==================== TextureAtlasBuilder Tests ====================
-
-    #[test]
-    fn test_texture_atlas_builder_new() {
-        let builder = TextureAtlasBuilder::new(1024, 1024);
-        assert_eq!(builder.max_width, 1024);
-        assert_eq!(builder.max_height, 1024);
-        assert_eq!(builder.padding, 2); // default padding
-        assert!(builder.regions.is_empty());
-    }
-
-    #[test]
-    fn test_texture_atlas_builder_with_padding() {
-        let builder = TextureAtlasBuilder::new(1024, 1024).with_padding(4);
-        assert_eq!(builder.padding, 4);
-    }
-
-    #[test]
-    fn test_texture_atlas_builder_add_region() {
-        let builder = TextureAtlasBuilder::new(1024, 1024)
-            .add_region("sprite1".to_string(), 64, 64, None)
-            .add_region("sprite2".to_string(), 128, 128, None);
-
-        assert_eq!(builder.regions.len(), 2);
-        assert_eq!(builder.regions[0].name, "sprite1");
-        assert_eq!(builder.regions[0].width, 64);
-        assert_eq!(builder.regions[1].name, "sprite2");
-        assert_eq!(builder.regions[1].width, 128);
-    }
-
-    #[test]
-    fn test_texture_atlas_builder_chaining() {
-        let builder = TextureAtlasBuilder::new(512, 512)
-            .with_padding(1)
-            .add_region("a".to_string(), 32, 32, None)
-            .add_region("b".to_string(), 32, 32, None)
-            .add_region("c".to_string(), 32, 32, None);
-
-        assert_eq!(builder.padding, 1);
-        assert_eq!(builder.regions.len(), 3);
-    }
-
-    // Note: TextureManager and TextureAtlasBuilder.build() require GPU device,
-    // so those are tested in integration tests or with mocked devices
+    // Note: TextureManager requires a GPU device, so its load paths are
+    // exercised by ignored GPU tests / examples.
 }

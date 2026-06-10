@@ -3,11 +3,9 @@
 //! This crate provides a simple renderer using WGPU.
 
 use std::sync::Arc;
-use winit::{
-    application::ApplicationHandler,
-    window::Window,
-};
+use winit::window::Window;
 
+pub mod atlas;
 pub mod bloom;
 mod error;
 pub mod line_pipeline;
@@ -31,23 +29,20 @@ pub use window::*;
 
 // Selective re-exports to avoid conflicts
 // TextureHandle is the canonical definition in texture.rs
-pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline, TextureAtlas};
-pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle, TextureAtlasBuilder};
+pub use atlas::{AtlasRegion, TextureAtlas, TextureAtlasBuilder};
+pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline};
+pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle};
 
 // Re-export Time from common crate (moved from renderer for proper placement)
 pub use common::Time;
 
 /// Simplified renderer initialization - no tokio required
 pub async fn init(window: Arc<Window>) -> Result<Renderer, RendererError> {
-    log::info!("Initializing renderer");
-    Renderer::new(window).await
+    init_with_config(window, RendererConfig::default()).await
 }
 
-/// Run the renderer with a custom application handler
-pub fn run_with_app<T>(app: &mut T) -> Result<(), RendererError>
-where
-    T: ApplicationHandler<()> + 'static
-{
-    log::info!("Running renderer with custom application handler");
-    Renderer::run_with_app(app)
+/// Renderer initialization with explicit configuration (vsync, etc.)
+pub async fn init_with_config(window: Arc<Window>, config: RendererConfig) -> Result<Renderer, RendererError> {
+    log::info!("Initializing renderer (vsync: {})", config.vsync);
+    Renderer::with_config(window, config).await
 }

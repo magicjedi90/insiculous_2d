@@ -13,27 +13,36 @@
 //!   all needed together and share lifetimes.
 //!
 //! Splitting them would add complexity without clear benefit for a 2D game engine.
-//!
-//! # Static Method: `run_with_app`
-//!
-//! The [`Renderer::run_with_app`] static method exists for legacy compatibility.
-//! New code should use the [`Game`](engine_core::Game) trait and [`run_game()`](engine_core::run_game)
-//! function which handle window/event loop management internally.
 
 use std::sync::Arc;
 use wgpu::{
     Adapter, Device, Queue, Surface, SurfaceConfiguration, TextureFormat, TextureUsages,
 };
-use winit::{
-    application::ApplicationHandler,
-    event_loop::EventLoop,
-    window::Window
-};
+use winit::window::Window;
 
 use crate::bloom::{BloomConfig, BloomPipeline};
 use crate::error::RendererError;
 use crate::line_pipeline::{LinePipeline, LineVertex};
 use crate::render_targets::RenderTargets;
+
+/// Configuration for creating a [`Renderer`].
+///
+/// Games normally set these through `GameConfig` in `engine_core`; this
+/// struct is the renderer-level surface for embedders that drive the
+/// renderer directly.
+#[derive(Debug, Clone)]
+pub struct RendererConfig {
+    /// Present frames with vsync (`PresentMode::Fifo` — never tears, capped
+    /// at the display refresh rate). `false` selects `AutoNoVsync` for the
+    /// lowest latency the platform offers.
+    pub vsync: bool,
+}
+
+impl Default for RendererConfig {
+    fn default() -> Self {
+        Self { vsync: true }
+    }
+}
 
 /// The main renderer struct - now with proper lifetime management
 pub struct Renderer {
@@ -60,13 +69,18 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Create a new renderer with an existing window and default configuration
+    pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
+        Self::with_config(window, RendererConfig::default()).await
+    }
+
     /// Create a new renderer with an existing window
     ///
     /// This method properly manages the surface lifetime by:
     /// 1. Creating the instance and surface first
     /// 2. The surface gets `'static` lifetime because `Arc<Window>` is `'static`
     /// 3. WGPU 28.0.0 supports `Arc<Window>` -> `Surface<'static>` conversion
-    pub async fn new(window: Arc<Window>) -> Result<Self, RendererError> {
+    pub async fn with_config(window: Arc<Window>, renderer_config: RendererConfig) -> Result<Self, RendererError> {
         // Create a WGPU instance
         let instance = wgpu::Instance::default();
 
@@ -119,7 +133,11 @@ impl Renderer {
             format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: if renderer_config.vsync {
+                wgpu::PresentMode::Fifo
+            } else {
+                wgpu::PresentMode::AutoNoVsync
+            },
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -220,78 +238,25 @@ impl Renderer {
         }
     }
 
-    /// Render a frame
-    pub fn render(&self) -> Result<(), RendererError> {
-        // Get a frame (returns None if we should skip this frame)
-        let frame = match self.acquire_frame()? {
-            Some(frame) => frame,
-            None => return Ok(()),
-        };
-
-        // Create a view
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Create a command encoder
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
-        // Create a render pass
-        {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Main Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            // In a real implementation, we would draw things here
-        }
-
-        // Submit the command buffer
-        self.queue.submit(std::iter::once(encoder.finish()));
-
-        // Present the frame
-        frame.present();
-
-        Ok(())
-    }
-
     /// Render a frame with a sprite pipeline
     pub fn render_with_sprites(
-        &self,
+        &mut self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
         sprite_batches: &[&crate::sprite::SpriteBatch]
     ) -> Result<(), RendererError> {
-        // Create a combined texture resources map that includes the white texture for colored sprites
-        let mut combined_texture_resources = texture_resources.clone();
-
-        // Add the white texture if it exists, using a special handle for colored sprites
+        // Make sure the built-in white texture (for flat-colored sprites) has
+        // a cached bind group. Cheap no-op after the first frame — no need to
+        // clone the caller's texture map just to splice it in.
         if let Some(white_texture) = &self.white_texture {
-            let white_texture_handle = crate::texture::TextureHandle { id: 0 }; // Use handle 0 for white texture
-            combined_texture_resources.insert(white_texture_handle, white_texture.clone());
+            sprite_pipeline.cache_texture_bind_group(crate::texture::TextureHandle::WHITE, white_texture);
         }
 
         // Prepare sprites - update instance buffer with sprite data
         sprite_pipeline.prepare_sprites(&self.queue, sprite_batches);
 
-        self.render_with_sprites_internal(sprite_pipeline, camera, &combined_texture_resources, sprite_batches)
+        self.render_with_sprites_internal(sprite_pipeline, camera, texture_resources, sprite_batches)
     }
 
     /// Internal method to render sprites with the combined texture resources.
@@ -300,7 +265,7 @@ impl Renderer {
     /// then extracts bright pixels, blurs them, and composites the result
     /// to the swapchain.
     fn render_with_sprites_internal(
-        &self,
+        &mut self,
         sprite_pipeline: &mut crate::sprite::SpritePipeline,
         camera: &crate::sprite_data::Camera,
         texture_resources: &std::collections::HashMap<crate::texture::TextureHandle, crate::sprite_data::TextureResource>,
@@ -485,19 +450,5 @@ impl Renderer {
     /// Get the white texture resource for colored sprites
     pub fn white_texture(&self) -> Option<&crate::sprite_data::TextureResource> {
         self.white_texture.as_ref()
-    }
-
-    /// Run the renderer with a custom application handler
-    pub fn run_with_app<T>(app: &mut T) -> Result<(), RendererError> 
-    where 
-        T: ApplicationHandler<()> + 'static
-    {
-        // Create an event loop
-        let event_loop = EventLoop::new()
-            .map_err(|e| RendererError::WindowCreationError(e.to_string()))?;
-
-        // Run the event loop with the application
-        event_loop.run_app(app)
-            .map_err(|e| RendererError::WindowCreationError(e.to_string()))
     }
 }

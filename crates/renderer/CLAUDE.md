@@ -1,45 +1,52 @@
 # Renderer Crate — Agent Context
 
-You are working in the rendering crate. WGPU 28.0.0 backend with instanced sprite rendering.
+You are working in the rendering crate. WGPU 28.0.0 backend with instanced sprite rendering, HDR + bloom post-processing.
 
 ## Architecture
 ```
-Renderer (WGPU device, queue, surface)
-└── SpritePipeline (render pipeline, bind groups, buffers)
-    ├── Vertex buffer (quad geometry)
-    ├── Instance buffer (per-sprite transforms, colors, UVs)
-    ├── Camera uniform buffer + bind group (cached)
-    └── Texture bind groups (cached per handle)
+Renderer (WGPU device, queue, surface, RendererConfig{vsync})
+├── RenderTargets (HDR color + depth + bloom ping/pong, rebuilt on resize)
+├── SpritePipeline (instanced quads -> HDR target)
+│   ├── Vertex/index buffers (quad geometry)
+│   ├── Instance buffer (DynamicBuffer — grows on demand, never panics)
+│   ├── Camera uniform buffer + bind group (cached)
+│   └── Texture bind groups (cached per handle; TextureHandle::WHITE = built-in 1x1 white)
+├── LinePipeline (line-list geometry -> HDR target, e.g. spring-mass grid)
+└── BloomPipeline (extract -> H/V blur ping-pong -> composite to swapchain)
+    └── Bind groups cached per target size; per-direction blur uniform buffers
 ```
 
-## Rendering Flow
-1. `RenderManager::begin_frame()` — acquire surface texture
-2. Collect sprite batches from ECS (group by texture handle)
-3. Upload instance data to GPU buffer
-4. For each batch: bind texture, draw instanced quads
-5. UI overlay: draw UI commands on top
-6. `RenderManager::end_frame()` — present
+## Rendering Flow (one frame)
+1. Sprites + lines draw into the HDR target (Rgba16Float) with depth
+2. Bloom extracts bright pixels (half-res), blurs H+V × iterations, composites to the sRGB swapchain
+3. Camera uniforms uploaded once per pipeline per frame
 
 ## File Map
-- `renderer.rs` — WGPU device/queue/surface lifecycle
-- `sprite.rs` — SpritePipeline (main rendering, batching, draw calls)
-- `sprite_data.rs` — GPU data structures (Vertex, SpriteInstance, CameraUniform)
-- `texture.rs` — Texture loading, caching, bind group management
-- `shader/sprite.wgsl` — WGSL vertex + fragment shader
+- `renderer.rs` — WGPU device/queue/surface lifecycle, `RendererConfig`, frame orchestration
+- `sprite.rs` — `Sprite` data type; parent of the sprite submodules
+- `sprite/batch.rs` — `SpriteBatch`, `SpriteBatcher` (CPU-side grouping by texture)
+- `sprite/pipeline.rs` — `SpritePipeline` (GPU pipeline, bind group caches, draw)
+- `sprite_data.rs` — GPU data structures (`SpriteVertex`, `SpriteInstance`, `DynamicBuffer`)
+- `texture.rs` — `TextureManager`, `TextureHandle` (incl. `WHITE`), `SamplerConfig`
+- `atlas.rs` — `TextureAtlas`, `TextureAtlasBuilder`, `AtlasRegion`
+- `render_targets.rs` — HDR/depth/bloom textures, resize handling
+- `bloom.rs` — bloom passes + `BloomConfig` (runtime-tunable)
+- `line_pipeline.rs` — `LinePipeline`, `LineVertex`
+- `shaders/` — `sprite_instanced.wgsl`, `line.wgsl`, `bloom_{extract,blur,composite}.wgsl`
 
 ## Key Guidelines
-- Cache bind groups — never create per-frame
-- Batch by texture to minimize bind group switches
-- Instance buffer grows but never shrinks
-- GPU tests marked `#[ignore]` — most tests use mock/stub objects
+- **Cache bind groups — never create per-frame.** Sprite textures cache per handle; bloom caches per target size.
+- **`queue.write_buffer` flushes at submit, not encode.** Never rewrite one uniform buffer between passes in the same submit — every pass sees only the last write. Use one buffer per distinct value (see bloom's H/V blur buffers).
+- Batch by texture to minimize bind group switches; cross-batch submission order must be deterministic (callers sort by min depth, then handle)
+- `DynamicBuffer` grows (next power of two) and never shrinks; pass `&Device` to `update`
+- Float sorts use `total_cmp` — no `partial_cmp().unwrap()`
+- GPU tests marked `#[ignore]` — everything else runs headless
 
 ## Known Tech Debt
-- SpritePipeline manages 13 resources in one struct (SRP violation)
-- Dead code with `#[allow(dead_code)]` in sprite.rs, sprite_data.rs, texture.rs
-- CameraUniform duplicated in common and renderer crates
+See `TECH_DEBT.md` — 3 open issues, all Low (shared camera binding, cross-batch transparency vs depth writes, prepare_sprites scratch Vec).
 
 ## Testing
-- 62 tests, run with `cargo test -p renderer`
+- 69 tests, run with `cargo test -p renderer`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`
@@ -49,7 +56,8 @@ Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`
 | SpritePipeline batching | Canvas item rendering | `servers/rendering/renderer_canvas_cull.cpp` — `canvas_render_items` |
 | Sprite component | Sprite2D | `scene/2d/sprite_2d.cpp` |
 | Camera2D | Camera2D | `scene/2d/camera_2d.cpp` |
-| sprite.wgsl | Canvas shader | `servers/rendering/renderer_rd/shaders/canvas.glsl` |
+| sprite_instanced.wgsl | Canvas shader | `servers/rendering/renderer_rd/shaders/canvas.glsl` |
 | Texture caching | Texture storage | `servers/rendering/storage/texture_storage.cpp` |
+| Bloom | Glow effect | `servers/rendering/renderer_rd/effects/copy_effects.cpp` |
 
 **Remember:** We use WGPU, not Vulkan/OpenGL. Study Godot's *batching design* and *draw order logic*, not its graphics API calls.
