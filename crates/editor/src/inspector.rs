@@ -151,7 +151,7 @@ fn render_field(
         }
         // For arrays, show inline if small
         Value::Array(arr) => {
-            if arr.len() <= 4 && arr.iter().all(|v| is_simple_value(v)) {
+            if arr.len() <= 4 && arr.iter().all(is_simple_value) {
                 let formatted: Vec<String> = arr.iter().map(format_simple_value).collect();
                 ui.label(
                     &format!("{}: [{}]", key, formatted.join(", ")),
@@ -239,7 +239,7 @@ fn format_simple_value(value: &Value) -> String {
             if is_vec_like(map) {
                 format_vec_like(map)
             } else {
-                format!("{{...}}")
+                "{...}".to_string()
             }
         }
     }

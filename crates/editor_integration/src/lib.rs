@@ -19,6 +19,7 @@
 //! }
 //! ```
 
+mod constants;
 mod editor_game;
 mod entity_ops;
 mod panel_renderer;

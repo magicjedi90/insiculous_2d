@@ -6,255 +6,187 @@
 //! - RigidBody
 //! - Collider
 //! - AudioSource
+//!
+//! Each `edit_*` function renders the component's fields and returns
+//! `Option<ComponentEdit<T>>` — `None` when nothing changed this frame,
+//! `Some` with the full new value and a `field_hint` naming the changed
+//! field (used to merge continuous slider drags into one undo entry).
 
 use ecs::sprite_components::Sprite;
 use common::Transform2D;
 use physics::components::{Collider, RigidBody, RigidBodyType, ColliderShape};
 use ecs::audio_components::AudioSource;
-use glam::{Vec2, Vec4};
 
 use crate::editable_inspector::{EditResult, EditableInspector};
 
-/// Inspector result containing which fields changed.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct TransformEditResult {
-    pub position_changed: bool,
-    pub rotation_changed: bool,
-    pub scale_changed: bool,
-    pub new_position: Vec2,
-    pub new_rotation: f32,
-    pub new_scale: Vec2,
+/// Value ranges for component field editors, centralized so every editor
+/// uses consistent limits and they can be tuned in one place.
+mod ranges {
+    use std::ops::RangeInclusive;
+
+    /// Position covers most game worlds.
+    pub const POSITION: RangeInclusive<f32> = -1000.0..=1000.0;
+    /// Rotation in radians.
+    pub const ROTATION: RangeInclusive<f32> =
+        -std::f32::consts::PI..=std::f32::consts::PI;
+    /// Scale prevents negative/zero values.
+    pub const SCALE: RangeInclusive<f32> = 0.01..=10.0;
+    /// Sprite/collider offsets relative to the entity.
+    pub const OFFSET: RangeInclusive<f32> = -100.0..=100.0;
+    /// Depth sorting range.
+    pub const DEPTH: RangeInclusive<f32> = -100.0..=100.0;
+    /// Linear velocity.
+    pub const VELOCITY: RangeInclusive<f32> = -500.0..=500.0;
+    /// Angular velocity in radians per second.
+    pub const ANGULAR_VELOCITY: RangeInclusive<f32> = -10.0..=10.0;
+    /// Gravity scale (1.0 is normal gravity).
+    pub const GRAVITY_SCALE: RangeInclusive<f32> = 0.0..=2.0;
+    /// Audio pitch (slow-motion to chipmunk).
+    pub const PITCH: RangeInclusive<f32> = 0.1..=3.0;
+    /// Spatial audio cutoff distance.
+    pub const MAX_DISTANCE: RangeInclusive<f32> = 0.0..=5000.0;
+    /// Spatial audio reference distance.
+    pub const REFERENCE_DISTANCE: RangeInclusive<f32> = 0.0..=1000.0;
+    /// Spatial audio rolloff factor.
+    pub const ROLLOFF: RangeInclusive<f32> = 0.0..=5.0;
+}
+
+/// A completed single-frame inspector edit on a component.
+///
+/// Holds the full component value with this frame's change applied, plus a
+/// hint naming the changed field. The hint drives undo merging: consecutive
+/// edits to the same field on the same entity collapse into a single undo
+/// entry (see `Set*Command::try_merge`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentEdit<T> {
+    /// Full component value with this frame's change applied.
+    pub new_value: T,
+    /// Name of the field that changed (e.g. `"position"`).
+    pub field_hint: &'static str,
 }
 
 /// Edit a Transform2D component.
 ///
-/// # Arguments
-/// * `inspector` - The editable inspector builder
-/// * `transform` - The current transform values
-///
-/// # Returns
-/// TransformEditResult indicating which fields changed and their new values.
+/// Returns `Some(ComponentEdit)` if any field changed this frame.
 pub fn edit_transform2d(
     inspector: &mut EditableInspector<'_>,
     transform: &Transform2D,
-) -> TransformEditResult {
-    let mut result = TransformEditResult {
-        new_position: transform.position,
-        new_rotation: transform.rotation,
-        new_scale: transform.scale,
-        ..Default::default()
-    };
+) -> Option<ComponentEdit<Transform2D>> {
+    let mut new = *transform;
+    let mut hint = None;
 
     inspector.header("Transform2D");
 
-    // Position (range: -1000 to 1000, typically covers most game worlds)
-    if let EditResult::Changed(new_pos) = inspector.vec2("Position", transform.position, -1000.0, 1000.0) {
-        result.position_changed = true;
-        result.new_position = new_pos;
+    if let EditResult::Changed(v) = inspector.vec2("Position", transform.position, ranges::POSITION) {
+        new.position = v;
+        hint = Some("position");
+    }
+    if let EditResult::Changed(v) = inspector.f32("Rotation", transform.rotation, ranges::ROTATION) {
+        new.rotation = v;
+        hint = Some("rotation");
+    }
+    if let EditResult::Changed(v) = inspector.vec2("Scale", transform.scale, ranges::SCALE) {
+        new.scale = v;
+        hint = Some("scale");
     }
 
-    // Rotation (range: -π to π, displayed in radians)
-    if let EditResult::Changed(new_rot) = inspector.f32("Rotation", transform.rotation, -std::f32::consts::PI, std::f32::consts::PI) {
-        result.rotation_changed = true;
-        result.new_rotation = new_rot;
-    }
-
-    // Scale (range: 0.01 to 10.0, prevents negative/zero scale)
-    if let EditResult::Changed(new_scale) = inspector.vec2("Scale", transform.scale, 0.01, 10.0) {
-        result.scale_changed = true;
-        result.new_scale = new_scale;
-    }
-
-    result
-}
-
-/// Inspector result for Sprite component.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct SpriteEditResult {
-    pub offset_changed: bool,
-    pub rotation_changed: bool,
-    pub scale_changed: bool,
-    pub color_changed: bool,
-    pub depth_changed: bool,
-    pub new_offset: Vec2,
-    pub new_rotation: f32,
-    pub new_scale: Vec2,
-    pub new_color: Vec4,
-    pub new_depth: f32,
+    hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
 /// Edit a Sprite component.
 pub fn edit_sprite(
     inspector: &mut EditableInspector<'_>,
     sprite: &Sprite,
-) -> SpriteEditResult {
-    let mut result = SpriteEditResult {
-        new_offset: sprite.offset,
-        new_rotation: sprite.rotation,
-        new_scale: sprite.scale,
-        new_color: sprite.color,
-        new_depth: sprite.depth,
-        ..Default::default()
-    };
+) -> Option<ComponentEdit<Sprite>> {
+    let mut new = sprite.clone();
+    let mut hint = None;
 
     inspector.header("Sprite");
 
-    // Offset
-    if let EditResult::Changed(new_offset) = inspector.vec2("Offset", sprite.offset, -100.0, 100.0) {
-        result.offset_changed = true;
-        result.new_offset = new_offset;
+    if let EditResult::Changed(v) = inspector.vec2("Offset", sprite.offset, ranges::OFFSET) {
+        new.offset = v;
+        hint = Some("offset");
     }
-
-    // Rotation
-    if let EditResult::Changed(new_rot) = inspector.f32("Rotation", sprite.rotation, -std::f32::consts::PI, std::f32::consts::PI) {
-        result.rotation_changed = true;
-        result.new_rotation = new_rot;
+    if let EditResult::Changed(v) = inspector.f32("Rotation", sprite.rotation, ranges::ROTATION) {
+        new.rotation = v;
+        hint = Some("rotation");
     }
-
-    // Scale
-    if let EditResult::Changed(new_scale) = inspector.vec2("Scale", sprite.scale, 0.01, 10.0) {
-        result.scale_changed = true;
-        result.new_scale = new_scale;
+    if let EditResult::Changed(v) = inspector.vec2("Scale", sprite.scale, ranges::SCALE) {
+        new.scale = v;
+        hint = Some("scale");
     }
-
-    // Color
-    if let EditResult::Changed(new_color) = inspector.color("Color", sprite.color) {
-        result.color_changed = true;
-        result.new_color = new_color;
+    if let EditResult::Changed(v) = inspector.color("Color", sprite.color) {
+        new.color = v;
+        hint = Some("color");
     }
-
-    // Depth (range: -100 to 100, covers typical depth sorting range)
-    if let EditResult::Changed(new_depth) = inspector.f32("Depth", sprite.depth, -100.0, 100.0) {
-        result.depth_changed = true;
-        result.new_depth = new_depth;
+    if let EditResult::Changed(v) = inspector.f32("Depth", sprite.depth, ranges::DEPTH) {
+        new.depth = v;
+        hint = Some("depth");
     }
 
     // Texture handle (read-only)
     inspector.u32("Texture", sprite.texture_handle);
 
-    result
-}
-
-/// Inspector result for RigidBody component.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct RigidBodyEditResult {
-    pub body_type_changed: bool,
-    pub velocity_changed: bool,
-    pub angular_velocity_changed: bool,
-    pub gravity_scale_changed: bool,
-    pub linear_damping_changed: bool,
-    pub angular_damping_changed: bool,
-    pub can_rotate_changed: bool,
-    pub ccd_enabled_changed: bool,
-    pub new_body_type: RigidBodyType,
-    pub new_velocity: Vec2,
-    pub new_angular_velocity: f32,
-    pub new_gravity_scale: f32,
-    pub new_linear_damping: f32,
-    pub new_angular_damping: f32,
-    pub new_can_rotate: bool,
-    pub new_ccd_enabled: bool,
+    hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
 /// Edit a RigidBody component.
 pub fn edit_rigid_body(
     inspector: &mut EditableInspector<'_>,
     body: &RigidBody,
-) -> RigidBodyEditResult {
-    let mut result = RigidBodyEditResult {
-        new_body_type: body.body_type,
-        new_velocity: body.velocity,
-        new_angular_velocity: body.angular_velocity,
-        new_gravity_scale: body.gravity_scale,
-        new_linear_damping: body.linear_damping,
-        new_angular_damping: body.angular_damping,
-        new_can_rotate: body.can_rotate,
-        new_ccd_enabled: body.ccd_enabled,
-        ..Default::default()
-    };
+) -> Option<ComponentEdit<RigidBody>> {
+    let mut new = body.clone();
+    let mut hint = None;
 
     inspector.header("RigidBody");
 
     // Body type (read-only for now - would need dropdown widget)
-    // TODO: Add enum dropdown when UI crate supports it
     let type_str = match body.body_type {
         RigidBodyType::Dynamic => "Dynamic",
         RigidBodyType::Static => "Static",
         RigidBodyType::Kinematic => "Kinematic",
     };
-    // Display as read-only label
     inspector.header(&format!("  Type: {}", type_str));
 
-    // Velocity
-    if let EditResult::Changed(new_vel) = inspector.vec2("Velocity", body.velocity, -500.0, 500.0) {
-        result.velocity_changed = true;
-        result.new_velocity = new_vel;
+    if let EditResult::Changed(v) = inspector.vec2("Velocity", body.velocity, ranges::VELOCITY) {
+        new.velocity = v;
+        hint = Some("velocity");
+    }
+    if let EditResult::Changed(v) = inspector.f32("Ang. Velocity", body.angular_velocity, ranges::ANGULAR_VELOCITY) {
+        new.angular_velocity = v;
+        hint = Some("angular_velocity");
+    }
+    if let EditResult::Changed(v) = inspector.f32("Gravity Scale", body.gravity_scale, ranges::GRAVITY_SCALE) {
+        new.gravity_scale = v;
+        hint = Some("gravity_scale");
+    }
+    if let EditResult::Changed(v) = inspector.normalized_f32("Linear Damping", body.linear_damping) {
+        new.linear_damping = v;
+        hint = Some("linear_damping");
+    }
+    if let EditResult::Changed(v) = inspector.normalized_f32("Angular Damping", body.angular_damping) {
+        new.angular_damping = v;
+        hint = Some("angular_damping");
+    }
+    if let EditResult::Changed(v) = inspector.bool("Can Rotate", body.can_rotate) {
+        new.can_rotate = v;
+        hint = Some("can_rotate");
+    }
+    if let EditResult::Changed(v) = inspector.bool("CCD Enabled", body.ccd_enabled) {
+        new.ccd_enabled = v;
+        hint = Some("ccd_enabled");
     }
 
-    // Angular velocity
-    if let EditResult::Changed(new_ang_vel) = inspector.f32("Ang. Velocity", body.angular_velocity, -10.0, 10.0) {
-        result.angular_velocity_changed = true;
-        result.new_angular_velocity = new_ang_vel;
-    }
-
-    // Gravity scale (normalized 0-2 range, 1.0 is normal)
-    if let EditResult::Changed(new_grav) = inspector.f32("Gravity Scale", body.gravity_scale, 0.0, 2.0) {
-        result.gravity_scale_changed = true;
-        result.new_gravity_scale = new_grav;
-    }
-
-    // Linear damping (0-1 range)
-    if let EditResult::Changed(new_damp) = inspector.normalized_f32("Linear Damping", body.linear_damping) {
-        result.linear_damping_changed = true;
-        result.new_linear_damping = new_damp;
-    }
-
-    // Angular damping (0-1 range)
-    if let EditResult::Changed(new_damp) = inspector.normalized_f32("Angular Damping", body.angular_damping) {
-        result.angular_damping_changed = true;
-        result.new_angular_damping = new_damp;
-    }
-
-    // Can rotate
-    if let EditResult::Changed(new_can_rot) = inspector.bool("Can Rotate", body.can_rotate) {
-        result.can_rotate_changed = true;
-        result.new_can_rotate = new_can_rot;
-    }
-
-    // CCD enabled
-    if let EditResult::Changed(new_ccd) = inspector.bool("CCD Enabled", body.ccd_enabled) {
-        result.ccd_enabled_changed = true;
-        result.new_ccd_enabled = new_ccd;
-    }
-
-    result
-}
-
-/// Inspector result for Collider component.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ColliderEditResult {
-    pub offset_changed: bool,
-    pub is_sensor_changed: bool,
-    pub friction_changed: bool,
-    pub restitution_changed: bool,
-    pub new_offset: Vec2,
-    pub new_is_sensor: bool,
-    pub new_friction: f32,
-    pub new_restitution: f32,
+    hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
 /// Edit a Collider component.
 pub fn edit_collider(
     inspector: &mut EditableInspector<'_>,
     collider: &Collider,
-) -> ColliderEditResult {
-    let mut result = ColliderEditResult {
-        new_offset: collider.offset,
-        new_is_sensor: collider.is_sensor,
-        new_friction: collider.friction,
-        new_restitution: collider.restitution,
-        ..Default::default()
-    };
+) -> Option<ComponentEdit<Collider>> {
+    let mut new = collider.clone();
+    let mut hint = None;
 
     inspector.header("Collider");
 
@@ -267,176 +199,113 @@ pub fn edit_collider(
     };
     inspector.header(&format!("  Shape: {}", shape_str));
 
-    // Offset
-    if let EditResult::Changed(new_offset) = inspector.vec2("Offset", collider.offset, -100.0, 100.0) {
-        result.offset_changed = true;
-        result.new_offset = new_offset;
+    if let EditResult::Changed(v) = inspector.vec2("Offset", collider.offset, ranges::OFFSET) {
+        new.offset = v;
+        hint = Some("offset");
     }
-
-    // Is sensor
-    if let EditResult::Changed(new_sensor) = inspector.bool("Is Sensor", collider.is_sensor) {
-        result.is_sensor_changed = true;
-        result.new_is_sensor = new_sensor;
+    if let EditResult::Changed(v) = inspector.bool("Is Sensor", collider.is_sensor) {
+        new.is_sensor = v;
+        hint = Some("is_sensor");
     }
-
-    // Friction (0-1 range)
-    if let EditResult::Changed(new_friction) = inspector.normalized_f32("Friction", collider.friction) {
-        result.friction_changed = true;
-        result.new_friction = new_friction;
+    if let EditResult::Changed(v) = inspector.normalized_f32("Friction", collider.friction) {
+        new.friction = v;
+        hint = Some("friction");
     }
-
-    // Restitution (0-1 range)
-    if let EditResult::Changed(new_rest) = inspector.normalized_f32("Restitution", collider.restitution) {
-        result.restitution_changed = true;
-        result.new_restitution = new_rest;
+    if let EditResult::Changed(v) = inspector.normalized_f32("Restitution", collider.restitution) {
+        new.restitution = v;
+        hint = Some("restitution");
     }
 
     // Collision groups/filter (read-only)
     inspector.u32("Groups", collider.collision_groups);
     inspector.u32("Filter", collider.collision_filter);
 
-    result
-}
-
-/// Inspector result for AudioSource component.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct AudioSourceEditResult {
-    pub volume_changed: bool,
-    pub pitch_changed: bool,
-    pub looping_changed: bool,
-    pub play_on_spawn_changed: bool,
-    pub spatial_changed: bool,
-    pub max_distance_changed: bool,
-    pub reference_distance_changed: bool,
-    pub rolloff_factor_changed: bool,
-    pub new_volume: f32,
-    pub new_pitch: f32,
-    pub new_looping: bool,
-    pub new_play_on_spawn: bool,
-    pub new_spatial: bool,
-    pub new_max_distance: f32,
-    pub new_reference_distance: f32,
-    pub new_rolloff_factor: f32,
+    hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
 /// Edit an AudioSource component.
 pub fn edit_audio_source(
     inspector: &mut EditableInspector<'_>,
     source: &AudioSource,
-) -> AudioSourceEditResult {
-    let mut result = AudioSourceEditResult {
-        new_volume: source.volume,
-        new_pitch: source.pitch,
-        new_looping: source.looping,
-        new_play_on_spawn: source.play_on_spawn,
-        new_spatial: source.spatial,
-        new_max_distance: source.max_distance,
-        new_reference_distance: source.reference_distance,
-        new_rolloff_factor: source.rolloff_factor,
-        ..Default::default()
-    };
+) -> Option<ComponentEdit<AudioSource>> {
+    let mut new = source.clone();
+    let mut hint = None;
 
     inspector.header("AudioSource");
 
     // Sound ID (read-only asset reference)
     inspector.u32("Sound ID", source.sound_id);
 
-    // Volume (0-1 range)
-    if let EditResult::Changed(new_vol) = inspector.normalized_f32("Volume", source.volume) {
-        result.volume_changed = true;
-        result.new_volume = new_vol;
+    if let EditResult::Changed(v) = inspector.normalized_f32("Volume", source.volume) {
+        new.volume = v;
+        hint = Some("volume");
     }
-
-    // Pitch (0.1 to 3.0 range, allows slow-motion to chipmunk)
-    if let EditResult::Changed(new_pitch) = inspector.f32("Pitch", source.pitch, 0.1, 3.0) {
-        result.pitch_changed = true;
-        result.new_pitch = new_pitch;
+    if let EditResult::Changed(v) = inspector.f32("Pitch", source.pitch, ranges::PITCH) {
+        new.pitch = v;
+        hint = Some("pitch");
     }
-
-    // Looping
-    if let EditResult::Changed(new_loop) = inspector.bool("Looping", source.looping) {
-        result.looping_changed = true;
-        result.new_looping = new_loop;
+    if let EditResult::Changed(v) = inspector.bool("Looping", source.looping) {
+        new.looping = v;
+        hint = Some("looping");
     }
-
-    // Play on spawn
-    if let EditResult::Changed(new_play) = inspector.bool("Play on Spawn", source.play_on_spawn) {
-        result.play_on_spawn_changed = true;
-        result.new_play_on_spawn = new_play;
+    if let EditResult::Changed(v) = inspector.bool("Play on Spawn", source.play_on_spawn) {
+        new.play_on_spawn = v;
+        hint = Some("play_on_spawn");
     }
-
-    // Spatial audio enabled
-    if let EditResult::Changed(new_spatial) = inspector.bool("Spatial", source.spatial) {
-        result.spatial_changed = true;
-        result.new_spatial = new_spatial;
+    if let EditResult::Changed(v) = inspector.bool("Spatial", source.spatial) {
+        new.spatial = v;
+        hint = Some("spatial");
     }
 
     // Spatial audio parameters (only relevant if spatial is true)
     if source.spatial {
-        if let EditResult::Changed(new_dist) = inspector.f32("Max Distance", source.max_distance, 0.0, 5000.0) {
-            result.max_distance_changed = true;
-            result.new_max_distance = new_dist;
+        if let EditResult::Changed(v) = inspector.f32("Max Distance", source.max_distance, ranges::MAX_DISTANCE) {
+            new.max_distance = v;
+            hint = Some("max_distance");
         }
-
-        if let EditResult::Changed(new_ref) = inspector.f32("Ref Distance", source.reference_distance, 0.0, 1000.0) {
-            result.reference_distance_changed = true;
-            result.new_reference_distance = new_ref;
+        if let EditResult::Changed(v) = inspector.f32("Ref Distance", source.reference_distance, ranges::REFERENCE_DISTANCE) {
+            new.reference_distance = v;
+            hint = Some("reference_distance");
         }
-
-        if let EditResult::Changed(new_roll) = inspector.f32("Rolloff", source.rolloff_factor, 0.0, 5.0) {
-            result.rolloff_factor_changed = true;
-            result.new_rolloff_factor = new_roll;
+        if let EditResult::Changed(v) = inspector.f32("Rolloff", source.rolloff_factor, ranges::ROLLOFF) {
+            new.rolloff_factor = v;
+            hint = Some("rolloff_factor");
         }
     }
 
-    result
+    hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::Vec2;
 
     #[test]
-    fn test_transform_edit_result_default() {
-        let result = TransformEditResult::default();
-        assert!(!result.position_changed);
-        assert!(!result.rotation_changed);
-        assert!(!result.scale_changed);
+    fn test_component_edit_carries_value_and_hint() {
+        let edit = ComponentEdit {
+            new_value: Transform2D::new(Vec2::new(5.0, 6.0)),
+            field_hint: "position",
+        };
+        assert_eq!(edit.new_value.position, Vec2::new(5.0, 6.0));
+        assert_eq!(edit.field_hint, "position");
     }
 
     #[test]
-    fn test_sprite_edit_result_default() {
-        let result = SpriteEditResult::default();
-        assert!(!result.offset_changed);
-        assert!(!result.rotation_changed);
-        assert!(!result.scale_changed);
-        assert!(!result.color_changed);
-        assert!(!result.depth_changed);
+    fn test_component_edit_equality() {
+        let a = ComponentEdit { new_value: 1.0_f32, field_hint: "x" };
+        let b = ComponentEdit { new_value: 1.0_f32, field_hint: "x" };
+        let c = ComponentEdit { new_value: 2.0_f32, field_hint: "x" };
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 
     #[test]
-    fn test_rigid_body_edit_result_default() {
-        let result = RigidBodyEditResult::default();
-        assert!(!result.velocity_changed);
-        assert!(!result.angular_velocity_changed);
-        assert!(!result.gravity_scale_changed);
-    }
-
-    #[test]
-    fn test_collider_edit_result_default() {
-        let result = ColliderEditResult::default();
-        assert!(!result.offset_changed);
-        assert!(!result.is_sensor_changed);
-        assert!(!result.friction_changed);
-        assert!(!result.restitution_changed);
-    }
-
-    #[test]
-    fn test_audio_source_edit_result_default() {
-        let result = AudioSourceEditResult::default();
-        assert!(!result.volume_changed);
-        assert!(!result.pitch_changed);
-        assert!(!result.looping_changed);
+    fn test_ranges_are_well_formed() {
+        assert!(ranges::POSITION.start() < ranges::POSITION.end());
+        assert!(ranges::SCALE.start() > &0.0); // scale must stay positive
+        assert!(ranges::PITCH.start() > &0.0); // pitch of zero is silence
+        assert!(ranges::ROTATION.contains(&0.0));
     }
 
     #[test]

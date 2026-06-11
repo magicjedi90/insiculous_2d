@@ -82,6 +82,54 @@ impl Default for GizmoInteraction {
     }
 }
 
+/// Complete color set for gizmo rendering.
+///
+/// Defaults match the editor's dark theme; `EditorTheme::gizmo_palette()`
+/// produces a themed instance.
+#[derive(Debug, Clone)]
+pub struct GizmoPalette {
+    /// X axis line and handle
+    pub x: Color,
+    /// Y axis line and handle
+    pub y: Color,
+    /// Center/free-move handle
+    pub center: Color,
+    /// X handle while hovered/dragged
+    pub x_hover: Color,
+    /// Y handle while hovered/dragged
+    pub y_hover: Color,
+    /// Center handle while hovered/dragged
+    pub center_hover: Color,
+    /// Rotation ring
+    pub ring: Color,
+    /// Current-rotation indicator line
+    pub rotation_indicator: Color,
+    /// Scale box outline
+    pub scale_outline: Color,
+    /// Scale corner handles
+    pub scale_handle: Color,
+    /// Scale corner handles while hovered/dragged
+    pub scale_handle_hover: Color,
+}
+
+impl Default for GizmoPalette {
+    fn default() -> Self {
+        Self {
+            x: Color::new(0.9, 0.2, 0.2, 1.0),      // Red
+            y: Color::new(0.2, 0.9, 0.2, 1.0),      // Green
+            center: Color::new(0.9, 0.9, 0.2, 1.0), // Yellow
+            x_hover: Color::new(1.0, 0.4, 0.4, 1.0),
+            y_hover: Color::new(0.4, 1.0, 0.4, 1.0),
+            center_hover: Color::new(1.0, 1.0, 0.4, 1.0),
+            ring: Color::new(0.3, 0.3, 0.9, 1.0),
+            rotation_indicator: Color::new(0.9, 0.9, 0.9, 1.0),
+            scale_outline: Color::new(0.6, 0.6, 0.6, 1.0),
+            scale_handle: Color::new(0.7, 0.7, 0.7, 1.0),
+            scale_handle_hover: Color::new(0.9, 0.9, 0.4, 1.0),
+        }
+    }
+}
+
 /// Transform gizmo for manipulating entity transforms.
 #[derive(Debug, Clone)]
 pub struct Gizmo {
@@ -101,12 +149,8 @@ pub struct Gizmo {
     active_handle: Option<GizmoHandle>,
     /// Last mouse position for delta calculation
     last_mouse_pos: Vec2,
-    /// Color for X axis
-    color_x: Color,
-    /// Color for Y axis
-    color_y: Color,
-    /// Color for center/free handle
-    color_center: Color,
+    /// Colors for every gizmo element
+    palette: GizmoPalette,
 }
 
 impl Default for Gizmo {
@@ -127,9 +171,7 @@ impl Gizmo {
             axis_length: 80.0,
             active_handle: None,
             last_mouse_pos: Vec2::ZERO,
-            color_x: Color::new(0.9, 0.2, 0.2, 1.0), // Red
-            color_y: Color::new(0.2, 0.9, 0.2, 1.0), // Green
-            color_center: Color::new(0.9, 0.9, 0.2, 1.0), // Yellow
+            palette: GizmoPalette::default(),
         }
     }
 
@@ -155,9 +197,7 @@ impl Gizmo {
 
     /// Apply colors from the editor theme.
     pub fn apply_theme(&mut self, theme: &EditorTheme) {
-        self.color_x = theme.gizmo_x;
-        self.color_y = theme.gizmo_y;
-        self.color_center = theme.gizmo_center;
+        self.palette = theme.gizmo_palette();
     }
 
     /// Set the entity rotation (for rotation gizmo display).
@@ -190,11 +230,36 @@ impl Gizmo {
         )
     }
 
-    /// Convert world position to screen position.
-    /// For now, this is a simple offset. A real implementation would use camera transform.
-    #[allow(dead_code)] // Will be used when editor gizmo rendering is wired to viewport
-    fn world_to_screen(&self, world_pos: Vec2, camera_offset: Vec2, camera_zoom: f32) -> Vec2 {
-        (world_pos - camera_offset) * camera_zoom
+    /// Draw one translate axis (line + arrow handle) and return the handle's
+    /// interactive bounds. The handle brightens while hovered or dragged.
+    fn render_axis_handle(
+        &self,
+        ui: &mut UIContext,
+        origin: Vec2,
+        end: Vec2,
+        base: Color,
+        hover: Color,
+        handle: GizmoHandle,
+    ) -> Rect {
+        ui.line(origin, end, base, 2.0);
+
+        let bounds = self.centered_handle_rect(end);
+        let hovered = bounds.contains(ui.mouse_pos());
+        let color = if hovered || self.active_handle == Some(handle) {
+            hover
+        } else {
+            base
+        };
+        ui.rect(bounds, color);
+        bounds
+    }
+
+    /// Start drag bookkeeping for `handle` if `dragging` and no drag is active.
+    fn begin_drag_if(&mut self, dragging: bool, handle: GizmoHandle, mouse_pos: Vec2) {
+        if dragging && self.active_handle.is_none() {
+            self.active_handle = Some(handle);
+            self.last_mouse_pos = mouse_pos;
+        }
     }
 
     /// Render the gizmo and handle interactions.
@@ -218,41 +283,23 @@ impl Gizmo {
         let mut interaction = GizmoInteraction::default();
         let mouse_pos = ui.mouse_pos();
 
-        // X axis line
+        // X axis (right), Y axis (up in screen space = negative Y)
         let x_end = screen_pos + Vec2::new(self.axis_length, 0.0);
-        ui.line(screen_pos, x_end, self.color_x, 2.0);
-
-        // X axis arrow head
-        let x_arrow_bounds = self.centered_handle_rect(x_end);
-        let x_hovered = x_arrow_bounds.contains(mouse_pos);
-        let x_color = if x_hovered || self.active_handle == Some(GizmoHandle::AxisX) {
-            Color::new(1.0, 0.4, 0.4, 1.0)
-        } else {
-            self.color_x
-        };
-        ui.rect(x_arrow_bounds, x_color);
-
-        // Y axis line (pointing up in screen space, which is down in Y)
         let y_end = screen_pos + Vec2::new(0.0, -self.axis_length);
-        ui.line(screen_pos, y_end, self.color_y, 2.0);
+        let x_arrow_bounds = self.render_axis_handle(
+            ui, screen_pos, x_end, self.palette.x, self.palette.x_hover, GizmoHandle::AxisX,
+        );
+        let y_arrow_bounds = self.render_axis_handle(
+            ui, screen_pos, y_end, self.palette.y, self.palette.y_hover, GizmoHandle::AxisY,
+        );
 
-        // Y axis arrow head
-        let y_arrow_bounds = self.centered_handle_rect(y_end);
-        let y_hovered = y_arrow_bounds.contains(mouse_pos);
-        let y_color = if y_hovered || self.active_handle == Some(GizmoHandle::AxisY) {
-            Color::new(0.4, 1.0, 0.4, 1.0)
-        } else {
-            self.color_y
-        };
-        ui.rect(y_arrow_bounds, y_color);
-
-        // Center handle (for free movement)
+        // Center handle (free movement, no axis line)
         let center_bounds = self.centered_handle_rect(screen_pos);
         let center_hovered = center_bounds.contains(mouse_pos);
         let center_color = if center_hovered || self.active_handle == Some(GizmoHandle::Center) {
-            Color::new(1.0, 1.0, 0.4, 1.0)
+            self.palette.center_hover
         } else {
-            self.color_center
+            self.palette.center
         };
         ui.rect(center_bounds, center_color);
 
@@ -261,17 +308,10 @@ impl Gizmo {
         let result_y = ui.interact("gizmo_y", y_arrow_bounds, true);
         let result_center = ui.interact("gizmo_center", center_bounds, true);
 
-        // Start dragging
-        if result_x.dragging && self.active_handle.is_none() {
-            self.active_handle = Some(GizmoHandle::AxisX);
-            self.last_mouse_pos = mouse_pos;
-        } else if result_y.dragging && self.active_handle.is_none() {
-            self.active_handle = Some(GizmoHandle::AxisY);
-            self.last_mouse_pos = mouse_pos;
-        } else if result_center.dragging && self.active_handle.is_none() {
-            self.active_handle = Some(GizmoHandle::Center);
-            self.last_mouse_pos = mouse_pos;
-        }
+        // Start dragging (first dragging handle wins; later calls no-op)
+        self.begin_drag_if(result_x.dragging, GizmoHandle::AxisX, mouse_pos);
+        self.begin_drag_if(result_y.dragging, GizmoHandle::AxisY, mouse_pos);
+        self.begin_drag_if(result_center.dragging, GizmoHandle::Center, mouse_pos);
 
         // Continue dragging
         if let Some(handle) = self.active_handle {
@@ -310,7 +350,7 @@ impl Gizmo {
             let p1 = screen_pos + Vec2::new(angle1.cos(), angle1.sin()) * ring_radius;
             let p2 = screen_pos + Vec2::new(angle2.cos(), angle2.sin()) * ring_radius;
 
-            ui.line(p1, p2, Color::new(0.3, 0.3, 0.9, 1.0), 2.0);
+            ui.line(p1, p2, self.palette.ring, 2.0);
         }
 
         // Draw current rotation indicator
@@ -318,7 +358,7 @@ impl Gizmo {
             self.rotation.cos() * ring_radius,
             self.rotation.sin() * ring_radius,
         );
-        ui.line(screen_pos, indicator_end, Color::new(0.9, 0.9, 0.9, 1.0), 3.0);
+        ui.line(screen_pos, indicator_end, self.palette.rotation_indicator, 3.0);
 
         // Ring interaction (simplified - uses a rectangular area for now)
         let ring_bounds = Rect::new(
@@ -331,10 +371,7 @@ impl Gizmo {
         let result = ui.interact("gizmo_ring", ring_bounds, true);
 
         if result.dragging {
-            if self.active_handle.is_none() {
-                self.active_handle = Some(GizmoHandle::Ring);
-                self.last_mouse_pos = mouse_pos;
-            }
+            self.begin_drag_if(true, GizmoHandle::Ring, mouse_pos);
 
             // Calculate rotation delta based on angle change
             let last_angle = (self.last_mouse_pos - screen_pos).y.atan2((self.last_mouse_pos - screen_pos).x);
@@ -370,25 +407,25 @@ impl Gizmo {
         ui.line(
             Vec2::new(box_bounds.x, box_bounds.y),
             Vec2::new(box_bounds.x + box_bounds.width, box_bounds.y),
-            Color::new(0.6, 0.6, 0.6, 1.0),
+            self.palette.scale_outline,
             1.0,
         );
         ui.line(
             Vec2::new(box_bounds.x + box_bounds.width, box_bounds.y),
             Vec2::new(box_bounds.x + box_bounds.width, box_bounds.y + box_bounds.height),
-            Color::new(0.6, 0.6, 0.6, 1.0),
+            self.palette.scale_outline,
             1.0,
         );
         ui.line(
             Vec2::new(box_bounds.x + box_bounds.width, box_bounds.y + box_bounds.height),
             Vec2::new(box_bounds.x, box_bounds.y + box_bounds.height),
-            Color::new(0.6, 0.6, 0.6, 1.0),
+            self.palette.scale_outline,
             1.0,
         );
         ui.line(
             Vec2::new(box_bounds.x, box_bounds.y + box_bounds.height),
             Vec2::new(box_bounds.x, box_bounds.y),
-            Color::new(0.6, 0.6, 0.6, 1.0),
+            self.palette.scale_outline,
             1.0,
         );
 
@@ -406,21 +443,16 @@ impl Gizmo {
             let hovered = handle_bounds.contains(mouse_pos);
             let active = self.active_handle == Some(GizmoHandle::ScaleCorner(corner));
             let color = if hovered || active {
-                Color::new(0.9, 0.9, 0.4, 1.0)
+                self.palette.scale_handle_hover
             } else {
-                Color::new(0.7, 0.7, 0.7, 1.0)
+                self.palette.scale_handle
             };
             ui.rect(handle_bounds, color);
 
             let id = format!("gizmo_scale_{:?}", corner);
             let result = ui.interact(id.as_str(), handle_bounds, true);
 
-            if result.dragging {
-                if self.active_handle.is_none() {
-                    self.active_handle = Some(GizmoHandle::ScaleCorner(corner));
-                    self.last_mouse_pos = mouse_pos;
-                }
-            }
+            self.begin_drag_if(result.dragging, GizmoHandle::ScaleCorner(corner), mouse_pos);
         }
 
         // Process active scale drag

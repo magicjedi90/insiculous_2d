@@ -1,16 +1,19 @@
 # Technical Debt: editor
 
-Last audited: January 2026
+Last audited: June 2026 (full DRY/SRP/KISS remediation pass)
 
 ## Summary
-- Magic numbers: 3
-- Priority: All Low
+- Open issues: 0 (all previously tracked items resolved June 2026)
+- See "Resolved" sections below for history and resolutions
 
 ---
 
 ## Magic Numbers
 
-### [MAGIC-001] Hardcoded slider ranges in component_editors.rs
+### ~~[MAGIC-001] Hardcoded slider ranges in component_editors.rs~~ ✅ RESOLVED
+- **Resolution (June 2026):** All 13 ranges extracted to a `mod ranges` block of
+  named `RangeInclusive<f32>` constants in `component_editors.rs`; the
+  `EditableInspector::f32/vec2` API now takes `RangeInclusive<f32>` directly.
 - **File:** `component_editors.rs`
 - **Lines:** 57, 63, 69, 109, 133, 195, 201, 207, 277, 357, 382, 387, 392
 - **Issue:** Component field ranges are hardcoded inline:
@@ -29,7 +32,9 @@ Last audited: January 2026
 - **Suggested fix:** Extract to a `ComponentFieldRanges` configuration struct or const declarations.
 - **Priority:** Low
 
-### [MAGIC-002] Widget ID formula constants in editable_inspector.rs
+### ~~[MAGIC-002] Widget ID formula constants in editable_inspector.rs~~ ✅ RESOLVED
+- **Resolution (June 2026):** Multipliers promoted to named constants
+  `COMPONENT_ID_STRIDE` / `FIELD_ID_STRIDE` with documented collision limits.
 - **File:** `editable_inspector.rs`
 - **Lines:** 528-530
 - **Issue:** FieldId to WidgetId conversion uses hardcoded multipliers:
@@ -43,7 +48,10 @@ Last audited: January 2026
 - **Suggested fix:** Use larger multipliers (1_000_000, 1_000) or switch to string-based hashing.
 - **Priority:** Low
 
-### [MAGIC-003] Layout dimensions in editable_inspector.rs
+### ~~[MAGIC-003] Layout dimensions in editable_inspector.rs~~ ✅ RESOLVED
+- **Resolution (June 2026):** Input widths, gaps, and channel-label offsets are
+  now `EditableFieldStyle` fields (defaults preserve the previous values), so
+  layout is configurable without code changes.
 - **File:** `editable_inspector.rs`
 - **Lines:** 629, 638, 715, 821-822
 - **Issue:** Widget layout dimensions are hardcoded:
@@ -62,23 +70,32 @@ Last audited: January 2026
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 14 |
-| Test coverage | 136 tests (100% pass rate) |
+| Test coverage | 226 tests (100% pass rate) |
+| Files over 600 lines | 0 |
+| Clippy warnings | 0 |
 | High priority issues | 0 |
 | Medium priority issues | 0 |
-| Low priority issues | 3 |
+| Low priority issues | 0 |
 
 ---
 
-## Recommendations
+## Design Decisions (June 2026 remediation)
 
-### Immediate Actions
-None required - all issues are low priority and the code functions correctly.
-
-### Future Improvements
-1. **MAGIC-001** - Extract field ranges to configuration when adding per-project customization
-2. **MAGIC-002** - Increase ID multipliers if adding components with many fields
-3. **MAGIC-003** - Add layout dimensions to EditableFieldStyle if UI customization needed
+1. **Component registry macro** — `stored_component.rs` now holds the single
+   `editor_component_registry!` invocation that generates `StoredComponent`,
+   `ComponentKind` (with `add_default`/`capture`/`remove`/`is_present`/
+   `display_name`/`category`), `capture_all_components`, and
+   `inspect_all_components`. **Add new editor-visible components there — one
+   line — instead of writing match arms.**
+2. **context.rs state/delegation split evaluated and rejected** — the
+   delegation methods are cohesive accessors over the editor's sub-systems;
+   splitting state from delegation would add indirection without reducing
+   coupling. Tests were moved to `context/tests.rs` instead, keeping
+   `context/mod.rs` under the 600-line limit.
+3. **Theme-driven colors** — widget code takes `&EditorTheme` (menu, toolbar,
+   hierarchy) or themed style structs (`GizmoPalette`,
+   `EditableFieldStyle`, `InspectorStyle`). Struct `Default` impls keep the
+   previous literals so an unthemed instance looks identical.
 
 ---
 
@@ -96,11 +113,11 @@ None required - all issues are low priority and the code functions correctly.
 - **Resolution:** Extracted `check_action_with()` generic helper using closure predicates. All 3 methods (`is_action_pressed`, `is_action_just_pressed`, `is_action_just_released`) now delegate to this helper, reducing ~50 lines to ~20.
 - **Resolved:** February 2026
 
-### SRP-002: MenuBar.render() mixes layout, interaction, and rendering
-- **File:** `src/menu.rs:246-302`
-- **Issue:** 57-line method handles bounds calculation, click detection, state management, AND dropdown rendering
-- **Suggested fix:** Split into update_menu_layout(), render_menu_titles(), handle_menu_interactions()
-- **Priority:** Medium | **Effort:** Medium
+### ~~SRP-002: MenuBar.render() mixes layout, interaction, and rendering~~ ✅ RESOLVED
+- **File:** `src/menu.rs`
+- **Resolution (June 2026):** `render()` is now a 4-line orchestrator over
+  `layout_titles()` (pure geometry, unit-tested), `render_title_bar()`,
+  `apply_toggle()`, and `render_open_dropdown()`.
 
 ### ~~DRY-003: Menu dropdown hardcoded constants~~ ✅ RESOLVED
 - **File:** `src/menu.rs`
@@ -112,14 +129,19 @@ None required - all issues are low priority and the code functions correctly.
 - **Resolution:** Extracted `centered_handle_rect(&self, center) -> Rect` helper method. All 5 occurrences of centered rect creation now use this helper.
 - **Resolved:** February 2026
 
-### ARCH-001: Gizmo render_translate() is 95 lines
-- **File:** `src/gizmo.rs:197-291`
-- **Issue:** Large method with repeated handle rendering pattern
-- **Suggested fix:** Extract `render_gizmo_handle()` helper
-- **Priority:** Low | **Effort:** Medium
+### ~~ARCH-001: Gizmo render_translate() is 95 lines~~ ✅ RESOLVED
+- **File:** `src/gizmo.rs`
+- **Resolution (June 2026):** Extracted `render_axis_handle()` (line + hoverable
+  arrow) and `begin_drag_if()` (drag-start bookkeeping, reused by rotate/scale).
+  All gizmo colors now come from `GizmoPalette` / `EditorTheme::gizmo_palette()`.
 
-### ARCH-002: Component edit result structs have 26-33 fields each
+### ~~ARCH-002: Component edit result structs have 26-33 fields each~~ ✅ RESOLVED
 - **File:** `src/component_editors.rs`
-- **Issue:** TransformEditResult, SpriteEditResult, etc. have per-field boolean flags creating boilerplate
-- **Suggested fix:** Use change mask pattern or generic EditResult<T>
-- **Priority:** Medium | **Effort:** Large
+- **Resolution (June 2026):** All five `*EditResult` structs replaced by the
+  generic `ComponentEdit<T> { new_value, field_hint }` returned as
+  `Option<ComponentEdit<T>>`. The `field_hint` preserves undo merging of
+  continuous slider drags. The five near-identical `Set*Command` impls in
+  `commands/set_commands.rs` collapsed into the `impl_set_component_command!`
+  macro. Note: if multiple fields change in one frame, `field_hint` is the
+  last-changed field rather than a hardcoded priority — only the undo
+  merge-group label differs.

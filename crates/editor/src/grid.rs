@@ -173,7 +173,7 @@ impl GridRenderer {
                 for y in h_sub {
                     if !is_on_grid(y, effective_grid_size) {
                         sprites.push(self.create_horizontal_line(
-                            min_x, max_x, y,
+                            (min_x, max_x), y,
                             line_thickness_world * 0.5,
                             self.colors.secondary,
                             white_texture,
@@ -185,7 +185,7 @@ impl GridRenderer {
                 for x in v_sub {
                     if !is_on_grid(x, effective_grid_size) {
                         sprites.push(self.create_vertical_line(
-                            min_y, max_y, x,
+                            (min_y, max_y), x,
                             line_thickness_world * 0.5,
                             self.colors.secondary,
                             white_texture,
@@ -202,7 +202,7 @@ impl GridRenderer {
                     continue;
                 }
                 sprites.push(self.create_horizontal_line(
-                    min_x, max_x, y,
+                    (min_x, max_x), y,
                     line_thickness_world,
                     self.colors.primary,
                     white_texture,
@@ -216,7 +216,7 @@ impl GridRenderer {
                     continue;
                 }
                 sprites.push(self.create_vertical_line(
-                    min_y, max_y, x,
+                    (min_y, max_y), x,
                     line_thickness_world,
                     self.colors.primary,
                     white_texture,
@@ -229,7 +229,7 @@ impl GridRenderer {
         if self.axes_visible {
             // X axis (horizontal line at y=0, red)
             sprites.push(self.create_horizontal_line(
-                min_x, max_x, 0.0,
+                (min_x, max_x), 0.0,
                 axis_thickness_world,
                 self.colors.axis_x,
                 white_texture,
@@ -238,7 +238,7 @@ impl GridRenderer {
 
             // Y axis (vertical line at x=0, green)
             sprites.push(self.create_vertical_line(
-                min_y, max_y, 0.0,
+                (min_y, max_y), 0.0,
                 axis_thickness_world,
                 self.colors.axis_y,
                 white_texture,
@@ -304,15 +304,17 @@ impl GridRenderer {
         (h_lines, v_lines)
     }
 
-    /// Create a horizontal line sprite.
+    /// Create a horizontal line sprite spanning `(min_x, max_x)`.
     fn create_horizontal_line(
         &self,
-        min_x: f32, max_x: f32, y: f32,
+        span_x: (f32, f32),
+        y: f32,
         thickness: f32,
         color: Vec4,
         texture: TextureHandle,
         depth: f32,
     ) -> Sprite {
+        let (min_x, max_x) = span_x;
         let length = max_x - min_x;
         let center_x = (min_x + max_x) * 0.5;
 
@@ -323,15 +325,17 @@ impl GridRenderer {
             .with_depth(depth)
     }
 
-    /// Create a vertical line sprite.
+    /// Create a vertical line sprite spanning `(min_y, max_y)`.
     fn create_vertical_line(
         &self,
-        min_y: f32, max_y: f32, x: f32,
+        span_y: (f32, f32),
+        x: f32,
         thickness: f32,
         color: Vec4,
         texture: TextureHandle,
         depth: f32,
     ) -> Sprite {
+        let (min_y, max_y) = span_y;
         let length = max_y - min_y;
         let center_y = (min_y + max_y) * 0.5;
 
@@ -346,7 +350,7 @@ impl GridRenderer {
 /// Check if a value falls on the grid (within floating point tolerance).
 fn is_on_grid(value: f32, grid_size: f32) -> bool {
     let remainder = (value / grid_size).fract().abs();
-    remainder < 0.001 || remainder > 0.999
+    !(0.001..=0.999).contains(&remainder)
 }
 
 #[cfg(test)]

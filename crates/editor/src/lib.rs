@@ -27,6 +27,7 @@ mod component_editors;
 mod context;
 mod dock;
 mod editable_inspector;
+mod field_style;
 mod editor_input;
 mod gizmo;
 mod grid;
@@ -51,8 +52,7 @@ pub mod world_snapshot;
 pub use commands::{CommandHistory, EditorCommand};
 pub use component_editors::{
     edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
-    AudioSourceEditResult, ColliderEditResult, RigidBodyEditResult, SpriteEditResult,
-    TransformEditResult,
+    ComponentEdit,
 };
 pub use context::EditorContext;
 pub use editor_preferences::EditorPreferences;
@@ -62,7 +62,7 @@ pub use editable_inspector::{
     EditableFieldStyle, EditableInspector, EditResult, FieldId,
 };
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
-pub use gizmo::{Gizmo, GizmoMode};
+pub use gizmo::{Gizmo, GizmoMode, GizmoPalette};
 pub use hierarchy::HierarchyPanel;
 pub use grid::{GridColors, GridConfig, GridRenderer};
 pub use inspector::{inspect_component, InspectorStyle};
@@ -72,6 +72,11 @@ pub use play_controls::{PlayControlAction, PlayControls};
 pub use play_state::EditorPlayState;
 pub use selection::Selection;
 pub use status_bar::{StatusBar, StatusBarStats, STATUS_BAR_HEIGHT};
+pub use stored_component::{
+    available_components, capture_all_components, categorized_components,
+    inspect_all_components, restore_components, ComponentCategory, ComponentKind,
+    StoredComponent,
+};
 pub use theme::EditorTheme;
 pub use toolbar::{EditorTool, Toolbar};
 pub use viewport::SceneViewport;
@@ -80,17 +85,19 @@ pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInpu
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
-        CommandHistory, EditorCommand,
+        available_components, capture_all_components, categorized_components,
+        inspect_all_components, restore_components, CommandHistory, ComponentCategory,
+        ComponentEdit, ComponentKind, EditorCommand, StoredComponent,
         component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
-        inspect_component, AudioSourceEditResult, ColliderEditResult, DockArea, DockPanel,
+        inspect_component, DockArea, DockPanel,
         DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
         EditorPlayState, EditorPreferences, EditorTool, EditableFieldStyle, EditableInspector,
         EditorTheme, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer,
         HierarchyPanel, InspectorStyle, Menu, MenuBar, MenuItem, PanelId, PickResult,
         PickableEntity, StatusBar, StatusBarStats, STATUS_BAR_HEIGHT,
-        PlayControlAction, PlayControls, RigidBodyEditResult, SceneViewport, Selection,
-        SelectionRect, SpriteEditResult, Toolbar, TransformEditResult, ViewportInputConfig,
+        PlayControlAction, PlayControls, SceneViewport, Selection,
+        SelectionRect, Toolbar, ViewportInputConfig,
         ViewportInputHandler, ViewportInputResult, AABB,
     };
 }

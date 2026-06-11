@@ -20,7 +20,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 
 ## File Map
 ### State + chrome
-- `context.rs` — EditorContext struct (selection, tools, state, theme, command_history)
+- `context/` — EditorContext struct (selection, tools, state, theme, command_history); tests in `context/tests.rs`
 - `lib.rs` — Public re-exports
 - `theme.rs` — EditorTheme (color tokens, gizmo/grid/inspector style converters)
 - `dock.rs` — Multi-panel docking
@@ -35,7 +35,8 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 ### Inspector / components
 - `inspector.rs` — Generic `inspect_component()` (read-only, serde-based)
 - `editable_inspector.rs` — Editable field widgets (sliders, Vec2, checkboxes, color)
-- `component_editors.rs` — Per-component editors: `edit_transform2d()`, `edit_sprite()`, etc.
+- `field_style.rs` — `FieldId` (widget-ID mapping), `EditableFieldStyle` (layout dims + colors), `EditResult<T>`
+- `component_editors.rs` — Per-component editors: `edit_transform2d()`, `edit_sprite()`, etc. Return `Option<ComponentEdit<T>>`; field ranges in `mod ranges`
 
 ### Scene + selection
 - `selection.rs` — Selection set (primary + multi-select)
@@ -46,21 +47,21 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - `grid.rs` — Background grid rendering
 
 ### Persistence + commands
-- `commands.rs` — EditorCommand trait, CommandHistory, 11 concrete commands; `push_already_executed`, `try_merge_or_push`
-- `stored_component.rs` — StoredComponent enum for type-safe capture/restore
+- `commands/` — EditorCommand trait + CommandHistory (`mod.rs`), entity commands, component commands, `impl_set_component_command!` macro for the 5 Set*Commands (`set_commands.rs`); `push_already_executed`, `try_merge_or_push`
+- `stored_component.rs` — **Component registry macro (single source of truth). ADD NEW EDITOR-VISIBLE COMPONENTS HERE** — one line in `editor_component_registry!` generates StoredComponent, ComponentKind (add/capture/remove/is_present/display_name/category), capture_all_components, and inspect_all_components
 - `world_snapshot.rs` — WorldSnapshot save/restore (used by play/stop)
 - Scene save/load file I/O lives in `editor_integration` (via `engine_core::scene_serializer`), not in this crate
 
 ## Key Patterns
 - Inspector uses `serde_json::to_value()` to extract component fields generically
-- Component editors return result types (e.g., `TransformEditResult`) that the integration crate applies
+- Component editors return `Option<ComponentEdit<T>>` (full new value + `field_hint` for undo merging) that the integration crate applies via `apply_component_edit()`
 - `EditorPlayState::Editing` → editable, `Playing` → read-only inspector, `Paused` → editable
 - Selection: `editor.selection.primary()` returns the main selected EntityId
 - Gizmo drag tracking: `gizmo_drag_start` field captures initial transform, then a single `TransformGizmo` command is pushed on release
-- Theme is on `EditorContext.theme` (public field); call `theme.gizmo_colors()`, `inspector_style()`, etc. instead of hardcoding colors
+- Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
 
 ## Testing
-- 214 passing, 3 ignored — `cargo test -p editor`
+- 226 passing, 3 ignored (doc) — `cargo test -p editor`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

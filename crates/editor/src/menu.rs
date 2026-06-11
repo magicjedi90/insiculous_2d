@@ -4,7 +4,9 @@
 //! support for keyboard shortcuts.
 
 use glam::Vec2;
-use ui::{Color, Rect, UIContext};
+use ui::{Rect, UIContext};
+
+use crate::theme::EditorTheme;
 
 /// Menu dropdown layout constants
 const DROPDOWN_ITEM_HEIGHT: f32 = 24.0;
@@ -238,67 +240,78 @@ impl MenuBar {
 
     /// Render the menu bar and handle interactions.
     ///
+    /// Runs the three phases in order: layout (pure geometry), title bar
+    /// (drawing + click detection), and the open dropdown.
+    ///
     /// Returns the label of the clicked menu item, if any.
-    pub fn render(&mut self, ui: &mut UIContext, window_width: f32) -> Option<String> {
-        let mut clicked_item = None;
-        let height = self.height();
+    pub fn render(&mut self, ui: &mut UIContext, window_width: f32, theme: &EditorTheme) -> Option<String> {
+        self.layout_titles(window_width);
+        let toggled = self.render_title_bar(ui, theme);
+        self.apply_toggle(toggled);
+        self.render_open_dropdown(ui, theme)
+    }
 
-        // Update bounds
+    /// Phase 1 — compute the bar bounds and each menu title's bounds.
+    /// Pure geometry: no drawing, no state transitions.
+    fn layout_titles(&mut self, window_width: f32) {
+        let height = self.height();
         self.bounds = Rect::new(0.0, 0.0, window_width, height);
 
-        // Draw menu bar background
-        ui.rect(self.bounds, Color::new(0.12, 0.12, 0.12, 1.0));
-
-        // First pass: update menu bounds and handle interactions
         let mut x = self.item_padding;
-        let mut new_open_menu = self.open_menu;
-
-        for index in 0..self.menus.len() {
-            let menu = &mut self.menus[index];
-
-            // Calculate menu title bounds (wider for better readability)
+        for menu in &mut self.menus {
+            // Wider than the text for better readability
             let title_width = menu.title.len() as f32 * 10.0 + self.item_padding * 3.0;
-            let menu_bounds = Rect::new(x, 0.0, title_width, height);
-            menu.bounds = menu_bounds;
-
-            // Check for menu title click
-            let id = format!("menu_{}", menu.title);
-            let is_open = self.open_menu == Some(index);
-
-            // Highlight if open or hovered
-            if is_open {
-                ui.rect(menu_bounds, Color::new(0.2, 0.2, 0.2, 1.0));
-            }
-
-            if ui.button(id.as_str(), &menu.title, menu_bounds) {
-                if is_open {
-                    new_open_menu = None;
-                } else {
-                    new_open_menu = Some(index);
-                }
-            }
-
+            menu.bounds = Rect::new(x, 0.0, title_width, height);
             x += title_width + self.item_spacing;
         }
+    }
 
-        self.open_menu = new_open_menu;
+    /// Phase 2 — draw the bar background and title buttons.
+    /// Returns the index of a title that was clicked this frame, if any.
+    fn render_title_bar(&mut self, ui: &mut UIContext, theme: &EditorTheme) -> Option<usize> {
+        ui.rect(self.bounds, theme.bg_header);
 
-        // Second pass: render dropdown for open menu
-        if let Some(open_index) = self.open_menu {
-            let menu = &self.menus[open_index];
-            let menu_bounds = menu.bounds;
+        let mut toggled = None;
+        for (index, menu) in self.menus.iter().enumerate() {
+            if self.open_menu == Some(index) {
+                ui.rect(menu.bounds, theme.menu_open_highlight);
+            }
 
-            if let Some(item) = Self::render_dropdown_static(ui, menu, menu_bounds) {
-                clicked_item = Some(item);
-                self.open_menu = None;
+            let id = format!("menu_{}", menu.title);
+            if ui.button(id.as_str(), &menu.title, menu.bounds) {
+                toggled = Some(index);
             }
         }
+        toggled
+    }
 
-        clicked_item
+    /// Phase 3 — apply a title click: open the clicked menu, or close it if
+    /// it was already open.
+    fn apply_toggle(&mut self, toggled: Option<usize>) {
+        if let Some(index) = toggled {
+            self.open_menu = if self.open_menu == Some(index) {
+                None
+            } else {
+                Some(index)
+            };
+        }
+    }
+
+    /// Phase 4 — render the dropdown for the open menu (if any) and handle
+    /// item clicks. A click closes the menu and returns the item label.
+    fn render_open_dropdown(&mut self, ui: &mut UIContext, theme: &EditorTheme) -> Option<String> {
+        let open_index = self.open_menu?;
+        let menu = &self.menus[open_index];
+
+        let clicked = Self::render_dropdown_static(ui, menu, menu.bounds, theme);
+        if clicked.is_some() {
+            self.open_menu = None;
+        }
+        clicked
     }
 
     /// Render a dropdown menu (static method to avoid borrow issues).
-    fn render_dropdown_static(ui: &mut UIContext, menu: &Menu, anchor: Rect) -> Option<String> {
+    fn render_dropdown_static(ui: &mut UIContext, menu: &Menu, anchor: Rect, theme: &EditorTheme) -> Option<String> {
         let item_count = menu.items.len();
         let dropdown_height = item_count as f32 * DROPDOWN_ITEM_HEIGHT + 8.0;
         let dropdown_bounds = Rect::new(
@@ -335,7 +348,7 @@ impl MenuBar {
                             item_bounds.x + item_bounds.width - DROPDOWN_ITEM_PADDING - shortcut.len() as f32 * 6.0,
                             item_bounds.center().y,
                         );
-                        ui.label_styled(shortcut, shortcut_pos, Color::new(0.5, 0.5, 0.5, 1.0), 12.0);
+                        ui.label_styled(shortcut, shortcut_pos, theme.shortcut_hint, 12.0);
                     }
 
                     y += DROPDOWN_ITEM_HEIGHT;
@@ -345,7 +358,7 @@ impl MenuBar {
                     ui.line(
                         Vec2::new(dropdown_bounds.x + 8.0, sep_y),
                         Vec2::new(dropdown_bounds.x + dropdown_bounds.width - 8.0, sep_y),
-                        Color::new(0.3, 0.3, 0.3, 1.0),
+                        theme.menu_separator,
                         1.0,
                     );
                     y += DROPDOWN_ITEM_HEIGHT;
@@ -507,5 +520,57 @@ mod tests {
 
         bar.close_all();
         assert!(bar.open_menu.is_none());
+    }
+
+    #[test]
+    fn test_layout_titles_sets_bar_bounds_to_window_width() {
+        let mut bar = MenuBar::editor_default();
+        bar.layout_titles(1280.0);
+        assert_eq!(bar.bounds.width, 1280.0);
+        assert_eq!(bar.bounds.height, bar.height());
+    }
+
+    #[test]
+    fn test_layout_titles_do_not_overlap() {
+        let mut bar = MenuBar::editor_default();
+        bar.layout_titles(1280.0);
+
+        for pair in bar.menus.windows(2) {
+            let left = pair[0].bounds;
+            let right = pair[1].bounds;
+            assert!(
+                left.x + left.width <= right.x,
+                "menu '{}' overlaps '{}'",
+                pair[0].title,
+                pair[1].title
+            );
+        }
+    }
+
+    #[test]
+    fn test_layout_title_width_scales_with_title_length() {
+        let mut bar = MenuBar::new();
+        bar.add_menu(Menu::new("File"));
+        bar.add_menu(Menu::new("MuchLongerTitle"));
+        bar.layout_titles(800.0);
+
+        assert!(bar.menus[1].bounds.width > bar.menus[0].bounds.width);
+    }
+
+    #[test]
+    fn test_apply_toggle_opens_and_closes() {
+        let mut bar = MenuBar::editor_default();
+
+        bar.apply_toggle(Some(1));
+        assert_eq!(bar.open_menu, Some(1));
+
+        // Clicking the same title again closes it
+        bar.apply_toggle(Some(1));
+        assert!(bar.open_menu.is_none());
+
+        // No click leaves state unchanged
+        bar.apply_toggle(Some(2));
+        bar.apply_toggle(None);
+        assert_eq!(bar.open_menu, Some(2));
     }
 }

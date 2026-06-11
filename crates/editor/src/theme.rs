@@ -58,6 +58,46 @@ pub struct EditorTheme {
     pub gizmo_y: Color,
     /// Center/free-move gizmo handle
     pub gizmo_center: Color,
+    /// X-axis handle while hovered/dragged
+    pub gizmo_x_hover: Color,
+    /// Y-axis handle while hovered/dragged
+    pub gizmo_y_hover: Color,
+    /// Center handle while hovered/dragged
+    pub gizmo_center_hover: Color,
+    /// Rotation ring
+    pub gizmo_ring: Color,
+    /// Current-rotation indicator line
+    pub gizmo_rotation_indicator: Color,
+    /// Scale gizmo box outline
+    pub gizmo_scale_outline: Color,
+    /// Scale gizmo corner handles
+    pub gizmo_scale_handle: Color,
+    /// Scale gizmo corner handles while hovered/dragged
+    pub gizmo_scale_handle_hover: Color,
+
+    // ── Selection / rows ────────────────────────────────────────
+    /// Selected row background (hierarchy, lists)
+    pub selection_fill: Color,
+    /// Hovered row background (hierarchy, lists)
+    pub hover_fill: Color,
+    /// Active tool button background (toolbar)
+    pub toolbar_active: Color,
+
+    // ── Menu ────────────────────────────────────────────────────
+    /// Background highlight behind an open menu title
+    pub menu_open_highlight: Color,
+    /// Separator lines inside menu dropdowns
+    pub menu_separator: Color,
+    /// Keyboard shortcut hint text (menus, toolbar)
+    pub shortcut_hint: Color,
+
+    // ── Inspector field labels ──────────────────────────────────
+    /// "X" axis label in Vec2 fields
+    pub axis_x_label: Color,
+    /// "Y" axis label in Vec2 fields
+    pub axis_y_label: Color,
+    /// "R", "G", "B", "A" channel labels in color fields
+    pub channel_labels: [Color; 4],
 
     // ── Play state ──────────────────────────────────────────────
     /// Play button / playing border tint (`#00cc44`)
@@ -140,6 +180,34 @@ impl Default for EditorTheme {
             gizmo_x: Color::new(0.0, 1.0, 0.0, 1.0),
             gizmo_y: Color::new(1.0, 0.0, 0.0, 1.0),
             gizmo_center: Color::new(0.9, 0.9, 0.2, 1.0),
+            gizmo_x_hover: Color::new(1.0, 0.4, 0.4, 1.0),
+            gizmo_y_hover: Color::new(0.4, 1.0, 0.4, 1.0),
+            gizmo_center_hover: Color::new(1.0, 1.0, 0.4, 1.0),
+            gizmo_ring: Color::new(0.3, 0.3, 0.9, 1.0),
+            gizmo_rotation_indicator: Color::new(0.9, 0.9, 0.9, 1.0),
+            gizmo_scale_outline: Color::new(0.6, 0.6, 0.6, 1.0),
+            gizmo_scale_handle: Color::new(0.7, 0.7, 0.7, 1.0),
+            gizmo_scale_handle_hover: Color::new(0.9, 0.9, 0.4, 1.0),
+
+            // Selection / rows
+            selection_fill: Color::new(0.3, 0.5, 0.8, 0.5),
+            hover_fill: Color::new(0.5, 0.5, 0.5, 0.2),
+            toolbar_active: Color::new(0.3, 0.5, 0.8, 1.0),
+
+            // Menu
+            menu_open_highlight: Color::new(0.2, 0.2, 0.2, 1.0),
+            menu_separator: Color::new(0.3, 0.3, 0.3, 1.0),
+            shortcut_hint: Color::new(0.5, 0.5, 0.5, 1.0),
+
+            // Inspector field labels
+            axis_x_label: Color::new(0.8, 0.4, 0.4, 1.0),
+            axis_y_label: Color::new(0.4, 0.8, 0.4, 1.0),
+            channel_labels: [
+                Color::new(0.9, 0.4, 0.4, 1.0), // R
+                Color::new(0.4, 0.9, 0.4, 1.0), // G
+                Color::new(0.4, 0.4, 0.9, 1.0), // B
+                Color::new(0.7, 0.7, 0.7, 1.0), // A
+            ],
 
             // Play state
             play_green: Color::from_hex(0x00cc44),
@@ -216,7 +284,27 @@ impl EditorTheme {
             label_color: self.inspector_label,
             value_color: self.inspector_value,
             header_color: self.inspector_header,
+            axis_x_label: self.axis_x_label,
+            axis_y_label: self.axis_y_label,
+            channel_labels: self.channel_labels,
             ..Default::default()
+        }
+    }
+
+    /// Create a `GizmoPalette` from this theme.
+    pub fn gizmo_palette(&self) -> crate::gizmo::GizmoPalette {
+        crate::gizmo::GizmoPalette {
+            x: self.gizmo_x,
+            y: self.gizmo_y,
+            center: self.gizmo_center,
+            x_hover: self.gizmo_x_hover,
+            y_hover: self.gizmo_y_hover,
+            center_hover: self.gizmo_center_hover,
+            ring: self.gizmo_ring,
+            rotation_indicator: self.gizmo_rotation_indicator,
+            scale_outline: self.gizmo_scale_outline,
+            scale_handle: self.gizmo_scale_handle,
+            scale_handle_hover: self.gizmo_scale_handle_hover,
         }
     }
 
@@ -320,6 +408,37 @@ mod tests {
         assert!((v.y - 0.2).abs() < f32::EPSILON);
         assert!((v.z - 0.3).abs() < f32::EPSILON);
         assert!((v.w - 0.4).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_gizmo_palette_matches_tokens() {
+        let theme = EditorTheme::default();
+        let palette = theme.gizmo_palette();
+        assert_eq!(palette.x, theme.gizmo_x);
+        assert_eq!(palette.y, theme.gizmo_y);
+        assert_eq!(palette.center, theme.gizmo_center);
+        assert_eq!(palette.x_hover, theme.gizmo_x_hover);
+        assert_eq!(palette.y_hover, theme.gizmo_y_hover);
+        assert_eq!(palette.ring, theme.gizmo_ring);
+        assert_eq!(palette.scale_handle_hover, theme.gizmo_scale_handle_hover);
+    }
+
+    #[test]
+    fn test_editable_field_style_includes_axis_and_channel_labels() {
+        let theme = EditorTheme::default();
+        let style = theme.editable_field_style();
+        assert_eq!(style.axis_x_label, theme.axis_x_label);
+        assert_eq!(style.axis_y_label, theme.axis_y_label);
+        assert_eq!(style.channel_labels, theme.channel_labels);
+    }
+
+    #[test]
+    fn test_hover_colors_differ_from_base() {
+        let theme = EditorTheme::default();
+        assert_ne!(theme.gizmo_x_hover, theme.gizmo_x);
+        assert_ne!(theme.gizmo_y_hover, theme.gizmo_y);
+        assert_ne!(theme.gizmo_scale_handle_hover, theme.gizmo_scale_handle);
+        assert_ne!(theme.selection_fill, theme.hover_fill);
     }
 
     #[test]

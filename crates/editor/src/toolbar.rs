@@ -4,7 +4,7 @@
 //! (Select, Move, Rotate, Scale) and displays the current tool state.
 
 use glam::Vec2;
-use ui::{Color, Rect, UIContext};
+use ui::{Rect, UIContext};
 
 /// Available editor tools for manipulating entities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -116,7 +116,7 @@ impl Toolbar {
     /// Render the toolbar and handle tool selection.
     ///
     /// Returns the newly selected tool if changed.
-    pub fn render(&mut self, ui: &mut UIContext) -> Option<EditorTool> {
+    pub fn render(&mut self, ui: &mut UIContext, theme: &crate::EditorTheme) -> Option<EditorTool> {
         let tools = EditorTool::all();
         let mut new_tool = None;
 
@@ -135,7 +135,7 @@ impl Toolbar {
             // Use different styling for selected vs unselected
             if is_selected {
                 // Draw selected indicator
-                ui.rect_rounded(button_bounds, Color::new(0.3, 0.5, 0.8, 1.0), 4.0);
+                ui.rect_rounded(button_bounds, theme.toolbar_active, 4.0);
             }
 
             // Draw button (will use default styling with hover effect)
@@ -150,7 +150,7 @@ impl Toolbar {
                 button_bounds.center().x,
                 button_bounds.y + button_bounds.height + 2.0,
             );
-            ui.label_styled(tool.shortcut(), hint_pos, Color::new(0.5, 0.5, 0.5, 1.0), 10.0);
+            ui.label_styled(tool.shortcut(), hint_pos, theme.shortcut_hint, 10.0);
         }
 
         new_tool

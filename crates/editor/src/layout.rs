@@ -39,20 +39,11 @@ pub const MIN_PANEL_SIZE: f32 = 100.0;
 /// Default panel width for left/right docked panels
 pub const DEFAULT_PANEL_WIDTH: f32 = 250.0;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_layout_constants_positive() {
-        assert!(PADDING > 0.0);
-        assert!(HEADER_HEIGHT > 0.0);
-        assert!(LINE_HEIGHT > 0.0);
-        assert!(MIN_PANEL_SIZE > 0.0);
-    }
-
-    #[test]
-    fn test_padding_hierarchy() {
-        assert!(PADDING > PADDING_SMALL);
-    }
-}
+// Compile-time sanity checks on layout constants.
+const _: () = {
+    assert!(PADDING > 0.0);
+    assert!(HEADER_HEIGHT > 0.0);
+    assert!(LINE_HEIGHT > 0.0);
+    assert!(MIN_PANEL_SIZE > 0.0);
+    assert!(PADDING > PADDING_SMALL);
+};

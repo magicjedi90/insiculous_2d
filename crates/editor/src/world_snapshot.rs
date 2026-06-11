@@ -249,8 +249,10 @@ mod tests {
         };
         world.add_component(&entity, behavior).ok();
 
-        let mut state = BehaviorState::default();
-        state.timer = 1.5;
+        let state = BehaviorState {
+            timer: 1.5,
+            ..Default::default()
+        };
         world.add_component(&entity, state).ok();
 
         world.add_component(&entity, EntityTag::new("hero")).ok();

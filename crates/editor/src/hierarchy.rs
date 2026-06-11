@@ -10,6 +10,7 @@ use glam::Vec2;
 use physics::components::RigidBody;
 
 use crate::layout::{LINE_HEIGHT, PADDING};
+use crate::theme::EditorTheme;
 use crate::Selection;
 
 /// Row height for each entity in the hierarchy (matches LINE_HEIGHT).
@@ -29,6 +30,16 @@ const ARROW_WIDTH: f32 = 16.0;
 pub struct HierarchyPanel {
     /// Entities that are collapsed (all expanded by default).
     collapsed: HashSet<EntityId>,
+}
+
+/// Shared state for one hierarchy render pass, threaded through the node recursion.
+struct NodeRenderCtx<'a> {
+    ui: &'a mut ui::UIContext,
+    world: &'a World,
+    selection: &'a Selection,
+    theme: &'a EditorTheme,
+    bounds: common::Rect,
+    clicked_entities: &'a mut Vec<EntityId>,
 }
 
 impl HierarchyPanel {
@@ -99,6 +110,7 @@ impl HierarchyPanel {
         world: &World,
         selection: &mut Selection,
         bounds: common::Rect,
+        theme: &EditorTheme,
     ) -> Vec<EntityId> {
         let mut clicked_entities = Vec::new();
 
@@ -106,19 +118,19 @@ impl HierarchyPanel {
         let mut roots = world.get_root_entities();
         roots.sort_by_key(|e| e.value());
 
+        let mut ctx = NodeRenderCtx {
+            ui,
+            world,
+            selection,
+            theme,
+            bounds,
+            clicked_entities: &mut clicked_entities,
+        };
+
         // Render each root and its descendants with top padding
         let mut y = bounds.y + BASE_PADDING;
         for root in roots {
-            y = self.render_node(
-                ui,
-                world,
-                selection,
-                bounds,
-                root,
-                0,
-                y,
-                &mut clicked_entities,
-            );
+            y = self.render_node(&mut ctx, root, 0, y);
         }
 
         clicked_entities
@@ -129,24 +141,22 @@ impl HierarchyPanel {
     /// Returns the next Y position after this node and its visible children.
     fn render_node(
         &mut self,
-        ui: &mut ui::UIContext,
-        world: &World,
-        selection: &mut Selection,
-        bounds: common::Rect,
+        ctx: &mut NodeRenderCtx<'_>,
         entity: EntityId,
         depth: usize,
         y: f32,
-        clicked_entities: &mut Vec<EntityId>,
     ) -> f32 {
+        let bounds = ctx.bounds;
+
         // Check if this row is visible within bounds
         if y + ROW_HEIGHT < bounds.y || y > bounds.y + bounds.height {
             // Skip rendering but still calculate next Y
             let mut next_y = y + ROW_HEIGHT;
             if self.is_expanded(entity) {
-                if let Some(children) = world.get_children(entity) {
-                    for &child in children {
-                        next_y =
-                            self.render_node(ui, world, selection, bounds, child, depth + 1, next_y, clicked_entities);
+                if let Some(children) = ctx.world.get_children(entity) {
+                    let children_vec: Vec<EntityId> = children.to_vec();
+                    for child in children_vec {
+                        next_y = self.render_node(ctx, child, depth + 1, next_y);
                     }
                 }
             }
@@ -154,14 +164,14 @@ impl HierarchyPanel {
         }
 
         let x = bounds.x + BASE_PADDING + (depth as f32 * INDENT_PER_DEPTH);
-        let has_children = world.get_children(entity).map_or(false, |c| !c.is_empty());
-        let is_selected = selection.contains(entity);
+        let has_children = ctx.world.get_children(entity).is_some_and(|c| !c.is_empty());
+        let is_selected = ctx.selection.contains(entity);
         let is_expanded = self.is_expanded(entity);
 
         // Row background for selection (full width)
         let row_rect = common::Rect::new(bounds.x, y, bounds.width, ROW_HEIGHT);
         if is_selected {
-            ui.rect(row_rect, ui::Color::new(0.3, 0.5, 0.8, 0.5));
+            ctx.ui.rect(row_rect, ctx.theme.selection_fill);
         }
 
         // Check arrow interaction FIRST for entities with children
@@ -169,7 +179,7 @@ impl HierarchyPanel {
         if has_children {
             let arrow_rect = common::Rect::new(x, y, ARROW_WIDTH, ROW_HEIGHT);
             let arrow_id = format!("hierarchy_arrow_{}", entity.value());
-            let arrow_interaction = ui.interact(arrow_id.as_str(), arrow_rect, true);
+            let arrow_interaction = ctx.ui.interact(arrow_id.as_str(), arrow_rect, true);
 
             if arrow_interaction.clicked {
                 self.toggle_expanded(entity);
@@ -178,7 +188,7 @@ impl HierarchyPanel {
 
             // Draw arrow (baseline near bottom of row)
             let arrow = if is_expanded { "▼" } else { "▶" };
-            ui.label(arrow, Vec2::new(x, y + ROW_HEIGHT - 4.0));
+            ctx.ui.label(arrow, Vec2::new(x, y + ROW_HEIGHT - 4.0));
         }
 
         // Row interaction - use area after arrow for entities with children
@@ -187,39 +197,30 @@ impl HierarchyPanel {
         let row_interact_rect = common::Rect::new(row_interact_x, y, row_interact_width, ROW_HEIGHT);
 
         let row_id = format!("hierarchy_row_{}", entity.value());
-        let row_interaction = ui.interact(row_id.as_str(), row_interact_rect, true);
+        let row_interaction = ctx.ui.interact(row_id.as_str(), row_interact_rect, true);
 
         if row_interaction.clicked && !arrow_clicked {
-            clicked_entities.push(entity);
+            ctx.clicked_entities.push(entity);
         }
 
         // Hover highlight (full row width for visual consistency)
         if row_interaction.state == ui::WidgetState::Hovered && !is_selected {
-            ui.rect(row_rect, ui::Color::new(0.5, 0.5, 0.5, 0.2));
+            ctx.ui.rect(row_rect, ctx.theme.hover_fill);
         }
 
         // Entity name (baseline near bottom of row)
-        let name = Self::entity_display_name(world, entity);
+        let name = Self::entity_display_name(ctx.world, entity);
         let name_x = x + if has_children { ARROW_WIDTH } else { 0.0 };
-        ui.label(&name, Vec2::new(name_x, y + ROW_HEIGHT - 4.0));
+        ctx.ui.label(&name, Vec2::new(name_x, y + ROW_HEIGHT - 4.0));
 
         // Render children if expanded
         let mut next_y = y + ROW_HEIGHT;
         if is_expanded && has_children {
-            if let Some(children) = world.get_children(entity) {
+            if let Some(children) = ctx.world.get_children(entity) {
                 // Clone to avoid borrow issues
                 let children_vec: Vec<EntityId> = children.to_vec();
                 for child in children_vec {
-                    next_y = self.render_node(
-                        ui,
-                        world,
-                        selection,
-                        bounds,
-                        child,
-                        depth + 1,
-                        next_y,
-                        clicked_entities,
-                    );
+                    next_y = self.render_node(ctx, child, depth + 1, next_y);
                 }
             }
         }

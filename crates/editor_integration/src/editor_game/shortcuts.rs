@@ -1,0 +1,165 @@
+//! Keyboard shortcuts and play state transitions.
+
+use std::path::PathBuf;
+
+use winit::keyboard::KeyCode;
+
+use editor::{EditorPlayState, EditorTool, PlayControlAction};
+use editor::world_snapshot::WorldSnapshot;
+use engine_core::contexts::GameContext;
+use engine_core::Game;
+
+use crate::constants::DEFAULT_SCENE_PATH;
+
+use super::EditorGame;
+
+impl<G: Game> EditorGame<G> {
+    /// Q/W/E/R tool selection shortcuts.
+    pub(super) fn handle_tool_shortcuts(&mut self, ctx: &GameContext) {
+        let kb = ctx.input.keyboard();
+
+        if kb.is_key_just_pressed(KeyCode::KeyQ) {
+            self.editor.set_tool(EditorTool::Select);
+        } else if kb.is_key_just_pressed(KeyCode::KeyW) {
+            self.editor.set_tool(EditorTool::Move);
+        } else if kb.is_key_just_pressed(KeyCode::KeyE) {
+            self.editor.set_tool(EditorTool::Rotate);
+        } else if kb.is_key_just_pressed(KeyCode::KeyR) {
+            self.editor.set_tool(EditorTool::Scale);
+        }
+    }
+
+    /// Handle a play control action (Play, Pause, Stop).
+    ///
+    /// Returns `true` if a Stop was performed (world restored from snapshot),
+    /// so the caller can notify the inner game via `on_play_stopped`.
+    pub(super) fn handle_play_action(&mut self, action: PlayControlAction, world: &mut ecs::World) -> bool {
+        match action {
+            PlayControlAction::Play => {
+                if self.editor.is_editing() {
+                    // Cancel any in-progress gizmo drag
+                    self.gizmo_drag_start = None;
+                    // Starting a new play session — capture snapshot
+                    self.world_snapshot = Some(WorldSnapshot::capture(world));
+                    self.editor.set_play_state(EditorPlayState::Playing);
+                    self.editor.close_add_component_popup();
+                    log::info!("Play: snapshot captured, entering play mode");
+                } else if self.editor.is_paused() {
+                    // Resuming from pause
+                    self.editor.set_play_state(EditorPlayState::Playing);
+                    self.editor.close_add_component_popup();
+                    log::info!("Play: resumed from pause");
+                }
+                false
+            }
+            PlayControlAction::Pause => {
+                if self.editor.is_playing() {
+                    self.editor.set_play_state(EditorPlayState::Paused);
+                    log::info!("Paused");
+                }
+                false
+            }
+            PlayControlAction::Stop => {
+                if self.editor.in_play_session() {
+                    // Restore world from snapshot
+                    if let Some(snapshot) = self.world_snapshot.take() {
+                        snapshot.restore(world);
+                        log::info!("Stop: world restored from snapshot");
+                    }
+                    self.editor.set_play_state(EditorPlayState::Editing);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// Top-level key handler: play shortcuts always work; editor shortcuts
+    /// apply while Editing/Paused; everything else forwards to the game.
+    pub(super) fn handle_editor_key(&mut self, key: KeyCode, ctx: &mut GameContext) {
+        let ctrl = ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft)
+            || ctx.input.keyboard().is_key_pressed(KeyCode::ControlRight);
+        let shift = ctx.input.keyboard().is_key_pressed(KeyCode::ShiftLeft)
+            || ctx.input.keyboard().is_key_pressed(KeyCode::ShiftRight);
+
+        // Play state shortcuts (always intercepted)
+        if key == KeyCode::KeyP && ctrl && shift {
+            // Ctrl+Shift+P → Stop
+            if self.handle_play_action(PlayControlAction::Stop, ctx.world) {
+                self.inner.on_play_stopped(ctx);
+            }
+            return;
+        }
+        if key == KeyCode::KeyP && ctrl {
+            // Ctrl+P → Play/Pause toggle
+            if self.editor.is_playing() {
+                self.handle_play_action(PlayControlAction::Pause, ctx.world);
+            } else {
+                self.handle_play_action(PlayControlAction::Play, ctx.world);
+            }
+            return;
+        }
+
+        // During play mode, forward keys to inner game (skip editor shortcuts)
+        if self.editor.is_playing() {
+            self.inner.on_key_pressed(key, ctx);
+            return;
+        }
+
+        // Editor shortcuts (only during Editing/Paused)
+        match key {
+            KeyCode::KeyZ if ctrl && !shift => {
+                self.command_history.undo(ctx.world);
+                self.editor.mark_dirty();
+            }
+            KeyCode::KeyZ if ctrl && shift => {
+                self.command_history.redo(ctx.world);
+                self.editor.mark_dirty();
+            }
+            KeyCode::KeyY if ctrl => {
+                self.command_history.redo(ctx.world);
+                self.editor.mark_dirty();
+            }
+            KeyCode::KeyG => self.editor.toggle_grid(),
+            KeyCode::KeyS if ctrl && shift => {
+                // Ctrl+Shift+S → Save As
+                let path = PathBuf::from(DEFAULT_SCENE_PATH);
+                if let Err(e) = self.save_scene_as(ctx.world, ctx.assets, path) {
+                    self.editor.status_bar.show_error(format!("Save failed: {}", e));
+                    log::error!("Failed to save: {}", e);
+                }
+            }
+            KeyCode::KeyS if ctrl => {
+                // Ctrl+S → Save
+                if let Err(e) = self.save_scene(ctx.world, ctx.assets) {
+                    self.editor.status_bar.show_error(format!("Save failed: {}", e));
+                    log::error!("Failed to save: {}", e);
+                }
+            }
+            KeyCode::KeyN if ctrl => {
+                // Ctrl+N → New Scene
+                self.new_scene(ctx.world);
+            }
+            KeyCode::KeyO if ctrl => {
+                // Ctrl+O → Open Scene
+                let path = PathBuf::from(DEFAULT_SCENE_PATH);
+                self.load_scene_with_feedback(ctx.world, ctx.assets, &path);
+            }
+            KeyCode::KeyD if ctrl => {
+                self.duplicate_selected_entities(ctx);
+            }
+            KeyCode::Delete | KeyCode::Backspace => {
+                self.delete_selected_entities(ctx);
+            }
+            KeyCode::Equal => self.editor.zoom_camera(1.1),
+            KeyCode::Minus => self.editor.zoom_camera(0.9),
+            KeyCode::Digit0 => self.editor.reset_camera(),
+            KeyCode::F5 => {
+                // F5 → Start/Resume play (only from Editing or Paused)
+                self.handle_play_action(PlayControlAction::Play, ctx.world);
+            }
+            _ => self.inner.on_key_pressed(key, ctx),
+        }
+    }
+}

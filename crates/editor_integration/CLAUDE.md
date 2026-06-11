@@ -22,15 +22,21 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
 ```
 
 ## File Map
-- `editor_game.rs` — EditorGame<G> wrapper, main update loop, input routing, play state, save/load wiring (1108 lines — split candidate)
-- `entity_ops.rs` — Pure entity CRUD (`&mut World` + `&mut Selection`, no UI). Add/remove/duplicate/reparent, component add/remove (901 lines — split candidate)
-- `panel_renderer.rs` — Renders panel contents (scene view, hierarchy, inspector, asset browser) (923 lines — split candidate)
+- `editor_game/` — EditorGame<G> wrapper, split by feature:
+  - `mod.rs` — struct + slim `Game` impl (`update()` = ~30 lines of named phases) + `run_game_with_editor`
+  - `menu_actions.rs` — menu bar dispatch + shared delete/duplicate helpers
+  - `scene_io.rs` — save/load/new scene (load failures surface on status bar)
+  - `shortcuts.rs` — keyboard shortcuts + play state transitions
+  - `viewport_interaction.rs` — picking, rectangle selection, gizmo drag
+- `entity_ops.rs` — Pure entity CRUD (`&mut World` + `&mut Selection`, no UI). Component dispatch lives in `editor::ComponentKind` (registry macro)
+- `panel_renderer/` — Panel contents: `mod.rs` (dispatch, scene view, hierarchy), `inspector.rs` (editable/readonly inspector + `apply_component_edit()`)
+- `constants.rs` — `DEFAULT_SCENE_PATH`, min window size, `MIN_ENTITY_SCALE`, `DUPLICATE_OFFSET`
 - `lib.rs` — Public re-exports
 
 ## Key Patterns
 - `EditorGame::update()` — main orchestration. Editor input → conditional game update (only if Playing) → render panels
 - Input routing: Editing/Paused → editor gets input. Playing → game gets input, editor hotkeys still work.
-- Inspector writeback: component editors return edit results → applied via `world.get_mut::<T>()` and pushed onto CommandHistory via `try_merge_or_push` (continuous edits merge)
+- Inspector writeback: `edit_*()` returns `Option<ComponentEdit<T>>` → `apply_component_edit()` writes to world and records undo via `try_merge_or_push` (continuous edits merge by `field_hint`)
 - Play/Stop: snapshot world on Play (typed clone via `WorldSnapshot`), restore on Stop
 - Save/Load: Ctrl+S / Ctrl+Shift+S / Ctrl+O / Ctrl+N — uses `scene_serializer::world_to_scene_data` for save, `SceneLoader` for load. Hardcoded paths (no file picker yet)
 - Status messages: `editor.status_bar.show_message("Saved")` after successful operations
@@ -41,11 +47,10 @@ Phase 1A–1H **complete**: entity CRUD, component add/remove, undo/redo, play/p
 Currently in Phase 2 (Ideal Editor UI). See `PROJECT_ROADMAP.md`.
 
 ## Known Tech Debt
-- `editor_game.rs`, `entity_ops.rs`, `panel_renderer.rs` all > 600 lines (project guideline). Candidates for splitting along feature boundaries (input routing / save-load / panel-by-panel)
-- No file picker dialog — save/load uses hardcoded `scenes/` paths
+See `TECH_DEBT.md` (all files < 600 lines since June 2026; remaining: no file picker, menu-label string matching)
 
 ## Testing
-- 72 passing, 1 ignored — `cargo test -p editor_integration`
+- 63 passing, 1 ignored (doc) — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
 - `entity_ops` is fully headless-testable (no UI dependency)
 
 ## Godot Oracle — When Stuck

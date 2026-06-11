@@ -126,11 +126,12 @@ impl ViewportInputHandler {
         input_handler: &input::InputHandler,
         viewport_contains_mouse: bool,
     ) -> ViewportInputResult {
-        let mut result = ViewportInputResult::default();
-
         // Track modifier keys from input state
-        result.shift_held = input_state.add_modifier;
-        result.ctrl_held = input_state.toggle_modifier;
+        let mut result = ViewportInputResult {
+            shift_held: input_state.add_modifier,
+            ctrl_held: input_state.toggle_modifier,
+            ..Default::default()
+        };
 
         // Only handle input if mouse is over viewport
         if !viewport_contains_mouse {
@@ -281,34 +282,32 @@ impl ViewportInputHandler {
     }
 }
 
-/// Calculate zoom factor for a scroll delta.
-#[allow(dead_code)]
-pub fn calculate_zoom_factor(scroll_delta: f32, base_factor: f32, invert: bool) -> f32 {
-    let factor = if scroll_delta > 0.0 {
-        base_factor
-    } else {
-        1.0 / base_factor
-    };
-
-    if invert {
-        1.0 / factor
-    } else {
-        factor
-    }
-}
-
-/// Convert screen delta to world delta for panning.
-#[allow(dead_code)]
-pub fn screen_to_world_delta(screen_delta: Vec2, camera_zoom: f32) -> Vec2 {
-    Vec2::new(
-        -screen_delta.x / camera_zoom,
-        screen_delta.y / camera_zoom, // Flip Y
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Calculate zoom factor for a scroll delta (mirrors the logic in `handle_input`).
+    fn calculate_zoom_factor(scroll_delta: f32, base_factor: f32, invert: bool) -> f32 {
+        let factor = if scroll_delta > 0.0 {
+            base_factor
+        } else {
+            1.0 / base_factor
+        };
+
+        if invert {
+            1.0 / factor
+        } else {
+            factor
+        }
+    }
+
+    /// Convert screen delta to world delta for panning (mirrors the logic in `handle_input`).
+    fn screen_to_world_delta(screen_delta: Vec2, camera_zoom: f32) -> Vec2 {
+        Vec2::new(
+            -screen_delta.x / camera_zoom,
+            screen_delta.y / camera_zoom, // Flip Y
+        )
+    }
 
     #[test]
     fn test_viewport_input_handler_new() {

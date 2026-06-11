@@ -185,7 +185,7 @@ impl EntityPicker {
         entities: &[PickableEntity],
     ) -> PickResult {
         // Check if this is a repeat click at the same position
-        let is_same_position = self.last_pick_pos.map_or(false, |last| {
+        let is_same_position = self.last_pick_pos.is_some_and(|last| {
             (screen_pos - last).length() < self.same_position_threshold
         });
 
