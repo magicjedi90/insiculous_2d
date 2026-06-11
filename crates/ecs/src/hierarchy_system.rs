@@ -26,9 +26,9 @@ use crate::world::World;
 ///
 /// # Example
 ///
-/// ```ignore
-/// use ecs::prelude::*;
-/// use ecs::hierarchy_system::TransformHierarchySystem;
+/// ```
+/// use ecs::{GlobalTransform2D, Transform2D, TransformHierarchySystem, World, WorldHierarchyExt};
+/// use glam::Vec2;
 ///
 /// let mut world = World::new();
 /// world.add_system(TransformHierarchySystem::new());
@@ -45,6 +45,11 @@ use crate::world::World;
 /// world.set_parent(child, parent).ok();
 ///
 /// // After update, child's GlobalTransform2D.position will be (150.0, 0.0)
+/// # world.initialize().unwrap();
+/// # world.start().unwrap();
+/// world.update(0.016).unwrap();
+/// let global = world.get::<GlobalTransform2D>(child).unwrap();
+/// assert_eq!(global.position, Vec2::new(150.0, 0.0));
 /// ```
 pub struct TransformHierarchySystem {
     /// Whether the system is enabled

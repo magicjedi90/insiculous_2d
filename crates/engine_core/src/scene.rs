@@ -98,9 +98,13 @@ impl Scene {
     /// a SceneInstance with named entity lookups.
     ///
     /// # Example
-    /// ```ignore
-    /// let instance = scene.load_from_file("assets/scenes/level1.scene.ron", &mut assets)?;
+    /// ```
+    /// # use engine_core::prelude::*;
+    /// # fn load(scene: &mut Scene, assets: &mut AssetManager) -> Result<(), SceneLoadError> {
+    /// let instance = scene.load_from_file("assets/scenes/level1.scene.ron", assets)?;
     /// let player = instance.get_entity("player").unwrap();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn load_from_file(
         &mut self,

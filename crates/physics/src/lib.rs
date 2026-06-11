@@ -13,19 +13,28 @@
 //!
 //! # Usage
 //!
-//! ```rust,ignore
+//! ```rust
 //! use physics::{PhysicsSystem, RigidBody, Collider};
 //! use ecs::sprite_components::Transform2D;
+//! use ecs::{System, World};
+//! use glam::Vec2;
 //!
-//! // Create physics system and add to world
-//! let physics_system = PhysicsSystem::new();
-//! world.add_system(physics_system);
+//! // Create the ECS world and the physics system
+//! let mut world = World::new();
+//! let mut physics_system = PhysicsSystem::new();
 //!
-//! // Create entity with physics
+//! // Create an entity with physics components
 //! let entity = world.create_entity();
-//! world.add_component(&entity, Transform2D::new(Vec2::new(0.0, 100.0)));
-//! world.add_component(&entity, RigidBody::new_dynamic());
-//! world.add_component(&entity, Collider::box_collider(32.0, 32.0));
+//! world.add_component(&entity, Transform2D::new(Vec2::new(0.0, 100.0))).unwrap();
+//! world.add_component(&entity, RigidBody::new_dynamic()).unwrap();
+//! world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
+//!
+//! // Step the simulation each frame (the game loop normally does this)
+//! physics_system.update(&mut world, 1.0 / 60.0);
+//!
+//! // Gravity pulled the dynamic body down
+//! let transform = world.get::<Transform2D>(entity).unwrap();
+//! assert!(transform.position.y < 100.0);
 //! ```
 
 pub mod components;

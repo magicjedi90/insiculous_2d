@@ -6,13 +6,13 @@
 //!
 //! The easiest way to create a game is using the `Game` trait:
 //!
-//! ```ignore
+//! ```no_run
 //! use engine_core::prelude::*;
 //!
 //! struct MyGame;
 //!
 //! impl Game for MyGame {
-//!     fn update(&mut self, ctx: &mut GameContext) {
+//!     fn update(&mut self, _ctx: &mut GameContext) {
 //!         // Game logic here
 //!     }
 //! }

@@ -5,15 +5,13 @@
 //! Systems read the state and act on it — no callbacks, pure ECS style.
 //!
 //! # Example
-//! ```ignore
+//! ```
 //! use ecs::{World, StateMachine};
 //!
 //! #[derive(Debug, Clone, PartialEq)]
 //! enum PlayerState {
 //!     Idle,
 //!     Running { speed: f32 },
-//!     Jumping { velocity: f32 },
-//!     Falling,
 //! }
 //!
 //! let mut world = World::new();
@@ -149,17 +147,22 @@ where
     /// belongs to.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// # use ecs::HierarchicalStateMachine;
     /// #[derive(Clone, PartialEq, Debug)]
     /// enum PlayerState { Idle, Running, Jumping, Falling }
     ///
     /// #[derive(Clone, PartialEq, Debug)]
     /// enum PlayerGroup { OnGround, InAir }
     ///
-    /// let sm = HierarchicalStateMachine::new(PlayerState::Idle, |s| match s {
+    /// let mut sm = HierarchicalStateMachine::new(PlayerState::Idle, |s| match s {
     ///     PlayerState::Idle | PlayerState::Running => PlayerGroup::OnGround,
     ///     PlayerState::Jumping | PlayerState::Falling => PlayerGroup::InAir,
     /// });
+    /// assert!(sm.in_group(&PlayerGroup::OnGround));
+    ///
+    /// sm.transition_to(PlayerState::Jumping);
+    /// assert!(sm.in_group(&PlayerGroup::InAir));
     /// ```
     pub fn new(initial: S, parent_map: fn(&S) -> P) -> Self {
         let parent_state = parent_map(&initial);

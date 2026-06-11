@@ -40,13 +40,13 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 - Batch by texture to minimize bind group switches; cross-batch submission order must be deterministic (callers sort by min depth, then handle)
 - `DynamicBuffer` grows (next power of two) and never shrinks; pass `&Device` to `update`
 - Float sorts use `total_cmp` — no `partial_cmp().unwrap()`
-- GPU tests marked `#[ignore]` — everything else runs headless
+- All tests run headless (GPU-dependent doc examples are compile-only `no_run`)
 
 ## Known Tech Debt
 See `TECH_DEBT.md` — 3 open issues, all Low (shared camera binding, cross-batch transparency vs depth writes, prepare_sprites scratch Vec).
 
 ## Testing
-- 69 tests, run with `cargo test -p renderer`
+- 70 tests (69 unit + 1 compile-only doc), run with `cargo test -p renderer`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

@@ -5,7 +5,7 @@
 //! that multiple systems need to read/write.
 //!
 //! # Example
-//! ```ignore
+//! ```
 //! use ecs::World;
 //!
 //! struct Score { value: u32 }
@@ -19,6 +19,7 @@
 //!
 //! // Write
 //! world.resource_mut::<Score>().unwrap().value += 10;
+//! assert_eq!(world.resource::<Score>().unwrap().value, 10);
 //! ```
 
 use std::any::{Any, TypeId};

@@ -7,4 +7,4 @@ Shared types and math utilities used across all crates.
 - `CameraUniform` — camera view/projection data (NOTE: duplicated in renderer crate — tech debt)
 
 ## Testing
-- 26 tests, run with `cargo test -p common`
+- 27 tests (26 unit + 1 doc), run with `cargo test -p common`

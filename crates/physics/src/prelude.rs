@@ -1,8 +1,11 @@
 //! Convenience re-exports for physics module
 //!
 //! Import everything commonly needed with:
-//! ```rust,ignore
+//! ```rust
 //! use physics::prelude::*;
+//!
+//! let physics_system = PhysicsSystem::new();
+//! # let _ = physics_system;
 //! ```
 
 pub use crate::components::{

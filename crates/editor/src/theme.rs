@@ -5,10 +5,19 @@
 //! mockup (`crates/editor/IdealEditor.png`).
 //!
 //! # Usage
-//! ```ignore
+//! ```
+//! use editor::EditorTheme;
+//!
 //! let theme = EditorTheme::default();
-//! ui.rect_filled(rect, theme.bg_primary);
-//! ui.label_colored("Title", pos, theme.accent_cyan);
+//!
+//! // Reference color tokens directly when drawing panel chrome...
+//! let header_color = theme.accent_cyan;
+//! let panel_bg = theme.bg_primary;
+//!
+//! // ...and use the converter methods for subsystem style bundles.
+//! let inspector_style = theme.inspector_style();
+//! let grid_colors = theme.grid_colors();
+//! # let _ = (header_color, panel_bg, inspector_style, grid_colors);
 //! ```
 
 use glam::Vec4;

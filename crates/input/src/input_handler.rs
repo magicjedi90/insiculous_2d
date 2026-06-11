@@ -14,11 +14,19 @@
 //! 4. **State Reset** (end of frame): Call `end_frame()` to clear per-frame state
 //!    (just_pressed/just_released flags, mouse movement and wheel deltas)
 //!
-//! ```ignore
+//! ```
+//! use input::{InputHandler, InputEvent};
+//! use winit::keyboard::KeyCode;
+//!
+//! let mut input = InputHandler::new();
+//! # input.queue_event(InputEvent::KeyPressed(KeyCode::Space));
+//!
 //! // Typical frame loop:
 //! input.process_queued_events();  // Process this frame's input
 //! // ... game logic reads input state ...
+//! assert!(input.is_key_just_pressed(KeyCode::Space));
 //! input.end_frame();              // Clear per-frame state for next frame
+//! assert!(!input.is_key_just_pressed(KeyCode::Space));
 //! ```
 //!
 //! For simple use cases, `update()` combines steps 2 and 4 into one call.
@@ -233,7 +241,9 @@ impl InputHandler {
     /// when events are processed vs when state is reset.
     ///
     /// For most game loops, prefer the two-step approach:
-    /// ```ignore
+    /// ```
+    /// # use input::InputHandler;
+    /// # let mut input = InputHandler::new();
     /// input.process_queued_events();  // At start of frame
     /// // ... game logic ...
     /// input.end_frame();              // At end of frame
@@ -249,17 +259,22 @@ impl InputHandler {
     /// deltas (movement, wheel). Call this at the **end** of each frame,
     /// after all game logic has had a chance to check input state.
     ///
-    /// ```ignore
+    /// ```
+    /// # use input::{InputHandler, InputEvent};
+    /// # use winit::keyboard::KeyCode;
+    /// # let mut input = InputHandler::new();
+    /// # let mut player_jumped = false;
     /// // Start of frame
     /// input.process_queued_events();
     ///
     /// // Game logic - can check is_key_just_pressed(), etc.
     /// if input.is_key_just_pressed(KeyCode::Space) {
-    ///     player.jump();
+    ///     player_jumped = true;
     /// }
     ///
     /// // End of frame - reset for next frame
     /// input.end_frame();
+    /// # let _ = player_jumped;
     /// ```
     pub fn end_frame(&mut self) {
         self.keyboard.clear_frame_state();

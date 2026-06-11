@@ -5,13 +5,13 @@
 //! dock panels, hierarchy, inspector, gizmo, tool shortcuts).
 //!
 //! # Example
-//! ```ignore
+//! ```no_run
 //! use engine_core::prelude::*;
 //! use editor_integration::run_game_with_editor;
 //!
 //! struct MyGame;
 //! impl Game for MyGame {
-//!     fn update(&mut self, ctx: &mut GameContext) { /* game logic */ }
+//!     fn update(&mut self, _ctx: &mut GameContext) { /* game logic */ }
 //! }
 //!
 //! fn main() {

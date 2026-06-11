@@ -147,8 +147,12 @@ impl TextureManager {
     /// converted to RGBA format for GPU upload.
     ///
     /// # Example
-    /// ```ignore
+    /// ```no_run
+    /// # use renderer::{TextureManager, TextureLoadConfig, TextureError};
+    /// # fn load(texture_manager: &mut TextureManager) -> Result<(), TextureError> {
     /// let handle = texture_manager.load_texture("assets/player.png", TextureLoadConfig::default())?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn load_texture<P: AsRef<Path>>(
         &mut self,

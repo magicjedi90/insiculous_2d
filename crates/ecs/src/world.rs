@@ -155,11 +155,17 @@ impl World {
     /// Create an entity and return a builder for adding components.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// # use ecs::{World, Transform2D, Sprite};
+    /// # use glam::Vec2;
+    /// # let mut world = World::new();
+    /// # let (pos, tex) = (Vec2::new(10.0, 20.0), 0);
     /// let entity = world.spawn()
     ///     .with(Transform2D::new(pos))
     ///     .with(Sprite::new(tex))
     ///     .id();
+    /// # assert!(world.has_component::<Transform2D>(&entity).unwrap());
+    /// # assert!(world.has_component::<Sprite>(&entity).unwrap());
     /// ```
     pub fn spawn(&mut self) -> crate::entity_builder::EntityBuilder<'_> {
         crate::entity_builder::EntityBuilder::new(self)
@@ -383,15 +389,20 @@ impl World {
     /// Returns a vector of entity IDs that have all required component types.
     ///
     /// # Example
-    /// ```ignore
-    /// use ecs::{World, Single, Pair};
+    /// ```
+    /// use ecs::{World, EntityId, Single, Pair};
     /// use ecs::sprite_components::{Transform2D, Sprite};
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
+    /// # let e = world.create_entity();
+    /// # world.add_component(&e, Transform2D::default()).ok();
+    /// # world.add_component(&e, Sprite::new(0)).ok();
     /// // Get all entities with Transform2D
     /// let entities: Vec<EntityId> = world.query_entities::<Single<Transform2D>>();
     /// // Get all entities with both Transform2D and Sprite
-    /// let entities: Vec<EntityId> = world.query_entities::<Pair<Transform2D, Sprite>>();
+    /// let both: Vec<EntityId> = world.query_entities::<Pair<Transform2D, Sprite>>();
+    /// # assert_eq!(entities.len(), 1);
+    /// # assert_eq!(both.len(), 1);
     /// ```
     pub fn query_entities<Q: QueryTypes>(&self) -> Vec<EntityId> {
         let required_types = Q::component_types();

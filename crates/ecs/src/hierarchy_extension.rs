@@ -5,7 +5,7 @@
 //! code organization by extracting hierarchy-related functionality into a focused module.
 //!
 //! # Example
-//! ```ignore
+//! ```
 //! use ecs::{World, WorldHierarchyExt};
 //!
 //! let mut world = World::new();
@@ -51,10 +51,14 @@ pub trait WorldHierarchyExt {
     /// - Returns an error if trying to set an entity as its own parent
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// # use ecs::{World, WorldHierarchyExt};
+    /// # let mut world = World::new();
     /// let parent = world.create_entity();
     /// let child = world.create_entity();
     /// world.set_parent(child, parent)?;
+    /// # assert_eq!(world.get_parent(child), Some(parent));
+    /// # Ok::<(), ecs::EcsError>(())
     /// ```
     fn set_parent(&mut self, child: EntityId, parent: EntityId) -> Result<(), EcsError>;
 

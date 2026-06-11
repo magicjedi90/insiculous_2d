@@ -35,7 +35,9 @@ pub struct EntityCollected {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use engine_core::prelude::*;
+///
 /// struct MyGame {
 ///     behaviors: BehaviorRunner,
 ///     physics: Option<PhysicsSystem>,
@@ -44,7 +46,7 @@ pub struct EntityCollected {
 /// impl Game for MyGame {
 ///     fn update(&mut self, ctx: &mut GameContext) {
 ///         self.behaviors.update(
-///             &mut ctx.world,
+///             ctx.world,
 ///             ctx.input,
 ///             ctx.delta_time,
 ///             self.physics.as_mut(),

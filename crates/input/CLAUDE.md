@@ -34,4 +34,4 @@ Event-based input system with a generic action-mapping layer.
 - Scroll deltas normalized to lines (`PixelDelta` ÷ 16)
 
 ## Testing
-- 58 tests — `cargo test -p input`
+- 62 passing (4 unit + 54 integration + 4 doc), 0 ignored — `cargo test -p input`

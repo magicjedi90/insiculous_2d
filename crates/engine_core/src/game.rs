@@ -5,7 +5,7 @@
 //! just implement a few simple methods and call `run()`.
 //!
 //! # Example
-//! ```ignore
+//! ```no_run
 //! use engine_core::prelude::*;
 //!
 //! struct MyGame {
@@ -153,11 +153,13 @@ fn append_particle_sprites(
 /// boilerplate. Just implement the `Game` trait and call this function.
 ///
 /// # Example
-/// ```ignore
+/// ```no_run
+/// use engine_core::prelude::*;
+///
 /// struct MyGame;
 ///
 /// impl Game for MyGame {
-///     fn update(&mut self, ctx: &mut GameContext) {
+///     fn update(&mut self, _ctx: &mut GameContext) {
 ///         // Game logic here
 ///     }
 /// }

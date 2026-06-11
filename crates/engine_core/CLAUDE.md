@@ -37,7 +37,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Inverse path: `SceneLoader::load_and_instantiate(path, world, assets)` from `scene_loader.rs`
 
 ## Testing
-- 90 passing, 7 ignored — `cargo test -p engine_core`
+- 154 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

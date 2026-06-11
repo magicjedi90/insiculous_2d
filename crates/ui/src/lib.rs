@@ -12,25 +12,26 @@
 //! - Mouse interaction with hover, click, and drag support
 //!
 //! # Example
-//! ```ignore
+//! ```
 //! use ui::{UIContext, Rect};
+//! use glam::Vec2;
+//! # use input::InputHandler;
 //!
 //! let mut ui = UIContext::new();
+//! # let input = InputHandler::new();
 //!
-//! // In your game loop:
-//! fn update(&mut self, ctx: &mut GameContext) {
-//!     self.ui.begin_frame(&ctx.input, ctx.window_size);
+//! // Each frame (the engine passes its InputHandler and window size):
+//! ui.begin_frame(&input, Vec2::new(800.0, 600.0));
 //!
-//!     // Create UI elements
-//!     self.ui.panel(Rect::new(10.0, 10.0, 200.0, 100.0));
-//!     self.ui.label("Score: 100", Vec2::new(20.0, 30.0));
+//! // Create UI elements
+//! ui.panel(Rect::new(10.0, 10.0, 200.0, 100.0));
+//! ui.label("Score: 100", Vec2::new(20.0, 30.0));
 //!
-//!     if self.ui.button("play_btn", "Play", Rect::new(20.0, 60.0, 80.0, 30.0)) {
-//!         // Handle button click
-//!     }
-//!
-//!     self.ui.end_frame();
+//! if ui.button("play_btn", "Play", Rect::new(20.0, 60.0, 80.0, 30.0)) {
+//!     // Handle button click
 //! }
+//!
+//! ui.end_frame();
 //! ```
 //!
 //! # Rendering Integration

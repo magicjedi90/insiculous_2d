@@ -7,4 +7,4 @@ Procedural macros for the ECS crate.
 - `define_component!` macro — component struct definition with Default impl
 
 ## Testing
-- 3 tests, run with `cargo test -p ecs_macros`
+- 4 tests (3 integration + 1 doc), run with `cargo test -p ecs_macros`

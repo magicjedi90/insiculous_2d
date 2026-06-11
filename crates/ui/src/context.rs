@@ -26,11 +26,15 @@ use crate::{
 /// The main UI context for immediate-mode UI rendering.
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// # use ui::{UIContext, Rect};
+/// # use glam::Vec2;
+/// # use input::InputHandler;
 /// let mut ui = UIContext::new();
+/// # let input_handler = InputHandler::new();
 ///
 /// // In your update loop:
-/// ui.begin_frame(&input_handler);
+/// ui.begin_frame(&input_handler, Vec2::new(800.0, 600.0));
 ///
 /// if ui.button("my_button", "Click Me!", Rect::new(10.0, 10.0, 100.0, 30.0)) {
 ///     println!("Button clicked!");
@@ -40,6 +44,7 @@ use crate::{
 ///
 /// // Get draw commands for rendering
 /// let commands = ui.draw_list().commands();
+/// # assert!(!commands.is_empty());
 /// ```
 pub struct UIContext {
     /// Interaction manager for widget state tracking

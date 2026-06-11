@@ -5,23 +5,23 @@
 **Reference:** Use `training.md` for detailed API, patterns, and examples
 **This file:** Project status, architecture, and high-level guidance
 
-## Project Status (February 2026)
+## Project Status (June 2026)
 
 ### Core Systems Complete
-- **ECS**: HashMap-based per-type storage, 110 tests, type-safe queries
-- **Renderer**: WGPU 28.0.0, instanced sprites, 62 tests
-- **Physics**: Rapier2d integration, 58 tests, presets
-- **UI**: Immediate-mode, 60 tests, fontdue integration
-- **Input**: Event-based, 58 tests, generic action mapping (`InputMapping<A>`)
-- **Audio**: Rodio backend, 20 tests (spatial audio components exist in ecs but have no runtime system yet)
-- **Engine Core**: Game API, managers, scene serializer, 85 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 196 tests
-- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 72 tests
+- **ECS**: HashMap-based per-type storage, 174 tests, type-safe queries
+- **Renderer**: WGPU 28.0.0, instanced sprites, 70 tests
+- **Physics**: Rapier2d integration, 61 tests, presets
+- **UI**: Immediate-mode, 70 tests, fontdue integration
+- **Input**: Event-based, 62 tests, generic action mapping (`InputMapping<A>`)
+- **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
+- **Engine Core**: Game API, managers, scene serializer, 154 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, 229 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 64 tests
 
 ### Key Metrics
-- **Total Tests**: 879/879 passing (100% success rate)
+- **Total Tests**: 936/936 passing (100% success rate), 0 ignored
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
-- **Code Quality**: 34 ignored tests (GPU/window), 0 failures
+- **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`), 0 failures
 
 ### Current Priority
 **Phase 1: Functional Editor** - Complete! See `PROJECT_ROADMAP.md` for full details.
@@ -35,7 +35,7 @@ See `PROJECT_ROADMAP.md` Technical Debt section for prioritized list
 This engine is designed to be developed collaboratively with AI agents. Follow these principles:
 
 ### Everything Must Be CLI-Testable
-- **All logic must be testable without a GPU or window.** The 30 ignored tests are the only exceptions (they require GPU/window). Everything else runs headless.
+- **All logic must be testable without a GPU or window.** Every test runs headless — including doc tests. Doc examples that genuinely need a window/GPU/device use ` ```no_run ` (compile-checked, not executed); never ` ```ignore `.
 - **`cargo test --workspace`** is the single command to validate the entire engine. It must always pass.
 - **`cargo test -p <crate>`** tests individual crates in isolation. Use this for faster iteration on a single system.
 - **No manual testing required.** If a feature can't be verified by `cargo test`, it needs a test. AI agents can't click buttons or look at screens.
@@ -131,7 +131,7 @@ insiculous_2d (root) ──→ editor_integration (optional, behind "editor" fea
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 598 tests
+cargo test --workspace               # Run all 936 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -152,7 +152,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 879/879 (100%)
-ignored: 34 (GPU/window)
+passed: 936/936 (100%)
+ignored: 0
 failed: 0
 ```

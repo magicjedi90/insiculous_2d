@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```
 //! use engine_core::prelude::*;
 //!
 //! struct MyGame {
@@ -15,10 +15,10 @@
 //! impl Game for MyGame {
 //!     fn init(&mut self, ctx: &mut GameContext) {
 //!         // Load a texture from file
-//!         self.player_texture = ctx.assets.load_texture("assets/player.png").unwrap();
+//!         self.player_texture = ctx.assets.load_texture("player.png").unwrap();
 //!     }
 //!
-//!     fn update(&mut self, ctx: &mut GameContext) {
+//!     fn update(&mut self, _ctx: &mut GameContext) {
 //!         // Use the texture handle for sprite rendering
 //!     }
 //! }
@@ -108,10 +108,14 @@ impl AssetManager {
     /// against the asset manager's base path.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// # use engine_core::prelude::*;
+    /// # fn load(assets: &mut AssetManager) -> Result<(), AssetError> {
     /// let handle = assets.load_texture("player.png")?;
-    /// // Or with full path:
+    /// // Or with a longer relative path:
     /// let handle = assets.load_texture("sprites/enemies/boss.png")?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> Result<TextureHandle, AssetError> {
         let path = path.as_ref();

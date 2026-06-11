@@ -3,7 +3,10 @@
 /// Generate builder-style setter methods for struct fields.
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// use common::with_fields;
+/// use glam::Vec2;
+///
 /// struct Sprite {
 ///     offset: Vec2,
 ///     rotation: f32,
@@ -17,6 +20,12 @@
 ///         scale: Vec2,
 ///     }
 /// }
+///
+/// let sprite = Sprite { offset: Vec2::ZERO, rotation: 0.0, scale: Vec2::ONE }
+///     .offset(Vec2::new(10.0, 20.0))
+///     .rotation(1.5);
+/// assert_eq!(sprite.offset, Vec2::new(10.0, 20.0));
+/// assert_eq!(sprite.rotation, 1.5);
 /// ```
 #[macro_export]
 macro_rules! with_fields {

@@ -5,23 +5,26 @@
 //! persisted to a JSON file so it survives restarts. A toast pops in via the
 //! UI system when an achievement is unlocked for the first time.
 //!
+//! In a game, the manager is available as `ctx.achievements` inside
+//! `Game::init()` / `Game::update()`.
+//!
 //! # Example
-//! ```ignore
+//! ```
 //! use engine_core::prelude::*;
 //!
-//! fn init(&mut self, ctx: &mut GameContext) {
-//!     ctx.achievements.register(Achievement::new(
-//!         "first_blood",
-//!         "First Blood",
-//!         "Defeat your first enemy",
-//!     ));
-//! }
+//! // In Game::init(): register achievements (ctx.achievements in a real game)
+//! let mut achievements = AchievementManager::in_memory();
+//! achievements.register(Achievement::new(
+//!     "first_blood",
+//!     "First Blood",
+//!     "Defeat your first enemy",
+//! ));
 //!
-//! fn update(&mut self, ctx: &mut GameContext) {
-//!     if enemy_defeated {
-//!         ctx.achievements.unlock("first_blood");
-//!     }
-//! }
+//! // In Game::update(): unlock when the condition is met
+//! assert!(!achievements.is_unlocked("first_blood"));
+//! achievements.unlock("first_blood");
+//! assert!(achievements.is_unlocked("first_blood"));
+//! assert_eq!(achievements.unlocked_count(), 1);
 //! ```
 
 use std::collections::HashMap;

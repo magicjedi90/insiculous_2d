@@ -37,7 +37,7 @@ audio system is future work).
 - See `TECH_DEBT.md` for the full list
 
 ## Testing
-- 20 headless unit tests (disabled mode + bytes/temp-file APIs), run with
+- 21 headless tests (20 unit + 1 doc; disabled mode + bytes/temp-file APIs), run with
   `cargo test -p audio`. No audio device needed.
 
 ## Godot Oracle

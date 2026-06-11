@@ -10,9 +10,18 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 ///
 /// Generates `type_name()` and `field_names()` implementations automatically.
 ///
+/// The generated impl references the `ComponentMeta` trait by its plain name,
+/// so the trait (defined in the `ecs` crate) must be in scope at the derive site.
+///
 /// # Example
-/// ```ignore
+/// ```
 /// use ecs_macros::ComponentMeta;
+/// # // The real trait lives in the `ecs` crate (`use ecs::ComponentMeta;`);
+/// # // declared locally here because `ecs_macros` cannot depend on `ecs`.
+/// # pub trait ComponentMeta {
+/// #     fn type_name() -> &'static str;
+/// #     fn field_names() -> &'static [&'static str];
+/// # }
 ///
 /// #[derive(ComponentMeta)]
 /// pub struct Health {

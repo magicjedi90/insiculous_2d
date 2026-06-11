@@ -10,12 +10,17 @@ use crate::world::World;
 /// on each `.with()` call. Call `.id()` to get the entity ID.
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// # use ecs::{World, Transform2D, Sprite, Name};
+/// # use glam::Vec2;
+/// # let mut world = World::new();
+/// # let (pos, tex) = (Vec2::ZERO, 0);
 /// let entity = world.spawn()
 ///     .with(Transform2D::new(pos))
 ///     .with(Sprite::new(tex))
-///     .with(RigidBody::new_dynamic())
+///     .with(Name::new("player"))
 ///     .id();
+/// # assert!(world.has_component::<Name>(&entity).unwrap());
 /// ```
 pub struct EntityBuilder<'w> {
     world: &'w mut World,

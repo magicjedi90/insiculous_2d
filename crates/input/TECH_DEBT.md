@@ -145,7 +145,7 @@ UI). Needed eventually for "rebind keys" settings screens; serde derives on
 |--------|-------|
 | Source files | 7 (`button_tracker`, `gamepad`, `input_handler`, `input_mapping`, `keyboard`, `mouse`, `prelude` + lib) |
 | Source lines | ~1,030 (was ~1,170 with less functionality) |
-| Tests | 58 passing (4 unit + 53 integration + 1 doc), 3 doc-ignored |
+| Tests | 62 passing (4 unit + 54 integration + 4 doc), 0 ignored |
 | Clippy warnings | 0 (including `--all-targets`) |
 | Error types | 0 (none needed — no fallible APIs remain) |
 | Workspace impact | engine_core `BehaviorRunner` owns its `InputMapping<GameAction>`; editor `EditorInputMapping` delegates to `InputMapping<EditorAction>`; Pong unaffected (key-level API only) |

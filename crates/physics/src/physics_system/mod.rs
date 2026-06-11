@@ -19,7 +19,13 @@
 //!
 //! These pass-through methods exist intentionally for **API ergonomics**:
 //!
-//! ```ignore
+//! ```
+//! # use physics::PhysicsSystem;
+//! # use ecs::World;
+//! # use glam::Vec2;
+//! # let mut world = World::new();
+//! # let entity = world.create_entity();
+//! # let mut physics_system = PhysicsSystem::new();
 //! // With pass-through (cleaner):
 //! physics_system.set_velocity(entity, Vec2::new(0.0, 100.0), 0.0);
 //!

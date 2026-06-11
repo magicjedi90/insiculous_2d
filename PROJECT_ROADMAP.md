@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (June 2026):** Core systems complete. 902 tests passing (100%), 34 ignored (GPU/window). Full DRY/SRP/KISS audit + remediation passes completed for renderer, ui, input, audio, physics, ecs, engine_core, editor, and editor_integration — see `TECH_DEBT.md` for the workspace rollup.
+**Engine Status (June 2026):** Core systems complete. 936 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for renderer, ui, input, audio, physics, ecs, engine_core, editor, and editor_integration — see `TECH_DEBT.md` for the workspace rollup.
 
 ---
 

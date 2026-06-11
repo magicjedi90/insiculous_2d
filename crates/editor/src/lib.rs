@@ -13,13 +13,20 @@
 //! - Component property editing with automatic UI generation
 //!
 //! # Example
-//! ```ignore
-//! use editor::prelude::*;
+//! ```
+//! use editor::EditorContext;
+//! use ecs::World;
 //!
-//! fn main() {
-//!     // Run the editor instead of the game
-//!     run_editor(EditorConfig::default()).unwrap();
-//! }
+//! // EditorContext holds all editor state: selection, tools, play state,
+//! // theme, and panels. The `editor_integration` crate wires it to a
+//! // running game via `run_game_with_editor()`.
+//! let mut editor = EditorContext::new();
+//! let mut world = World::new();
+//! let entity = world.create_entity();
+//!
+//! editor.selection.select(entity);
+//! assert_eq!(editor.selection.primary(), Some(entity));
+//! assert!(editor.is_editing()); // starts in Editing play state
 //! ```
 
 pub mod commands;

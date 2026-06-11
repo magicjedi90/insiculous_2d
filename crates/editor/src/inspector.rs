@@ -43,11 +43,23 @@ impl Default for InspectorStyle {
 /// Returns the Y position after rendering (for layout chaining).
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// use editor::{inspect_component, InspectorStyle};
+/// use ecs::{Transform2D, World};
+/// use glam::Vec2;
+///
+/// # let mut world = World::new();
+/// # let entity = world.create_entity();
+/// # world.add_component(&entity, Transform2D::new(Vec2::new(10.0, 20.0))).ok();
+/// # let mut ui = ui::UIContext::new();
+/// # let style = InspectorStyle::default();
+/// # let (x, start_y) = (8.0_f32, 30.0_f32);
 /// let mut y = start_y;
 /// if let Some(transform) = world.get::<Transform2D>(entity) {
-///     y = inspect_component(ui, "Transform2D", transform, x, y, &style);
+///     y = inspect_component(&mut ui, "Transform2D", transform, x, y, &style);
 /// }
+/// // The returned Y advances past the header and rendered fields.
+/// assert!(y > start_y);
 /// ```
 pub fn inspect_component<T: Serialize>(
     ui: &mut UIContext,

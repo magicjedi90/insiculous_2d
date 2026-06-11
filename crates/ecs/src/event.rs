@@ -5,7 +5,7 @@
 //! clear all queues.
 //!
 //! # Example
-//! ```ignore
+//! ```
 //! use ecs::World;
 //!
 //! #[derive(Debug, Clone)]
@@ -16,10 +16,12 @@
 //! world.emit_event(CoinCollected { entity_id: 2, value: 5 });
 //!
 //! for event in world.read_events::<CoinCollected>() {
-//!     println!("Collected {} coins", event.value);
+//!     println!("Entity {} collected {} coins", event.entity_id, event.value);
 //! }
+//! # assert_eq!(world.read_events::<CoinCollected>().len(), 2);
 //!
 //! world.flush_events(); // Call at end of frame
+//! # assert!(world.read_events::<CoinCollected>().is_empty());
 //! ```
 
 use std::any::{Any, TypeId};

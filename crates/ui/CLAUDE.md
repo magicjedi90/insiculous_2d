@@ -23,7 +23,7 @@ ui.end_frame(); // collects draw commands
 - See `TECH_DEBT.md` — open: FontManager responsibilities (SRP-001), context.rs over 600-line rule (SRP-002), numeric-only text input (JUN-T1)
 
 ## Testing
-- 68 tests, run with `cargo test -p ui`
+- 70 tests (incl. 2 doc), run with `cargo test -p ui`
 
 ## Godot Oracle
 - Immediate-mode patterns: Godot doesn't use immediate-mode, but see `scene/gui/control.cpp` for widget lifecycle
