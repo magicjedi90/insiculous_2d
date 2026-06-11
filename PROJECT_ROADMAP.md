@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (April 2026):** Core systems complete. 724 tests passing (100%).
+**Engine Status (June 2026):** Core systems complete. 902 tests passing (100%), 34 ignored (GPU/window). Full DRY/SRP/KISS audit + remediation passes completed for renderer, ui, input, audio, physics, ecs, engine_core, editor, and editor_integration — see `TECH_DEBT.md` for the workspace rollup.
 
 ---
 
@@ -18,8 +18,8 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | Physics | ✅ Complete | Rapier2d, platformer + top-down presets, collision callbacks |
 | Rendering | ✅ Complete | WGPU 28, instanced sprites, batching |
 | Sprite Animation | ✅ Complete | `SpriteAnimation` component + `SpriteAnimationSystem` |
-| Audio | ✅ Complete | Rodio backend, spatial audio |
-| Input | ✅ Complete | Keyboard/mouse/gamepad, action mapping |
+| Audio | ✅ Complete | Rodio backend, SFX/music/master buses (spatial audio components are editor-only data — no runtime system yet) |
+| Input | ✅ Complete | Keyboard/mouse, generic `InputMapping<A>` action layer (gamepad state model ready, no gilrs backend yet) |
 | UI | ✅ Complete | Immediate-mode, buttons, sliders, panels |
 | Scene Serialization | ✅ Complete | RON format, prefabs, scene graph hierarchy |
 | Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible` |
@@ -243,32 +243,43 @@ WASM/Web export, mobile, desktop packaging. Not a prerequisite for making games;
 
 ## Technical Debt (High + Medium Only)
 
-LOW priority items are tracked in `crates/*/TECH_DEBT.md` and are not listed here.
+Workspace rollup with per-crate counts: root `TECH_DEBT.md`. LOW priority items
+are tracked in `crates/*/TECH_DEBT.md` and are not listed here.
+
+**Resolved by the June 2026 audit passes** (previously listed here):
+renderer SRP-001 (`sprite.rs` split into `sprite/{batch,pipeline}.rs`) and
+ARCH-003 (all `#[allow(dead_code)]` removed, ~700 lines dead code deleted);
+audio ARCH-001 reclassified as a feature gap (streaming — audio crate has 0
+open debt); input TEST-001 superseded by GAP-001 below (dead-zone tests land
+with the gamepad backend); physics TEST-001 mostly closed (sensor + collision
+response tests added; remaining friction/kinematic/tunneling gaps are Low).
+The editor, editor_integration, physics, renderer, and audio crates currently
+carry **zero** High/Medium debt.
 
 ### Medium Priority
 
-**renderer (2 items):**
-- [ ] **SRP-001: SpritePipeline holds too many GPU resources** — `renderer/src/sprite.rs:225-254`. Split into PipelineResources, BufferManager, CameraManager, TextureBindGroupManager.
-- [ ] **ARCH-003: Dead code with `#[allow(dead_code)]` suppressions** — `sprite.rs`, `sprite_data.rs`, `texture.rs`. Use or remove.
+**engine_core (6 items):**
+- [ ] **ARCH-006: Behaviors hardcoded in scene serialization** — `scene_data.rs`/`scene_loader.rs`/`scene_serializer.rs` match on Behavior variants instead of going through `ComponentRegistry`. Route through a registry/`Custom` variant; pairs with the Phase 4 scripting migration of `ecs/src/behavior.rs`.
+- [ ] **SRP-001: GameRunner owns glyph texture caching** — `game.rs::prepare_glyph_textures`. Extract `GlyphTextureCache` or move into `UIManager`.
+- [ ] **SRP-002: BehaviorRunner giant match over 7 behavior types** — one handler method per variant, no logic change.
+- [ ] **LOGIC-002: `unwrap()` on asset_manager relies on distant guard** — `game.rs`; use `let Some(..) else { return }`.
+- [ ] **ARCH-007: Achievement toast appearance hardcoded** — `achievements.rs`; add `ToastStyle` with defaults, log the `reset()` save error.
+- [ ] **ARCH-003: Glob re-exports obscure the public API** — `lib.rs` has 16 `pub use module::*`; switch to explicit lists.
 
-**ui (1 item):**
-- [ ] **SRP-001: FontManager too many responsibilities** — `ui/src/font.rs:100-315`. Split into FontLoader, GlyphCache, TextLayoutEngine.
-
-**ecs (2 items):**
-- [ ] **ARCH-004: Hard-coded behaviors should move to scripting crate** — `ecs/src/behavior.rs`. Migrate to `scripting/src/builtins/` when scripting crate is created (Phase 4).
-- [ ] **SRP-003: TransformHierarchySystem does double iteration** — `ecs/src/hierarchy_system.rs:87-118`. Reorganize to single pass.
-
-**common (1 item):**
-- [ ] **ARCH-001: `CameraUniform` duplicated in renderer crate** — Use `common::CameraUniform` everywhere, remove renderer copy.
-
-**audio (1 item):**
-- [ ] **ARCH-001: No streaming for large music assets** — All audio eagerly loaded. Add streaming path for long tracks, keep cache for SFX.
+**ui (3 items):**
+- [ ] **SRP-001: FontManager too many responsibilities** — `ui/src/font.rs`. Split into FontLoader, GlyphCache, TextLayoutEngine when it next grows.
+- [ ] **SRP-002: context.rs over the 600-line rule** (~990 lines) — mechanical split into `text.rs`/`widgets.rs`.
+- [ ] **JUN-T1: Text input is numeric-only and layout-blind** — blocks editor rename/search widgets; needs winit character events plumbed through the `input` crate.
 
 **input (1 item):**
-- [ ] **TEST-001: Missing input timing + dead zone tests** — Add gamepad dead zone normalization and frame-accurate event timing tests.
+- [ ] **GAP-001: No gamepad backend** — state model complete and tested, but no gilrs integration produces events. Add a poll in the engine event loop; dead-zone normalization lands with it.
 
-**physics (1 item):**
-- [ ] **TEST-001: Missing friction/kinematic/sensor validation** — Add coverage for friction/restitution, kinematic bodies, and sensors.
+**common (2 items):**
+- [ ] **ARCH-001: `CameraUniform` duplicated in renderer crate** — Use `common::CameraUniform` everywhere, remove renderer copy.
+- [ ] **DRY-002: Volume clamping duplicated cross-crate** (`audio`, `ecs`) — add `clamp_volume()` utility in common.
+
+**ecs_macros (1 item):**
+- [ ] **KISS-001: Over-specified `syn` features** — `["full", "parsing"]` where `["derive"]` suffices; compile-time win.
 
 ---
 

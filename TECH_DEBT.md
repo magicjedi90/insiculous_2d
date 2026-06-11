@@ -1,96 +1,115 @@
-# Technical Debt: Editor Change Set Review
+# Technical Debt — Workspace Rollup
 
-Last audited: January 2026
+Last updated: June 11, 2026
 
-## Summary
-- DRY violations: 0
-- SRP violations: 0
-- KISS violations: 0
-- Architecture issues: 1
-- Critical bugs/infra issues: 1
-- UX/ergonomics nits: 6
-- Tooling/repo hygiene nits: 2
+This file is the high-level index of technical debt across the workspace.
+Each crate carries the authoritative detail in its own `crates/<name>/TECH_DEBT.md`;
+this rollup tracks open counts, the medium-priority items worth scheduling, and
+what the 2026 audit passes resolved. High + Medium items are mirrored in
+`PROJECT_ROADMAP.md`.
 
----
-
-## Critical Bugs / Infra Issues
-
-### [BUG-001] Mouse button release events are not tracked in editor input mapping
-- **File:** `crates/editor/src/editor_input.rs`
-- **Lines:** `EditorInputMapping::is_action_just_released`, `EditorInputMapping::update_state`
-- **Issue:** `InputHandler` exposes `is_mouse_button_just_pressed` but no `is_mouse_button_just_released`, so `just_released` is hard-coded to `false`. Any editor feature relying on mouse release transitions cannot work reliably.
-- **Suggested fix:** Add mouse button release tracking in the `input` crate and plumb it through `EditorInputMapping` (or remove the `just_released` fields until supported).
-- **Priority:** Medium
+> The previous version of this file was a January 2026 review of the editor
+> change set. All of its items were resolved or superseded by the June 2026
+> remediation passes: mouse-button release tracking now exists via the shared
+> `ButtonTracker` (`is_source_just_released`), editor shortcuts use real
+> modifier combinations (Ctrl+S, Ctrl+Shift+P, …), `EditorInputMapping`
+> delegates to the generic `InputMapping<EditorAction>`, and panel rendering
+> moved out of `examples/editor_demo.rs` into `editor_integration`.
 
 ---
 
-## Architecture Issues
+## Status by Crate
 
-### [ARCH-001] Viewport zoom limits ignore `ViewportInputConfig`
-- **File:** `crates/editor/src/viewport.rs`, `crates/editor/src/viewport_input.rs`
-- **Lines:** `SceneViewport::set_camera_zoom`, `ViewportInputConfig`
-- **Issue:** Zoom clamping is hard-coded to `0.1..10.0` while `ViewportInputConfig` exposes `min_zoom`/`max_zoom` that are never applied. This makes configuration misleading and prevents per-viewport limits.
-- **Suggested fix:** Thread the `ViewportInputConfig` min/max values into `SceneViewport` (or remove the unused config fields).
-- **Priority:** Low
+| Crate | Last Audited | Open (High / Med / Low) | Notes |
+|-------|--------------|--------------------------|-------|
+| `audio` | Jun 2026 (remediated) | 0 / 0 / 0 | Clean; remaining gaps (streaming, spatial runtime) reclassified as feature work |
+| `common` | Feb 2026 | 0 / 2 / 3 | `CameraUniform` duplicated in renderer; cross-crate volume clamping |
+| `ecs` | Feb 2026 | 0 / 0 / 4 | Dual/archetype storage fully removed; remaining items are micro-DRY |
+| `ecs_macros` | Feb 2026 | 0 / 1 / 2 | Over-specified `syn` features (compile-time cost) |
+| `editor` | Jun 2026 (remediated) | 0 / 0 / 0 | All tracked items resolved; component registry macro is single source of truth |
+| `editor_integration` | Jun 2026 (remediated) | 0 / 0 / 2 | No file picker (Phase 2+); menu actions matched by label string |
+| `engine_core` | Jun 2026 | 0 / 6 / 6 | Largest remaining debt pool — see below |
+| `input` | Jun 2026 (restructured) | 0 / 1 / 3 | Generic `InputMapping<A>`; open items are feature gaps (gamepad backend) |
+| `physics` | Jun 2026 (remediated) | 0 / 0 / 3 | All correctness findings fixed; remaining items organizational |
+| `renderer` | Jun 2026 (remediated) | 0 / 0 / 3 | Bloom/panic/dead-code fixes landed; ~700 lines dead code removed |
+| `ui` | Jun 2026 | 0 / 3 / 3 | FontManager split, context.rs size, general text input |
 
----
-
-## UX / Ergonomics Nits
-
-### [UX-001] Toolbar position is hard-coded relative to assumed panel sizes
-- **File:** `crates/editor/src/context.rs`
-- **Lines:** `EditorContext::new()`
-- **Issue:** Toolbar is positioned at `Vec2::new(220.0, 34.0)`, which assumes a left panel width and menu height. If dock panel sizes change or menu height differs, the toolbar can overlap or float oddly.
-- **Suggested fix:** Compute toolbar position based on the dock layout and menu bar height rather than fixed constants.
-- **Priority:** Low
-
-### [UX-002] Widget id offset may collide with other UI widgets
-- **File:** `crates/editor/src/dock.rs`
-- **Lines:** `impl From<PanelId> for WidgetId`
-- **Issue:** Panel widget ids are offset by `+10000`. This is only safe if no other widgets occupy that range. If `ui` uses large ids, collisions are possible.
-- **Suggested fix:** Consider a dedicated id namespace or a hash-based id derived from a stable string key.
-- **Priority:** Low
-
-### [UX-003] Hierarchy list uses index-based widget ids
-- **File:** `examples/editor_demo.rs`
-- **Lines:** `render_panel_content()` for `PanelId::HIERARCHY`
-- **Issue:** UI ids use `hierarchy_entity_{i}`. If entity ordering changes, UI state can jitter between frames.
-- **Suggested fix:** Use the entity id (`entity_id.value()`) in the widget id for stability.
-- **Priority:** Low
-
-### [UX-004] Parameter naming inconsistency in key handler
-- **File:** `examples/editor_demo.rs`
-- **Lines:** `on_key_pressed(&mut self, key, _ctx)`
-- **Issue:** `_ctx` is used inside the function, which is misleading (underscore implies unused).
-- **Suggested fix:** Rename `_ctx` to `ctx`.
-- **Priority:** Low
-
-### [UX-005] Editor shortcuts do not enforce modifier keys
-- **File:** `crates/editor/src/editor_input.rs`
-- **Lines:** `EditorInputMapping::set_default_bindings`
-- **Issue:** Actions such as `SelectAll`, `Duplicate`, `Undo`, `Redo`, `Copy`, and `Paste` are bound to raw letter keys without modifier checks. This can trigger unintended actions when typing in text fields or using single-key shortcuts.
-- **Suggested fix:** Extend input bindings to support modifier combinations (e.g., `Ctrl+Key`) or enforce modifiers in the action handlers.
-- **Priority:** Medium
-
-### [UX-006] Selection drag completion is lost when mouse leaves the viewport
-- **File:** `crates/editor/src/viewport_input.rs`
-- **Lines:** `ViewportInputHandler::handle_input`
-- **Issue:** If the cursor leaves the viewport while dragging a selection rectangle, the handler returns early and never emits a click/selection completion, dropping the interaction.
-- **Suggested fix:** Keep selection state active when the cursor leaves the viewport and finalize on mouse release.
-- **Priority:** Low
+Workspace-wide invariants (verified by the June 2026 audits): no files over
+600 lines, no `#[allow(dead_code)]`, no `unwrap()` outside tests, and
+`cargo clippy --workspace` is clean.
 
 ---
 
-## Tooling / Repo Hygiene Nits
+## Open Medium-Priority Items
 
-### [TOOL-001] Root dependencies may be example-only
-- **File:** `Cargo.toml`
-- **Issue:** `editor`, `ui`, `common`, `glam`, `winit`, `env_logger`, `log` were added to root dependencies to support `examples/editor_demo.rs`. If the root crate doesn't otherwise use them, strict linting could flag unused dependencies.
-- **Suggested fix:** Consider moving example-only dependencies to `[dev-dependencies]` if feasible.
-- **Priority:** Low
+### engine_core (6)
+- **[ARCH-006]** Behaviors hardcoded in scene serialization, bypassing `ComponentRegistry` — route through a registry/`Custom` variant; pairs with the Phase 4 scripting-crate migration of `ecs/src/behavior.rs`
+- **[SRP-001]** `GameRunner` still owns glyph texture caching (`game.rs::prepare_glyph_textures`) — extract `GlyphTextureCache` or move into `UIManager`
+- **[SRP-002]** `BehaviorRunner` giant match over 7 behavior variants — one handler method per variant
+- **[LOGIC-002]** `unwrap()` on `asset_manager` relies on a distant guard — `let Some(..) else { return }`
+- **[ARCH-007]** Achievement toast styling hardcoded (dimensions, gold/dark colors) — `ToastStyle` struct with defaults
+- **[ARCH-003]** 16 glob re-exports obscure the public API surface — explicit re-export lists
 
-### [TOOL-002] IDE metadata file change
-- **File:** `.idea/insiculous_2d.iml`
-- **Issue:** IDE-generated file changed. If the project excludes IDE files from commits, this should be omitted.
-- **Suggested fix:** Ensure repository policy for `.idea` files is followed.
-- **Priority:** Low
+### ui (3)
+- **[SRP-001]** `FontManager` handles loading, storage, rasterization, caching, and layout — split when it next grows
+- **[SRP-002]** `context.rs` ~990 lines vs the 600-line rule — mechanical split (`text.rs` / `widgets.rs`) deferred by scope decision
+- **[JUN-T1]** Text input is numeric-only and keyboard-layout-blind — blocks editor rename/search widgets; needs winit character events plumbed through `input`
+
+### input (1)
+- **[GAP-001]** No gamepad backend — state model is complete and tested, but nothing produces gamepad events (no gilrs integration). Dead-zone normalization should land with the backend.
+
+### common (2)
+- **[ARCH-001]** `CameraUniform` duplicated in renderer — use `common::CameraUniform` everywhere
+- **[DRY-002]** Volume clamping duplicated across `audio` and `ecs` — `clamp_volume()` utility in common
+
+### ecs_macros (1)
+- **[KISS-001]** `syn = { features = ["full", "parsing"] }` is overkill for struct name/field extraction — `["derive"]` only
+
+---
+
+## Resolved in the 2026 Audit Passes (Highlights)
+
+Full details live in each crate's `TECH_DEBT.md` "Resolved" sections.
+
+- **ecs (Feb):** broken archetype/dual storage deleted entirely (single
+  HashMap-based path), hierarchy cycle detection, `WorldHierarchyExt`
+  extraction, generation-validated component ops
+- **renderer (Jun):** bloom blur bug (uniform rewrite between passes), sprite
+  overflow panic → growing `DynamicBuffer`, NaN-safe depth sort, per-frame
+  bind-group/clone churn eliminated, `sprite.rs` split, ~700 lines dead code
+  removed
+- **ui (Jun):** glyph bitmaps shared as `Arc<[u8]>` (no per-frame copies),
+  focused-widget state survives unseen frames, theme bypass fixed
+  (`TextInputStyle`), dead draw/interact APIs deleted
+- **input (Jun):** stale mouse-delta bug, unbind/rebind leak, strict
+  action-edge semantics; `InputMapping<A>` made generic, `ButtonTracker<T>`
+  deduplicates device state, `ThreadSafeInputHandler`/`init()`/`InputError`
+  deleted (~250 lines)
+- **audio (Jun):** per-play full-buffer clone removed (`Arc<[u8]>` +
+  `Cursor`), live-sink volume re-apply, clamping at point of use,
+  `stop(handle)` implemented, dead `PlaybackState` deleted
+- **physics (Jun):** collision event clear/append contract (no stale
+  re-emission, no sub-step loss), world-space contact points, one-update
+  forces, raycast normalization, `PhysicsError`/`MovementConfig` deleted,
+  directory splits under 600 lines
+- **engine_core (Jun):** orphaned `scene_saver.rs`/`file_operations.rs`
+  deleted (single save pipeline), Behavior↔BehaviorData conversion collapsed
+  to one `From` pair, dead `game_loop.rs` deleted, clippy-clean incl.
+  `--all-targets`
+- **editor + editor_integration (Jun):** component registry macro
+  (`stored_component.rs`) as single source of truth, `ComponentEdit<T>`
+  writeback, 1,100-line files split into feature directories, full theme
+  routing, duplicate `ComponentKind`/dispatch deleted
+
+---
+
+## Process
+
+- Audit a crate → record findings in `crates/<name>/TECH_DEBT.md` with
+  `[CATEGORY-NNN]` ids, priority, and suggested fix
+- Fix High/Medium where the fix is contained; move resolved items to the
+  crate's "Resolved" section with the resolution
+- Update this rollup and the `PROJECT_ROADMAP.md` Technical Debt section
+  after each audit pass
+- Feature gaps (missing systems, e.g. audio streaming, gamepad backend,
+  touch input) are tracked as roadmap work, not debt

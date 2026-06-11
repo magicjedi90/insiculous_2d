@@ -14,6 +14,10 @@
 use engine_core::prelude::*;
 use std::path::Path;
 
+/// Anchor asset paths to the repository so the example runs from any
+/// working directory.
+const EXAMPLES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples");
+
 struct BehaviorDemo {
     behaviors: BehaviorRunner,
     physics: Option<PhysicsSystem>,
@@ -32,11 +36,9 @@ impl BehaviorDemo {
 
 impl Game for BehaviorDemo {
     fn init(&mut self, ctx: &mut GameContext) {
-        ctx.assets.set_base_path("examples");
+        let scene_path = Path::new(EXAMPLES_DIR).join("assets/scenes/behavior_demo.scene.ron");
 
-        let scene_path = Path::new("examples/assets/scenes/behavior_demo.scene.ron");
-
-        match SceneLoader::load_and_instantiate(scene_path, &mut ctx.world, ctx.assets) {
+        match SceneLoader::load_and_instantiate(&scene_path, ctx.world, ctx.assets) {
             Ok(instance) => {
                 println!("=== Behavior Demo ===");
                 println!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
@@ -66,7 +68,6 @@ impl Game for BehaviorDemo {
                 println!("Creating fallback player...");
 
                 // Minimal fallback - just a player
-                use ecs::behavior::Behavior;
                 let player = ctx.world.create_entity();
                 ctx.world.add_component(&player, Transform2D::new(Vec2::ZERO)).ok();
                 ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.6, 1.0, 1.0))).ok();
@@ -76,15 +77,14 @@ impl Game for BehaviorDemo {
 
         // Initialize physics system
         if let Some(physics) = &mut self.physics {
-            use ecs::System;
-            physics.initialize(&mut ctx.world).ok();
+            physics.initialize(ctx.world).ok();
         }
     }
 
     fn update(&mut self, ctx: &mut GameContext) {
         // Process all behaviors - sets velocities for physics entities
         self.behaviors.update(
-            &mut ctx.world,
+            ctx.world,
             ctx.input,
             ctx.delta_time,
             self.physics.as_mut(),
@@ -92,8 +92,7 @@ impl Game for BehaviorDemo {
 
         // Step physics simulation (handles collision detection)
         if let Some(physics) = &mut self.physics {
-            use ecs::System;
-            physics.update(&mut ctx.world, ctx.delta_time);
+            physics.update(ctx.world, ctx.delta_time);
         }
     }
 
@@ -103,7 +102,8 @@ impl Game for BehaviorDemo {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = GameConfig::new("Behavior Demo - Insiculous 2D")
         .with_size(800, 600)
-        .with_clear_color(0.1, 0.1, 0.12, 1.0);
+        .with_clear_color(0.1, 0.1, 0.12, 1.0)
+        .with_asset_base_path(EXAMPLES_DIR);
 
     run_game(BehaviorDemo::new(), config)
 }

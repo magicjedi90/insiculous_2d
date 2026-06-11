@@ -7,40 +7,70 @@
 //! - Simple Game API (Game trait, GameConfig, run_game)
 //! - RON scene file loading for entity/component definition
 //! - ECS for entity/component management
-//! - Asset Manager for loading/creating textures
+//! - Asset Manager with a config-level base path (cwd-independent asset loading)
 //! - **Audio System** - sound effects and music playback
 //! - **UI System** - immediate-mode UI with buttons, sliders, and panels
 //! - **Font Rendering** - load TTF/OTF fonts for text display via fontdue
-//! - Input handling with keyboard
+//! - **Action Mapping** - game-defined action enum bound through `InputMapping<A>`
 //! - 2D Physics with rapier2d integration
 //! - **Scene Graph Hierarchy** - parent-child entity relationships with transform propagation
 //!
-//! Controls: WASD to move player, SPACE to jump, R to reset, M to toggle music, ESC to exit
+//! Controls: WASD to move player, SPACE to jump, R to reset, M to toggle music,
+//!           +/- to adjust volume, H to toggle UI, ESC to exit
 //!           Click UI buttons for interactive controls!
 //!
 //! Scene file: examples/assets/scenes/hello_world.scene.ron
 //! Font file: examples/assets/fonts/font.ttf (optional - download any TTF font)
 
 use engine_core::prelude::*;
-use ecs::hierarchy_system::TransformHierarchySystem;
-use ecs::WorldHierarchyExt;
+use input::{InputMapping, InputSource};
 use std::path::Path;
+
+/// Anchor all asset paths to the repository so the example runs from any
+/// working directory (`GameConfig::with_asset_base_path` resolves textures
+/// referenced by the scene file against this directory).
+const EXAMPLES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples");
+
+/// Where the player respawns on reset (matches the scene file's spawn point).
+const PLAYER_SPAWN: Vec2 = Vec2::new(-200.0, 100.0);
+
+// --- Actions: game-defined enum evaluated through the engine's InputMapping ---
+
+/// Demo-level actions. Movement and jumping are handled by the scene's
+/// `PlayerPlatformer` behavior; these cover the manual controls. Rebinding a
+/// key means changing one line in `demo_actions()` instead of hunting through
+/// game logic for raw key checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum DemoAction {
+    /// Plays the jump sound (the jump itself is driven by the behavior system)
+    Jump,
+    ToggleMusic,
+    ToggleUi,
+    ResetPlayer,
+    VolumeUp,
+    VolumeDown,
+}
+
+fn demo_actions() -> InputMapping<DemoAction> {
+    let mut actions = InputMapping::new();
+    actions.bind(DemoAction::Jump, InputSource::Keyboard(KeyCode::Space));
+    actions.bind(DemoAction::ToggleMusic, InputSource::Keyboard(KeyCode::KeyM));
+    actions.bind(DemoAction::ToggleUi, InputSource::Keyboard(KeyCode::KeyH));
+    actions.bind(DemoAction::ResetPlayer, InputSource::Keyboard(KeyCode::KeyR));
+    actions.bind(DemoAction::VolumeUp, InputSource::Keyboard(KeyCode::Equal));
+    actions.bind(DemoAction::VolumeDown, InputSource::Keyboard(KeyCode::Minus));
+    actions
+}
 
 // --- Resources: typed singleton state stored in the World ---
 
 /// Cross-system game state accessible by any system via `world.resource::<GameState>()`.
 /// This is the Repository pattern adapted for ECS — a single source of truth for
 /// game-wide state like score and lives.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct GameState {
     score: u32,
     coins_collected: u32,
-}
-
-impl Default for GameState {
-    fn default() -> Self {
-        Self { score: 0, coins_collected: 0 }
-    }
 }
 
 // --- State Machine: per-entity state for the player ---
@@ -78,6 +108,8 @@ struct HelloWorld {
     scene_instance: Option<SceneInstance>,
     /// Transform hierarchy system for parent-child relationships
     transform_hierarchy: TransformHierarchySystem,
+    /// Action bindings for the demo's manual controls
+    actions: InputMapping<DemoAction>,
     /// The jump sound effect handle (if loaded)
     jump_sound: Option<SoundHandle>,
     /// Whether music is currently playing
@@ -97,6 +129,7 @@ impl HelloWorld {
             behaviors: BehaviorRunner::new(),
             scene_instance: None,
             transform_hierarchy: TransformHierarchySystem::new(),
+            actions: demo_actions(),
             jump_sound: None,
             music_playing: false,
             volume: 1.0,
@@ -105,25 +138,38 @@ impl HelloWorld {
         }
     }
 
-    fn reset_player(&mut self, ctx: &mut GameContext) {
-        // Get player entity from a scene instance
-        let player = self.scene_instance.as_ref()
-            .and_then(|scene| scene.get_entity("player"));
+    fn player_entity(&self) -> Option<EntityId> {
+        self.scene_instance
+            .as_ref()
+            .and_then(|scene| scene.get_entity("player"))
+    }
 
-        if let Some(player) = player {
-            // Reset player position
-            if let Some(transform) = ctx.world.get_mut::<Transform2D>(player) {
-                transform.position = Vec2::new(-200.0, 100.0);
-            }
-            // Reset velocity
-            if let Some(body) = ctx.world.get_mut::<RigidBody>(player) {
-                body.velocity = Vec2::ZERO;
-            }
-            // Update physics world
-            if let Some(physics) = &mut self.physics {
-                physics.physics_world_mut().set_body_transform(player, Vec2::new(-200.0, 100.0), 0.0);
-                physics.set_velocity(player, Vec2::ZERO, 0.0);
-            }
+    /// Move the player back to spawn and zero its velocity.
+    ///
+    /// Once a body exists, rapier is authoritative — writing to `Transform2D`
+    /// or `RigidBody.velocity` on a live physics entity has no effect, so the
+    /// reset goes through the physics API (`reset_body` is also safe for
+    /// entities spawned the same frame).
+    fn reset_player(&mut self, ctx: &mut GameContext) {
+        let Some(player) = self.player_entity() else { return };
+
+        if let Some(physics) = &mut self.physics {
+            physics.reset_body(player, PLAYER_SPAWN);
+        } else if let Some(transform) = ctx.world.get_mut::<Transform2D>(player) {
+            // No physics running: the transform is the source of truth.
+            transform.position = PLAYER_SPAWN;
+        }
+    }
+
+    fn toggle_music(&mut self, ctx: &mut GameContext) {
+        if self.music_playing {
+            ctx.audio.pause_music();
+            self.music_playing = false;
+            println!("Music paused");
+        } else {
+            ctx.audio.resume_music();
+            self.music_playing = true;
+            println!("Music resumed");
         }
     }
 }
@@ -131,13 +177,10 @@ impl HelloWorld {
 impl Game for HelloWorld {
     /// Called once at startup - loads a scene from a .scene.ron file
     fn init(&mut self, ctx: &mut GameContext) {
-        // Set asset base path to examples directory
-        ctx.assets.set_base_path("examples");
-
         // Try to load the scene from RON file
-        let scene_path = Path::new("examples/assets/scenes/hello_world.scene.ron");
+        let scene_path = Path::new(EXAMPLES_DIR).join("assets/scenes/hello_world.scene.ron");
 
-        match SceneLoader::load_and_instantiate(scene_path, &mut ctx.world, ctx.assets) {
+        match SceneLoader::load_and_instantiate(&scene_path, ctx.world, ctx.assets) {
             Ok(instance) => {
                 println!("Loaded scene '{}' with {} entities", instance.name, instance.entity_count);
 
@@ -160,9 +203,8 @@ impl Game for HelloWorld {
                 println!("Creating entities programmatically as fallback...");
 
                 // Fallback: create entities manually with a Behavior component
-                use ecs::behavior::Behavior;
                 let player = ctx.world.create_entity();
-                ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
+                ctx.world.add_component(&player, Transform2D::new(PLAYER_SPAWN)).ok();
                 ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
                 ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
                 ctx.world.add_component(&player, Collider::player_box(80.0, 80.0)).ok();
@@ -192,19 +234,17 @@ impl Game for HelloWorld {
 
         // Initialize the physics system
         if let Some(physics) = &mut self.physics {
-            use ecs::System;
-            physics.initialize(&mut ctx.world).ok();
+            physics.initialize(ctx.world).ok();
         }
 
         // Initialize the transform hierarchy system
-        use ecs::System;
-        self.transform_hierarchy.initialize(&mut ctx.world).ok();
+        self.transform_hierarchy.initialize(ctx.world).ok();
 
         // --- Resource: insert game-wide state ---
         ctx.world.insert_resource(GameState::default());
 
         // --- State Machine: attach to player entity ---
-        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+        if let Some(player) = self.player_entity() {
             ctx.world.add_component(
                 &player,
                 HierarchicalStateMachine::new(PlayerState::Idle, player_group),
@@ -217,7 +257,7 @@ impl Game for HelloWorld {
         let child_count = total_count - root_count;
 
         // Try to load sound effects
-        match ctx.audio.load_sound("examples/assets/sounds/snd_jump.wav") {
+        match ctx.audio.load_sound(Path::new(EXAMPLES_DIR).join("assets/sounds/snd_jump.wav")) {
             Ok(handle) => {
                 self.jump_sound = Some(handle);
                 println!("Loaded jump sound effect");
@@ -229,7 +269,7 @@ impl Game for HelloWorld {
         }
 
         // Try to load background music
-        match ctx.audio.play_music("examples/assets/sounds/music.ogg") {
+        match ctx.audio.play_music(Path::new(EXAMPLES_DIR).join("assets/sounds/music.ogg")) {
             Ok(()) => {
                 self.music_playing = true;
                 println!("Playing background music");
@@ -240,32 +280,30 @@ impl Game for HelloWorld {
         }
 
         // Try to load a font for text rendering
-        match ctx.ui.load_font_file("examples/assets/fonts/font.ttf") {
-            Ok(_handle) => {
-                self.font_loaded = true;
-                println!("Font loaded - text will render with actual glyphs!");
+        let bundled_font = format!("{EXAMPLES_DIR}/assets/fonts/font.ttf");
+        if ctx.ui.load_font_file(&bundled_font).is_ok() {
+            self.font_loaded = true;
+            println!("Font loaded - text will render with actual glyphs!");
+        } else {
+            // Try fallback paths for common system fonts
+            let font_paths = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "C:\\Windows\\Fonts\\arial.ttf",
+            ];
+
+            for path in font_paths {
+                if ctx.ui.load_font_file(path).is_ok() {
+                    self.font_loaded = true;
+                    println!("System font loaded from: {}", path);
+                    break;
+                }
             }
-            Err(_) => {
-                // Try fallback paths for common system fonts
-                let font_paths = [
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-                    "/System/Library/Fonts/Helvetica.ttc",
-                    "C:\\Windows\\Fonts\\arial.ttf",
-                ];
 
-                for path in font_paths {
-                    if let Ok(_) = ctx.ui.load_font_file(path) {
-                        self.font_loaded = true;
-                        println!("System font loaded from: {}", path);
-                        break;
-                    }
-                }
-
-                if !self.font_loaded {
-                    println!("No font loaded. Text will render as placeholders.");
-                    println!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
-                }
+            if !self.font_loaded {
+                println!("No font loaded. Text will render as placeholders.");
+                println!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
             }
         }
 
@@ -285,10 +323,10 @@ impl Game for HelloWorld {
 
     /// Called every frame - update game logic
     fn update(&mut self, ctx: &mut GameContext) {
-        // Play jump sound when SPACE is pressed (if sound is loaded)
-        if ctx.input.is_key_just_pressed(KeyCode::Space) {
+        // Play jump sound on the strict press edge (if sound is loaded).
+        // The jump itself is handled by the PlayerPlatformer behavior.
+        if self.actions.just_activated(DemoAction::Jump, ctx.input) {
             if let Some(jump_sound) = &self.jump_sound {
-                // Play with slight random pitch variation for variety
                 let settings = SoundSettings::new()
                     .with_volume(0.8)
                     .with_speed(1.0);
@@ -298,26 +336,18 @@ impl Game for HelloWorld {
             }
         }
 
-        // Toggle music with M key
-        if ctx.input.is_key_just_pressed(KeyCode::KeyM) {
-            if self.music_playing {
-                ctx.audio.pause_music();
-                self.music_playing = false;
-                println!("Music paused");
-            } else {
-                ctx.audio.resume_music();
-                self.music_playing = true;
-                println!("Music resumed");
-            }
+        // Toggle music
+        if self.actions.just_activated(DemoAction::ToggleMusic, ctx.input) {
+            self.toggle_music(ctx);
         }
 
-        // Adjust master volume with +/- keys
-        if ctx.input.is_key_just_pressed(KeyCode::Equal) {
+        // Adjust master volume
+        if self.actions.just_activated(DemoAction::VolumeUp, ctx.input) {
             let new_volume = (ctx.audio.master_volume() + 0.1).min(1.0);
             ctx.audio.set_master_volume(new_volume);
             println!("Volume: {:.0}%", new_volume * 100.0);
         }
-        if ctx.input.is_key_just_pressed(KeyCode::Minus) {
+        if self.actions.just_activated(DemoAction::VolumeDown, ctx.input) {
             let new_volume = (ctx.audio.master_volume() - 0.1).max(0.0);
             ctx.audio.set_master_volume(new_volume);
             println!("Volume: {:.0}%", new_volume * 100.0);
@@ -326,29 +356,25 @@ impl Game for HelloWorld {
         // Process all entity behaviors (player movement, AI, etc.)
         // This single call replaces 40+ lines of hardcoded movement logic!
         self.behaviors.update(
-            &mut ctx.world,
+            ctx.world,
             ctx.input,
             ctx.delta_time,
             self.physics.as_mut(),
         );
 
         // Reset player position (manual action, not a behavior)
-        if ctx.input.is_key_pressed(KeyCode::KeyR) {
+        if self.actions.just_activated(DemoAction::ResetPlayer, ctx.input) {
             self.reset_player(ctx);
         }
 
         // Step physics simulation (also emits CollisionData events to the world event bus)
         if let Some(physics) = &mut self.physics {
-            use ecs::System;
-            physics.update(&mut ctx.world, ctx.delta_time);
+            physics.update(ctx.world, ctx.delta_time);
         }
 
         // Update transform hierarchy - propagates transforms from parents to children
         // This must run after physics so child entities follow their parents
-        {
-            use ecs::System;
-            self.transform_hierarchy.update(&mut ctx.world, ctx.delta_time);
-        }
+        self.transform_hierarchy.update(ctx.world, ctx.delta_time);
 
         // --- Events: read collection events emitted by BehaviorRunner ---
         // Any system can read these — audio, particles, scoring all stay decoupled
@@ -364,7 +390,7 @@ impl Game for HelloWorld {
         }
 
         // --- State Machine: update player state based on physics velocity ---
-        if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+        if let Some(player) = self.player_entity() {
             // Determine state from physics velocity
             let vel = ctx.world.get::<RigidBody>(player)
                 .map(|rb| rb.velocity)
@@ -388,8 +414,8 @@ impl Game for HelloWorld {
         }
 
         // ==================== UI Demo ====================
-        // Toggle UI visibility with H key
-        if ctx.input.is_key_just_pressed(KeyCode::KeyH) {
+        // Toggle UI visibility
+        if self.actions.just_activated(DemoAction::ToggleUi, ctx.input) {
             self.show_ui = !self.show_ui;
         }
 
@@ -410,7 +436,7 @@ impl Game for HelloWorld {
             ctx.ui.label(&score_text, Vec2::new(20.0, 50.0));
 
             // --- Player state display (from StateMachine) ---
-            let state_text = if let Some(player) = self.scene_instance.as_ref().and_then(|s| s.get_entity("player")) {
+            let state_text = if let Some(player) = self.player_entity() {
                 if let Some(sm) = ctx.world.get::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
                     format!("State: {:?} ({:?})", sm.current(), sm.parent())
                 } else {
@@ -434,13 +460,7 @@ impl Game for HelloWorld {
             let music_btn_rect = UIRect::new(20.0, 140.0, 90.0, 30.0);
             let music_label = if self.music_playing { "Pause" } else { "Play" };
             if ctx.ui.button("music_btn", music_label, music_btn_rect) {
-                if self.music_playing {
-                    ctx.audio.pause_music();
-                    self.music_playing = false;
-                } else {
-                    ctx.audio.resume_music();
-                    self.music_playing = true;
-                }
+                self.toggle_music(ctx);
             }
 
             // Reset button
@@ -467,10 +487,12 @@ impl Game for HelloWorld {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create game configuration
+    // Create game configuration. The asset base path makes texture paths in
+    // the scene file resolve correctly regardless of the working directory.
     let game_config = GameConfig::new("Hello World - Insiculous 2D Physics Demo")
         .with_size(800, 600)
-        .with_clear_color(0.1, 0.1, 0.15, 1.0);
+        .with_clear_color(0.1, 0.1, 0.15, 1.0)
+        .with_asset_base_path(EXAMPLES_DIR);
 
     // Create and run the game
     let game = HelloWorld::new();
