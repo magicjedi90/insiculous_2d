@@ -24,6 +24,7 @@
 
 pub mod behavior_runner;
 mod game;
+mod glyph_texture_cache;
 mod timing;
 mod scene;
 pub mod scene_manager;
@@ -47,24 +48,30 @@ pub mod debug;
 
 pub mod prelude;
 
-// Re-export for convenience
-pub use behavior_runner::*;
-pub use game::*;
-pub use timing::*;
-pub use scene::*;
-pub use scene_manager::*;
-pub use lifecycle::*;
-pub use assets::*;
-pub use scene_data::*;
-pub use scene_loader::*;
-pub use scene_serializer::*;
-pub use render_manager::*;
-pub use window_manager::*;
-pub use game_loop_manager::*;
-pub use ui_manager::*;
-pub use game_config::*;
+// Re-export the public API surface explicitly (no globs) so the crate's
+// top-level names are visible at a glance.
+pub use behavior_runner::{BehaviorRunner, EntityCollected};
+pub use game::{run_game, Game};
+pub use timing::Timer;
+pub use scene::Scene;
+pub use scene_manager::SceneManager;
+pub use lifecycle::{Lifecycle, LifecycleManager, LifecycleState};
+pub use assets::{AssetConfig, AssetError, AssetManager};
+pub use scene_data::{
+    BehaviorData, ColliderShapeData, ComponentData, EditorSettings, EntityData, PhysicsSettings,
+    PrefabData, RigidBodyTypeData, SceneData, SceneLoadError,
+};
+pub use scene_loader::{SceneInstance, SceneLoader};
+pub use scene_serializer::{save_scene_to_file, serialize_to_ron, world_to_scene_data};
+pub use render_manager::RenderManager;
+pub use window_manager::{WindowConfig, WindowManager};
+pub use game_loop_manager::{GameLoopManager, MAX_DELTA_TIME};
+pub use ui_manager::UIManager;
+pub use game_config::GameConfig;
 pub use chaos_mode::ChaosMode;
-pub use achievements::{Achievement, AchievementManager, AchievementError, DEFAULT_TOAST_DURATION};
+pub use achievements::{
+    Achievement, AchievementError, AchievementManager, ToastStyle, DEFAULT_TOAST_DURATION,
+};
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

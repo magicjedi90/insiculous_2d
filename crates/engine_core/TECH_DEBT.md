@@ -4,10 +4,11 @@ Last audited: June 2026
 
 ## Summary
 - High priority: 0
-- Medium priority: 6
+- Medium priority: 1
 - Low priority: 6
 - Resolved since February 2026 audit: DRY-001, DRY-003 (partial), ARCH-001, KISS-001, LOGIC-003, ARCH-002 (reclassified not-an-issue)
 - Resolved June 2026 (post-audit cleanup): DRY-008, DRY-009, DEAD-001, QUAL-001, ARCH-005 (decision: keep)
+- Resolved June 2026 (medium-priority sweep): SRP-001, SRP-002, LOGIC-002, ARCH-007, ARCH-003
 
 ---
 
@@ -22,41 +23,6 @@ Last audited: June 2026
 - **Fix:** Route behaviors through the registry / a `Custom { type_name, data }` variant with
   game-registered factories. Larger design change; track for Phase 2+.
 - **Priority:** Medium | **Effort:** Large
-
-### [SRP-001] GameRunner still owns glyph texture caching
-- **File:** `game.rs:267-313` (`prepare_glyph_textures`)
-- **Issue:** Mixes UI draw-command iteration, texture creation, and cache management inside
-  the orchestrator. Carried over from Feb 2026 audit.
-- **Fix:** Extract `GlyphTextureCache` struct or move into `UIManager`.
-- **Priority:** Medium | **Effort:** Medium
-
-### [SRP-002] BehaviorRunner giant match over 7 behavior types
-- **File:** `behavior_runner.rs:128-273`
-- **Issue:** Single `match` with 15-40 lines per variant. Carried over from Feb 2026 audit.
-- **Fix:** One handler method per variant; no logic change.
-- **Priority:** Medium | **Effort:** Small
-
-### [LOGIC-002] `unwrap()` on asset_manager relies on distant guard
-- **File:** `game.rs:400` (`self.asset_manager.as_mut().unwrap()` in `initialize_and_update`,
-  guarded only by the `has_managers` check at line 364)
-- **Fix:** `let Some(asset_manager) = ... else { return; }` with a log line.
-- **Priority:** Medium | **Effort:** Small
-
-### [ARCH-007] Achievement toast appearance hardcoded
-- **File:** `achievements.rs:240-272`
-- **Issue:** Toast dimensions (320×72, margins) and colors (gold `[1.0, 0.82, 0.2]`,
-  dark bg `[0.08, 0.08, 0.12]`) are fixed; games cannot restyle a core engine-rendered UI
-  element. Also `reset()` (line 224) swallows the save error with `let _ =` while `unlock()` logs.
-- **Fix:** `ToastStyle` struct with defaults on `AchievementManager`; log the `reset()` error.
-- **Priority:** Medium | **Effort:** Medium
-
-### [ARCH-003] Glob re-exports obscure the public API surface
-- **File:** `lib.rs:52-67`
-- **Issue:** 16 `pub use module::*` globs re-export everything unfiltered, alongside
-  `pub mod` declarations — the public API is whatever happens to be `pub` anywhere.
-  Carried over from Feb 2026 audit.
-- **Fix:** Explicit re-export lists (as already done for `chaos_mode` and `achievements`).
-- **Priority:** Medium | **Effort:** Small
 
 ---
 
@@ -113,6 +79,11 @@ Last audited: June 2026
 | DEAD-001 `game_loop.rs` dead code | Resolved (Jun 2026): `game_loop.rs` + `tests/game_loop.rs` deleted, exports removed from `lib.rs`/`prelude.rs`. `GameLoopManager` is the only frame timer. |
 | QUAL-001 clippy warnings | Resolved (Jun 2026): orphaned doc comment removed (game.rs), needless borrow fixed (game.rs), `push_arc` now derives segment count from sweep angle (also removed duplicated `CIRCLE_SEGMENTS / 2` at call sites), `!= true` assertion fixed, `Lifecycle` trait moved above test module. `cargo clippy -p engine_core --all-targets` is clean. |
 | ARCH-005 `grid/` single-game code | Decision (Jun 2026): KEEP in engine as a general-purpose deformable-grid effect (and candidate for editor grid visualization). Module docs updated to state this and that `Default` tuning values are starting points. Pong remains the reference consumer. |
+| SRP-001 GameRunner owned glyph texture caching | Resolved (Jun 2026): extracted `GlyphTextureCache` (`glyph_texture_cache.rs`) — owns the key→handle map and the prepare scan; `GameRunner` just calls `prepare()`/`textures()`. Cache-miss bookkeeping unit-tested headless. |
+| SRP-002 BehaviorRunner giant match | Resolved (Jun 2026): one private handler per variant (`update_player_platformer`, `update_patrol`, …) plus a `BehaviorCommands` struct and `apply_commands()`; no logic change. |
+| LOGIC-002 `unwrap()` on asset_manager | Resolved (Jun 2026): `initialize_and_update` now uses `let Some(...) else { log::warn!(...); return; }` — production code is `unwrap()`-free. |
+| ARCH-007 achievement toast styling hardcoded | Resolved (Jun 2026): `ToastStyle` struct (dimensions, colors, border, font sizes) with `Default` matching the old appearance; `AchievementManager::set_toast_style()`/`toast_style()`; `reset()` now logs its save error like `unlock()`. |
+| ARCH-003 glob re-exports in lib.rs | Resolved (Jun 2026): all 15 `pub use module::*` globs replaced with explicit re-export lists; prelude semantics unchanged; whole workspace compiles. |
 
 ---
 
@@ -124,6 +95,6 @@ Last audited: June 2026
 - `particles/` is genuinely reusable (config builder, pooling, no game-specific tuning);
   the emitter-in-ECS / particles-in-manager split is intentional — worth a module-level
   doc note.
-- Production code is essentially `unwrap()`-free outside the one site in LOGIC-002;
-  errors are typed (`thiserror`) throughout the scene pipeline.
+- Production code is `unwrap()`-free (LOGIC-002 resolved); errors are typed
+  (`thiserror`) throughout the scene pipeline.
 - `ChaosMode` correctly carries selection only — no gameplay logic in the engine.

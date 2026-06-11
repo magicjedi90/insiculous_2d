@@ -1,6 +1,6 @@
 # Technical Debt — Workspace Rollup
 
-Last updated: June 11, 2026
+Last updated: June 11, 2026 (post tech-debt pass: engine_core 5 Mediums + ui 2 Mediums resolved)
 
 This file is the high-level index of technical debt across the workspace.
 Each crate carries the authoritative detail in its own `crates/<name>/TECH_DEBT.md`;
@@ -28,11 +28,11 @@ what the 2026 audit passes resolved. High + Medium items are mirrored in
 | `ecs_macros` | Feb 2026 | 0 / 1 / 2 | Over-specified `syn` features (compile-time cost) |
 | `editor` | Jun 2026 (remediated) | 0 / 0 / 0 | All tracked items resolved; component registry macro is single source of truth |
 | `editor_integration` | Jun 2026 (remediated) | 0 / 0 / 2 | No file picker (Phase 2+); menu actions matched by label string |
-| `engine_core` | Jun 2026 | 0 / 6 / 6 | Largest remaining debt pool — see below |
+| `engine_core` | Jun 2026 (debt pass) | 0 / 1 / 6 | Only ARCH-006 (behavior registry, Phase 2+) remains Medium |
 | `input` | Jun 2026 (restructured) | 0 / 1 / 3 | Generic `InputMapping<A>`; open items are feature gaps (gamepad backend) |
 | `physics` | Jun 2026 (remediated) | 0 / 0 / 3 | All correctness findings fixed; remaining items organizational |
 | `renderer` | Jun 2026 (remediated) | 0 / 0 / 3 | Bloom/panic/dead-code fixes landed; ~700 lines dead code removed |
-| `ui` | Jun 2026 | 0 / 3 / 3 | FontManager split, context.rs size, general text input |
+| `ui` | Jun 2026 (debt pass) | 0 / 1 / 3 | FontManager + context.rs splits done; general text input (JUN-T1) remains |
 
 Workspace-wide invariants (verified by the June 2026 audits): no files over
 600 lines, no `#[allow(dead_code)]`, no `unwrap()` outside tests, and
@@ -42,17 +42,10 @@ Workspace-wide invariants (verified by the June 2026 audits): no files over
 
 ## Open Medium-Priority Items
 
-### engine_core (6)
-- **[ARCH-006]** Behaviors hardcoded in scene serialization, bypassing `ComponentRegistry` — route through a registry/`Custom` variant; pairs with the Phase 4 scripting-crate migration of `ecs/src/behavior.rs`
-- **[SRP-001]** `GameRunner` still owns glyph texture caching (`game.rs::prepare_glyph_textures`) — extract `GlyphTextureCache` or move into `UIManager`
-- **[SRP-002]** `BehaviorRunner` giant match over 7 behavior variants — one handler method per variant
-- **[LOGIC-002]** `unwrap()` on `asset_manager` relies on a distant guard — `let Some(..) else { return }`
-- **[ARCH-007]** Achievement toast styling hardcoded (dimensions, gold/dark colors) — `ToastStyle` struct with defaults
-- **[ARCH-003]** 16 glob re-exports obscure the public API surface — explicit re-export lists
+### engine_core (1)
+- **[ARCH-006]** Behaviors hardcoded in scene serialization, bypassing `ComponentRegistry` — route through a registry/`Custom` variant; pairs with the Phase 4 scripting-crate migration of `ecs/src/behavior.rs` (Large; Phase 2+)
 
-### ui (3)
-- **[SRP-001]** `FontManager` handles loading, storage, rasterization, caching, and layout — split when it next grows
-- **[SRP-002]** `context.rs` ~990 lines vs the 600-line rule — mechanical split (`text.rs` / `widgets.rs`) deferred by scope decision
+### ui (1)
 - **[JUN-T1]** Text input is numeric-only and keyboard-layout-blind — blocks editor rename/search widgets; needs winit character events plumbed through `input`
 
 ### input (1)
@@ -100,6 +93,13 @@ Full details live in each crate's `TECH_DEBT.md` "Resolved" sections.
   (`stored_component.rs`) as single source of truth, `ComponentEdit<T>`
   writeback, 1,100-line files split into feature directories, full theme
   routing, duplicate `ComponentKind`/dispatch deleted
+- **engine_core (Jun 11 debt pass):** `GlyphTextureCache` extracted from
+  `GameRunner`, BehaviorRunner match split into per-variant handlers,
+  asset_manager `unwrap()` → `let-else`, `ToastStyle` on `AchievementManager`
+  (+ `reset()` logs save errors), all `lib.rs` glob re-exports made explicit
+- **ui (Jun 11 debt pass):** `context.rs` (~990 lines) split into `context/`
+  (mod/text/widgets/tests), `font.rs` split into `font/` (FontManager facade +
+  `GlyphCache` + `layout`); public API unchanged, all files <600 lines
 
 ---
 

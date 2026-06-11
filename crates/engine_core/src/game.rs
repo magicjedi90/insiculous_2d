@@ -25,8 +25,6 @@
 //! }
 //! ```
 
-use std::collections::HashMap;
-
 use glam::Vec2;
 use winit::{
     application::ApplicationHandler,
@@ -47,9 +45,10 @@ use crate::{GameLoopManager, UIManager};
 use crate::game_config::GameConfig;
 use crate::ui_integration::render_ui_commands;
 use ui::DrawCommand;
-use crate::contexts::{GameContext, RenderContext, GlyphCacheKey};
+use crate::contexts::{GameContext, RenderContext};
 use crate::assets::{AssetConfig, AssetManager};
 use crate::achievements::AchievementManager;
+use crate::glyph_texture_cache::GlyphTextureCache;
 use crate::render_manager::RenderManager;
 use crate::window_manager::{WindowConfig, WindowManager};
 use crate::Scene;
@@ -206,7 +205,7 @@ struct GameRunner<G: Game> {
     /// Game loop timing and frame management
     game_loop_manager: GameLoopManager,
     /// Cached glyph textures for text rendering
-    glyph_textures: HashMap<GlyphCacheKey, TextureHandle>,
+    glyph_textures: GlyphTextureCache,
     /// Main game scene containing ECS world
     scene: Scene,
     /// Achievement / trophy manager
@@ -250,60 +249,12 @@ impl<G: Game> GameRunner<G> {
             input: InputHandler::new(),
             ui_manager: UIManager::new(),
             game_loop_manager,
-            glyph_textures: HashMap::new(),
+            glyph_textures: GlyphTextureCache::new(),
             scene: Scene::new("main"),
             achievements,
             particles: crate::particles::ParticleManager::default(),
             lines: Vec::new(),
             initialized: false,
-        }
-    }
-
-    /// Prepare glyph textures from UI draw commands.
-    ///
-    /// Scans Text commands for glyphs that need textures and creates them
-    /// on-demand, caching them for reuse.
-    fn prepare_glyph_textures(&mut self, commands: &[DrawCommand]) {
-        let asset_manager = match &mut self.asset_manager {
-            Some(am) => am,
-            None => return,
-        };
-
-        for cmd in commands {
-            if let DrawCommand::Text { data, .. } = cmd {
-                for glyph in &data.glyphs {
-                    // Skip empty glyphs (spaces, etc.)
-                    if glyph.width == 0 || glyph.height == 0 || glyph.bitmap.is_empty() {
-                        continue;
-                    }
-
-                    // Cache key is color-agnostic - same texture can be reused for any color
-                    let key = GlyphCacheKey::new(
-                        glyph.character,
-                        glyph.width,
-                        glyph.height,
-                    );
-
-                    // Skip if already cached
-                    if self.glyph_textures.contains_key(&key) {
-                        continue;
-                    }
-
-                    // Create glyph texture (grayscale alpha mask)
-                    match asset_manager.create_glyph_texture(
-                        glyph.width,
-                        glyph.height,
-                        &glyph.bitmap,
-                    ) {
-                        Ok(handle) => {
-                            self.glyph_textures.insert(key, handle);
-                        }
-                        Err(e) => {
-                            log::warn!("Failed to create glyph texture for '{}': {}", glyph.character, e);
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -392,7 +343,10 @@ impl<G: Game> GameRunner<G> {
 
     /// Initialize game on first frame, then update game logic.
     fn initialize_and_update(&mut self, delta_time: f32, window_size: Vec2) {
-        let asset_manager = self.asset_manager.as_mut().unwrap();
+        let Some(asset_manager) = self.asset_manager.as_mut() else {
+            log::warn!("initialize_and_update called before asset manager exists; skipping frame");
+            return;
+        };
 
         // Clear the line buffer at the start of the frame so games push fresh
         // vertices each update (typical case: grid.build_line_vertices()).
@@ -455,7 +409,9 @@ impl<G: Game> GameRunner<G> {
     /// Render complete frame with sprites and UI
     fn render_frame(&mut self, window_size: Vec2, ui_commands: &[DrawCommand]) {
         // Prepare glyph textures for text rendering
-        self.prepare_glyph_textures(ui_commands);
+        if let Some(asset_manager) = &mut self.asset_manager {
+            self.glyph_textures.prepare(ui_commands, asset_manager);
+        }
 
         // Phase 1: Game sprites — render into their own batcher so they never
         // share a batch with UI elements (which would cause UI panel backgrounds
@@ -469,7 +425,7 @@ impl<G: Game> GameRunner<G> {
                 camera: self.render_manager.camera_mut(),
                 window_size,
                 ui_commands: empty_commands,
-                glyph_textures: &self.glyph_textures,
+                glyph_textures: self.glyph_textures.textures(),
             };
             self.game.render(&mut ctx);
         }
@@ -481,7 +437,7 @@ impl<G: Game> GameRunner<G> {
 
         // Phase 2: UI sprites — separate batcher
         let mut ui_batcher = SpriteBatcher::new();
-        render_ui_commands(&mut ui_batcher, ui_commands, window_size, &self.glyph_textures);
+        render_ui_commands(&mut ui_batcher, ui_commands, window_size, self.glyph_textures.textures());
 
         // Collect and sort game batches (by depth then texture handle for stability)
         game_batcher.sort_all_batches();

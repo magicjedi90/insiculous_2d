@@ -27,6 +27,22 @@ pub struct EntityCollected {
     pub collector_tag: String,
 }
 
+/// Commands collected while iterating behaviors, applied after the loop to
+/// avoid borrow conflicts with the world.
+#[derive(Default)]
+struct BehaviorCommands {
+    /// Entities to despawn after processing
+    to_despawn: Vec<EntityId>,
+    /// Velocity commands (applied via physics or direct transform)
+    velocities: Vec<(EntityId, Vec2)>,
+    /// Impulse commands, applied AFTER velocity commands
+    impulses: Vec<(EntityId, Vec2)>,
+    /// Tag assignments
+    tags: Vec<(EntityId, String)>,
+    /// Collection events to emit
+    collected: Vec<EntityCollected>,
+}
+
 /// Processes behavior components for all entities.
 ///
 /// The `BehaviorRunner` iterates over all entities with `Behavior` components
@@ -100,189 +116,310 @@ impl BehaviorRunner {
         world: &mut World,
         input: &InputHandler,
         delta_time: f32,
-        mut physics: Option<&mut PhysicsSystem>,
+        physics: Option<&mut PhysicsSystem>,
     ) {
-        // Track entities to despawn after processing
-        let mut to_despawn: Vec<EntityId> = Vec::new();
-
-        // Collect velocity commands to apply after iteration (avoids borrow conflicts)
-        let mut velocity_commands: Vec<(EntityId, Vec2)> = Vec::new();
-
-        // Collect impulse commands to apply AFTER velocity commands
-        let mut impulse_commands: Vec<(EntityId, Vec2)> = Vec::new();
-
-        // Collect tag assignments to apply after iteration
-        let mut tag_assignments: Vec<(EntityId, String)> = Vec::new();
-
-        // Collect events to emit after iteration
-        let mut collected_events: Vec<EntityCollected> = Vec::new();
+        // Commands are collected during iteration and applied afterwards
+        // (avoids borrow conflicts with the world).
+        let mut commands = BehaviorCommands::default();
 
         // Process all entities with behaviors directly - avoid cloning
         for entity in world.entities() {
             // Get behavior component by reference to avoid cloning
-            if let Some(behavior) = world.get::<Behavior>(entity) {
-                // Clone state only when needed (much smaller than Behavior)
-                let mut state = world
-                    .get::<BehaviorState>(entity)
-                    .cloned()
-                    .unwrap_or_default();
+            let Some(behavior) = world.get::<Behavior>(entity) else { continue };
 
-                match behavior {
-                    Behavior::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown, tag } => {
-                        // Update cooldown timer
-                        if state.timer > 0.0 {
-                            state.timer -= delta_time;
-                        }
+            // Clone state only when needed (much smaller than Behavior)
+            let mut state = world
+                .get::<BehaviorState>(entity)
+                .cloned()
+                .unwrap_or_default();
 
-                        // Calculate horizontal velocity only - let physics handle Y (gravity + jumps)
-                        let mut vel_x = 0.0;
-                        if self.actions.is_active(GameAction::MoveLeft, input) { vel_x = -move_speed; }
-                        if self.actions.is_active(GameAction::MoveRight, input) { vel_x = *move_speed; }
-
-                        // For platformers, only set X velocity - preserve Y for physics
-                        if let Some(ref physics) = physics {
-                            let current_vel = physics.physics_world()
-                                .get_body_velocity(entity)
-                                .map(|(v, _)| v)
-                                .unwrap_or(Vec2::ZERO);
-                            // Set X to input, keep Y from physics (gravity/jumps)
-                            let vel = Vec2::new(vel_x, current_vel.y);
-                            velocity_commands.push((entity, vel));
-                        }
-
-                        // Jump - collect impulse to apply AFTER velocity commands
-                        if input.is_key_just_pressed(winit::keyboard::KeyCode::Space) && state.timer <= 0.0 {
-                            impulse_commands.push((entity, Vec2::new(0.0, *jump_impulse)));
-                            state.timer = *jump_cooldown;
-                        }
-
-                        tag_assignments.push((entity, tag.clone()));
-                        Self::update_state(world, entity, state);
+            match behavior {
+                Behavior::PlayerPlatformer { move_speed, jump_impulse, jump_cooldown, tag } => {
+                    self.update_player_platformer(
+                        entity, input, delta_time, physics.as_deref(),
+                        *move_speed, *jump_impulse, *jump_cooldown, tag,
+                        &mut state, &mut commands,
+                    );
+                    Self::update_state(world, entity, state);
                 }
 
                 Behavior::PlayerTopDown { move_speed, tag } => {
-                        // Calculate movement velocity from input
-                        let mut vel = Vec2::ZERO;
-                        if self.actions.is_active(GameAction::MoveUp, input) { vel.y += *move_speed; }
-                        if self.actions.is_active(GameAction::MoveDown, input) { vel.y -= *move_speed; }
-                        if self.actions.is_active(GameAction::MoveLeft, input) { vel.x -= *move_speed; }
-                        if self.actions.is_active(GameAction::MoveRight, input) { vel.x += *move_speed; }
-
-                        // Normalize diagonal movement
-                        if vel.length_squared() > 0.0 {
-                            vel = vel.normalize() * *move_speed;
-                        }
-
-                        velocity_commands.push((entity, vel));
-                        tag_assignments.push((entity, tag.clone()));
+                    self.update_player_top_down(entity, input, *move_speed, tag, &mut commands);
                 }
 
                 Behavior::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
-                        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
-                            if let Some(entity_pos) = Self::get_position(world, entity) {
-                                let distance = (target_pos - entity_pos).length();
-
-                                // Update chase state
-                                if !state.is_chasing && distance < *detection_range {
-                                    state.is_chasing = true;
-                                } else if state.is_chasing && distance > *lose_interest_range {
-                                    state.is_chasing = false;
-                                }
-
-                                if state.is_chasing {
-                                    let vel = (target_pos - entity_pos).normalize_or_zero() * *chase_speed;
-                                    velocity_commands.push((entity, vel));
-                                } else {
-                                    velocity_commands.push((entity, Vec2::ZERO));
-                                }
-                            }
-                        } else {
-                            state.is_chasing = false;
-                            velocity_commands.push((entity, Vec2::ZERO));
-                        }
-                        Self::update_state(world, entity, state);
+                    Self::update_chase_tagged(
+                        world, entity, target_tag,
+                        *detection_range, *chase_speed, *lose_interest_range,
+                        &mut state, &mut commands,
+                    );
+                    Self::update_state(world, entity, state);
                 }
 
                 Behavior::Patrol { point_a, point_b, speed, wait_time } => {
-                        let pt_a = Vec2::new(point_a.0, point_a.1);
-                        let pt_b = Vec2::new(point_b.0, point_b.1);
-
-                        if state.is_waiting {
-                            state.timer -= delta_time;
-                            if state.timer <= 0.0 {
-                                state.is_waiting = false;
-                                state.patrol_toward_b = !state.patrol_toward_b;
-                            }
-                            velocity_commands.push((entity, Vec2::ZERO));
-                        } else if let Some(entity_pos) = Self::get_position(world, entity) {
-                            let target = if state.patrol_toward_b { pt_b } else { pt_a };
-
-                            if (target - entity_pos).length() < 5.0 {
-                                state.is_waiting = true;
-                                state.timer = *wait_time;
-                                velocity_commands.push((entity, Vec2::ZERO));
-                            } else {
-                                let vel = (target - entity_pos).normalize() * *speed;
-                                velocity_commands.push((entity, vel));
-                            }
-                        }
-                        Self::update_state(world, entity, state);
+                    Self::update_patrol(
+                        world, entity, delta_time,
+                        Vec2::new(point_a.0, point_a.1), Vec2::new(point_b.0, point_b.1),
+                        *speed, *wait_time,
+                        &mut state, &mut commands,
+                    );
+                    Self::update_state(world, entity, state);
                 }
 
                 Behavior::FollowEntity { target_name, follow_distance, follow_speed } => {
-                        let mut vel = Vec2::ZERO;
-                        if let Some(&target_entity) = self.named_entities.get(target_name) {
-                            if let (Some(target_pos), Some(entity_pos)) = (
-                                Self::get_position(world, target_entity),
-                                Self::get_position(world, entity),
-                            ) {
-                                let to_target = target_pos - entity_pos;
-                                if to_target.length() > *follow_distance {
-                                    vel = to_target.normalize() * *follow_speed;
-                                }
-                            }
-                        }
-                        velocity_commands.push((entity, vel));
+                    self.update_follow_entity(
+                        world, entity, target_name, *follow_distance, *follow_speed, &mut commands,
+                    );
                 }
 
                 Behavior::FollowTagged { target_tag, follow_distance, follow_speed } => {
-                        let mut vel = Vec2::ZERO;
-                        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
-                            if let Some(entity_pos) = Self::get_position(world, entity) {
-                                let to_target = target_pos - entity_pos;
-                                if to_target.length() > *follow_distance {
-                                    vel = to_target.normalize() * *follow_speed;
-                                }
-                            }
-                        }
-                        velocity_commands.push((entity, vel));
+                    Self::update_follow_tagged(
+                        world, entity, target_tag, *follow_distance, *follow_speed, &mut commands,
+                    );
                 }
 
                 Behavior::Collectible { score_value, despawn_on_collect, collector_tag } => {
-                        if Self::check_tagged_overlap(world, entity, collector_tag, 40.0) {
-                            log::info!("Collected! +{} points", score_value);
-                            collected_events.push(EntityCollected {
-                                entity,
-                                score_value: *score_value,
-                                collector_tag: collector_tag.clone(),
-                            });
-                            if *despawn_on_collect {
-                                to_despawn.push(entity);
-                            }
-                        }
+                    Self::update_collectible(
+                        world, entity, *score_value, *despawn_on_collect, collector_tag, &mut commands,
+                    );
                 }
-            }
             }
         }
 
+        Self::apply_commands(world, physics, delta_time, commands);
+    }
+
+    /// `Behavior::PlayerPlatformer` — input-driven horizontal movement plus a
+    /// cooldown-gated jump impulse; Y velocity stays with physics (gravity).
+    #[allow(clippy::too_many_arguments)]
+    fn update_player_platformer(
+        &self,
+        entity: EntityId,
+        input: &InputHandler,
+        delta_time: f32,
+        physics: Option<&PhysicsSystem>,
+        move_speed: f32,
+        jump_impulse: f32,
+        jump_cooldown: f32,
+        tag: &str,
+        state: &mut BehaviorState,
+        commands: &mut BehaviorCommands,
+    ) {
+        // Update cooldown timer
+        if state.timer > 0.0 {
+            state.timer -= delta_time;
+        }
+
+        // Calculate horizontal velocity only - let physics handle Y (gravity + jumps)
+        let mut vel_x = 0.0;
+        if self.actions.is_active(GameAction::MoveLeft, input) { vel_x = -move_speed; }
+        if self.actions.is_active(GameAction::MoveRight, input) { vel_x = move_speed; }
+
+        // For platformers, only set X velocity - preserve Y for physics
+        if let Some(physics) = physics {
+            let current_vel = physics.physics_world()
+                .get_body_velocity(entity)
+                .map(|(v, _)| v)
+                .unwrap_or(Vec2::ZERO);
+            // Set X to input, keep Y from physics (gravity/jumps)
+            let vel = Vec2::new(vel_x, current_vel.y);
+            commands.velocities.push((entity, vel));
+        }
+
+        // Jump - collect impulse to apply AFTER velocity commands
+        if input.is_key_just_pressed(winit::keyboard::KeyCode::Space) && state.timer <= 0.0 {
+            commands.impulses.push((entity, Vec2::new(0.0, jump_impulse)));
+            state.timer = jump_cooldown;
+        }
+
+        commands.tags.push((entity, tag.to_string()));
+    }
+
+    /// `Behavior::PlayerTopDown` — input-driven movement on both axes with
+    /// normalized diagonals.
+    fn update_player_top_down(
+        &self,
+        entity: EntityId,
+        input: &InputHandler,
+        move_speed: f32,
+        tag: &str,
+        commands: &mut BehaviorCommands,
+    ) {
+        // Calculate movement velocity from input
+        let mut vel = Vec2::ZERO;
+        if self.actions.is_active(GameAction::MoveUp, input) { vel.y += move_speed; }
+        if self.actions.is_active(GameAction::MoveDown, input) { vel.y -= move_speed; }
+        if self.actions.is_active(GameAction::MoveLeft, input) { vel.x -= move_speed; }
+        if self.actions.is_active(GameAction::MoveRight, input) { vel.x += move_speed; }
+
+        // Normalize diagonal movement
+        if vel.length_squared() > 0.0 {
+            vel = vel.normalize() * move_speed;
+        }
+
+        commands.velocities.push((entity, vel));
+        commands.tags.push((entity, tag.to_string()));
+    }
+
+    /// `Behavior::ChaseTagged` — chase the nearest tagged entity once it is
+    /// inside detection range, give up beyond lose-interest range.
+    #[allow(clippy::too_many_arguments)]
+    fn update_chase_tagged(
+        world: &World,
+        entity: EntityId,
+        target_tag: &str,
+        detection_range: f32,
+        chase_speed: f32,
+        lose_interest_range: f32,
+        state: &mut BehaviorState,
+        commands: &mut BehaviorCommands,
+    ) {
+        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
+            if let Some(entity_pos) = Self::get_position(world, entity) {
+                let distance = (target_pos - entity_pos).length();
+
+                // Update chase state
+                if !state.is_chasing && distance < detection_range {
+                    state.is_chasing = true;
+                } else if state.is_chasing && distance > lose_interest_range {
+                    state.is_chasing = false;
+                }
+
+                if state.is_chasing {
+                    let vel = (target_pos - entity_pos).normalize_or_zero() * chase_speed;
+                    commands.velocities.push((entity, vel));
+                } else {
+                    commands.velocities.push((entity, Vec2::ZERO));
+                }
+            }
+        } else {
+            state.is_chasing = false;
+            commands.velocities.push((entity, Vec2::ZERO));
+        }
+    }
+
+    /// `Behavior::Patrol` — walk back and forth between two points, pausing
+    /// at each end for `wait_time` seconds.
+    #[allow(clippy::too_many_arguments)]
+    fn update_patrol(
+        world: &World,
+        entity: EntityId,
+        delta_time: f32,
+        point_a: Vec2,
+        point_b: Vec2,
+        speed: f32,
+        wait_time: f32,
+        state: &mut BehaviorState,
+        commands: &mut BehaviorCommands,
+    ) {
+        if state.is_waiting {
+            state.timer -= delta_time;
+            if state.timer <= 0.0 {
+                state.is_waiting = false;
+                state.patrol_toward_b = !state.patrol_toward_b;
+            }
+            commands.velocities.push((entity, Vec2::ZERO));
+        } else if let Some(entity_pos) = Self::get_position(world, entity) {
+            let target = if state.patrol_toward_b { point_b } else { point_a };
+
+            if (target - entity_pos).length() < 5.0 {
+                state.is_waiting = true;
+                state.timer = wait_time;
+                commands.velocities.push((entity, Vec2::ZERO));
+            } else {
+                let vel = (target - entity_pos).normalize() * speed;
+                commands.velocities.push((entity, vel));
+            }
+        }
+    }
+
+    /// `Behavior::FollowEntity` — move toward a named entity while farther
+    /// away than `follow_distance`.
+    fn update_follow_entity(
+        &self,
+        world: &World,
+        entity: EntityId,
+        target_name: &str,
+        follow_distance: f32,
+        follow_speed: f32,
+        commands: &mut BehaviorCommands,
+    ) {
+        let mut vel = Vec2::ZERO;
+        if let Some(&target_entity) = self.named_entities.get(target_name) {
+            if let (Some(target_pos), Some(entity_pos)) = (
+                Self::get_position(world, target_entity),
+                Self::get_position(world, entity),
+            ) {
+                let to_target = target_pos - entity_pos;
+                if to_target.length() > follow_distance {
+                    vel = to_target.normalize() * follow_speed;
+                }
+            }
+        }
+        commands.velocities.push((entity, vel));
+    }
+
+    /// `Behavior::FollowTagged` — move toward the nearest tagged entity while
+    /// farther away than `follow_distance`.
+    fn update_follow_tagged(
+        world: &World,
+        entity: EntityId,
+        target_tag: &str,
+        follow_distance: f32,
+        follow_speed: f32,
+        commands: &mut BehaviorCommands,
+    ) {
+        let mut vel = Vec2::ZERO;
+        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
+            if let Some(entity_pos) = Self::get_position(world, entity) {
+                let to_target = target_pos - entity_pos;
+                if to_target.length() > follow_distance {
+                    vel = to_target.normalize() * follow_speed;
+                }
+            }
+        }
+        commands.velocities.push((entity, vel));
+    }
+
+    /// `Behavior::Collectible` — emit a collection event (and optionally
+    /// despawn) when an entity with the collector tag overlaps.
+    fn update_collectible(
+        world: &World,
+        entity: EntityId,
+        score_value: u32,
+        despawn_on_collect: bool,
+        collector_tag: &str,
+        commands: &mut BehaviorCommands,
+    ) {
+        if Self::check_tagged_overlap(world, entity, collector_tag, 40.0) {
+            log::info!("Collected! +{} points", score_value);
+            commands.collected.push(EntityCollected {
+                entity,
+                score_value,
+                collector_tag: collector_tag.to_string(),
+            });
+            if despawn_on_collect {
+                commands.to_despawn.push(entity);
+            }
+        }
+    }
+
+    /// Apply the commands collected during behavior iteration: tags first,
+    /// then velocities, then impulses, then events and despawns.
+    fn apply_commands(
+        world: &mut World,
+        mut physics: Option<&mut PhysicsSystem>,
+        delta_time: f32,
+        commands: BehaviorCommands,
+    ) {
         // Apply tag assignments
-        for (entity, tag) in tag_assignments {
+        for (entity, tag) in commands.tags {
             Self::add_entity_tag(world, entity, &tag);
         }
 
         // Apply velocity commands (either via physics or direct transform)
         if let Some(ref mut physics) = physics {
-            for (entity, vel) in velocity_commands {
+            for (entity, vel) in commands.velocities {
                 // Check if entity is kinematic - kinematic bodies need position-based movement
                 let is_kinematic = world
                     .get::<RigidBody>(entity)
@@ -302,7 +439,7 @@ impl BehaviorRunner {
             }
         } else {
             // Fallback: direct transform modification (no physics)
-            for (entity, vel) in velocity_commands {
+            for (entity, vel) in commands.velocities {
                 if let Some(transform) = world.get_mut::<Transform2D>(entity) {
                     transform.position += vel * delta_time;
                 }
@@ -316,18 +453,18 @@ impl BehaviorRunner {
         // PhysicsSystem-level impulse API (games use set_velocity as the
         // universal "move this body" call).
         if let Some(ref mut physics) = physics {
-            for (entity, impulse) in impulse_commands {
+            for (entity, impulse) in commands.impulses {
                 physics.physics_world_mut().apply_impulse(entity, impulse);
             }
         }
 
         // Emit collection events before despawning
-        for event in collected_events {
+        for event in commands.collected {
             world.emit_event(event);
         }
 
         // Remove collected entities
-        for entity in to_despawn {
+        for entity in commands.to_despawn {
             let _ = world.remove_entity(&entity);
         }
     }

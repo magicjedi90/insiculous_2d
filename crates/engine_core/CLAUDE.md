@@ -11,7 +11,8 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Managers: `GameLoopManager`, `UIManager`, `RenderManager`, `WindowManager`, `SceneManager`
 
 ## File Map
-- `game.rs` — Game trait, GameConfig, run_game(), GameRunner orchestration (559 lines)
+- `game.rs` — Game trait, GameConfig, run_game(), GameRunner orchestration (594 lines)
+- `glyph_texture_cache.rs` — GlyphTextureCache: UI glyph bitmap → GPU texture cache (extracted from GameRunner)
 - `game_config.rs` — GameConfig struct
 - `game_loop_manager.rs` — Frame timing and delta
 - `ui_manager.rs` — UI lifecycle and draw commands
@@ -37,7 +38,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Inverse path: `SceneLoader::load_and_instantiate(path, world, assets)` from `scene_loader.rs`
 
 ## Testing
-- 154 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 161 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

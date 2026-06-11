@@ -13,14 +13,14 @@ ui.end_frame(); // collects draw commands
 ```
 
 ## File Map
-- `context.rs` — UIContext, widget methods (button, slider, label, panel, checkbox, float_input)
-- `font.rs` — FontManager (loading, rasterization, glyph cache, layout); bitmaps shared via `Arc<[u8]>`
+- `context/` — UIContext: `mod.rs` (struct, lifecycle, fonts, primitives), `text.rs` (label/measure), `widgets.rs` (button, slider, checkbox, float_input), `tests.rs`
+- `font/` — `mod.rs` (FontManager facade: loading/storage), `glyph_cache.rs` (GlyphCache; bitmaps shared via `Arc<[u8]>`), `layout.rs` (text layout/measurement)
 - `draw.rs` — Draw command generation (`Rect` re-exported from `common`)
 - `interaction.rs` — Widget state, mouse hit detection, focus, per-widget persistent state
 - `style.rs` — Theme definitions (`Color` re-exported from `common`), private palette consts
 
 ## Known Tech Debt
-- See `TECH_DEBT.md` — open: FontManager responsibilities (SRP-001), context.rs over 600-line rule (SRP-002), numeric-only text input (JUN-T1)
+- See `TECH_DEBT.md` — open: numeric-only text input (JUN-T1, Medium); Low: TextDrawData redundancy (ARCH-003), unused scroll_delta (JUN-T2), no layout helpers (JUN-T3)
 
 ## Testing
 - 70 tests (incl. 2 doc), run with `cargo test -p ui`

@@ -99,6 +99,66 @@ pub enum AchievementError {
 /// Default time (seconds) a toast stays visible before fading out.
 pub const DEFAULT_TOAST_DURATION: f32 = 4.0;
 
+/// Visual styling for achievement toasts.
+///
+/// Colors carry their base alpha; the fade-out over a toast's last second
+/// multiplies that alpha at draw time. Override via
+/// [`AchievementManager::set_toast_style`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToastStyle {
+    /// Toast panel width in pixels.
+    pub width: f32,
+    /// Toast panel height in pixels.
+    pub height: f32,
+    /// Margin from the window's top-right corner.
+    pub margin: f32,
+    /// Vertical spacing between stacked toasts.
+    pub spacing: f32,
+    /// Panel background color.
+    pub background: Color,
+    /// Panel border color.
+    pub border: Color,
+    /// Panel border width in pixels.
+    pub border_width: f32,
+    /// "Achievement Unlocked!" header color.
+    pub title_color: Color,
+    /// Achievement name color.
+    pub name_color: Color,
+    /// Achievement description color.
+    pub description_color: Color,
+    /// Header font size.
+    pub title_size: f32,
+    /// Achievement name font size.
+    pub name_size: f32,
+    /// Description font size.
+    pub description_size: f32,
+}
+
+impl Default for ToastStyle {
+    fn default() -> Self {
+        Self {
+            width: 320.0,
+            height: 72.0,
+            margin: 16.0,
+            spacing: 8.0,
+            background: Color::new(0.08, 0.08, 0.12, 0.92),
+            border: Color::new(1.0, 0.82, 0.2, 1.0),
+            border_width: 2.0,
+            title_color: Color::new(1.0, 0.82, 0.2, 1.0),
+            name_color: Color::new(1.0, 1.0, 1.0, 1.0),
+            description_color: Color::new(0.8, 0.8, 0.85, 1.0),
+            title_size: 14.0,
+            name_size: 16.0,
+            description_size: 12.0,
+        }
+    }
+}
+
+/// Multiply a style color's base alpha by the toast's fade factor.
+fn faded(color: Color, fade: f32) -> Color {
+    Color::new(color.r, color.g, color.b, color.a * fade)
+}
+
 /// Manages achievement registration, unlocking, persistence, and toasts.
 pub struct AchievementManager {
     /// Registered achievement definitions, keyed by id.
@@ -111,6 +171,8 @@ pub struct AchievementManager {
     save_path: Option<PathBuf>,
     /// How long each toast stays on screen.
     toast_duration: f32,
+    /// Visual styling for toasts (dimensions, colors, font sizes).
+    toast_style: ToastStyle,
 }
 
 impl AchievementManager {
@@ -122,6 +184,7 @@ impl AchievementManager {
             toasts: Vec::new(),
             save_path: None,
             toast_duration: DEFAULT_TOAST_DURATION,
+            toast_style: ToastStyle::default(),
         }
     }
 
@@ -144,6 +207,16 @@ impl AchievementManager {
     /// Override the toast duration (seconds).
     pub fn set_toast_duration(&mut self, seconds: f32) {
         self.toast_duration = seconds;
+    }
+
+    /// Override the toast appearance (dimensions, colors, font sizes).
+    pub fn set_toast_style(&mut self, style: ToastStyle) {
+        self.toast_style = style;
+    }
+
+    /// The current toast styling.
+    pub fn toast_style(&self) -> &ToastStyle {
+        &self.toast_style
     }
 
     /// Register an achievement definition. Call once per achievement at startup.
@@ -224,7 +297,9 @@ impl AchievementManager {
         self.toasts.clear();
         if let Some(path) = &self.save_path {
             let path = path.clone();
-            let _ = self.save_to(&path);
+            if let Err(e) = self.save_to(&path) {
+                log::warn!("Failed to save achievements after reset: {}", e);
+            }
         }
     }
 
@@ -240,38 +315,34 @@ impl AchievementManager {
     ///
     /// Toasts fade out over their last second of life.
     pub fn draw_toasts(&self, ui: &mut UIContext, window_size: Vec2) {
-        const WIDTH: f32 = 320.0;
-        const HEIGHT: f32 = 72.0;
-        const MARGIN: f32 = 16.0;
-        const SPACING: f32 = 8.0;
+        let style = &self.toast_style;
 
         for (i, toast) in self.toasts.iter().enumerate() {
             let alpha = (toast.remaining / 1.0).clamp(0.0, 1.0);
-            let x = window_size.x - WIDTH - MARGIN;
-            let y = MARGIN + (HEIGHT + SPACING) * i as f32;
+            let x = window_size.x - style.width - style.margin;
+            let y = style.margin + (style.height + style.spacing) * i as f32;
 
-            let bg = Color::new(0.08, 0.08, 0.12, 0.92 * alpha);
-            let border = Color::new(1.0, 0.82, 0.2, alpha);
-            ui.panel_styled(Rect::new(x, y, WIDTH, HEIGHT), bg, border, 2.0);
+            let bg = faded(style.background, alpha);
+            let border = faded(style.border, alpha);
+            ui.panel_styled(Rect::new(x, y, style.width, style.height), bg, border, style.border_width);
 
-            let title_color = Color::new(1.0, 0.82, 0.2, alpha);
             ui.label_styled(
                 "Achievement Unlocked!",
                 Vec2::new(x + 12.0, y + 10.0),
-                title_color,
-                14.0,
+                faded(style.title_color, alpha),
+                style.title_size,
             );
             ui.label_styled(
                 &toast.name,
                 Vec2::new(x + 12.0, y + 30.0),
-                Color::new(1.0, 1.0, 1.0, alpha),
-                16.0,
+                faded(style.name_color, alpha),
+                style.name_size,
             );
             ui.label_styled(
                 &toast.description,
                 Vec2::new(x + 12.0, y + 52.0),
-                Color::new(0.8, 0.8, 0.85, alpha),
-                12.0,
+                faded(style.description_color, alpha),
+                style.description_size,
             );
             let _ = toast.achievement_id; // reserved for future icon lookup
         }
@@ -448,6 +519,64 @@ mod tests {
         let mut mgr = AchievementManager::in_memory();
         mgr.register(Achievement::new("secret", "Secret", "Find it").hidden());
         assert!(mgr.get("secret").unwrap().hidden);
+    }
+
+    #[test]
+    fn default_toast_style_matches_documented_appearance() {
+        let style = ToastStyle::default();
+        assert_eq!(style.width, 320.0);
+        assert_eq!(style.height, 72.0);
+        assert_eq!(style.margin, 16.0);
+        assert_eq!(style.spacing, 8.0);
+        assert_eq!(style.background, Color::new(0.08, 0.08, 0.12, 0.92));
+        assert_eq!(style.border, Color::new(1.0, 0.82, 0.2, 1.0));
+        assert_eq!(style.border_width, 2.0);
+        assert_eq!(style.title_color, Color::new(1.0, 0.82, 0.2, 1.0));
+        assert_eq!(style.name_color, Color::new(1.0, 1.0, 1.0, 1.0));
+        assert_eq!(style.description_color, Color::new(0.8, 0.8, 0.85, 1.0));
+        assert_eq!(style.title_size, 14.0);
+        assert_eq!(style.name_size, 16.0);
+        assert_eq!(style.description_size, 12.0);
+    }
+
+    #[test]
+    fn manager_uses_default_toast_style_until_overridden() {
+        let mut mgr = AchievementManager::in_memory();
+        assert_eq!(*mgr.toast_style(), ToastStyle::default());
+
+        let custom = ToastStyle { width: 400.0, ..ToastStyle::default() };
+        mgr.set_toast_style(custom.clone());
+        assert_eq!(*mgr.toast_style(), custom);
+    }
+
+    #[test]
+    fn custom_toast_style_drives_drawn_panel_size() {
+        let mut mgr = AchievementManager::in_memory();
+        mgr.register(sample());
+        mgr.set_toast_style(ToastStyle {
+            width: 444.0,
+            height: 99.0,
+            ..ToastStyle::default()
+        });
+        mgr.unlock("test_id");
+
+        let input = input::InputHandler::new();
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+        mgr.draw_toasts(&mut ui, Vec2::new(800.0, 600.0));
+        ui.end_frame();
+
+        let panel_drawn_with_custom_size = ui.draw_list().commands().iter().any(|cmd| {
+            matches!(
+                cmd,
+                ui::DrawCommand::Rect { bounds, .. }
+                    if bounds.width == 444.0 && bounds.height == 99.0
+            )
+        });
+        assert!(
+            panel_drawn_with_custom_size,
+            "toast panel should be drawn with the custom width/height"
+        );
     }
 
     #[test]

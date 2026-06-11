@@ -256,19 +256,21 @@ response tests added; remaining friction/kinematic/tunneling gaps are Low).
 The editor, editor_integration, physics, renderer, and audio crates currently
 carry **zero** High/Medium debt.
 
+**Resolved June 11, 2026 (tech-debt pass):** engine_core SRP-001
+(`GlyphTextureCache` extracted to `glyph_texture_cache.rs`), SRP-002
+(BehaviorRunner match split into 7 handler methods), LOGIC-002 (`let-else`
+replaces the asset_manager `unwrap()`), ARCH-007 (`ToastStyle` on
+`AchievementManager`, `reset()` logs save errors), ARCH-003 (all `lib.rs`
+glob re-exports made explicit); ui SRP-001 (`font/` split: FontManager facade
++ `GlyphCache` + `layout`), SRP-002 (`context/` split: mod/text/widgets/tests,
+all files <600 lines).
+
 ### Medium Priority
 
-**engine_core (6 items):**
+**engine_core (1 item):**
 - [ ] **ARCH-006: Behaviors hardcoded in scene serialization** — `scene_data.rs`/`scene_loader.rs`/`scene_serializer.rs` match on Behavior variants instead of going through `ComponentRegistry`. Route through a registry/`Custom` variant; pairs with the Phase 4 scripting migration of `ecs/src/behavior.rs`.
-- [ ] **SRP-001: GameRunner owns glyph texture caching** — `game.rs::prepare_glyph_textures`. Extract `GlyphTextureCache` or move into `UIManager`.
-- [ ] **SRP-002: BehaviorRunner giant match over 7 behavior types** — one handler method per variant, no logic change.
-- [ ] **LOGIC-002: `unwrap()` on asset_manager relies on distant guard** — `game.rs`; use `let Some(..) else { return }`.
-- [ ] **ARCH-007: Achievement toast appearance hardcoded** — `achievements.rs`; add `ToastStyle` with defaults, log the `reset()` save error.
-- [ ] **ARCH-003: Glob re-exports obscure the public API** — `lib.rs` has 16 `pub use module::*`; switch to explicit lists.
 
-**ui (3 items):**
-- [ ] **SRP-001: FontManager too many responsibilities** — `ui/src/font.rs`. Split into FontLoader, GlyphCache, TextLayoutEngine when it next grows.
-- [ ] **SRP-002: context.rs over the 600-line rule** (~990 lines) — mechanical split into `text.rs`/`widgets.rs`.
+**ui (1 item):**
 - [ ] **JUN-T1: Text input is numeric-only and layout-blind** — blocks editor rename/search widgets; needs winit character events plumbed through the `input` crate.
 
 **input (1 item):**

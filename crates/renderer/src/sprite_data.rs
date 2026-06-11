@@ -397,8 +397,10 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_matrix_with_position() {
-        let mut camera = Camera::default();
-        camera.position = Vec2::new(100.0, 50.0);
+        let camera = Camera {
+            position: Vec2::new(100.0, 50.0),
+            ..Camera::default()
+        };
         let view = camera.view_matrix();
 
         // Transform a point at (100, 50) - should become (0, 0) in view space
@@ -410,8 +412,10 @@ mod tests {
 
     #[test]
     fn test_camera2d_view_matrix_with_zoom() {
-        let mut camera = Camera::default();
-        camera.zoom = 2.0; // 2x zoom in
+        let camera = Camera {
+            zoom: 2.0, // 2x zoom in
+            ..Camera::default()
+        };
         let view = camera.view_matrix();
 
         // A point at (10, 10) should appear at (20, 20) after zoom
@@ -492,9 +496,9 @@ mod tests {
 
         // Verify view_projection matches camera's
         let expected_vp = camera.view_projection_matrix().to_cols_array_2d();
-        for i in 0..4 {
-            for j in 0..4 {
-                assert!((uniform.view_projection[i][j] - expected_vp[i][j]).abs() < 0.0001);
+        for (actual_col, expected_col) in uniform.view_projection.iter().zip(expected_vp.iter()) {
+            for (actual, expected) in actual_col.iter().zip(expected_col.iter()) {
+                assert!((actual - expected).abs() < 0.0001);
             }
         }
     }

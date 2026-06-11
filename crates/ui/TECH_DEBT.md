@@ -4,7 +4,7 @@ Last audited: June 2026
 
 ## Summary
 - DRY violations: 7 (all resolved)
-- SRP violations: 2 (open: SRP-001 FontManager, SRP-002/context.rs size)
+- SRP violations: 2 (all resolved)
 - KISS violations: 1 (resolved)
 - Architecture issues: 3 (2 resolved, ARCH-003 open)
 - June 2026 audit: 10 new findings, 8 fixed, 2 tracked (see bottom)
@@ -54,32 +54,37 @@ Last audited: June 2026
 
 ## SRP Violations
 
-### [SRP-001] FontManager handles too many concerns
-- **File:** `font.rs`
-- **Lines:** 100-315
-- **Issue:** `FontManager` handles 5 distinct responsibilities:
-  1. Font loading (from bytes, files)
-  2. Font storage (HashMap management)
-  3. Glyph rasterization
-  4. Glyph caching
-  5. Text layout/measurement
+### ~~[SRP-001] FontManager handles too many concerns~~ ✅ RESOLVED
+- **File:** `font.rs` (now `font/`)
+- **Resolution:** Conservative split into a directory module (same pattern as
+  `physics/src/physics_world/`):
+  - `font/mod.rs` — `FontManager` facade (loading + storage) and shared types
+    (`FontError`, `FontHandle`, `FontMetrics`); public API unchanged
+  - `font/glyph_cache.rs` — `GlyphCache` (cache storage + lookup, fills misses by
+    rasterizing; bounded eviction); owns `RasterizedGlyph`/`GlyphInfo`
+  - `font/layout.rs` — `layout_text`/`measure_text` functions; owns
+    `TextLayout`/`LayoutGlyph`
 
-  The `layout_text` method (lines 215-282) is particularly complex at ~70 lines.
-- **Suggested fix:** Consider splitting:
-  - `FontLoader` - Loading fonts from various sources
-  - `FontManager` - Font storage and retrieval
-  - `TextLayouter` - Text layout and measurement
-  - `GlyphCache` - Glyph caching
-- **Priority:** Medium (but working well, so low urgency)
+  A separate `FontLoader` was deliberately not extracted: loading is two short
+  methods that must write to the storage map, so splitting it would add
+  indirection without separating anything. `FontManager` composes `GlyphCache`
+  by disjoint-field borrow (font lookup is immutable, cache fill is mutable),
+  so no borrow tangles. `lib.rs` re-exports are unchanged.
+- **Resolved:** June 2026
 
-### [SRP-002] context.rs exceeds the 600-line project rule
-- **File:** `context.rs` (~990 lines, ~280 of which are inline tests)
-- **Issue:** The widget methods themselves are now short (June 2026 helper extraction),
-  but the file still violates the project's 600-line guideline.
-- **Suggested fix:** Split `impl UIContext` across modules — e.g. `text.rs` (label/measure
-  family) and `widgets.rs` (button/slider/checkbox/float_input) — and/or move the inline
-  test module to `tests/`. Pure mechanical move, no API change.
-- **Priority:** Medium (deferred from June 2026 audit by scope decision)
+### ~~[SRP-002] context.rs exceeds the 600-line project rule~~ ✅ RESOLVED
+- **File:** `context.rs` (now `context/`, ~990 lines before the split)
+- **Resolution:** Mechanical split of `impl UIContext` into a directory module
+  (same pattern as `physics/src/physics_world/`); no API change, `lib.rs`
+  re-exports untouched:
+  - `context/mod.rs` — `UIContext` struct, `TextAlign`, construction, frame
+    lifecycle, font accessors, drawing primitives, custom-widget hooks (227 lines)
+  - `context/text.rs` — label/measure family + shared text helpers
+    (`text_pos_in_bounds`, `draw_text_at_baseline` are `pub(super)` for widgets) (204 lines)
+  - `context/widgets.rs` — button, slider, checkbox, float_input, panel,
+    progress_bar (341 lines)
+  - `context/tests.rs` — the former inline test module, unchanged (269 lines)
+- **Resolved:** June 2026
 
 ---
 
@@ -144,12 +149,12 @@ These issues from ANALYSIS.md have been resolved:
 
 | Metric | Value (June 2026) |
 |--------|-------------------|
-| Total source files | 6 |
-| Total source lines | ~2,000 (incl. inline tests) |
+| Total source files | 11 |
+| Total source lines | ~2,500 (incl. inline tests) |
 | Test coverage | 68 tests (100% pass rate) |
 | `#[allow(...)]` | 2 (`clippy::too_many_arguments` on `DrawList::slider`, `clippy::should_implement_trait` on `WidgetId::from_str`) |
 | High priority issues | 0 |
-| Medium priority issues | 3 (SRP-001, SRP-002, JUN-T1) |
+| Medium priority issues | 1 (JUN-T1) |
 | Low priority issues | 3 (ARCH-003, JUN-T2, JUN-T3) |
 
 ---
@@ -165,8 +170,8 @@ None required - the crate is well-structured with no high-priority issues.
 3. ~~**Address ARCH-001** - Review glyph caching strategy with engine_core~~ ✅ RESOLVED
 
 ### Technical Debt Backlog
-- SRP-001: Consider FontManager refactoring if it grows
-- SRP-002: Split context.rs to satisfy the 600-line rule
+- ~~SRP-001: Consider FontManager refactoring if it grows~~ ✅ DONE (June 2026)
+- ~~SRP-002: Split context.rs to satisfy the 600-line rule~~ ✅ DONE (June 2026)
 - ~~ARCH-002: Clean up rect.rs re-export~~ ✅ DONE
 - ARCH-003: Reduce TextDrawData redundancy
 - JUN-T1: General text input (character events)
