@@ -4,77 +4,15 @@
 //! so developers don't have to guess at values.
 
 use glam::Vec2;
-use serde::{Deserialize, Serialize};
 use crate::components::{Collider, RigidBody};
 use crate::physics_world::PhysicsConfig;
-
-/// Movement configuration for character controllers
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MovementConfig {
-    /// Horizontal movement speed in pixels/second
-    pub move_speed: f32,
-    /// Jump impulse strength
-    pub jump_impulse: f32,
-    /// Linear damping for the character body
-    pub damping: f32,
-}
-
-impl MovementConfig {
-    /// Platformer preset: precise, responsive controls
-    /// - Move speed: 120 px/s (~2 pixels/frame at 60 FPS)
-    /// - Jump impulse: 420 (satisfying jump height)
-    /// - Damping: 5.0 (stops quickly when not moving)
-    pub fn platformer() -> Self {
-        Self {
-            move_speed: 120.0,
-            jump_impulse: 420.0,
-            damping: 5.0,
-        }
-    }
-
-    /// Fast platformer preset: quicker movement for action games
-    /// - Move speed: 200 px/s
-    /// - Jump impulse: 500
-    /// - Damping: 4.0
-    pub fn platformer_fast() -> Self {
-        Self {
-            move_speed: 200.0,
-            jump_impulse: 500.0,
-            damping: 4.0,
-        }
-    }
-
-    /// Top-down game preset: equal movement in all directions
-    /// - Move speed: 150 px/s
-    /// - No jump (top-down perspective)
-    /// - Damping: 8.0 (quick stops)
-    pub fn top_down() -> Self {
-        Self {
-            move_speed: 150.0,
-            jump_impulse: 0.0,
-            damping: 8.0,
-        }
-    }
-
-    /// Floaty/space preset: low friction, momentum-based
-    /// - Move speed: 100 px/s
-    /// - Jump impulse: 300
-    /// - Damping: 1.0 (maintains momentum)
-    pub fn floaty() -> Self {
-        Self {
-            move_speed: 100.0,
-            jump_impulse: 300.0,
-            damping: 1.0,
-        }
-    }
-}
 
 /// Preset rigid body configurations
 impl RigidBody {
     /// Create a player body optimized for platformer games
     pub fn player_platformer() -> Self {
         Self::new_dynamic()
-            .with_linear_damping(MovementConfig::platformer().damping)
+            .with_linear_damping(5.0) // stops quickly when not moving
             .with_rotation_locked(true)
             .with_ccd(true)
     }
@@ -82,7 +20,7 @@ impl RigidBody {
     /// Create a player body optimized for top-down games
     pub fn player_top_down() -> Self {
         Self::new_dynamic()
-            .with_linear_damping(MovementConfig::top_down().damping)
+            .with_linear_damping(8.0) // quick stops for top-down movement
             .with_rotation_locked(true)
             .with_ccd(true)
     }
@@ -105,9 +43,9 @@ impl RigidBody {
 
 /// Preset collider configurations
 impl Collider {
-    /// Create a player-sized box collider (matches default 80x80 sprite)
-    pub fn player_box() -> Self {
-        Self::box_collider(80.0, 80.0)
+    /// Create a player box collider with high friction for the given sprite size
+    pub fn player_box(width: f32, height: f32) -> Self {
+        Self::box_collider(width, height)
             .with_friction(0.8)
     }
 
@@ -189,17 +127,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_movement_presets() {
-        let platformer = MovementConfig::platformer();
-        assert_eq!(platformer.move_speed, 120.0);
-        assert_eq!(platformer.jump_impulse, 420.0);
-        assert_eq!(platformer.damping, 5.0);
-
-        let top_down = MovementConfig::top_down();
-        assert_eq!(top_down.jump_impulse, 0.0);
-    }
-
-    #[test]
     fn test_rigid_body_presets() {
         let player = RigidBody::player_platformer();
         assert!(!player.can_rotate);
@@ -209,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_collider_presets() {
-        let player = Collider::player_box();
+        let player = Collider::player_box(80.0, 80.0);
         assert_eq!(player.friction, 0.8);
 
         let bouncy = Collider::bouncy(50.0, 50.0);

@@ -53,7 +53,7 @@ pub use renderer::{TextureHandle, TextureLoadConfig};
 pub use renderer::line_pipeline::LineVertex;
 
 // Re-export audio types
-pub use audio::{AudioManager, SoundHandle, SoundSettings, PlaybackState};
+pub use audio::{AudioManager, SoundHandle, SoundSettings};
 
 // Re-export UI types (UIRect and UIColor are aliases to common types for backwards compatibility)
 pub use ui::{UIContext, Theme as UITheme, WidgetId};
@@ -64,5 +64,5 @@ pub use common::Color as UIColor;
 #[cfg(feature = "physics")]
 pub use physics::{
     Collider, ColliderShape, CollisionData, CollisionEvent, ContactPoint,
-    MovementConfig, PhysicsConfig, PhysicsSystem, RigidBody, RigidBodyType,
+    PhysicsConfig, PhysicsSystem, RigidBody, RigidBodyType,
 };

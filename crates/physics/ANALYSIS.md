@@ -199,20 +199,15 @@ RigidBody::physics_prop()      // Objects that tumble and roll
 
 ### Collider Presets
 ```rust
-Collider::player_box()            // Standard player (80x80)
+Collider::player_box(w, h)        // Player box with high friction
 Collider::platform(width, height) // Platforms with high friction
 Collider::pushable_box(w, h)      // Pushable with low friction
 Collider::bouncy(width, height)   // Trampolines, bumpers
 Collider::slippery(width, height) // Ice, oil
 ```
 
-### MovementConfig Presets
-```rust
-MovementConfig::platformer()      // 120 px/s speed, 420 jump impulse
-MovementConfig::platformer_fast() // Action games
-MovementConfig::top_down()        // Top-down perspective
-MovementConfig::floaty()          // Space/underwater feel
-```
+(Note: the old `MovementConfig` preset struct was removed in June 2026 —
+nothing consumed it; damping values are inlined into the RigidBody presets.)
 
 ---
 

@@ -52,15 +52,17 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
 
 - **crates/physics/** - Rapier2d-based 2D physics integration
   - `lib.rs` - Physics system integration with ECS
-  - `physics_world.rs` - Rapier2d world wrapper
-  - `physics_system.rs` - ECS system for physics updates
+  - `physics_world/` - Rapier2d world wrapper (bodies, stepping, queries)
+  - `physics_system/` - ECS system for physics updates (sync, update loop)
   - `components.rs` - RigidBody, Collider ECS components
   - `presets.rs` - Pre-configured physics presets for common scenarios
 
 - **crates/audio/** - Audio playback via rodio
   - `lib.rs` - AudioManager facade
   - `manager.rs` - Sound loading, playback, volume control
-  - `ecs/audio_components.rs` - AudioSource, AudioListener, PlaySoundEffect
+  - `sound.rs` - SoundHandle, SoundSettings
+  - Note: AudioSource/AudioListener/PlaySoundEffect live in `crates/ecs/src/audio_components.rs`
+    and are editor-inspectable data only — no runtime system consumes them yet
 
 - **crates/common/** - Shared types and utilities
   - `math.rs` - Common mathematical constants and utilities
@@ -322,9 +324,7 @@ impulse semantics, reach into `physics_world_mut().apply_impulse(...)`.
 ```rust
 // Add physics components
 world.add_component(&entity, RigidBody::player_platformer()).ok();
-world.add_component(&entity,
-    Collider::player_box()).ok()
-)?;
+world.add_component(&entity, Collider::player_box(80.0, 80.0)).ok();
 
 // Physics presets for common scenarios
 RigidBody::player_platformer()      // Dynamic with damping

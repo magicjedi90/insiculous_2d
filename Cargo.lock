@@ -2055,14 +2055,11 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "physics"
 version = "0.1.0"
 dependencies = [
- "common",
  "ecs",
  "glam",
  "log",
  "rapier2d",
  "serde",
- "thiserror 2.0.17",
- "toml",
 ]
 
 [[package]]

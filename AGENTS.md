@@ -10,10 +10,10 @@
 ### Core Systems Complete
 - **ECS**: HashMap-based per-type storage, 110 tests, type-safe queries
 - **Renderer**: WGPU 28.0.0, instanced sprites, 62 tests
-- **Physics**: Rapier2d integration, 28 tests, presets
+- **Physics**: Rapier2d integration, 58 tests, presets
 - **UI**: Immediate-mode, 60 tests, fontdue integration
 - **Input**: Event-based, 58 tests, generic action mapping (`InputMapping<A>`)
-- **Audio**: Rodio backend, 3 tests, spatial audio
+- **Audio**: Rodio backend, 20 tests (spatial audio components exist in ecs but have no runtime system yet)
 - **Engine Core**: Game API, managers, scene serializer, 85 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 196 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 72 tests

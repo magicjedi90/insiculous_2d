@@ -2,7 +2,7 @@
 //!
 //! This crate provides audio playback functionality including:
 //! - Sound effect playback with volume and speed control
-//! - Background music with crossfade support
+//! - Background music playback (looping or one-shot)
 //! - Audio resource management and caching
 //!
 //! # Example
@@ -11,13 +11,13 @@
 //!
 //! let mut audio = AudioManager::new()?;
 //! let sound = audio.load_sound("assets/jump.wav")?;
-//! audio.play(&sound);
+//! audio.play(sound)?;
 //! ```
 
 mod error;
 mod manager;
 mod sound;
 
-pub use error::AudioError;
+pub use error::{AudioError, AudioResult};
 pub use manager::AudioManager;
-pub use sound::{SoundHandle, SoundSettings, PlaybackState};
+pub use sound::{SoundHandle, SoundSettings};

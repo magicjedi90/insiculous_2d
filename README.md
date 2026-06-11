@@ -141,7 +141,7 @@ use engine_core::prelude::*;
 let player = world.create_entity();
 world.add_component(&player, Transform2D::new(Vec2::ZERO))?;
 world.add_component(&player, RigidBody::player_platformer())?;
-world.add_component(&player, Collider::player_box())?;
+world.add_component(&player, Collider::player_box(80.0, 80.0))?;
 world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0)))?;
 
 // Physics system handles movement, gravity, collisions

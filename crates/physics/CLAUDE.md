@@ -9,35 +9,77 @@ PhysicsSystem
 │   ├── RigidBodySet, ColliderSet
 │   ├── IntegrationParameters
 │   └── PhysicsPipeline
-├── ECS sync: Transform2D ↔ RigidBody position (each frame)
+├── ECS sync: one-way per direction (see Update Flow)
 └── Collision callbacks (multiple listeners supported)
 ```
 
 ## Update Flow
 1. `PhysicsSystem::update(world, delta_time)`
-2. Sync ECS Transform2D → rapier body positions
-3. Step rapier simulation
-4. Sync rapier body positions → ECS Transform2D
-5. Fire collision callbacks for all contact events
+2. Garbage-collect rapier state for entities removed from the ECS directly
+3. Sync ECS → physics: **only ADDS missing bodies/colliders**. Once a body
+   exists, rapier is authoritative — editing `Transform2D` on a live physics
+   entity has no effect. Use `set_body_transform` / `set_velocity` /
+   `reset_body` to move live bodies.
+4. Flush deferred resets/velocities (for entities spawned the same frame)
+5. Clear the collision event buffer, then run 0..=8 fixed-timestep sub-steps
+   (each `step()` APPENDS its events)
+6. Reset one-update forces (`apply_force`) if any steps ran
+7. Sync rapier body positions/velocities → ECS components (Dynamic/Kinematic)
+8. Emit collision events to the world event bus + fire collision callbacks
+
+## Collision Event Contract
+- `PhysicsWorld::step()` APPENDS events; it never clears the buffer.
+- `PhysicsWorld::clear_collision_events()` must be called once per frame
+  before the first step (`PhysicsSystem::update` does this).
+- A frame with zero sub-steps therefore emits NO events (no stale
+  re-delivery of last step's `started` events), and a frame with multiple
+  catch-up sub-steps delivers the events of every sub-step.
+- Contact points/normals are in world space (pixels).
+
+## Physics Entities Must Be Root Entities
+Physics ignores the ECS parent-child hierarchy entirely: an entity's
+`Transform2D` is read as a WORLD-space position when the body is created, and
+rapier results are written back into that same (local) transform every frame.
+Parenting an entity that has a `RigidBody` gives nonsense — the parent offset
+is never applied and hierarchy propagation will fight the physics writeback.
+Pinned by `test_parented_entity_with_rigid_body_is_treated_as_world_space`.
 
 ## File Map
-- `lib.rs` — PhysicsSystem, public exports
-- `physics_world.rs` — Rapier2d world wrapper
-- `physics_system.rs` — ECS update system, sync logic
-- `components.rs` — RigidBody, Collider ECS components
+- `lib.rs` — public exports
+- `prelude.rs` — convenience re-exports
+- `physics_world/` — Rapier2d world wrapper
+  - `mod.rs` — `PhysicsConfig` (validated scale), struct, construction, unit conversion
+  - `bodies.rs` — add/remove bodies & colliders, per-body accessors, `reset_forces`
+  - `stepping.rs` — `step()`, collision event extraction, `clear_collision_events`
+  - `queries.rs` — `raycast` (direction normalized internally)
+  - `tests.rs`
+- `physics_system/` — ECS driver
+  - `mod.rs` — struct, builders, callbacks, pass-through API
+  - `sync.rs` — ECS↔rapier sync + orphan GC
+  - `update.rs` — `System` impl (fixed-timestep loop)
+  - `tests.rs`
+- `components.rs` — RigidBody, Collider ECS components, CollisionEvent/Data
 - `presets.rs` — Pre-configured physics: `RigidBody::player_platformer()`, `Collider::platform(w, h)`, etc.
 
 ## Key Patterns
 - All rapier types stay inside `PhysicsWorld` — ECS components are our own types
 - Body handles stored in RigidBody component for rapier lookup
 - Multiple collision callbacks: `physics.add_collision_callback(|c| { ... })`
-- Presets: `player_platformer()`, `pushable()`, `platform()`, `bouncy()`
+- Presets: `player_platformer()`, `pushable()`, `platform(w, h)`, `bouncy(w, h)`, `player_box(w, h)`
+- `PhysicsSystem::set_velocity` is the universal "launch this body" API
+  (deferred-safe for same-frame spawns); `PhysicsWorld::apply_impulse` exists
+  for genuine mass-aware impulses (used by engine_core's behavior_runner)
+- `apply_force` lasts one update (forces are reset after the step loop)
+- `PhysicsConfig.solver_iterations` / `.friction_iterations` map to rapier's
+  `num_solver_iterations` / `num_additional_friction_iterations`
 
 ## Known Tech Debt
-- PhysicsWorld handles too many rapier types (future SRP refactor)
+See `TECH_DEBT.md` — remaining: SRP-001 (PhysicsWorld manages many rapier
+types), API-001 (timing getters), partial MISSING-001 (gravity/collider-dim
+validation).
 
 ## Testing
-- 44 passing, 3 ignored — `cargo test -p physics`
+- 58 passing lib tests, 3 ignored doctests — `cargo test -p physics`
 - Pure math/simulation — no GPU needed
 
 ## Godot Oracle — When Stuck

@@ -127,7 +127,7 @@ impl Game for PlatformerGame {
                 ctx.world.add_component(&player, Transform2D::new(glam::Vec2::new(-200.0, 100.0))).ok();
                 ctx.world.add_component(&player, Sprite::new(0).with_color(glam::Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
                 ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
-                ctx.world.add_component(&player, Collider::player_box()).ok();
+                ctx.world.add_component(&player, Collider::player_box(80.0, 80.0)).ok();
                 ctx.world.add_component(&player, Behavior::PlayerPlatformer {
                     move_speed: 120.0,
                     jump_impulse: 420.0,

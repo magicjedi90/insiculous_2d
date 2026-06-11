@@ -18,6 +18,7 @@ impl SoundHandle {
     }
 
     /// Get the numeric ID of this handle.
+    #[must_use]
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -46,36 +47,35 @@ impl Default for SoundSettings {
 
 impl SoundSettings {
     /// Create new sound settings with default values.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the volume level.
+    /// Set the volume level (clamped to 0.0..=1.0).
+    ///
+    /// Note: the fields are public, so values are also re-clamped at the
+    /// point of use in [`crate::AudioManager::play_with_settings`].
+    #[must_use]
     pub fn with_volume(mut self, volume: f32) -> Self {
         self.volume = volume.clamp(0.0, 1.0);
         self
     }
 
-    /// Set the playback speed.
+    /// Set the playback speed (floored at 0.1).
+    ///
+    /// Note: the fields are public, so values are also re-clamped at the
+    /// point of use in [`crate::AudioManager::play_with_settings`].
+    #[must_use]
     pub fn with_speed(mut self, speed: f32) -> Self {
         self.speed = speed.max(0.1);
         self
     }
 
     /// Set whether the sound should loop.
+    #[must_use]
     pub fn with_looping(mut self, looping: bool) -> Self {
         self.looping = looping;
         self
     }
-}
-
-/// Current state of a sound playback.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlaybackState {
-    /// Sound is currently playing.
-    Playing,
-    /// Sound is paused.
-    Paused,
-    /// Sound has stopped (finished or manually stopped).
-    Stopped,
 }

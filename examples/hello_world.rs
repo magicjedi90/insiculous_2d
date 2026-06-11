@@ -165,7 +165,7 @@ impl Game for HelloWorld {
                 ctx.world.add_component(&player, Transform2D::new(Vec2::new(-200.0, 100.0))).ok();
                 ctx.world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0))).ok();
                 ctx.world.add_component(&player, RigidBody::player_platformer()).ok();
-                ctx.world.add_component(&player, Collider::player_box()).ok();
+                ctx.world.add_component(&player, Collider::player_box(80.0, 80.0)).ok();
                 // Add behavior for player-controlled platformer movement
                 ctx.world.add_component(&player, Behavior::PlayerPlatformer {
                     move_speed: 120.0,

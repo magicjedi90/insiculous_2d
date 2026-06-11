@@ -40,25 +40,8 @@ pub use components::{
     Collider, ColliderShape, CollisionData, CollisionEvent, ContactPoint, RigidBody,
     RigidBodyType,
 };
-pub use presets::MovementConfig;
 pub use physics_system::PhysicsSystem;
 pub use physics_world::{PhysicsConfig, PhysicsWorld};
-
-/// Physics error types
-#[derive(Debug, thiserror::Error)]
-pub enum PhysicsError {
-    #[error("Entity not found in physics world: {0:?}")]
-    EntityNotFound(ecs::EntityId),
-
-    #[error("Rigid body not found for entity: {0:?}")]
-    RigidBodyNotFound(ecs::EntityId),
-
-    #[error("Collider not found for entity: {0:?}")]
-    ColliderNotFound(ecs::EntityId),
-
-    #[error("Physics initialization error: {0}")]
-    InitializationError(String),
-}
 
 #[cfg(test)]
 mod tests {

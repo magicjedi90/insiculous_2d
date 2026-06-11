@@ -1,18 +1,44 @@
 # Audio Crate — Agent Context
 
-Audio playback via rodio with spatial audio support.
+Audio playback via rodio (sound effects + background music). **No spatial audio
+lives in this crate**: the ECS components `AudioSource`, `AudioListener`, and
+`PlaySoundEffect` are in `crates/ecs/src/audio_components.rs` and are currently
+editor-inspectable data only — no runtime system consumes them (a bridging
+audio system is future work).
 
-## Key Types
-- `AudioManager` — sound loading, playback, volume control
-- `AudioSource` — ECS component: volume, pitch, spatial settings, looping
-- `AudioListener` — ECS component: listener position for spatial audio
-- `PlaySoundEffect` — one-shot sound trigger component
+## Files
+- `lib.rs` — crate docs + re-exports (`AudioManager`, `SoundHandle`, `SoundSettings`, `AudioError`, `AudioResult`)
+- `manager.rs` — `AudioManager`: load/cache, SFX playback, music playback, volume buses, stop-by-handle
+- `sound.rs` — `SoundHandle` (Copy id), `SoundSettings` (builder: volume/speed/looping)
+- `error.rs` — `AudioError` (thiserror) + `AudioResult<T>` alias
+
+## Key Types & Behavior
+- `AudioManager::new_or_disabled()` — never fails; *disabled* mode (no audio
+  device) still loads/validates sounds, playback no-ops. In disabled mode
+  `play_music*` returns `Ok` but `is_music_playing()` stays `false` (documented).
+- Sound bytes cached as `Arc<[u8]>`; each play decodes from
+  `Cursor<Arc<[u8]>>` — no buffer copy per play.
+- Volume model: sink volume = `base * bus * master`, re-applied to all live
+  sinks (music + SFX) by `set_master_volume` / `set_sfx_volume` / `set_music_volume`.
+- Clamping happens at point of use (`clamp_volume` 0..=1, `clamp_speed` floor
+  0.1) because `SoundSettings` fields are public.
+- `play(handle)` / `unload(handle)` take `SoundHandle` by value (Copy);
+  `play_with_settings(&handle, settings)` keeps a reference (external callers).
+- `stop(handle)` stops all active instances of one sound; `stop_all()` stops
+  every SFX (music unaffected). Unknown handles are a no-op.
+- Music: `play_music` / `play_music_with_volume` loop forever;
+  `play_music_once(path, volume)` plays one-shot. No crossfade.
+- Errors: file-read failures are `AudioError::IoError` (`#[from] io::Error`);
+  undecodable data is `DecodeError`; `LoadError` reserved for non-IO load problems.
+- `unload` does not cut off already-playing instances (each holds its own Arc).
 
 ## Known Tech Debt
 - All audio loaded eagerly into memory (no streaming for large music files)
+- See `TECH_DEBT.md` for the full list
 
 ## Testing
-- 3 tests, run with `cargo test -p audio`
+- 20 headless unit tests (disabled mode + bytes/temp-file APIs), run with
+  `cargo test -p audio`. No audio device needed.
 
 ## Godot Oracle
 - Audio architecture: `servers/audio_server.cpp`, `scene/audio/audio_stream_player.cpp`

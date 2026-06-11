@@ -129,19 +129,11 @@ impl RigidBody {
         self
     }
 
-    /// Apply an impulse to the center of mass
-    pub fn apply_impulse(&mut self, impulse: Vec2) {
-        if self.body_type == RigidBodyType::Dynamic {
-            self.velocity += impulse;
-        }
-    }
-
-    /// Apply a force to the center of mass (scaled by delta time)
-    pub fn apply_force(&mut self, force: Vec2, delta_time: f32) {
-        if self.body_type == RigidBodyType::Dynamic {
-            self.velocity += force * delta_time;
-        }
-    }
+    // Note: there are intentionally no `apply_impulse`/`apply_force` methods
+    // here. The `velocity` field is only read when the rapier body is first
+    // created, so mutating it on a live body silently does nothing. Use
+    // `PhysicsSystem::set_velocity` / `apply_force`, or
+    // `PhysicsWorld::apply_impulse` for mass-aware impulses.
 }
 
 /// Collider shape types
@@ -364,18 +356,6 @@ mod tests {
         assert_eq!(body.velocity, Vec2::new(10.0, 20.0));
         assert_eq!(body.gravity_scale, 0.5);
         assert_eq!(body.linear_damping, 0.1);
-    }
-
-    #[test]
-    fn test_rigid_body_apply_impulse() {
-        let mut body = RigidBody::new_dynamic();
-        body.apply_impulse(Vec2::new(5.0, 10.0));
-        assert_eq!(body.velocity, Vec2::new(5.0, 10.0));
-
-        // Static bodies should not respond to impulses
-        let mut static_body = RigidBody::new_static();
-        static_body.apply_impulse(Vec2::new(5.0, 10.0));
-        assert_eq!(static_body.velocity, Vec2::ZERO);
     }
 
     #[test]

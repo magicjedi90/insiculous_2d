@@ -1,5 +1,16 @@
 # Audio Crate Analysis
 
+## Update (June 11, 2026 — remediation pass)
+
+- Sound bytes now cached as `Arc<[u8]>`; playback decodes from `Cursor<Arc<[u8]>>` with no per-play buffer clone.
+- `set_master_volume` / `set_sfx_volume` / `set_music_volume` all re-apply `base * bus * master` to live sinks (SFX and music).
+- `PlaybackState` deleted (was exported but never produced/accepted).
+- `stop(handle)` implemented (stops all active instances of a sound); `#[allow(dead_code)]` removed.
+- `play_music_once(path, volume)` added for one-shot music; `play_music*` keep looping semantics.
+- File-read failures now surface as `AudioError::IoError` (via `#[from] io::Error`).
+- `play`/`unload` take `SoundHandle` by value; `AudioResult` re-exported; `#[must_use]` on builders/getters.
+- See `TECH_DEBT.md` for the full remediation list. Sections below updated to match.
+
 ## Audit (April 15, 2026)
 
 **Removed:**
@@ -22,14 +33,11 @@
 - Straightforward API for SFX and music with `SoundHandle` + `SoundSettings` builder patterns.
 - Clean separation between asset loading/caching (`AudioManager::load_sound`) and playback (`play_with_settings`).
 - ECS components use builder pattern and serialize via serde, integrating with the scene serializer and editor inspector.
-- Cached raw bytes (`Arc<Vec<u8>>`) allow a sound to be replayed any number of times without re-reading from disk.
+- Cached raw bytes (`Arc<[u8]>`) allow a sound to be replayed any number of times without re-reading from disk or copying the buffer.
 
 ### Risks & Follow-ups
 - All audio is eagerly loaded into memory; consider optional streaming for large music tracks.
 - Spatial audio is limited to attenuation math (no real 3D processing, no stereo panning); API docs should document this limitation clearly.
-- `set_sfx_volume` only affects future sounds, not currently playing ones — intentional but could surprise callers (see inline note in `manager.rs`).
-- `ActiveSound.handle` is currently `#[allow(dead_code)]`, reserved for a future "stop by handle" API.
-- `PlaybackState` enum is declared but not yet wired into the public API.
 - Track whether multiple music tracks or mixing buses are needed as the project grows.
 
 ## Overview
@@ -50,8 +58,8 @@ The main audio system that handles:
 
 **Design Decisions:**
 - Uses `rodio` for cross-platform audio playback
-- Sounds are cached in memory as raw bytes (`Arc<Vec<u8>>`) for efficient replay
-- Each play constructs a fresh `Decoder` from the cached bytes so multiple instances of the same sound can overlap
+- Sounds are cached in memory as raw bytes (`Arc<[u8]>`) for efficient replay
+- Each play constructs a fresh `Decoder` from a `Cursor<Arc<[u8]>>` (cheap Arc clone, no buffer copy) so multiple instances of the same sound can overlap
 - Active sounds are tracked in a `Vec<ActiveSound>` and reaped on `update()` when their sinks empty
 - Non-blocking audio playback via rodio's sink system
 - `OutputStream` is kept alive via a `_stream` field (dropping it would kill all audio)
@@ -64,13 +72,10 @@ Unique identifier for loaded sounds:
 
 #### SoundSettings (`sound.rs`)
 Configuration for individual sound playback:
-- Volume (0.0 to 1.0, clamped)
-- Speed/pitch (minimum 0.1, no upper clamp)
+- Volume (0.0 to 1.0, clamped — re-clamped at point of use since fields are public)
+- Speed/pitch (minimum 0.1, no upper clamp — also re-clamped at point of use)
 - Looping flag
 - Builder pattern for fluent configuration
-
-#### PlaybackState (`sound.rs`)
-Enum: `Playing` / `Paused` / `Stopped`. Currently declared but not plumbed through the public API — reserved for a future "query sound state" feature.
 
 ### ECS Integration (`crates/ecs/src/audio_components.rs`)
 
@@ -119,8 +124,8 @@ Via `rodio`'s `symphonia-all` feature:
 // Load a sound
 let jump_sound = ctx.audio.load_sound("assets/jump.wav")?;
 
-// Play with default settings
-ctx.audio.play(&jump_sound)?;
+// Play with default settings (handle is a 4-byte Copy type, passed by value)
+ctx.audio.play(jump_sound)?;
 
 // Play with custom settings
 let settings = SoundSettings::new()
@@ -128,10 +133,15 @@ let settings = SoundSettings::new()
     .with_speed(1.2);
 ctx.audio.play_with_settings(&jump_sound, settings)?;
 
-// Background music
+// Background music (looping); play_music_once for one-shot tracks
 ctx.audio.play_music("assets/music.ogg")?;
+ctx.audio.play_music_once("assets/stinger.ogg", 0.8)?;
 ctx.audio.pause_music();
 ctx.audio.resume_music();
+
+// Stop all instances of one sound, or everything
+ctx.audio.stop(jump_sound);
+ctx.audio.stop_all();
 
 // Volume control
 ctx.audio.set_master_volume(0.5);
@@ -141,7 +151,7 @@ ctx.audio.set_music_volume(0.6);
 
 ## Test Coverage
 
-- 3 unit tests in `manager.rs` (SoundSettings builder/clamping, SoundHandle uniqueness)
+- 20 unit tests in `manager.rs` — all headless (disabled mode + bytes/temp-file APIs): settings builder/clamping, handle uniqueness, load from file/bytes (happy + IoError + DecodeError paths), unload/unload_all, stop/stop_all, volume setter clamping, disabled-mode music semantics
 - 7 unit tests in `crates/ecs/src/audio_components.rs` (AudioSource builder/spatial/attenuation, AudioListener, PlaySoundEffect)
 - Run with `cargo test -p audio` for audio-crate tests only; ECS component tests run under `cargo test -p ecs`
 
@@ -153,8 +163,7 @@ These are intentional design decisions, not technical debt:
 2. **No 3D/spatial audio processing** - Only attenuation calculation provided; no stereo panning or HRTF (would require 3rd party library)
 3. **No audio effects** - No reverb, echo, or other DSP effects (use external audio tools)
 4. **Single music track** - Only one music track at a time (sufficient for most 2D games)
-5. **No "stop by handle" API** - Individual active sounds cannot be stopped once started; `stop_all()` is all-or-nothing. Groundwork is in place (`ActiveSound.handle`) if needed.
-6. **SFX volume changes don't affect in-flight sounds** - Only master/music volume changes propagate to currently playing sinks.
+5. **Disabled mode never reports music as playing** - `play_music*` returns `Ok` (the file is still validated) but `is_music_playing()` stays `false`; documented on the API.
 
 ## Future Enhancements
 
@@ -162,6 +171,5 @@ These are intentional design decisions, not technical debt:
 2. Implement actual spatial audio positioning (stereo panning based on listener orientation)
 3. Add crossfade for music transitions
 4. Add audio effects processing (reverb, low-pass filter for occlusion)
-5. Support for audio buses/groups (group SFX, ambience, UI separately)
+5. Support for generic audio buses/groups (currently fixed master/sfx/music)
 6. Audio occlusion for environments
-7. Wire up `PlaybackState` so callers can query individual sound state

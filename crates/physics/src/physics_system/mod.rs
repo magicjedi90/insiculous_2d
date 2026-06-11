@@ -1,0 +1,265 @@
+//! Physics system for ECS integration
+//!
+//! This module provides a system that synchronizes ECS components with the physics world.
+//!
+//! Split by responsibility:
+//! - `mod.rs` — struct, builders, callbacks, pass-through API
+//! - `sync.rs` — ECS↔rapier synchronization and orphan garbage collection
+//! - `update.rs` — the `System` trait implementation (fixed-timestep driver)
+//!
+//! # API Design: Pass-Through Methods
+//!
+//! [`PhysicsSystem`] provides several methods that delegate directly to [`PhysicsWorld`]:
+//! - `set_gravity()` / `gravity()`
+//! - `set_velocity()` — the single, universal "launch / move this body at
+//!   velocity V" API. Safe on bodies spawned this frame (defers until synced).
+//! - `apply_force()`
+//! - `raycast()`
+//! - `collision_events()`
+//!
+//! These pass-through methods exist intentionally for **API ergonomics**:
+//!
+//! ```ignore
+//! // With pass-through (cleaner):
+//! physics_system.set_velocity(entity, Vec2::new(0.0, 100.0), 0.0);
+//!
+//! // Without pass-through:
+//! physics_system.physics_world_mut().set_velocity(entity, Vec2::new(0.0, 100.0), 0.0);
+//! ```
+//!
+//! Note: the legacy `apply_impulse` pass-through was removed — every callsite
+//! in the workspace was semantically "start this body at velocity V" rather
+//! than a mass-aware momentum delta, and having two functions for the same
+//! intent was a footgun (impulse silently no-ops on same-frame spawns).
+//! `PhysicsWorld::apply_impulse` remains for the rare case that genuinely
+//! needs mass-aware impulse semantics on a live body.
+//!
+//! Users who need advanced physics operations can still access the underlying
+//! [`PhysicsWorld`] via [`physics_world()`](PhysicsSystem::physics_world) and
+//! [`physics_world_mut()`](PhysicsSystem::physics_world_mut).
+
+mod sync;
+mod update;
+
+#[cfg(test)]
+mod tests;
+
+use glam::Vec2;
+
+use ecs::{EntityId, World};
+
+use crate::components::CollisionData;
+use crate::physics_world::{PhysicsConfig, PhysicsWorld};
+
+/// Type alias for collision callback to reduce complexity.
+///
+/// The `Send + Sync` bounds are required: `PhysicsSystem` implements
+/// `ecs::System`, whose supertraits are `Any + Send + Sync` (systems are
+/// stored as `Box<dyn System>` in the `SystemRegistry`), so every field of
+/// `PhysicsSystem` — including these callbacks — must be `Send + Sync`.
+type CollisionCallback = Box<dyn FnMut(&CollisionData) + Send + Sync>;
+
+/// Maximum number of fixed-timestep catch-up steps in a single update.
+///
+/// Bounds the work done after a stall regardless of how small the
+/// configured `fixed_timestep` is; leftover accumulated time is dropped
+/// rather than simulated, trading a small slowdown for stability.
+const MAX_STEPS_PER_UPDATE: u32 = 8;
+
+/// Physics system that steps the simulation and syncs transforms
+pub struct PhysicsSystem {
+    /// The physics world
+    physics_world: PhysicsWorld,
+    /// Accumulated time for fixed timestep
+    time_accumulator: f32,
+    /// Fixed timestep for physics updates (1/60 second by default)
+    fixed_timestep: f32,
+    /// Maximum delta time to prevent spiral of death
+    max_delta_time: f32,
+    /// Callbacks for collision events (supports multiple listeners)
+    collision_callbacks: Vec<CollisionCallback>,
+    /// Deferred velocities for entities not yet synced to Rapier
+    pending_velocities: Vec<(EntityId, Vec2, f32)>,
+    /// Deferred body resets for entities not yet synced to Rapier
+    pending_resets: Vec<(EntityId, Vec2)>,
+}
+
+impl PhysicsSystem {
+    /// Create a new physics system with default configuration
+    pub fn new() -> Self {
+        Self::with_config(PhysicsConfig::default())
+    }
+
+    /// Create a new physics system with custom configuration
+    pub fn with_config(config: PhysicsConfig) -> Self {
+        Self {
+            physics_world: PhysicsWorld::new(config),
+            time_accumulator: 0.0,
+            fixed_timestep: 1.0 / 60.0,
+            max_delta_time: 0.1,
+            collision_callbacks: Vec::new(),
+            pending_velocities: Vec::new(),
+            pending_resets: Vec::new(),
+        }
+    }
+
+    /// Set the fixed timestep for physics updates
+    pub fn with_fixed_timestep(mut self, timestep: f32) -> Self {
+        self.fixed_timestep = timestep;
+        self
+    }
+
+    /// Add a collision callback (builder pattern)
+    ///
+    /// Multiple callbacks can be registered. They will all be invoked
+    /// for each collision event in the order they were added.
+    pub fn with_collision_callback<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(&CollisionData) + Send + Sync + 'static,
+    {
+        self.collision_callbacks.push(Box::new(callback));
+        self
+    }
+
+    /// Add a collision callback (mutable method)
+    ///
+    /// Multiple callbacks can be registered. They will all be invoked
+    /// for each collision event in the order they were added.
+    pub fn add_collision_callback<F>(&mut self, callback: F)
+    where
+        F: FnMut(&CollisionData) + Send + Sync + 'static,
+    {
+        self.collision_callbacks.push(Box::new(callback));
+    }
+
+    /// Remove all collision callbacks
+    pub fn clear_collision_callbacks(&mut self) {
+        self.collision_callbacks.clear();
+    }
+
+    /// Get the number of registered collision callbacks
+    pub fn collision_callback_count(&self) -> usize {
+        self.collision_callbacks.len()
+    }
+
+    /// Clear all physics state, forcing re-sync from ECS on next update.
+    ///
+    /// Preserves configuration (gravity, scale, callbacks) but resets all
+    /// rapier bodies, colliders, and entity mappings. Call this when the
+    /// editor restores a world snapshot to ensure physics re-initializes
+    /// from the restored ECS component values.
+    pub fn clear(&mut self) {
+        self.physics_world.clear();
+        self.pending_velocities.clear();
+        self.pending_resets.clear();
+        self.time_accumulator = 0.0;
+    }
+
+    /// Remove an entity from both the physics world and the ECS world.
+    ///
+    /// This is the recommended way to destroy physics entities — it ensures
+    /// both systems stay in sync and clears any pending deferred velocities.
+    pub fn destroy_entity(&mut self, world: &mut World, entity: EntityId) {
+        self.physics_world.remove_entity(entity);
+        world.remove_entity(&entity).ok();
+        self.pending_velocities.retain(|(e, _, _)| *e != entity);
+        self.pending_resets.retain(|(e, _)| *e != entity);
+    }
+
+    /// Get a reference to the physics world
+    pub fn physics_world(&self) -> &PhysicsWorld {
+        &self.physics_world
+    }
+
+    /// Get a mutable reference to the physics world
+    pub fn physics_world_mut(&mut self) -> &mut PhysicsWorld {
+        &mut self.physics_world
+    }
+
+    /// Set gravity
+    pub fn set_gravity(&mut self, gravity: Vec2) {
+        self.physics_world.set_gravity(gravity);
+    }
+
+    /// Get gravity
+    pub fn gravity(&self) -> Vec2 {
+        self.physics_world.gravity()
+    }
+
+    /// Apply a force to an entity.
+    ///
+    /// The force lasts for one update: it is reset after the physics steps
+    /// run, so a continuous push must call this every frame. If a frame runs
+    /// zero physics steps (fixed-timestep accumulator not full), the force
+    /// is kept and acts on the next stepped frame instead.
+    pub fn apply_force(&mut self, entity: EntityId, force: Vec2) {
+        self.physics_world.apply_force(entity, force);
+    }
+
+    /// Cast a ray and return the first hit as `(entity, hit_point, distance)`.
+    ///
+    /// `direction` is normalized internally; `max_distance` and the returned
+    /// distance are in pixels along the ray. Returns `None` for a zero-length
+    /// or non-finite direction.
+    pub fn raycast(&self, origin: Vec2, direction: Vec2, max_distance: f32) -> Option<(EntityId, Vec2, f32)> {
+        self.physics_world.raycast(origin, direction, max_distance)
+    }
+
+    /// Get collision events from the last update's physics steps.
+    ///
+    /// Empty if the last update ran zero steps; contains the events of every
+    /// sub-step if the last update ran several.
+    pub fn collision_events(&self) -> &[CollisionData] {
+        self.physics_world.collision_events()
+    }
+
+    /// Set the velocity of a rigid body — the universal "launch / move this
+    /// body at velocity V" API.
+    ///
+    /// Safe to call on entities spawned this same frame: if the body hasn't
+    /// been synced into Rapier yet, the velocity is buffered and applied
+    /// automatically during the next `update()`. This is the one function
+    /// games should reach for when starting bodies moving.
+    pub fn set_velocity(&mut self, entity: EntityId, linear: Vec2, angular: f32) {
+        if self.physics_world.has_rigid_body(entity) {
+            self.physics_world.set_velocity(entity, linear, angular);
+        } else {
+            self.pending_velocities.push((entity, linear, angular));
+        }
+    }
+
+    /// Get the velocity of a rigid body
+    pub fn get_body_velocity(&self, entity: EntityId) -> Option<(Vec2, f32)> {
+        self.physics_world.get_body_velocity(entity)
+    }
+
+    /// Set the position and rotation of a rigid body
+    pub fn set_body_transform(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
+        self.physics_world.set_body_transform(entity, position, rotation);
+    }
+
+    /// Set the next kinematic position (for kinematic bodies)
+    pub fn set_kinematic_target(&mut self, entity: EntityId, position: Vec2, rotation: f32) {
+        self.physics_world.set_kinematic_target(entity, position, rotation);
+    }
+
+    /// Reset a body's position and zero its velocity.
+    ///
+    /// Safe to call on entities spawned this same frame: if the body hasn't
+    /// been synced into Rapier yet, the reset is buffered and applied during
+    /// the next `update()` (after the sync, before any pending velocities).
+    pub fn reset_body(&mut self, entity: EntityId, position: Vec2) {
+        if self.physics_world.has_rigid_body(entity) {
+            self.physics_world.set_body_transform(entity, position, 0.0);
+            self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
+        } else {
+            self.pending_resets.push((entity, position));
+        }
+    }
+}
+
+impl Default for PhysicsSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}

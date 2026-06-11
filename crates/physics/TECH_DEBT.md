@@ -1,12 +1,66 @@
 # Technical Debt: physics
 
-Last audited: January 2026
+Last audited: June 2026 (audit remediation pass)
 
 ## Summary
-- DRY violations: 1 (1 resolved)
+- DRY violations: 0 (3 resolved)
 - SRP violations: 1
 - KISS violations: 0 (1 resolved)
-- Architecture issues: 2 (2 resolved/documented)
+- Architecture issues: 0 (2 resolved/documented)
+- Open: SRP-001 (low), API-001 (low), MISSING-001 remainder (low)
+
+## June 2026 Audit Remediation
+All correctness findings fixed; final state: **58 passing lib tests, 0 failed**.
+
+- ✅ **Stale event re-emission**: `step()` no longer clears the event buffer;
+  `clear_collision_events()` added, `PhysicsSystem::update()` clears once
+  before the sub-step loop. Zero-step frames emit nothing.
+- ✅ **Sub-step event loss**: `step()` APPENDS events, so all catch-up
+  sub-steps' events survive a single update.
+- ✅ **Contact points were collider-local**: now transformed through
+  collider1's world isometry (point and normal) before meters→pixels.
+- ✅ **`apply_force` persisted forever**: forces reset after the step loop
+  (`PhysicsWorld::reset_forces()`); skipped on zero-step frames so a force
+  applied then still acts on the next stepped frame. Documented as one-update.
+- ✅ **Dead `RigidBody::apply_impulse`/`apply_force` component methods
+  removed**: they mutated a `velocity` field only read at body creation
+  (silent no-op on live bodies).
+- ✅ **MISSING-001 (partial)**: `pixels_per_meter` validated in `with_scale`
+  and at `PhysicsWorld::new` (non-finite or <= 0 → warn + default 100.0).
+  Gravity NaN and negative collider dimensions still unvalidated (low).
+- ✅ **CollisionPair bit-packing overflow**: canonical ordering now compares
+  `(value, generation)` tuples instead of `value | (generation << 32)`.
+- ✅ **`raycast` direction**: normalized internally; zero/non-finite direction
+  returns `None`; distance always in pixels along the ray.
+- ✅ **Kinematic dead config**: removed ignored `linvel`/`angvel` on
+  `kinematic_position_based` bodies.
+- ✅ **Non-test `unwrap()`**: `NonZeroUsize::new(8).unwrap()` replaced with
+  `config.solver_iterations.max(1)` + `NonZeroUsize::MIN` fallback (derives
+  from config with a floor of 1 instead of silently substituting 8).
+- ✅ **Iteration names matched to rapier**: `velocity_iterations` /
+  `position_iterations` renamed to `solver_iterations` / `friction_iterations`
+  (they map to `num_solver_iterations` / `num_additional_friction_iterations`).
+  Only physics-internal code used the field names, so the rename was safe.
+- ✅ **Unused deps removed**: `toml`, `common`, `thiserror` (after
+  `PhysicsError` deletion) dropped from Cargo.toml.
+- ✅ **Dead public API deleted**: `PhysicsError` (never constructed),
+  `MovementConfig` (consumed by nothing; damping literals inlined into the
+  two presets that referenced it). `Collider::player_box()` now takes
+  `(width, height)` instead of hardcoding 80x80.
+- ✅ **DRY-002/DRY-003**: `body(entity)`/`body_mut(entity)` private helpers
+  replace seven duplicated two-level lookups; translation/rotation builder
+  setup deduplicated across the three RigidBodyType match arms.
+- ✅ **600-line rule**: `physics_world.rs` (977) split into
+  `physics_world/{mod,bodies,stepping,queries,tests}.rs`;
+  `physics_system.rs` (775) split into
+  `physics_system/{mod,sync,update,tests}.rs`. All files < 601 lines.
+- ✅ **Test gaps closed**: sensor intersection events, callbacks firing on a
+  real collision, world-space contact points, scale validation, raycast
+  normalization, event delivery contracts, and pinned physics+hierarchy
+  behavior (physics entities must be root entities — see CLAUDE.md).
+- ℹ️ **`CollisionCallback` keeps `Send + Sync`**: required because
+  `ecs::System` has `Any + Send + Sync` supertraits and `PhysicsSystem`
+  implements it (stored as `Box<dyn System>` in `SystemRegistry`).
 
 ## January 2026 Fixes
 - ✅ **ARCH-002**: PhysicsSystem now supports multiple collision callbacks via:
@@ -30,17 +84,11 @@ Last audited: January 2026
 - **Methods updated:** `add_collider`, `step`, `get_contact_points_from_pair`, `get_body_transform`, `get_body_velocity`, `set_body_transform`, `set_kinematic_target`, `set_body_velocity`, `apply_impulse`, `apply_force`, `raycast`
 - **Benefit:** Single point of change for conversion logic, improved readability
 
-### [DRY-002] Repeated body builder pattern in add_rigid_body
-- **File:** `physics_world.rs`
-- **Lines:** 192-221
-- **Issue:** The `add_rigid_body()` method has repeated builder calls across Dynamic, Static, and Kinematic variants:
-  ```rust
-  .translation(vector![pos.x, pos.y])
-  .rotation(rotation)
-  ```
-  This is duplicated in all three match arms.
-- **Suggested fix:** Extract common builder setup to a helper, then specialize per body type.
-- **Priority:** Low
+### ~~[DRY-002] Repeated body builder pattern in add_rigid_body~~ ✅ RESOLVED (June 2026)
+- **File:** `physics_world/bodies.rs`
+- **Resolution:** The match arms now produce only the per-type builder; the
+  shared `.translation(...)/.rotation(...)/.build()` chain is applied once
+  after the match. (Same fix as DRY-003 — they were the same finding.)
 
 ---
 
@@ -127,23 +175,22 @@ These issues have been resolved:
 These are **test coverage gaps**, not code quality issues:
 - No friction/restitution tests
 - No kinematic body tests
-- No sensor trigger tests
-- No collision response validation tests
+- ~~No sensor trigger tests~~ ✅ `test_sensor_collider_fires_intersection_events`
+- ~~No collision response validation tests~~ ✅ collision pushes boxes apart (`lib.rs` integration test)
 - No high-speed tunneling tests
 
 ---
 
-## Metrics
+## Metrics (June 2026)
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 6 |
-| Total lines | ~1,200 |
-| Test coverage | 28 tests (all passing) |
-| Rapier2d types managed | 14 (including CollisionPair) |
+| Total source files | 13 (incl. split module dirs) |
+| Largest file | 600 lines (`physics_system/tests.rs`) |
+| Test coverage | 58 lib tests (all passing), 3 ignored doctests |
 | High priority issues | 0 |
 | Medium priority issues | 0 |
-| Low priority issues | 3 |
+| Low priority issues | 3 (SRP-001, API-001, MISSING-001 remainder) |
 
 ---
 
@@ -195,11 +242,15 @@ None required - all high/medium priority issues resolved.
 
 4 new issues (0 High, 1 Medium, 3 Low)
 
-### MISSING-001: No validation for degenerate physics values
-- **File:** `src/physics_world.rs`, `src/components.rs`
-- **Issue:** pixels_per_meter can be 0 (divide-by-zero), gravity can be NaN, negative collider dimensions accepted
-- **Suggested fix:** Add `validate()` methods to PhysicsConfig, RigidBody, Collider
-- **Priority:** Medium | **Effort:** Medium
+### MISSING-001: No validation for degenerate physics values — ✅ PARTIALLY RESOLVED (June 2026)
+- **File:** `src/physics_world/mod.rs`, `src/components.rs`
+- **Resolved:** `pixels_per_meter` is validated in `with_scale()` AND at
+  `PhysicsWorld::new()` (covers struct-literal construction): non-finite or
+  <= 0 values warn and fall back to `DEFAULT_PIXELS_PER_METER` (100.0).
+  Tests: `test_zero_scale_falls_back_to_default_and_produces_finite_positions`,
+  `test_invalid_scale_in_struct_literal_is_sanitized_at_world_creation`.
+- **Remaining:** gravity can be NaN, negative collider dimensions accepted
+- **Priority:** Low | **Effort:** Small
 
 ### API-001: Missing getter methods for PhysicsSystem timing config
 - **File:** `src/physics_system.rs:43-47`
@@ -207,11 +258,12 @@ None required - all high/medium priority issues resolved.
 - **Suggested fix:** Add getter methods
 - **Priority:** Low | **Effort:** Trivial
 
-### DRY-003: Repeated builder setup in add_rigid_body
-- **File:** `src/physics_world.rs:220-248`
-- **Issue:** translation/rotation setup duplicated across 3 body type branches
-- **Suggested fix:** Extract common builder setup before match
-- **Priority:** Low | **Effort:** Small
+### ~~DRY-003: Repeated builder setup in add_rigid_body~~ ✅ RESOLVED (June 2026)
+- **File:** `src/physics_world/bodies.rs`
+- **Resolution:** Common `.translation(...).rotation(...).build()` extracted
+  after the body-type match; each arm now contains only type-specific setup.
+  The dead `linvel`/`angvel` config on kinematic bodies was removed at the
+  same time (rapier ignores velocities on position-based kinematic bodies).
 
 ### SRP-002: Collider clamping inconsistent with builder pattern
 - **File:** `src/components.rs:267-276`
