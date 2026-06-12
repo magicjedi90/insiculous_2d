@@ -15,11 +15,11 @@
 - **Input**: Event-based, 62 tests, generic action mapping (`InputMapping<A>`)
 - **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
 - **Engine Core**: Game API, managers, scene serializer, 154 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 229 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, 241 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 64 tests
 
 ### Key Metrics
-- **Total Tests**: 943/943 passing (100% success rate), 0 ignored
+- **Total Tests**: 955/955 passing (100% success rate), 0 ignored
 - **Test Quality**: 0 TODOs, 155+ meaningful assertions
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`), 0 failures
 
@@ -131,7 +131,7 @@ insiculous_2d (root) ──→ editor_integration (optional, behind "editor" fea
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 943 tests
+cargo test --workspace               # Run all 955 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -152,7 +152,7 @@ cargo run --example editor_demo --features editor  # Run editor demo
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 943/943 (100%)
+passed: 955/955 (100%)
 ignored: 0
 failed: 0
 ```

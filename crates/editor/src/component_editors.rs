@@ -33,6 +33,8 @@ mod ranges {
     pub const SCALE: RangeInclusive<f32> = 0.01..=10.0;
     /// Sprite/collider offsets relative to the entity.
     pub const OFFSET: RangeInclusive<f32> = -100.0..=100.0;
+    /// Collider shape dimensions (half-extents, radii) in pixels.
+    pub const COLLIDER_EXTENT: RangeInclusive<f32> = 0.5..=1000.0;
     /// Depth sorting range.
     pub const DEPTH: RangeInclusive<f32> = -100.0..=100.0;
     /// Linear velocity.
@@ -190,14 +192,60 @@ pub fn edit_collider(
 
     inspector.header("Collider");
 
-    // Shape type (read-only for now - would need dropdown)
-    let shape_str = match &collider.shape {
-        ColliderShape::Box { .. } => "Box",
-        ColliderShape::Circle { .. } => "Circle",
-        ColliderShape::CapsuleY { .. } => "CapsuleY",
-        ColliderShape::CapsuleX { .. } => "CapsuleX",
-    };
-    inspector.header(&format!("  Shape: {}", shape_str));
+    // Shape kind is fixed (changing it would need a dropdown), but its
+    // dimensions are editable so colliders can be matched to sprites from
+    // the editor. Sizes are absolute pixels — physics ignores
+    // Transform2D.scale.
+    match &collider.shape {
+        ColliderShape::Box { half_extents } => {
+            inspector.header("  Shape: Box");
+            if let EditResult::Changed(v) =
+                inspector.vec2("Half Extents", *half_extents, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::Box { half_extents: v };
+                hint = Some("half_extents");
+            }
+        }
+        ColliderShape::Circle { radius } => {
+            inspector.header("  Shape: Circle");
+            if let EditResult::Changed(v) =
+                inspector.f32("Radius", *radius, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::Circle { radius: v };
+                hint = Some("radius");
+            }
+        }
+        ColliderShape::CapsuleY { half_height, radius } => {
+            inspector.header("  Shape: CapsuleY");
+            if let EditResult::Changed(v) =
+                inspector.f32("Half Height", *half_height, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::CapsuleY { half_height: v, radius: *radius };
+                hint = Some("half_height");
+            }
+            if let EditResult::Changed(v) =
+                inspector.f32("Cap Radius", *radius, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::CapsuleY { half_height: *half_height, radius: v };
+                hint = Some("radius");
+            }
+        }
+        ColliderShape::CapsuleX { half_height, radius } => {
+            inspector.header("  Shape: CapsuleX");
+            if let EditResult::Changed(v) =
+                inspector.f32("Half Width", *half_height, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::CapsuleX { half_height: v, radius: *radius };
+                hint = Some("half_height");
+            }
+            if let EditResult::Changed(v) =
+                inspector.f32("Cap Radius", *radius, ranges::COLLIDER_EXTENT)
+            {
+                new.shape = ColliderShape::CapsuleX { half_height: *half_height, radius: v };
+                hint = Some("radius");
+            }
+        }
+    }
 
     if let EditResult::Changed(v) = inspector.vec2("Offset", collider.offset, ranges::OFFSET) {
         new.offset = v;
@@ -306,6 +354,8 @@ mod tests {
         assert!(ranges::SCALE.start() > &0.0); // scale must stay positive
         assert!(ranges::PITCH.start() > &0.0); // pitch of zero is silence
         assert!(ranges::ROTATION.contains(&0.0));
+        // Collider dimensions must stay positive (rapier rejects zero extents)
+        assert!(ranges::COLLIDER_EXTENT.start() > &0.0);
     }
 
     #[test]

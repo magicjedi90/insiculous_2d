@@ -78,6 +78,8 @@ impl<G: Game> EditorGame<G> {
                 }
             }
             "Exit" => std::process::exit(0),
+            "Toggle Grid" => self.editor.toggle_grid(),
+            "Toggle Colliders" => self.editor.toggle_colliders(),
             "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
                 log::info!("Toggle panel: {}", action);
             }

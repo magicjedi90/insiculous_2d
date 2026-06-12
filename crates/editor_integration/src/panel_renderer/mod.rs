@@ -61,6 +61,19 @@ fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: comm
         1.0,
     );
 
+    // Collider outlines — drawn over the rendered sprites so physics shapes
+    // can be compared against the visuals and tuned until they line up.
+    if editor.is_colliders_visible() {
+        editor::render_collider_overlay(
+            ctx.ui,
+            ctx.world,
+            &editor.viewport,
+            &editor.selection,
+            &editor.theme.collider_overlay_colors(),
+            bounds,
+        );
+    }
+
     // Play-state border tint
     let border_color = theme.play_state_border(editor.play_state());
     let w = if editor.in_play_session() { 3.0 } else { 1.0 };

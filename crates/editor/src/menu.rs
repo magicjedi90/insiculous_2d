@@ -202,6 +202,9 @@ impl MenuBar {
                 MenuItem::action("Asset Browser"),
                 MenuItem::action("Console"),
                 MenuItem::separator(),
+                MenuItem::action_with_shortcut("Toggle Grid", "G"),
+                MenuItem::action_with_shortcut("Toggle Colliders", "C"),
+                MenuItem::separator(),
                 MenuItem::action("Reset Layout"),
             ]),
         );

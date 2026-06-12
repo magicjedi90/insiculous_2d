@@ -47,6 +47,8 @@ pub struct EditorContext {
     pub hierarchy: HierarchyPanel,
     /// Snap to grid enabled
     snap_to_grid: bool,
+    /// Whether collider outlines are drawn in the scene view
+    show_colliders: bool,
     /// Current play state (Editing / Playing / Paused)
     play_state: EditorPlayState,
     /// Play / Pause / Stop controls widget
@@ -113,6 +115,7 @@ impl EditorContext {
             input_mapping: EditorInputMapping::new(),
             hierarchy: HierarchyPanel::new(),
             snap_to_grid: false,
+            show_colliders: true,
             play_state: EditorPlayState::default(),
             play_controls: PlayControls::new(),
             add_component_popup_open: false,
@@ -219,6 +222,23 @@ impl EditorContext {
     /// Set the grid size.
     pub fn set_grid_size(&mut self, size: f32) {
         self.grid.set_grid_size(size);
+    }
+
+    // ================== Collider Overlay Methods ==================
+
+    /// Check if collider outlines are visible in the scene view.
+    pub fn is_colliders_visible(&self) -> bool {
+        self.show_colliders
+    }
+
+    /// Set collider outline visibility.
+    pub fn set_colliders_visible(&mut self, visible: bool) {
+        self.show_colliders = visible;
+    }
+
+    /// Toggle collider outline visibility.
+    pub fn toggle_colliders(&mut self) {
+        self.show_colliders = !self.show_colliders;
     }
 
     /// Check if snap to grid is enabled.

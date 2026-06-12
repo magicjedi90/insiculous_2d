@@ -161,6 +161,14 @@ pub struct EditorTheme {
     pub border_playing: Color,
     /// Viewport border tint while paused
     pub border_paused: Color,
+
+    // ── Collider overlay ────────────────────────────────────────
+    /// Solid (non-sensor) collider outlines in the scene view
+    pub collider_outline: Color,
+    /// Sensor (trigger-only) collider outlines
+    pub collider_sensor: Color,
+    /// Collider outline on selected entities
+    pub collider_selected: Color,
 }
 
 impl Default for EditorTheme {
@@ -252,6 +260,11 @@ impl Default for EditorTheme {
             border_editing: Color::new(0.0, 0.48, 0.83, 0.5),
             border_playing: Color::new(0.0, 0.8, 0.27, 0.8),
             border_paused: Color::new(1.0, 0.8, 0.0, 0.8),
+
+            // Collider overlay
+            collider_outline: Color::new(0.2, 1.0, 0.4, 0.9),
+            collider_sensor: Color::new(0.2, 0.85, 1.0, 0.9),
+            collider_selected: Color::new(1.0, 0.85, 0.2, 1.0),
         }
     }
 }
@@ -314,6 +327,15 @@ impl EditorTheme {
             scale_outline: self.gizmo_scale_outline,
             scale_handle: self.gizmo_scale_handle,
             scale_handle_hover: self.gizmo_scale_handle_hover,
+        }
+    }
+
+    /// Create `ColliderOverlayColors` from this theme.
+    pub fn collider_overlay_colors(&self) -> crate::ColliderOverlayColors {
+        crate::ColliderOverlayColors {
+            solid: self.collider_outline,
+            sensor: self.collider_sensor,
+            selected: self.collider_selected,
         }
     }
 
@@ -448,6 +470,19 @@ mod tests {
         assert_ne!(theme.gizmo_y_hover, theme.gizmo_y);
         assert_ne!(theme.gizmo_scale_handle_hover, theme.gizmo_scale_handle);
         assert_ne!(theme.selection_fill, theme.hover_fill);
+    }
+
+    #[test]
+    fn test_collider_overlay_colors_match_tokens_and_are_distinct() {
+        let theme = EditorTheme::default();
+        let colors = theme.collider_overlay_colors();
+        assert_eq!(colors.solid, theme.collider_outline);
+        assert_eq!(colors.sensor, theme.collider_sensor);
+        assert_eq!(colors.selected, theme.collider_selected);
+        // Each state must be visually distinguishable
+        assert_ne!(theme.collider_outline, theme.collider_sensor);
+        assert_ne!(theme.collider_outline, theme.collider_selected);
+        assert_ne!(theme.collider_sensor, theme.collider_selected);
     }
 
     #[test]

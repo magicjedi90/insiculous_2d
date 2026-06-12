@@ -29,6 +29,7 @@
 //! assert!(editor.is_editing()); // starts in Editing play state
 //! ```
 
+mod collider_overlay;
 pub mod commands;
 mod component_editors;
 mod context;
@@ -56,6 +57,9 @@ pub mod layout;
 pub mod world_snapshot;
 
 // Re-export main types
+pub use collider_overlay::{
+    collider_outline_segments, render_collider_overlay, ColliderOverlayColors,
+};
 pub use commands::{CommandHistory, EditorCommand};
 pub use component_editors::{
     edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
@@ -92,6 +96,7 @@ pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInpu
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::{
+        collider_outline_segments, render_collider_overlay, ColliderOverlayColors,
         available_components, capture_all_components, categorized_components,
         inspect_all_components, restore_components, CommandHistory, ComponentCategory,
         ComponentEdit, ComponentKind, EditorCommand, StoredComponent,

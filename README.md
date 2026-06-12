@@ -7,7 +7,8 @@ A lightweight, modular 2D game engine for Rust. Focus on game logic, not boilerp
 ```bash
 git clone https://github.com/yourusername/insiculous_2d.git
 cd insiculous_2d
-cargo run --example hello_world
+cargo run --example hello_world                      # physics platformer demo
+cargo run --example editor_demo --features editor    # same demo inside the visual editor
 ```
 
 ## Create Your First Game
@@ -54,17 +55,20 @@ That's it! The engine handles window creation, event loops, rendering, and input
 | Type | Purpose |
 |------|---------|
 | `Game` | Trait to implement - `init()`, `update()`, optionally `render()` |
-| `GameConfig` | Window settings: title, size, clear color, FPS |
-| `GameContext` | Access `input`, `world` (ECS), `assets`, `audio`, `ui`, `delta_time`, `window_size` |
+| `GameConfig` | Window settings: title, size, clear color, FPS, asset paths, chaos mode |
+| `GameContext` | Access `input`, `world` (ECS), `assets`, `audio`, `ui`, `achievements`, `chaos_mode`, `delta_time`, `window_size` |
 | `run_game()` | Single function to start everything |
+| `run_game_with_editor()` | Same game, wrapped in the visual editor (see below) |
 
 ### GameConfig Options
 
 ```rust
 let config = GameConfig::new("My Game")
-    .with_size(1280, 720)           // Window dimensions
-    .with_clear_color(0.1, 0.1, 0.2, 1.0)  // Background color
-    .with_fps(60);                   // Target frame rate
+    .with_size(1280, 720)                   // Window dimensions
+    .with_clear_color(0.1, 0.1, 0.2, 1.0)   // Background color
+    .with_fps(60)                           // Target frame rate
+    .with_asset_base_path("assets")         // Resolve relative asset paths (cwd-independent)
+    .with_chaos_mode(ChaosMode::Insane);    // Normal / Insane / Ridiculous / Insiculous
 ```
 
 ### Game Trait Methods
@@ -90,21 +94,94 @@ impl Game for MyGame {
 }
 ```
 
+## Visual Editor
+
+The engine ships a dockable scene editor that wraps **any** `Game` without
+changing its code: hierarchy panel, inspector with editable components and
+undo/redo, transform gizmos, play/pause/stop with world snapshot restore,
+scene save/load (RON), grid, and physics collider visualization.
+
+```bash
+cargo run --example editor_demo --features editor
+```
+
+### Run Your Own Game Inside the Editor
+
+`run_game_with_editor(game, config)` is a drop-in replacement for
+`run_game(game, config)`. Gate it behind a cargo feature so your shipping
+binary stays editor-free:
+
+```toml
+# Cargo.toml of your game crate
+[features]
+editor = ["dep:editor_integration"]
+
+[dependencies]
+engine_core = { path = "../insiculous_2d/crates/engine_core" }
+editor_integration = { path = "../insiculous_2d/crates/editor_integration", optional = true }
+```
+
+```rust
+fn main() {
+    let config = GameConfig::new("My Game");
+
+    #[cfg(feature = "editor")]
+    editor_integration::run_game_with_editor(MyGame::default(), config).unwrap();
+    #[cfg(not(feature = "editor"))]
+    run_game(MyGame::default(), config).unwrap();
+}
+```
+
+```bash
+cargo run                     # plain game
+cargo run --features editor   # the same game inside the editor
+```
+
+The Pong game (`games/pong`, sibling to this repo) is wired exactly this way —
+run `cargo run --features editor` from its directory to open it in the editor.
+
+### Editor Controls
+
+| Keys | Action |
+|------|--------|
+| `Q` / `W` / `E` / `R` | Select / Move / Rotate / Scale tool |
+| `F5`, `Ctrl+P` | Play (`Ctrl+P` also toggles pause while playing) |
+| `Ctrl+Shift+P` | Stop — restores the world to its pre-play snapshot |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
+| `Ctrl+D`, `Del` | Duplicate / delete selected entities |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save / Save As scene (RON) |
+| `Ctrl+O` / `Ctrl+N` | Open / New scene |
+| `G` | Toggle grid |
+| `C` | Toggle collider outlines |
+| `+` / `-` / `0` | Zoom in / out / reset camera |
+
+### Collider Visualization
+
+The scene view overlays every `Collider` with its outline, exactly as the
+physics simulation places it: green for solid colliders, cyan for sensors,
+yellow for the selected entity. Collider sizes are **absolute pixels** —
+physics ignores `Transform2D.scale` — so if a sprite is sized via scale, the
+overlay instantly shows any sprite-vs-collider mismatch. Shape dimensions
+(box half-extents, circle radius, capsule height/radius) and offset are
+editable in the inspector with full undo support.
+
 ## Architecture
 
 ```
 insiculous_2d/
 ├── crates/
-│   ├── engine_core/    # Game trait, application lifecycle, scenes, behaviors
-│   ├── renderer/       # WGPU 28.0.0 sprite rendering with instancing
-│   ├── ecs/            # Entity Component System (dual storage: HashMap + archetype)
-│   ├── input/          # Keyboard, mouse, gamepad handling with action mapping
-│   ├── physics/        # rapier2d 2D physics integration
-│   ├── audio/          # Rodio-based sound and music playback
-│   ├── ui/             # Immediate-mode UI with fontdue font rendering
-│   ├── common/         # Shared types (colors, transforms, math utilities)
-│   └── editor/         # Visual editor (in development)
-└── examples/           # Demo applications
+│   ├── engine_core/        # Game trait, lifecycle managers, scenes, behaviors, achievements
+│   ├── renderer/           # WGPU 28.0 sprite rendering with instancing and batching
+│   ├── ecs/                # Entity Component System (HashMap-based per-type storage)
+│   ├── ecs_macros/         # #[derive(ComponentMeta)] for editor/scene-aware components
+│   ├── input/              # Keyboard, mouse, gamepad with generic action mapping
+│   ├── physics/            # rapier2d 2D physics integration with presets
+│   ├── audio/              # Rodio-based sound and music playback
+│   ├── ui/                 # Immediate-mode UI with fontdue font rendering
+│   ├── common/             # Shared types (colors, transforms, math utilities)
+│   ├── editor/             # Editor panels, inspector, gizmos, undo/redo, theme
+│   └── editor_integration/ # run_game_with_editor() — wires the editor to a running game
+└── examples/               # Demo applications
 ```
 
 ## Advanced Usage
@@ -144,7 +221,8 @@ world.add_component(&player, RigidBody::player_platformer())?;
 world.add_component(&player, Collider::player_box(80.0, 80.0))?;
 world.add_component(&player, Sprite::new(0).with_color(Vec4::new(0.2, 0.4, 1.0, 1.0)))?;
 
-// Physics system handles movement, gravity, collisions
+// Physics system handles movement, gravity, collisions.
+// Collider sizes are absolute pixels; Transform2D.scale only affects sprites.
 ```
 
 ### Audio System
@@ -160,7 +238,7 @@ if ctx.input.is_key_just_pressed(KeyCode::Space) {
     }
 }
 
-// Background music with crossfade
+// Background music
 ctx.audio.play_music("assets/music.ogg")?;
 ctx.audio.set_volume(0.5);
 ```
@@ -171,15 +249,15 @@ ctx.audio.set_volume(0.5);
 fn update(&mut self, ctx: &mut GameContext) {
     // Panel background
     ctx.ui.panel(Rect::new(10.0, 10.0, 200.0, 150.0));
-    
+
     // Button
     if ctx.ui.button("play_btn", "Play", Rect::new(20.0, 30.0, 180.0, 40.0)) {
         self.start_game();
     }
-    
+
     // Slider
     self.volume = ctx.ui.slider("volume_slider", self.volume, Rect::new(20.0, 90.0, 180.0, 20.0));
-    
+
     // Label
     ctx.ui.label(&format!("Volume: {:.0}%", self.volume * 100.0), Vec2::new(20.0, 120.0));
 }
@@ -187,7 +265,7 @@ fn update(&mut self, ctx: &mut GameContext) {
 
 ### Scene Files (RON)
 
-Load entities and components from scene files:
+Load entire levels from scene files:
 
 ```rust
 use engine_core::SceneLoader;
@@ -210,27 +288,33 @@ fn init(&mut self, ctx: &mut GameContext) {
 
 Example scene file format:
 ```ron
-Scene(
+SceneData(
     name: "Level 1",
-    entities: [
-        Entity(
-            name: Some("player"),
+    physics: Some(PhysicsSettings(
+        gravity: (0.0, -980.0),
+        pixels_per_meter: 100.0,
+    )),
+    prefabs: {
+        "Player": PrefabData(
             components: [
-                Transform2D(
-                    position: (0.0, 100.0),
-                    rotation: 0.0,
-                    scale: (1.0, 1.0),
-                ),
-                Sprite(
-                    texture_handle: 0,
-                    color: (0.2, 0.4, 1.0, 1.0),
-                ),
-                Behavior(PlayerPlatformer()),
+                Transform2D(position: (0.0, 0.0)),
+                Sprite(texture: "#white", color: (0.2, 0.4, 1.0, 1.0)),
+                RigidBody(body_type: Dynamic, linear_damping: 5.0, can_rotate: false),
             ],
+        ),
+    },
+    entities: [
+        EntityData(
+            name: Some("player"),
+            prefab: Some("Player"),
+            overrides: [Transform2D(position: (-200.0, 100.0))],
         ),
     ],
 )
 ```
+
+Scenes edited in the visual editor are saved back to this same format
+(`Ctrl+S`).
 
 ### Entity Behaviors
 
@@ -264,6 +348,7 @@ Available behaviors:
 - `PlayerTopDown` - WASD movement in all directions
 - `ChaseTagged` - Chase entities with a specific tag
 - `FollowEntity` - Follow a named entity
+- `FollowTagged` - Follow the nearest entity with a tag
 - `Patrol` - Patrol between two points
 - `Collectible` - Items that can be collected
 
@@ -290,6 +375,8 @@ let roots = world.get_root_entities();
 ```
 
 Child transforms are automatically updated when parent transforms change.
+Note: entities with a `RigidBody` must stay at the root — physics treats
+their transform as world-space.
 
 ### Custom Rendering
 
@@ -342,29 +429,46 @@ if actions.just_activated(MyAction::Fire, ctx.input) {
 }
 ```
 
+### Chaos Mode
+
+Every game built on the engine can support the four-tier intensity theme:
+**Normal / Insane / Ridiculous / Insiculous** (= both). The engine carries
+the selection; each game decides what the variants mean.
+
+```rust
+let config = GameConfig::new("My Game").with_chaos_mode(ChaosMode::Insane);
+
+// In game logic — both predicates return true for Insiculous:
+if ctx.chaos_mode.is_insane()     { /* e.g. double speed */ }
+if ctx.chaos_mode.is_ridiculous() { /* e.g. spawn extras */ }
+```
+
 ## Test Summary
 
 | Crate | Tests | Coverage |
 |-------|-------|----------|
-| ECS | 113 | Entity lifecycle, components, queries, hierarchy, systems |
-| Input | 56 | Key states, action mapping, events, thread safety |
-| Engine Core | 68 | Game API, lifecycle, scenes, behaviors, timing |
-| Physics | 28 | Body types, colliders, simulation, presets |
-| UI | 53 | Widgets, interaction, draw commands, font rendering |
-| Audio | 3 | Sound loading, playback, settings |
-| Renderer | 62 | Sprite batching, instancing, camera, textures |
-| **Total** | **~383** | **All passing** |
+| ECS | 174 | Entity lifecycle, components, queries, hierarchy, systems |
+| Editor | 241 | Panels, inspector, gizmos, undo/redo, collider overlay, theme |
+| Engine Core | 161 | Game API, lifecycle, scenes, behaviors, achievements, timing |
+| Renderer | 70 | Sprite batching, instancing, camera, textures |
+| UI | 70 | Widgets, interaction, draw commands, font rendering |
+| Editor Integration | 64 | Editor↔game wiring, play/pause, scene save/load |
+| Input | 62 | Key states, action mapping, events |
+| Physics | 61 | Body types, colliders, simulation, presets |
+| Common / Audio / Macros | 52 | Math, transforms, sound playback, derive macros |
+| **Total** | **955** | **All passing, 0 ignored** |
 
-Run all tests: `cargo test --workspace`
+Run all tests: `cargo test --workspace` — everything runs headless, no GPU
+or window required.
 
 ## Project Status
 
-**Current State:** Production ready, performant
+**Current State:** Functional editor (Phase 1 complete), Phase 2 (Ideal Editor UI) in progress
 
-- **Test Status:** ~383 tests passing, 18 ignored (GPU/window tests), 0 failures
-- **Test Quality:** 0 TODOs, 155+ meaningful assertions
-- **Architecture:** Manager pattern implemented, game.rs SRP refactoring complete
-- **Performance:** Behavior system optimized (-85% allocations)
+- **Test Status:** 955/955 passing, 0 ignored, 0 failures
+- **Lint Status:** `cargo clippy --workspace --all-targets` clean
+- **Editor:** entity CRUD, component management, undo/redo, play/pause/stop, scene save/load, collider visualization
+- **Architecture:** Manager pattern, SRP-refactored core, all files under 600 lines
 
 See [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) for detailed technical debt tracking and priorities.
 
@@ -372,12 +476,13 @@ See [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) for detailed technical debt trackin
 
 - **hello_world** - Physics platformer with UI, audio, ECS, scene files, and behaviors
 - **behavior_demo** - Demonstrates all built-in entity behaviors
-- **editor_demo** - Visual editor for scene editing (in development)
+- **editor_demo** - The hello_world platformer running inside the visual editor
 
 Run an example:
 ```bash
 cargo run --example hello_world
 cargo run --example behavior_demo
+cargo run --example editor_demo --features editor
 ```
 
 ## Design Patterns Used
@@ -388,14 +493,14 @@ This codebase implements patterns from [Robert Nystrom's Game Programming Patter
 |---------|---------------|
 | **Component** | ECS with entity-component storage |
 | **Update Method** | Single game loop with centralized update |
-| **Command** | Input events and UI draw commands as data |
+| **Command** | Editor undo/redo, input events, UI draw commands as data |
 | **Manager Pattern** | GameLoopManager, UIManager, RenderManager, WindowManager |
 
 ## Requirements
 
-- Rust stable (1.70+)
+- Recent stable Rust toolchain
 - Cargo
-- GPU with Vulkan, Metal, or DX12 support
+- GPU with Vulkan, Metal, or DX12 support (games/editor only — tests run headless)
 
 ## License
 

@@ -45,6 +45,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - `picking.rs` — EntityPicker, PickableEntity, SelectionRect, screen_to_world()
 - `gizmo.rs` — Transform gizmos (translate, rotate, scale handles)
 - `grid.rs` — Background grid rendering
+- `collider_overlay.rs` — Collider outline overlay for the scene view (mirrors rapier placement: offset is body-local, Transform2D.scale ignored); toggled via `EditorContext::toggle_colliders()` / C key
 
 ### Persistence + commands
 - `commands/` — EditorCommand trait + CommandHistory (`mod.rs`), entity commands, component commands, `impl_set_component_command!` macro for the 5 Set*Commands (`set_commands.rs`); `push_already_executed`, `try_merge_or_push`
@@ -58,10 +59,10 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - `EditorPlayState::Editing` → editable, `Playing` → read-only inspector, `Paused` → editable
 - Selection: `editor.selection.primary()` returns the main selected EntityId
 - Gizmo drag tracking: `gizmo_drag_start` field captures initial transform, then a single `TransformGizmo` command is pushed on release
-- Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
+- Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()`, `collider_overlay_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
 
 ## Testing
-- 229 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
+- 241 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

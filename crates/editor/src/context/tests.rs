@@ -343,3 +343,17 @@ fn test_title_bar_text_untitled_dirty() {
     ctx.mark_dirty();
     assert_eq!(ctx.title_bar_text(), "Untitled* - Insiculous Editor");
 }
+
+#[test]
+fn test_collider_overlay_visible_by_default_and_toggles() {
+    let mut ctx = EditorContext::new();
+    assert!(ctx.is_colliders_visible());
+
+    ctx.toggle_colliders();
+    assert!(!ctx.is_colliders_visible());
+    ctx.toggle_colliders();
+    assert!(ctx.is_colliders_visible());
+
+    ctx.set_colliders_visible(false);
+    assert!(!ctx.is_colliders_visible());
+}

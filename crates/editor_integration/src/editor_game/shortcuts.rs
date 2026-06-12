@@ -122,6 +122,7 @@ impl<G: Game> EditorGame<G> {
                 self.editor.mark_dirty();
             }
             KeyCode::KeyG => self.editor.toggle_grid(),
+            KeyCode::KeyC if !ctrl => self.editor.toggle_colliders(),
             KeyCode::KeyS if ctrl && shift => {
                 // Ctrl+Shift+S → Save As
                 let path = PathBuf::from(DEFAULT_SCENE_PATH);
