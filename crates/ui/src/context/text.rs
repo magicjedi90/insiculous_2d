@@ -156,10 +156,29 @@ impl UIContext {
     /// when available, falling back to approximate centering otherwise.
     /// Use this for text in buttons, headers, and other bounded containers.
     pub fn label_in_bounds(&mut self, text: &str, bounds: Rect, align: TextAlign) {
+        let color = self.theme.text.color;
         let font_size = self.theme.text.font_size;
         let padding = self.theme.panel.padding;
+        self.label_in_bounds_styled(text, bounds, align, color, font_size, padding);
+    }
+
+    /// Draw a styled label vertically centered within bounds.
+    ///
+    /// Like [`label_in_bounds`](Self::label_in_bounds) but with explicit color,
+    /// font size, and edge padding. Use this instead of [`label_styled`](Self::label_styled)
+    /// whenever the text sits inside a box (panel headers, status bars) so the
+    /// glyphs never straddle the box's border.
+    pub fn label_in_bounds_styled(
+        &mut self,
+        text: &str,
+        bounds: Rect,
+        align: TextAlign,
+        color: Color,
+        font_size: f32,
+        padding: f32,
+    ) {
         let position = self.text_pos_in_bounds(text, bounds, align, font_size, padding);
-        self.label(text, position);
+        self.draw_text_at_baseline(text, position, color, font_size);
     }
 
     /// Create a text label centered horizontally at a position.

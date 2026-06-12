@@ -23,7 +23,7 @@ ui.end_frame(); // collects draw commands
 - See `TECH_DEBT.md` — open: numeric-only text input (JUN-T1, Medium); Low: TextDrawData redundancy (ARCH-003), unused scroll_delta (JUN-T2), no layout helpers (JUN-T3)
 
 ## Testing
-- 70 tests (incl. 2 doc), run with `cargo test -p ui`
+- 80 tests (incl. 2 doc), run with `cargo test -p ui`
 
 ## Godot Oracle
 - Immediate-mode patterns: Godot doesn't use immediate-mode, but see `scene/gui/control.cpp` for widget lifecycle

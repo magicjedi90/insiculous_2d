@@ -145,12 +145,13 @@ impl Toolbar {
                 new_tool = Some(tool);
             }
 
-            // Draw shortcut hint below button
+            // Draw shortcut hint below button (baseline sits a line below the
+            // button's bottom edge so the glyphs don't rise into the button)
             let hint_pos = Vec2::new(
                 button_bounds.center().x,
-                button_bounds.y + button_bounds.height + 2.0,
+                button_bounds.y + button_bounds.height + 12.0,
             );
-            ui.label_styled(tool.shortcut(), hint_pos, theme.shortcut_hint, 10.0);
+            ui.label_centered_styled(tool.shortcut(), hint_pos, theme.shortcut_hint, 10.0);
         }
 
         new_tool

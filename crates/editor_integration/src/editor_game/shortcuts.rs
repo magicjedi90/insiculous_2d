@@ -16,6 +16,11 @@ use super::EditorGame;
 impl<G: Game> EditorGame<G> {
     /// Q/W/E/R tool selection shortcuts.
     pub(super) fn handle_tool_shortcuts(&mut self, ctx: &GameContext) {
+        // A focused text input owns the keyboard — typing must not switch tools
+        if ctx.ui.wants_keyboard() {
+            return;
+        }
+
         let kb = ctx.input.keyboard();
 
         if kb.is_key_just_pressed(KeyCode::KeyQ) {
@@ -78,6 +83,13 @@ impl<G: Game> EditorGame<G> {
     /// Top-level key handler: play shortcuts always work; editor shortcuts
     /// apply while Editing/Paused; everything else forwards to the game.
     pub(super) fn handle_editor_key(&mut self, key: KeyCode, ctx: &mut GameContext) {
+        // A focused text input (inspector value box) owns the keyboard:
+        // Delete/Backspace edit the buffer, they must not delete the entity.
+        // Enter/Tab/Escape are handled by the widget itself, which clears focus.
+        if ctx.ui.wants_keyboard() {
+            return;
+        }
+
         let ctrl = ctx.input.keyboard().is_key_pressed(KeyCode::ControlLeft)
             || ctx.input.keyboard().is_key_pressed(KeyCode::ControlRight);
         let shift = ctx.input.keyboard().is_key_pressed(KeyCode::ShiftLeft)

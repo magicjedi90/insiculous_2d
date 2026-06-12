@@ -176,6 +176,48 @@ impl UIContext {
         self.interaction.mouse_pos()
     }
 
+    /// Whether the left mouse button was pressed this frame.
+    pub fn mouse_just_pressed(&self) -> bool {
+        self.interaction.input().mouse_just_pressed
+    }
+
+    /// Whether a widget (e.g. a text input being edited) currently has
+    /// keyboard focus. Hosts should suppress their own keyboard shortcuts
+    /// while this returns `true`.
+    pub fn wants_keyboard(&self) -> bool {
+        self.interaction.has_focus()
+    }
+
+    // ================== Overlays ==================
+
+    /// Begin an overlay (dropdown menu, popup) over `blocking_rect`.
+    ///
+    /// Until [`end_overlay`](Self::end_overlay):
+    /// - draw commands go to a higher depth band so they render on top of
+    ///   all base UI regardless of submission order, and
+    /// - `interact()` calls stay live while widgets *outside* the overlay
+    ///   become inert whenever the mouse is inside `blocking_rect` (for the
+    ///   rest of the frame), so clicks don't pass through the overlay.
+    pub fn begin_overlay(&mut self, blocking_rect: Rect) {
+        self.draw_list.begin_overlay();
+        self.interaction.push_blocking_rect(blocking_rect);
+        self.interaction.set_overlay_scope(true);
+    }
+
+    /// End the current overlay, returning to the base depth band and
+    /// re-enabling input blocking for subsequent widgets.
+    pub fn end_overlay(&mut self) {
+        self.draw_list.end_overlay();
+        self.interaction.set_overlay_scope(false);
+    }
+
+    /// Whether mouse input at `pos` is swallowed by an open overlay
+    /// (dropdown/popup). Raw-input consumers (e.g. viewport picking) should
+    /// check this before acting on mouse events.
+    pub fn is_input_blocked_at(&self, pos: Vec2) -> bool {
+        self.interaction.is_blocked_at(pos)
+    }
+
     // ================== Drawing Primitives ==================
 
     /// Draw a colored rectangle.

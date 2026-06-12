@@ -18,6 +18,12 @@ impl<G: Game> EditorGame<G> {
             return;
         }
 
+        // An open overlay (menu dropdown) swallows mouse input — skip
+        // picking/pan/zoom so clicks don't pass through it into the scene.
+        if ctx.ui.is_input_blocked_at(ctx.ui.mouse_pos()) {
+            return;
+        }
+
         let input_result = self.editor.viewport_input.handle_input_simple(
             &mut self.editor.viewport,
             &self.editor.input_mapping,

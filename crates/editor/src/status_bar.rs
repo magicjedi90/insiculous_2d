@@ -126,7 +126,6 @@ impl StatusBar {
             1.0,
         );
 
-        let text_y = bar.y + 4.0;
         let padding = 8.0;
 
         // Left section: status message
@@ -136,7 +135,7 @@ impl StatusBar {
         } else {
             theme.text_secondary
         };
-        ui.label_styled(status_text, Vec2::new(bar.x + padding, text_y), status_color, 11.0);
+        ui.label_in_bounds_styled(status_text, bar, ui::TextAlign::Left, status_color, 11.0, padding);
 
         // Center section: runtime stats
         let stats_text = format!(
@@ -144,12 +143,10 @@ impl StatusBar {
             self.stats.entity_count,
             self.stats.fps,
         );
-        let center_x = bar.x + bar.width / 2.0 - 80.0;
-        ui.label_styled(&stats_text, Vec2::new(center_x, text_y), theme.text_muted, 11.0);
+        ui.label_in_bounds_styled(&stats_text, bar, ui::TextAlign::Center, theme.text_muted, 11.0, padding);
 
         // Right section: version
-        let version_x = bar.x + bar.width - padding - (self.version.len() as f32 * 7.0);
-        ui.label_styled(&self.version, Vec2::new(version_x, text_y), theme.accent_cyan, 11.0);
+        ui.label_in_bounds_styled(&self.version, bar, ui::TextAlign::Right, theme.accent_cyan, 11.0, padding);
 
         bar
     }

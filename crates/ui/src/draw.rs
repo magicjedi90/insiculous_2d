@@ -126,10 +126,17 @@ impl DrawCommand {
 /// (< camera far=1000).
 const UI_BASE_DEPTH: f32 = 900.0;
 
+/// Extra depth added to commands recorded while overlay mode is active
+/// (dropdown menus, popups). Keeps overlays above all base-band UI no matter
+/// the submission order. The base band would need 50,000 commands to collide.
+const OVERLAY_DEPTH_BOOST: f32 = 50.0;
+
 /// A draw list that collects all UI draw commands for a frame.
 #[derive(Debug, Clone, Default)]
 pub struct DrawList {
     commands: Vec<DrawCommand>,
+    /// Whether subsequent commands belong to the overlay depth band.
+    overlay: bool,
 }
 
 impl DrawList {
@@ -137,6 +144,7 @@ impl DrawList {
     pub fn new() -> Self {
         Self {
             commands: Vec::new(),
+            overlay: false,
         }
     }
 
@@ -144,12 +152,31 @@ impl DrawList {
     /// Each command gets slightly increasing depth to maintain draw order.
     #[inline]
     fn next_depth(&self) -> f32 {
-        UI_BASE_DEPTH + self.commands.len() as f32 * 0.001
+        let boost = if self.overlay { OVERLAY_DEPTH_BOOST } else { 0.0 };
+        UI_BASE_DEPTH + boost + self.commands.len() as f32 * 0.001
+    }
+
+    /// Record subsequent commands in the overlay depth band so they render
+    /// on top of all base-band UI (panels, toolbars) regardless of submission
+    /// order. Must be paired with [`end_overlay`](Self::end_overlay).
+    pub fn begin_overlay(&mut self) {
+        self.overlay = true;
+    }
+
+    /// Return to the base depth band.
+    pub fn end_overlay(&mut self) {
+        self.overlay = false;
+    }
+
+    /// Whether overlay mode is currently active.
+    pub fn is_overlay(&self) -> bool {
+        self.overlay
     }
 
     /// Clear all draw commands.
     pub fn clear(&mut self) {
         self.commands.clear();
+        self.overlay = false;
     }
 
     /// Get all draw commands.
@@ -411,6 +438,37 @@ mod tests {
         let depths: Vec<f32> = list.commands().iter().map(|c| c.depth()).collect();
         assert!(depths[0] < depths[1]);
         assert!(depths[1] < depths[2]);
+    }
+
+    #[test]
+    fn test_overlay_commands_render_above_base_band() {
+        let mut list = DrawList::new();
+        list.rect(Rect::default(), Color::RED); // base band
+        list.begin_overlay();
+        list.rect(Rect::default(), Color::BLUE); // overlay band
+        list.rect(Rect::default(), Color::GREEN); // overlay band
+        list.end_overlay();
+        list.rect(Rect::default(), Color::RED); // base band again
+
+        let depths: Vec<f32> = list.commands().iter().map(|c| c.depth()).collect();
+        assert!(depths[0] < 950.0, "base command stays in base band");
+        assert!(depths[1] >= 950.0, "overlay command is boosted");
+        assert!(depths[2] > depths[1], "overlay band stays monotonic");
+        assert!(depths[3] < 950.0, "end_overlay returns to base band");
+        assert!(depths[3] > depths[0], "base band stays monotonic");
+    }
+
+    #[test]
+    fn test_clear_resets_overlay_mode() {
+        let mut list = DrawList::new();
+        list.begin_overlay();
+        assert!(list.is_overlay());
+
+        list.clear();
+        assert!(!list.is_overlay());
+
+        list.rect(Rect::default(), Color::RED);
+        assert!(list.commands()[0].depth() < 950.0);
     }
 
     #[test]

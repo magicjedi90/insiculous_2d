@@ -258,9 +258,15 @@ impl DockArea {
             );
             ui.rect_rounded(header_bounds, theme.bg_header, 0.0);
 
-            // Draw panel title in accent color
-            let title_pos = glam::Vec2::new(header_bounds.x + 8.0, header_bounds.y + 4.0);
-            ui.label_styled(&panel.title, title_pos, theme.accent_cyan, 14.0);
+            // Draw panel title in accent color, vertically centered in the header
+            ui.label_in_bounds_styled(
+                &panel.title,
+                header_bounds,
+                ui::TextAlign::Left,
+                theme.accent_cyan,
+                14.0,
+                8.0,
+            );
 
             // Track content area (caller will push/pop clip rect around each panel's content)
             let content = panel.content_bounds();

@@ -240,6 +240,12 @@ pub struct InteractionManager {
     persistent_state: HashMap<WidgetId, WidgetPersistentState>,
     /// Widget that had keyboard focus
     focus_widget: Option<WidgetId>,
+    /// Regions (e.g. open dropdowns) that swallow mouse input for all
+    /// widgets outside the overlay scope. Cleared each frame.
+    blocking_rects: Vec<Rect>,
+    /// Whether interact() calls are currently inside an overlay (exempt
+    /// from blocking rects). Cleared each frame.
+    overlay_scope: bool,
 }
 
 impl Default for InteractionManager {
@@ -257,6 +263,8 @@ impl InteractionManager {
             input: InputState::default(),
             persistent_state: HashMap::new(),
             focus_widget: None,
+            blocking_rects: Vec::new(),
+            overlay_scope: false,
         }
     }
 
@@ -266,6 +274,10 @@ impl InteractionManager {
 
         // Clear hot widget at start of frame (will be set by widgets that are hovered)
         self.hot_widget = None;
+
+        // Blocking regions are re-registered each frame by whatever overlay is open
+        self.blocking_rects.clear();
+        self.overlay_scope = false;
 
         // Don't clear active_widget here - let widgets check for clicks first
         // The active_widget will be cleared in end_frame() after click detection
@@ -316,6 +328,29 @@ impl InteractionManager {
         self.focus_widget == Some(id)
     }
 
+    /// Check if any widget has keyboard focus (e.g. a text input being edited).
+    pub fn has_focus(&self) -> bool {
+        self.focus_widget.is_some()
+    }
+
+    /// Register a region that swallows mouse input for all widgets outside
+    /// the overlay scope (used by dropdown menus and popups). Cleared each frame.
+    pub fn push_blocking_rect(&mut self, rect: Rect) {
+        self.blocking_rects.push(rect);
+    }
+
+    /// Set whether subsequent interact() calls belong to an overlay and are
+    /// therefore exempt from blocking rects.
+    pub fn set_overlay_scope(&mut self, overlay: bool) {
+        self.overlay_scope = overlay;
+    }
+
+    /// Check if mouse input at the given position is swallowed by a blocking
+    /// region (an open dropdown or popup).
+    pub fn is_blocked_at(&self, pos: Vec2) -> bool {
+        self.blocking_rects.iter().any(|r| r.contains(pos))
+    }
+
     /// Set keyboard focus to a widget.
     pub fn set_focus(&mut self, id: WidgetId) {
         self.focus_widget = Some(id);
@@ -348,6 +383,14 @@ impl InteractionManager {
                 state: WidgetState::Disabled,
                 ..Default::default()
             };
+        }
+
+        // Widgets outside an overlay are inert while the mouse is over a
+        // blocking region (open dropdown/popup): no hover, no click, no
+        // activation. An already-active widget keeps its slot — end_frame
+        // clears it on mouse release.
+        if !self.overlay_scope && self.is_blocked_at(self.input.mouse_pos) {
+            return InteractionResult::default();
         }
 
         let mouse_in_bounds = bounds.contains(self.input.mouse_pos);
@@ -424,6 +467,104 @@ mod tests {
         let id4: WidgetId = ("list", 5).into();
         let id5 = WidgetId::from_str_index("list", 5);
         assert_eq!(id4, id5);
+    }
+
+    /// Build an InputHandler with the mouse at `pos`, optionally pressed.
+    fn input_with_mouse(pos: Vec2, pressed: bool) -> InputHandler {
+        let mut input = InputHandler::new();
+        input.mouse_mut().update_position(pos.x, pos.y);
+        if pressed {
+            input.mouse_mut().handle_button_press(MouseButton::Left);
+        }
+        input
+    }
+
+    #[test]
+    fn test_blocking_rect_makes_outside_widget_inert() {
+        let mut manager = InteractionManager::new();
+        let input = input_with_mouse(Vec2::new(50.0, 50.0), true);
+        manager.begin_frame(&input);
+
+        // A dropdown covers the widget's area
+        manager.push_blocking_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+
+        let id = WidgetId::from_str("widget_under_dropdown");
+        let result = manager.interact(id, Rect::new(40.0, 40.0, 50.0, 50.0), true);
+
+        assert_eq!(result.state, WidgetState::Normal, "no hover under a blocking rect");
+        assert!(!result.clicked);
+        assert!(!result.dragging);
+        assert!(manager.active_widget.is_none(), "press must not activate a blocked widget");
+        assert!(manager.hot_widget.is_none());
+    }
+
+    #[test]
+    fn test_overlay_scope_widget_stays_interactive_over_blocking_rect() {
+        let mut manager = InteractionManager::new();
+        let input = input_with_mouse(Vec2::new(50.0, 50.0), true);
+        manager.begin_frame(&input);
+
+        manager.push_blocking_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+        manager.set_overlay_scope(true);
+
+        let id = WidgetId::from_str("dropdown_item");
+        let result = manager.interact(id, Rect::new(40.0, 40.0, 50.0, 50.0), true);
+
+        assert_eq!(result.state, WidgetState::Active, "overlay widget receives the press");
+        assert!(result.dragging);
+    }
+
+    #[test]
+    fn test_widget_outside_blocking_rect_unaffected() {
+        let mut manager = InteractionManager::new();
+        let input = input_with_mouse(Vec2::new(300.0, 300.0), false);
+        manager.begin_frame(&input);
+
+        manager.push_blocking_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+
+        let id = WidgetId::from_str("far_widget");
+        let result = manager.interact(id, Rect::new(280.0, 280.0, 50.0, 50.0), true);
+        assert_eq!(result.state, WidgetState::Hovered, "blocking only applies under the rect");
+    }
+
+    #[test]
+    fn test_blocked_widget_persistent_state_survives_frame() {
+        let mut manager = InteractionManager::new();
+        let id = WidgetId::from_str("blocked_text_input");
+        manager.get_state(id).string_value = "edit buffer".to_string();
+
+        let input = input_with_mouse(Vec2::new(50.0, 50.0), false);
+        manager.begin_frame(&input);
+        manager.push_blocking_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+        manager.interact(id, Rect::new(40.0, 40.0, 20.0, 20.0), true);
+        manager.end_frame();
+
+        let state = manager.get_state_if_exists(id).expect("blocked widget state retained");
+        assert_eq!(state.string_value, "edit buffer");
+    }
+
+    #[test]
+    fn test_begin_frame_clears_blocking_state() {
+        let mut manager = InteractionManager::new();
+        manager.push_blocking_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+        manager.set_overlay_scope(true);
+        assert!(manager.is_blocked_at(Vec2::new(50.0, 50.0)));
+
+        manager.begin_frame(&InputHandler::new());
+        assert!(!manager.is_blocked_at(Vec2::new(50.0, 50.0)));
+        assert!(!manager.overlay_scope);
+    }
+
+    #[test]
+    fn test_has_focus_tracks_any_focused_widget() {
+        let mut manager = InteractionManager::new();
+        assert!(!manager.has_focus());
+
+        manager.set_focus(WidgetId::from_str("field"));
+        assert!(manager.has_focus());
+
+        manager.clear_focus();
+        assert!(!manager.has_focus());
     }
 
     #[test]

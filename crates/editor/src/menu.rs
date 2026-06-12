@@ -301,29 +301,56 @@ impl MenuBar {
     }
 
     /// Phase 4 — render the dropdown for the open menu (if any) and handle
-    /// item clicks. A click closes the menu and returns the item label.
+    /// item clicks. A click on an item — or a press outside the dropdown —
+    /// closes the menu; an item click returns its label.
     fn render_open_dropdown(&mut self, ui: &mut UIContext, theme: &EditorTheme) -> Option<String> {
         let open_index = self.open_menu?;
         let menu = &self.menus[open_index];
+        let dropdown_bounds = Self::dropdown_bounds(menu, menu.bounds);
 
-        let clicked = Self::render_dropdown_static(ui, menu, menu.bounds, theme);
+        if ui.mouse_just_pressed()
+            && Self::should_close_on_press(ui.mouse_pos(), dropdown_bounds, menu.bounds)
+        {
+            self.open_menu = None;
+            return None;
+        }
+
+        // Overlay: render on top of panels/toolbar and swallow clicks so
+        // they don't pass through to widgets underneath.
+        ui.begin_overlay(dropdown_bounds);
+        let clicked = Self::render_dropdown_static(ui, menu, dropdown_bounds, theme);
+        ui.end_overlay();
+
         if clicked.is_some() {
             self.open_menu = None;
         }
         clicked
     }
 
-    /// Render a dropdown menu (static method to avoid borrow issues).
-    fn render_dropdown_static(ui: &mut UIContext, menu: &Menu, anchor: Rect, theme: &EditorTheme) -> Option<String> {
-        let item_count = menu.items.len();
-        let dropdown_height = item_count as f32 * DROPDOWN_ITEM_HEIGHT + 8.0;
-        let dropdown_bounds = Rect::new(
+    /// Compute the dropdown bounds for a menu anchored below its title.
+    fn dropdown_bounds(menu: &Menu, anchor: Rect) -> Rect {
+        let dropdown_height = menu.items.len() as f32 * DROPDOWN_ITEM_HEIGHT + 8.0;
+        Rect::new(
             anchor.x,
             anchor.y + anchor.height,
             DROPDOWN_WIDTH,
             dropdown_height,
-        );
+        )
+    }
 
+    /// Whether a mouse press at `mouse` should close the open dropdown.
+    ///
+    /// Presses inside the dropdown are item interactions; presses on the open
+    /// menu's own title must NOT close here because the title's click fires on
+    /// mouse *release* — closing on press would make the release re-toggle the
+    /// menu open (close/reopen flicker). Pressing a different title closes
+    /// here, then that title's release opens its menu.
+    fn should_close_on_press(mouse: Vec2, dropdown: Rect, title: Rect) -> bool {
+        !dropdown.contains(mouse) && !title.contains(mouse)
+    }
+
+    /// Render a dropdown menu (static method to avoid borrow issues).
+    fn render_dropdown_static(ui: &mut UIContext, menu: &Menu, dropdown_bounds: Rect, theme: &EditorTheme) -> Option<String> {
         // Draw dropdown background
         ui.panel(dropdown_bounds);
 
@@ -558,6 +585,91 @@ mod tests {
         bar.layout_titles(800.0);
 
         assert!(bar.menus[1].bounds.width > bar.menus[0].bounds.width);
+    }
+
+    #[test]
+    fn test_should_close_on_press_geometry() {
+        let dropdown = Rect::new(8.0, 24.0, 200.0, 100.0);
+        let title = Rect::new(8.0, 0.0, 60.0, 24.0);
+
+        // Press far away → close
+        assert!(MenuBar::should_close_on_press(Vec2::new(500.0, 300.0), dropdown, title));
+        // Press inside the dropdown → keep open (item interaction)
+        assert!(!MenuBar::should_close_on_press(Vec2::new(50.0, 60.0), dropdown, title));
+        // Press on the open menu's own title → keep open (release toggles it)
+        assert!(!MenuBar::should_close_on_press(Vec2::new(30.0, 10.0), dropdown, title));
+    }
+
+    /// Build an InputHandler with the mouse at the given position, pressed.
+    fn pressed_mouse_at(x: f32, y: f32) -> input::InputHandler {
+        let mut input = input::InputHandler::new();
+        input.mouse_mut().update_position(x, y);
+        input.mouse_mut().handle_button_press(winit::event::MouseButton::Left);
+        input
+    }
+
+    #[test]
+    fn test_outside_press_closes_open_menu() {
+        let mut bar = MenuBar::editor_default();
+        bar.layout_titles(1280.0);
+        bar.open_menu = Some(0);
+
+        let mut ui = UIContext::new();
+        let input = pressed_mouse_at(900.0, 400.0); // far from menu + dropdown
+        ui.begin_frame(&input, Vec2::new(1280.0, 720.0));
+        let clicked = bar.render(&mut ui, 1280.0, &crate::theme::EditorTheme::default());
+        ui.end_frame();
+
+        assert!(clicked.is_none());
+        assert!(bar.open_menu.is_none(), "press outside must close the dropdown");
+    }
+
+    #[test]
+    fn test_press_on_open_title_keeps_menu_open_until_release() {
+        let mut bar = MenuBar::editor_default();
+        bar.layout_titles(1280.0);
+        bar.open_menu = Some(0);
+        let title_center = bar.menus[0].bounds.center();
+
+        let mut ui = UIContext::new();
+        let input = pressed_mouse_at(title_center.x, title_center.y);
+        ui.begin_frame(&input, Vec2::new(1280.0, 720.0));
+        bar.render(&mut ui, 1280.0, &crate::theme::EditorTheme::default());
+        ui.end_frame();
+
+        // The close happens via the title's click (on release), not on press —
+        // closing here too would cause a close/reopen flicker.
+        assert_eq!(bar.open_menu, Some(0));
+    }
+
+    #[test]
+    fn test_open_dropdown_renders_in_overlay_band_and_blocks_input() {
+        let mut bar = MenuBar::editor_default();
+        bar.layout_titles(1280.0);
+        bar.open_menu = Some(0);
+
+        let mut ui = UIContext::new();
+        ui.begin_frame(&input::InputHandler::new(), Vec2::new(1280.0, 720.0));
+        bar.render(&mut ui, 1280.0, &crate::theme::EditorTheme::default());
+
+        // Dropdown draws above the base UI band (950+)
+        let max_depth = ui
+            .draw_list()
+            .commands()
+            .iter()
+            .map(|c| c.depth())
+            .fold(f32::MIN, f32::max);
+        assert!(max_depth >= 950.0, "dropdown must render in the overlay band, got {max_depth}");
+
+        // Mouse input under the dropdown is swallowed for later widgets
+        let dropdown = MenuBar::dropdown_bounds(&bar.menus[0], bar.menus[0].bounds);
+        assert!(ui.is_input_blocked_at(dropdown.center()));
+
+        // Overlay mode was properly closed: subsequent draws are base band
+        let before = ui.draw_list().len();
+        ui.rect(Rect::new(0.0, 0.0, 10.0, 10.0), ui::Color::WHITE);
+        assert!(ui.draw_list().commands()[before].depth() < 950.0);
+        ui.end_frame();
     }
 
     #[test]

@@ -267,3 +267,51 @@ fn test_measure_text_empty_string_returns_zero_width() {
     let size = ui.measure_text("");
     assert_eq!(size.x, 0.0, "empty string should have zero width");
 }
+
+#[test]
+fn test_label_in_bounds_styled_keeps_glyphs_inside_bounds() {
+    // No font loaded — the estimate path uses ascent = 0.8 * font_size,
+    // matching the dock panel header geometry (24px tall).
+    let mut ui = UIContext::new();
+    let bounds = Rect::new(0.0, 100.0, 200.0, 24.0);
+
+    ui.label_in_bounds_styled("Hierarchy", bounds, TextAlign::Left, Color::WHITE, 14.0, 8.0);
+
+    if let DrawCommand::TextPlaceholder { position, font_size, .. } = &ui.draw_list().commands()[0] {
+        let glyph_top = position.y - font_size * 0.8; // baseline minus ascent
+        assert!(
+            glyph_top >= bounds.y,
+            "glyphs must not rise above the bounds top (no border strike-through): top {glyph_top} < {}",
+            bounds.y
+        );
+        assert!(position.y <= bounds.y + bounds.height, "baseline stays inside the bounds");
+        assert_eq!(position.x, bounds.x + 8.0, "left-aligned with padding");
+    } else {
+        panic!("Expected TextPlaceholder command");
+    }
+}
+
+#[test]
+fn test_wants_keyboard_follows_float_input_focus() {
+    use input::prelude::MouseButton;
+
+    let mut ui = UIContext::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+    let mut input = input::InputHandler::new();
+
+    // Frame 1: press inside the field (click fires on release, so no focus yet)
+    input.mouse_mut().update_position(50.0, 20.0);
+    input.mouse_mut().handle_button_press(MouseButton::Left);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    ui.float_input("focus_field", 1.0, 0.0, 10.0, bounds);
+    ui.end_frame();
+    assert!(!ui.wants_keyboard());
+
+    // Frame 2: release inside the field — the click focuses the input
+    input.update(); // clear just-pressed edge from frame 1
+    input.mouse_mut().handle_button_release(MouseButton::Left);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    ui.float_input("focus_field", 1.0, 0.0, 10.0, bounds);
+    ui.end_frame();
+    assert!(ui.wants_keyboard(), "focused float input must claim the keyboard");
+}
