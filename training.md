@@ -536,15 +536,9 @@ cargo test -- --nocapture
 ```
 
 ### Test Status Summary
-```
-Total: 356 tests
-├─ Passed: 338 (100% of executable)
-├─ Ignored: 18 (5% - require GPU/window)
-└─ Failed: 0 (0%)
-
-Success Rate: 100%
-Quality: Excellent ✅
-```
+Do not trust hardcoded test counts in docs — run `cargo test --workspace` for the
+truth. The invariant that matters: **0 failed, 0 ignored** (GPU/window-bound doc
+examples are `no_run`, never `ignore`). Current count lives in `AGENTS.md`.
 
 For more game programming patterns, refer to the [Game Programming Patterns](https://gameprogrammingpatterns.com/) book.
 

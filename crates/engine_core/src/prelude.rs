@@ -37,7 +37,7 @@ pub use glam::{Vec2, Vec4};
 
 // Re-export ECS types
 pub use ecs::{EntityId, World};
-pub use ecs::sprite_components::Sprite;
+pub use ecs::sprite_components::{Name, Sprite};
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;
 pub use ecs::WorldHierarchyExt;
@@ -45,8 +45,8 @@ pub use ecs::System;
 pub use ecs::behavior::Behavior;
 pub use ecs::{StateMachine, HierarchicalStateMachine, EventBus, ResourceStorage};
 
-// Re-export input types (KeyCode re-exported through input crate, not directly from winit)
-pub use input::prelude::KeyCode;
+// Re-export input types (KeyCode/MouseButton re-exported through input crate, not directly from winit)
+pub use input::prelude::{KeyCode, MouseButton};
 
 // Re-export renderer types
 pub use renderer::{TextureHandle, TextureLoadConfig};

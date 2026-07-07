@@ -39,7 +39,7 @@ Each game lives in `../games/<name>/` as a standalone cargo project consuming th
 
 ---
 
-### Game 1: Pong ☑ IN PROGRESS
+### Game 1: Pong ☑ COMPLETE (June 2026)
 
 Two paddles, one ball, score display. The "Hello, World" of games.
 
@@ -51,15 +51,17 @@ Two paddles, one ball, score display. The "Hello, World" of games.
 
 ---
 
-### Game 2: Breakout ☐
+### Game 2: Breakout ☑ COMPLETE (June 2026)
 
 Ball bouncing off a paddle, destroying a grid of bricks. Classic single-player.
+Lives in `../games/breakout/` — 18 tests, clippy-clean, full chaos-mode +
+achievements support, deforming grid background, particles.
 
-**Teaches:** Dynamic entity spawning/despawning via collision callbacks, brick grid layout, lives system
-**Key components:** Ball (dynamic), paddle (kinematic), brick entities (static, destroyed on hit), `Collectible` behavior for power-ups
-**Controls:** Mouse or arrow keys to move paddle.
-**Win condition:** Clear all bricks. Lives lost when ball falls off screen.
-**Estimated scope:** ~300 lines.
+**Taught:** Dynamic entity despawning via collision events (bricks), grid layout spawning, lives system (bottom sensor + escape safety net), offset-based paddle bounce control, mouse+keyboard on one input
+**Key components:** Ball (dynamic, CCD), paddle (kinematic `capsule_x`), 10×6 brick grid (static, destroyed on hit)
+**Controls:** Mouse or arrow keys/A/D to move paddle; Space/Enter/click to launch.
+**Win condition:** Clear all bricks. Lives lost when all live balls fall off screen.
+**Engine gap found:** `MouseButton` wasn't re-exported in `engine_core::prelude` — added alongside `KeyCode`.
 
 ---
 

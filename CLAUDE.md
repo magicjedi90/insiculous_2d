@@ -1,6 +1,75 @@
 @AGENTS.md
 @training.md
 
+# Solo Session Guardrails — READ FIRST (applies to every model)
+
+This project is worked on by different Claude models across sessions. These rules
+encode lessons already learned here — following them is cheaper than re-learning them.
+
+## Non-Negotiable Workflow
+1. **Never invent an API.** Before calling any engine function, `grep` for its
+   definition or an existing call site. If you can't find it, it doesn't exist —
+   check `training.md` or the crate's `CLAUDE.md` instead of guessing.
+2. **Small verified steps.** After each edit: `cargo check --workspace`. After each
+   feature: `cargo test -p <crate>`. Before claiming done: `cargo test --workspace`
+   AND `cargo clippy --workspace --all-targets` (both must be fully clean —
+   0 failed, 0 ignored, 0 warnings). Use the `/finish-task` skill for the full checklist.
+3. **Never claim tests pass without running them.** Never delete/weaken a failing
+   test to make it pass, never add `#[ignore]` or ` ```ignore ` doc examples
+   (GPU/window-bound doc examples use ` ```no_run `).
+4. **Do only what was asked.** No opportunistic refactors, no new dependencies, no
+   `#[allow(...)]`, no `unwrap()` outside tests. Files stay under 600 lines — split
+   instead of growing.
+5. **When stuck after 2 attempts, stop thrashing.** Consult the Godot oracle (below),
+   write findings to `coordination/BLOCKERS.md`, and report to the user with what you
+   tried. A clear blocker report beats a wrong "fix".
+6. **Use the project skills** for recurring tasks: `/add-component` (wire a new ECS
+   component through registry + editor), `/new-game` (20-games-challenge scaffold),
+   `/finish-task` (definition-of-done verification).
+
+## Single Sources of Truth (edit HERE, nowhere else)
+| Concern | The one place |
+|---------|---------------|
+| Editor-visible components | `crates/editor/src/stored_component.rs` — one line in `editor_component_registry!` |
+| Dynamic component creation by name | `crates/ecs/src/component_registry.rs` — `registry.register::<T>()` in the global-registry fn |
+| Scene RON schema (load) | `crates/engine_core/src/scene_data.rs` — `ComponentData` enum + `scene_loader.rs` |
+| World → RON save | `crates/engine_core/src/scene_serializer.rs` — `extract_components()` (the ONLY save pipeline) |
+| Inspector writeback / undo merge | `apply_component_edit()` in `crates/editor_integration/src/panel_renderer/inspector.rs`; `impl_set_component_command!` in `crates/editor/src/commands/set_commands.rs` |
+| Frame timing | `GameLoopManager` (`game_loop_manager.rs`) — there is no other frame timer |
+| Editor colors | `crates/editor/src/theme.rs` `EditorTheme` tokens — never hardcode colors in panels |
+| Behavior ↔ BehaviorData | The `From` impl pair in `scene_data.rs` |
+
+## Known Footguns (silent bugs already paid for once)
+- **Physics ignores `Transform2D.scale`.** Colliders are absolute-pixel sized; sprites
+  scaled via `scale` will visually drift from their collider. Games use
+  `RENDER_UNIT = 80` (scale × 80 = pixel size). Check the collider overlay (C key in
+  editor) when sprites and physics disagree.
+- **`PhysicsSystem` sync only ADDS bodies** — editing a collider on a live entity does
+  not rebuild its rapier body; edits apply when the body is (re)created.
+- **`Box<dyn Component>` + blanket `Any` impl:** call `.as_ref().as_any()` /
+  `.as_mut().as_any_mut()` before downcasting. Bare `.as_any()` on the Box resolves to
+  the Box's own TypeId and every downcast fails (bit us in `ecs/component.rs`).
+- **wgpu `queue.write_buffer` flushes at `submit()`, not encode time.** Rewriting one
+  uniform buffer between passes in a single submit means all passes read the LAST
+  write (broke bloom). One buffer per distinct per-frame value.
+- **UI text y = baseline** in `label_styled`. For text inside a box use
+  `label_in_bounds_styled` (vertically centers via font metrics) or glyphs straddle
+  the box border.
+- **Editor keyboard shortcuts must gate on `ctx.ui.wants_keyboard()`** and raw-input
+  consumers on `ctx.ui.is_input_blocked_at(mouse)` — otherwise typing in an inspector
+  field triggers Delete-entity/tool shortcuts, and clicks pass through open dropdowns.
+- **Same-frame spawns:** `PhysicsSystem::set_velocity` and `reset_body` are buffered
+  and apply once the body syncs — use them, don't reach for rapier directly.
+- **Collision events:** snapshot with `.to_vec()` before consuming; the event buffer
+  follows a clear/append contract per step.
+- **`ctx.chaos_mode` is read-write** — the engine persists writes made during
+  update/key handlers.
+- **ECS access:** `world.get::<T>(entity)` / `get_mut` take `EntityId` by value and
+  return `Option`. To update component B from component A, read A first, then
+  `get_mut` B sequentially (no simultaneous borrows).
+- Trust `AGENTS.md` / memory for current test counts, not stale numbers inside older
+  docs — when in doubt, `cargo test --workspace` is the truth.
+
 # Agent Teams — Parallel Development System
 
 When dispatching parallel work, use the Task tool to spawn subagents that work on
