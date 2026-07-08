@@ -44,6 +44,8 @@ pub mod contexts;
 pub mod ui_integration;
 pub mod chaos_mode;
 pub mod achievements;
+#[cfg(feature = "physics")]
+pub mod pickups;
 pub mod particles;
 pub mod grid;
 pub mod debug;

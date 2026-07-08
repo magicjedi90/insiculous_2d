@@ -42,7 +42,7 @@ pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;
 pub use ecs::WorldHierarchyExt;
 pub use ecs::System;
-pub use ecs::behavior::Behavior;
+pub use ecs::behavior::{Behavior, EntityTag};
 pub use ecs::{StateMachine, HierarchicalStateMachine, EventBus, ResourceStorage};
 
 // Re-export input types (KeyCode/MouseButton re-exported through input crate, not directly from winit)
@@ -66,3 +66,7 @@ pub use physics::{
     Collider, ColliderShape, CollisionData, CollisionEvent, ContactPoint,
     PhysicsConfig, PhysicsSystem, RigidBody, RigidBodyType,
 };
+
+// Generic pickup/collectible tracking (built on physics collision events)
+#[cfg(feature = "physics")]
+pub use crate::pickups::{EffectTimer, Pickup, Pickups};

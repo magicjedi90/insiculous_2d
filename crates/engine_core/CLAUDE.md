@@ -31,6 +31,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `timing.rs` — Timer utilities
 - `contexts.rs` — GameContext, RenderContext
 - `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
+- `pickups.rs` — generic pickup/collectible tracking (`Pickups<K>` keyed by a game-defined kind, `EffectTimer` for timed effects); collection = started-collision events vs a collector set, once per pickup. Used by BOTH Pong (floating power-ups, balls collect) and Breakout (falling drops, paddle collects) — engine owns the mechanism, games own the meaning
 - `ui_integration.rs` — UI-to-renderer bridge
 - `prelude.rs` — Re-exports for `use engine_core::prelude::*`
 
@@ -41,7 +42,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 168 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 178 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method
