@@ -94,6 +94,7 @@ fn extract_components(
             scale: (s.scale.x, s.scale.y),
             color: (s.color.x, s.color.y, s.color.z, s.color.w),
             depth: s.depth,
+            emissive: s.emissive,
         });
     }
 
@@ -180,6 +181,11 @@ fn extract_components(
     // Behavior — conversion lives on `From<&Behavior> for BehaviorData` in scene_data.rs
     if let Some(b) = world.get::<ecs::behavior::Behavior>(entity) {
         components.push(ComponentData::Behavior(BehaviorData::from(b)));
+    }
+
+    // EntityTag
+    if let Some(t) = world.get::<ecs::behavior::EntityTag>(entity) {
+        components.push(ComponentData::EntityTag { tag: t.0.clone() });
     }
 
     components
@@ -282,7 +288,7 @@ mod tests {
             color: Vec4::new(1.0, 0.0, 0.0, 1.0),
             depth: 10.0,
             visible: true,
-            emissive: 0.0,
+            emissive: 0.9,
             tex_region: [0.0, 0.0, 1.0, 1.0],
         };
         world.add_component(&entity, sprite).ok();
@@ -300,6 +306,7 @@ mod tests {
                 scale,
                 color,
                 depth,
+                emissive,
             } => {
                 assert_eq!(texture, "#texture_5");
                 assert_eq!(*offset, (1.0, 2.0));
@@ -307,6 +314,7 @@ mod tests {
                 assert_eq!(*scale, (3.0, 4.0));
                 assert_eq!(*color, (1.0, 0.0, 0.0, 1.0));
                 assert_eq!(*depth, 10.0);
+                assert_eq!(*emissive, 0.9);
             }
             other => panic!("Expected Sprite, got {:?}", other),
         }
@@ -486,6 +494,30 @@ mod tests {
                 assert_eq!(tag, "hero");
             }
             other => panic!("Expected Behavior::PlayerPlatformer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_entity_with_entity_tag() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world
+            .add_component(&entity, ecs::behavior::EntityTag::new("enemy"))
+            .ok();
+
+        let scene = world_to_scene_data(&world, "TagTest", None, &test_texture_path);
+
+        match &scene.entities[0].components[0] {
+            ComponentData::EntityTag { tag } => assert_eq!(tag, "enemy"),
+            other => panic!("Expected EntityTag, got {:?}", other),
+        }
+
+        // Round-trips through RON
+        let ron_string = serialize_to_ron(&scene).expect("Serialize should succeed");
+        let parsed: SceneData = ron::from_str(&ron_string).expect("Parse should succeed");
+        match &parsed.entities[0].components[0] {
+            ComponentData::EntityTag { tag } => assert_eq!(tag, "enemy"),
+            other => panic!("Expected EntityTag, got {:?}", other),
         }
     }
 

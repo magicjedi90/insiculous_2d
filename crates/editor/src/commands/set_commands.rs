@@ -3,6 +3,7 @@
 use std::any::Any;
 
 use ecs::audio_components::AudioSource;
+use ecs::behavior::Behavior;
 use ecs::sprite_components::Sprite;
 use ecs::{EntityId, World};
 use physics::components::{Collider, RigidBody};
@@ -130,4 +131,7 @@ impl_set_component_command!(
 impl_set_component_command!(
     /// Command for an inspector property edit on an AudioSource.
     SetAudioSourceCommand, AudioSource, "Set AudioSource");
+impl_set_component_command!(
+    /// Command for an inspector property edit on a Behavior.
+    SetBehaviorCommand, Behavior, "Set Behavior");
 

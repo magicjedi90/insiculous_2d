@@ -63,7 +63,7 @@ components like any other type, but the physics crate owns their definitions.
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 174 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
+- 177 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 

@@ -34,9 +34,10 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 
 ### Inspector / components
 - `inspector.rs` — Generic `inspect_component()` (read-only, serde-based)
-- `editable_inspector.rs` — Editable field widgets (sliders, Vec2, checkboxes, color)
+- `editable_inspector.rs` — Editable field widgets (sliders, Vec2, checkboxes, color, read-only string, `cycle()` variant selector)
 - `field_style.rs` — `FieldId` (widget-ID mapping), `EditableFieldStyle` (layout dims + colors), `EditResult<T>`
 - `component_editors.rs` — Per-component editors: `edit_transform2d()`, `edit_sprite()`, etc. Return `Option<ComponentEdit<T>>`; field ranges in `mod ranges`
+- `behavior_editor.rs` — `edit_behavior()`: variant cycle selector + per-variant fields (String fields read-only until the ui crate grows text input)
 
 ### Scene + selection
 - `selection.rs` — Selection set (primary + multi-select)
@@ -62,7 +63,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()`, `collider_overlay_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
 
 ## Testing
-- 245 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
+- 250 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

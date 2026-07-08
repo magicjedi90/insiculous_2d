@@ -29,6 +29,7 @@
 //! assert!(editor.is_editing()); // starts in Editing play state
 //! ```
 
+mod behavior_editor;
 mod collider_overlay;
 pub mod commands;
 mod component_editors;
@@ -57,6 +58,7 @@ pub mod layout;
 pub mod world_snapshot;
 
 // Re-export main types
+pub use behavior_editor::edit_behavior;
 pub use collider_overlay::{
     collider_outline_segments, render_collider_overlay, ColliderOverlayColors,
 };
@@ -69,8 +71,8 @@ pub use context::EditorContext;
 pub use editor_preferences::EditorPreferences;
 pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
 pub use editable_inspector::{
-    component_header, display_u32, edit_bool, edit_color, edit_f32, edit_normalized_f32, edit_vec2,
-    EditableFieldStyle, EditableInspector, EditResult, FieldId,
+    component_header, cycle_step, display_string, display_u32, edit_bool, edit_color, edit_f32,
+    edit_normalized_f32, edit_vec2, EditableFieldStyle, EditableInspector, EditResult, FieldId,
 };
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
 pub use gizmo::{Gizmo, GizmoMode, GizmoPalette};

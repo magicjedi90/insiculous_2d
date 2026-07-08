@@ -7,6 +7,7 @@
 //! to that invocation** — no match statements elsewhere need to change.
 
 use ecs::audio_components::{AudioListener, AudioSource};
+use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::hierarchy::GlobalTransform2D;
 use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
 use ecs::{EntityId, World};
@@ -22,15 +23,17 @@ pub enum ComponentCategory {
     Rendering,
     Physics,
     Audio,
+    Gameplay,
 }
 
 impl ComponentCategory {
     /// All categories in display order.
-    pub const ALL: [ComponentCategory; 4] = [
+    pub const ALL: [ComponentCategory; 5] = [
         ComponentCategory::Core,
         ComponentCategory::Rendering,
         ComponentCategory::Physics,
         ComponentCategory::Audio,
+        ComponentCategory::Gameplay,
     ];
 
     /// Display name for the category header.
@@ -40,6 +43,7 @@ impl ComponentCategory {
             ComponentCategory::Rendering => "Rendering",
             ComponentCategory::Physics => "Physics",
             ComponentCategory::Audio => "Audio",
+            ComponentCategory::Gameplay => "Gameplay",
         }
     }
 }
@@ -181,6 +185,7 @@ editor_component_registry! {
     hidden: [
         GlobalTransform2D => GlobalTransform2D,
         Name              => Name,
+        BehaviorState     => BehaviorState,
     ],
     builtin: [
         Transform2D => common::Transform2D,
@@ -193,6 +198,8 @@ editor_component_registry! {
         Collider        => Collider : Physics,
         AudioSource     => AudioSource : Audio,
         AudioListener   => AudioListener : Audio,
+        Behavior        => Behavior : Gameplay,
+        EntityTag       => EntityTag : Gameplay,
     ],
 }
 
@@ -283,9 +290,26 @@ mod tests {
         world.add_component(&entity, Collider::default()).ok();
         world.add_component(&entity, AudioSource::default()).ok();
         world.add_component(&entity, AudioListener::default()).ok();
+        world.add_component(&entity, Behavior::default()).ok();
+        world.add_component(&entity, BehaviorState::default()).ok();
+        world.add_component(&entity, EntityTag::default()).ok();
 
         let captured = capture_all_components(&world, entity);
-        assert_eq!(captured.len(), 10);
+        assert_eq!(captured.len(), 13);
+    }
+
+    #[test]
+    fn test_gameplay_components_registered_under_gameplay_category() {
+        assert_eq!(ComponentKind::Behavior.category(), ComponentCategory::Gameplay);
+        assert_eq!(ComponentKind::EntityTag.category(), ComponentCategory::Gameplay);
+
+        let categories = categorized_components();
+        let (_, gameplay_kinds) = categories
+            .iter()
+            .find(|(c, _)| *c == ComponentCategory::Gameplay)
+            .expect("Gameplay category present");
+        assert!(gameplay_kinds.contains(&ComponentKind::Behavior));
+        assert!(gameplay_kinds.contains(&ComponentKind::EntityTag));
     }
 
     // ==================== ComponentKind dispatch ====================

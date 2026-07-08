@@ -16,8 +16,8 @@ mod set_commands;
 pub use component_commands::{AddComponentCommand, RemoveComponentCommand};
 pub use entity_commands::{CreateEntityCommand, DeleteEntityCommand, MacroCommand};
 pub use set_commands::{
-    SetAudioSourceCommand, SetColliderCommand, SetRigidBodyCommand, SetSpriteCommand,
-    SetTransformCommand, TransformGizmoCommand,
+    SetAudioSourceCommand, SetBehaviorCommand, SetColliderCommand, SetRigidBodyCommand,
+    SetSpriteCommand, SetTransformCommand, TransformGizmoCommand,
 };
 
 // The registry-generated ComponentKind is re-exported here so existing

@@ -8,7 +8,7 @@ use std::path::Path;
 
 use glam::Vec2;
 
-use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+use ecs::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
 use ecs::{EntityId, World, WorldHierarchyExt};
 use renderer::TextureHandle;
 
@@ -158,6 +158,10 @@ impl SceneLoader {
 
         if let Some(name) = &entity_data.name {
             named_entities.insert(name.clone(), entity_id);
+            // Also attach a Name component so the name survives a save
+            // round-trip (the serializer reads Name into EntityData.name)
+            // and shows up in the editor hierarchy.
+            Self::add_component_logged(world, entity_id, Name::new(name.clone()));
         }
 
         // Set up parent relationship if specified
@@ -279,6 +283,7 @@ impl SceneLoader {
             ComponentData::RigidBody { .. } => "RigidBody",
             ComponentData::Collider { .. } => "Collider",
             ComponentData::Behavior(_) => "Behavior",
+            ComponentData::EntityTag { .. } => "EntityTag",
             ComponentData::Dynamic { component_type, .. } => component_type.as_str(),
         }
     }
@@ -311,6 +316,7 @@ impl SceneLoader {
                 scale,
                 color,
                 depth,
+                emissive,
             } => {
                 let texture_handle = Self::resolve_texture(texture, assets)?;
                 let sprite = Sprite {
@@ -321,7 +327,7 @@ impl SceneLoader {
                     color: glam::Vec4::new(color.0, color.1, color.2, color.3),
                     depth: *depth,
                     visible: true,
-                    emissive: 0.0,
+                    emissive: *emissive,
                     tex_region: [0.0, 0.0, 1.0, 1.0],
                 };
                 Self::add_component_logged(world, entity_id, sprite);
@@ -464,6 +470,10 @@ impl SceneLoader {
                 Self::add_component_logged(world, entity_id, behavior);
             }
 
+            ComponentData::EntityTag { tag } => {
+                Self::add_component_logged(world, entity_id, ecs::behavior::EntityTag::new(tag.clone()));
+            }
+
             ComponentData::Dynamic { component_type, data } => {
                 // Use the component registry to create the component
                 let registry = ecs::component_registry::global_registry();
@@ -499,130 +509,27 @@ impl SceneLoader {
         Ok(())
     }
 
-    /// Resolve a texture reference to a TextureHandle
+    /// Resolve a texture reference to a TextureHandle.
     ///
-    /// Texture references can be:
-    /// - `#white` - Use the white texture (handle 0) for color tinting
-    /// - `#solid:RRGGBB` - Create a solid color texture
-    /// - Any other string - Load as a file path
+    /// Reference syntax lives in `crate::texture_ref`.
     fn resolve_texture(
         texture_ref: &str,
         assets: &mut AssetManager,
     ) -> Result<TextureHandle, SceneLoadError> {
-        if texture_ref == "#white" {
-            // White texture is always handle 0
-            return Ok(TextureHandle { id: 0 });
-        }
-
-        if let Some(hex) = texture_ref.strip_prefix("#solid:") {
-            // Parse hex color and create solid color texture
-            let color = Self::parse_hex_color(hex)?;
-            assets
-                .create_solid_color(1, 1, color)
-                .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
-        } else {
-            // Load as file path
-            assets
-                .load_texture(texture_ref)
-                .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
-        }
-    }
-
-    /// Parse a hex color string (RRGGBB or RRGGBBAA) to [u8; 4]
-    fn parse_hex_color(hex: &str) -> Result<[u8; 4], SceneLoadError> {
-        let hex = hex.trim_start_matches('#');
-
-        if hex.len() == 6 {
-            Ok([parse_hex_byte(hex, 0)?, parse_hex_byte(hex, 2)?, parse_hex_byte(hex, 4)?, 255])
-        } else if hex.len() == 8 {
-            Ok([parse_hex_byte(hex, 0)?, parse_hex_byte(hex, 2)?, parse_hex_byte(hex, 4)?, parse_hex_byte(hex, 6)?])
-        } else {
-            Err(SceneLoadError::InvalidTextureRef(format!(
-                "Hex color must be 6 or 8 characters: {}",
-                hex
-            )))
-        }
+        crate::texture_ref::resolve_texture(texture_ref, assets)
     }
 }
 
-/// Parse a 2-character hex byte from a string at the given offset.
-fn parse_hex_byte(hex: &str, start: usize) -> Result<u8, SceneLoadError> {
-    u8::from_str_radix(&hex[start..start + 2], 16)
-        .map_err(|_| SceneLoadError::InvalidTextureRef(format!("Invalid hex color: {}", hex)))
-}
-
+// Parse-level tests (public API) live in `tests/scene_loader_parse.rs`;
+// only tests needing private methods stay inline.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_hex_color_6() {
-        let color = SceneLoader::parse_hex_color("FF0000").unwrap();
-        assert_eq!(color, [255, 0, 0, 255]);
-
-        let color = SceneLoader::parse_hex_color("00FF00").unwrap();
-        assert_eq!(color, [0, 255, 0, 255]);
-
-        let color = SceneLoader::parse_hex_color("0000FF").unwrap();
-        assert_eq!(color, [0, 0, 255, 255]);
-    }
-
-    #[test]
-    fn test_parse_hex_color_8() {
-        let color = SceneLoader::parse_hex_color("FF000080").unwrap();
-        assert_eq!(color, [255, 0, 0, 128]);
-    }
-
-    #[test]
-    fn test_parse_scene_basic() {
-        let scene_ron = r#"
-            SceneData(
-                name: "Test Scene",
-                entities: [
-                    EntityData(
-                        name: Some("player"),
-                        components: [
-                            Transform2D(position: (100.0, 200.0)),
-                        ],
-                    ),
-                ],
-            )
-        "#;
-
-        let scene = SceneLoader::parse(scene_ron).unwrap();
-        assert_eq!(scene.name, "Test Scene");
-        assert_eq!(scene.entities.len(), 1);
-        assert_eq!(scene.entities[0].name, Some("player".to_string()));
-    }
-
-    #[test]
-    fn test_parse_scene_with_prefabs() {
-        let scene_ron = r##"
-            SceneData(
-                name: "Prefab Test",
-                prefabs: {
-                    "Enemy": PrefabData(
-                        components: [
-                            Transform2D(position: (0.0, 0.0)),
-                            Sprite(texture: "#white", color: (1.0, 0.0, 0.0, 1.0)),
-                        ],
-                    ),
-                },
-                entities: [
-                    EntityData(
-                        name: Some("enemy1"),
-                        prefab: Some("Enemy"),
-                        overrides: [
-                            Transform2D(position: (500.0, 100.0)),
-                        ],
-                    ),
-                ],
-            )
-        "##;
-
-        let scene = SceneLoader::parse(scene_ron).unwrap();
-        assert_eq!(scene.prefabs.len(), 1);
-        assert!(scene.prefabs.contains_key("Enemy"));
+    fn test_entity_tag_component_type_name() {
+        let tag = ComponentData::EntityTag { tag: "enemy".to_string() };
+        assert_eq!(SceneLoader::component_type_name(&tag), "EntityTag");
     }
 
     #[test]

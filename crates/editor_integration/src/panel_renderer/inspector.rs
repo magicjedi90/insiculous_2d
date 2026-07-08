@@ -8,7 +8,7 @@ use editor::{
     CommandHistory, ComponentKind, EditorContext, InspectorStyle,
     EditableInspector, FieldId,
     edit_transform2d, edit_sprite, edit_rigid_body, edit_collider, edit_audio_source,
-    inspect_component,
+    edit_behavior, inspect_component,
 };
 use engine_core::contexts::GameContext;
 
@@ -204,6 +204,39 @@ fn render_inspector_editable(
         }
         y = inspector.y();
         y = inspect_component(ctx.ui, "", listener, content_x + 16.0, y, &inspect_style);
+        component_index += 1;
+    }
+
+    // --- Behavior (removable, uses edit_behavior which renders its own header) ---
+    if let Some(behavior) = ctx.world.get::<ecs::behavior::Behavior>(entity_id).cloned() {
+        y += line_height * 0.5;
+        let header_y = y;
+        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
+            .with_component_index(component_index)
+            .with_style(field_style.clone());
+        let edit = edit_behavior(&mut inspector, &behavior);
+        y = inspector.y();
+
+        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
+            removals.push(ComponentKind::Behavior);
+        }
+
+        apply_component_edit(ctx.world, entity_id, &behavior, edit, command_history,
+            |e, old, new, hint| Box::new(editor::commands::SetBehaviorCommand::new(e, old, new, hint)));
+        component_index += 1;
+    }
+
+    // --- EntityTag (removable, read-only display for now) ---
+    if let Some(tag) = ctx.world.get::<ecs::behavior::EntityTag>(entity_id) {
+        y += line_height * 0.5;
+        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
+            .with_component_index(component_index)
+            .with_style(field_style.clone());
+        if inspector.header_with_remove("EntityTag", true) {
+            removals.push(ComponentKind::EntityTag);
+        }
+        y = inspector.y();
+        y = inspect_component(ctx.ui, "", tag, content_x + 16.0, y, &inspect_style);
         component_index += 1;
     }
 

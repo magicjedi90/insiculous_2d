@@ -167,6 +167,36 @@ pub fn display_u32(
     );
 }
 
+/// Render a read-only string value (for tags, target names, etc.).
+pub fn display_string(
+    ui: &mut UIContext,
+    label: &str,
+    value: &str,
+    pos: Vec2,
+    style: &EditableFieldStyle,
+) {
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(
+        value,
+        glam::Vec2::new(pos.x + style.label_width, pos.y + 4.0),
+        style.value_color,
+        14.0,
+    );
+}
+
+/// Step an index forward or backward through `count` values, wrapping at
+/// the ends. Pure helper behind [`EditableInspector::cycle`].
+pub fn cycle_step(index: usize, count: usize, forward: bool) -> usize {
+    if count == 0 {
+        return 0;
+    }
+    if forward {
+        (index + 1) % count
+    } else {
+        (index + count - 1) % count
+    }
+}
+
 /// Render an editable color (Vec4) with RGBA text inputs and preview.
 pub fn edit_color(
     ui: &mut UIContext,
@@ -403,6 +433,69 @@ impl<'a> EditableInspector<'a> {
         self.current_y += self.style.row_height;
     }
 
+    /// Add a read-only string display.
+    pub fn string(&mut self, label: &str, value: &str) {
+        let pos = self.field_pos();
+        display_string(self.ui, label, value, pos, &self.style);
+        self.field_index += 1;
+        self.current_y += self.style.row_height;
+    }
+
+    /// Add a cycle selector row: `label  [<] value [>]` for choosing among
+    /// `count` named values (e.g. enum variants, where a dropdown is not
+    /// available).
+    ///
+    /// Returns `Changed(new_index)` when an arrow button is clicked,
+    /// wrapping within `count`.
+    pub fn cycle(
+        &mut self,
+        label: &str,
+        value_name: &str,
+        index: usize,
+        count: usize,
+    ) -> EditResult<usize> {
+        let pos = self.field_pos();
+        let (label_color, value_color) = (self.style.label_color, self.style.value_color);
+        let (row_height, label_width) = (self.style.row_height, self.style.label_width);
+        self.ui
+            .label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), label_color, 14.0);
+
+        let btn_size = row_height - 6.0;
+        let btn_y = pos.y + (row_height - btn_size) / 2.0;
+        let value_width = 120.0;
+        let prev_x = pos.x + label_width;
+
+        let prev_bounds = Rect::new(prev_x, btn_y, btn_size, btn_size);
+        let prev_clicked = self.ui.button(
+            FieldId::new(self.component_index, self.field_index, 0),
+            "<",
+            prev_bounds,
+        );
+
+        self.ui.label_styled(
+            value_name,
+            glam::Vec2::new(prev_x + btn_size + 6.0, pos.y + 4.0),
+            value_color,
+            14.0,
+        );
+
+        let next_bounds = Rect::new(prev_x + btn_size + value_width, btn_y, btn_size, btn_size);
+        let next_clicked = self.ui.button(
+            FieldId::new(self.component_index, self.field_index, 1),
+            ">",
+            next_bounds,
+        );
+
+        self.field_index += 1;
+        self.current_y += self.style.row_height;
+
+        if prev_clicked || next_clicked {
+            EditResult::Changed(cycle_step(index, count, next_clicked))
+        } else {
+            EditResult::Unchanged
+        }
+    }
+
     /// Add an editable color (Vec4) field.
     pub fn color(&mut self, label: &str, value: Vec4) -> EditResult<Vec4> {
         let id = FieldId::new(self.component_index, self.field_index, 0);
@@ -447,6 +540,20 @@ mod tests {
         assert_eq!(style.row_height, 24.0);
         assert_eq!(style.label_width, 100.0);
         assert_eq!(style.padding, 8.0);
+    }
+
+    #[test]
+    fn test_cycle_step_wraps_both_directions() {
+        assert_eq!(cycle_step(0, 7, true), 1);
+        assert_eq!(cycle_step(6, 7, true), 0); // wraps forward
+        assert_eq!(cycle_step(0, 7, false), 6); // wraps backward
+        assert_eq!(cycle_step(3, 7, false), 2);
+    }
+
+    #[test]
+    fn test_cycle_step_zero_count_is_safe() {
+        assert_eq!(cycle_step(5, 0, true), 0);
+        assert_eq!(cycle_step(5, 0, false), 0);
     }
 
     #[test]

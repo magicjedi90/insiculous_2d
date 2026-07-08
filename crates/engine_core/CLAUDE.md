@@ -22,7 +22,9 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `scene_manager.rs` — Scene loading and entity instantiation
 - `scene_loader.rs` — RON → World deserialization
 - `scene_serializer.rs` — World → SceneData (inverse of scene_loader, used by editor save)
-- `scene_data.rs` — SceneData / PrefabData / EntityData structs
+- `scene_data.rs` — SceneData / PrefabData / EntityData structs (schema incl. `ComponentData::EntityTag`, Sprite `emissive`)
+- `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
+- `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths)
 - `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save
 - `behavior_runner.rs` — Entity behavior system
 - `lifecycle.rs` — FSM for scene lifecycle
@@ -36,9 +38,10 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Editor calls `world_to_scene_data(world, name, physics, texture_path_fn)` from `scene_serializer.rs`
 - Texture handle → path resolved via `AssetManager.handle_to_path` (populated by `load_texture()`)
 - Inverse path: `SceneLoader::load_and_instantiate(path, world, assets)` from `scene_loader.rs`
+- Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 161 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 168 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

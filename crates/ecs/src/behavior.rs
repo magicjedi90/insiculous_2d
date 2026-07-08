@@ -122,6 +122,89 @@ fn default_lose_range() -> f32 { 300.0 }
 fn default_true() -> bool { true }
 fn default_player_tag() -> String { "player".to_string() }
 
+impl Default for Behavior {
+    fn default() -> Self {
+        Behavior::PlayerPlatformer {
+            move_speed: default_move_speed(),
+            jump_impulse: default_jump_impulse(),
+            jump_cooldown: default_jump_cooldown(),
+            tag: default_player_tag(),
+        }
+    }
+}
+
+impl Behavior {
+    /// Variant names in declaration order (indices match `variant_index`).
+    pub const VARIANT_NAMES: &'static [&'static str] = &[
+        "PlayerPlatformer",
+        "PlayerTopDown",
+        "FollowEntity",
+        "FollowTagged",
+        "Patrol",
+        "Collectible",
+        "ChaseTagged",
+    ];
+
+    /// Display name of this behavior's variant
+    pub fn variant_name(&self) -> &'static str {
+        Self::VARIANT_NAMES[self.variant_index()]
+    }
+
+    /// Index of this behavior's variant within `VARIANT_NAMES`
+    pub fn variant_index(&self) -> usize {
+        match self {
+            Behavior::PlayerPlatformer { .. } => 0,
+            Behavior::PlayerTopDown { .. } => 1,
+            Behavior::FollowEntity { .. } => 2,
+            Behavior::FollowTagged { .. } => 3,
+            Behavior::Patrol { .. } => 4,
+            Behavior::Collectible { .. } => 5,
+            Behavior::ChaseTagged { .. } => 6,
+        }
+    }
+
+    /// Build a behavior of the given variant index with default field values.
+    ///
+    /// Indices wrap around, so `default_for_variant(i % VARIANT_NAMES.len())`
+    /// callers may pass any index produced by cycling forward or backward.
+    pub fn default_for_variant(index: usize) -> Behavior {
+        match index % Self::VARIANT_NAMES.len() {
+            0 => Behavior::default(),
+            1 => Behavior::PlayerTopDown {
+                move_speed: default_move_speed(),
+                tag: default_player_tag(),
+            },
+            2 => Behavior::FollowEntity {
+                target_name: String::new(),
+                follow_distance: default_follow_distance(),
+                follow_speed: default_follow_speed(),
+            },
+            3 => Behavior::FollowTagged {
+                target_tag: default_player_tag(),
+                follow_distance: default_follow_distance(),
+                follow_speed: default_follow_speed(),
+            },
+            4 => Behavior::Patrol {
+                point_a: (0.0, 0.0),
+                point_b: (100.0, 0.0),
+                speed: default_patrol_speed(),
+                wait_time: default_wait_time(),
+            },
+            5 => Behavior::Collectible {
+                score_value: default_score(),
+                despawn_on_collect: default_true(),
+                collector_tag: default_player_tag(),
+            },
+            _ => Behavior::ChaseTagged {
+                target_tag: default_player_tag(),
+                detection_range: default_detection_range(),
+                chase_speed: default_chase_speed(),
+                lose_interest_range: default_lose_range(),
+            },
+        }
+    }
+}
+
 // Note: Component trait is implemented via blanket impl in component.rs
 // for all types that implement Any + Send + Sync
 
@@ -235,6 +318,44 @@ mod tests {
         assert!(tag.matches("enemy"));
         assert!(!tag.matches("player"));
         assert_eq!(tag.0, "enemy");
+    }
+
+    #[test]
+    fn test_behavior_default_is_player_platformer_with_serde_defaults() {
+        match Behavior::default() {
+            Behavior::PlayerPlatformer {
+                move_speed,
+                jump_impulse,
+                jump_cooldown,
+                tag,
+            } => {
+                assert_eq!(move_speed, 120.0);
+                assert_eq!(jump_impulse, 420.0);
+                assert_eq!(jump_cooldown, 0.3);
+                assert_eq!(tag, "player");
+            }
+            _ => panic!("Default must be PlayerPlatformer"),
+        }
+    }
+
+    #[test]
+    fn test_default_for_variant_round_trips_variant_index() {
+        for index in 0..Behavior::VARIANT_NAMES.len() {
+            let behavior = Behavior::default_for_variant(index);
+            assert_eq!(behavior.variant_index(), index);
+            assert_eq!(behavior.variant_name(), Behavior::VARIANT_NAMES[index]);
+        }
+    }
+
+    #[test]
+    fn test_default_for_variant_wraps_out_of_range_indices() {
+        let count = Behavior::VARIANT_NAMES.len();
+        assert_eq!(count, 7);
+        assert_eq!(Behavior::default_for_variant(count).variant_index(), 0);
+        assert_eq!(
+            Behavior::default_for_variant(count + 2).variant_index(),
+            2
+        );
     }
 
     #[test]
