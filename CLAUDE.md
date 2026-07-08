@@ -62,6 +62,11 @@ encode lessons already learned here — following them is cheaper than re-learni
   and apply once the body syncs — use them, don't reach for rapier directly.
 - **Collision events:** snapshot with `.to_vec()` before consuming; the event buffer
   follows a clear/append contract per step.
+- **Destroying a body on contact-start cancels rapier's impulse.** An entity
+  destroyed the frame its collision event fires may never push the other body
+  back (corner/gap contacts especially) — the mover sails straight through.
+  If the response matters (breakout bricks), apply it in game code; see
+  `brick_bounce_velocity` in `../games/breakout/src/gameplay.rs`.
 - **`ctx.chaos_mode` is read-write** — the engine persists writes made during
   update/key handlers.
 - **ECS access:** `world.get::<T>(entity)` / `get_mut` take `EntityId` by value and
@@ -98,7 +103,7 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
 2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
 3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (984 tests, 0 failures, 0 ignored)
+4. **Verify**: `cargo test --workspace` must pass (985 tests, 0 failures, 0 ignored)
 5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
 6. **Release**: Remove the lock file
 

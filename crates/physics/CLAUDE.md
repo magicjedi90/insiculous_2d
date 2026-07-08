@@ -79,7 +79,7 @@ types), API-001 (timing getters), partial MISSING-001 (gravity/collider-dim
 validation).
 
 ## Testing
-- 61 passing (58 lib + 3 doc), 0 ignored — `cargo test -p physics`
+- 62 passing (58 lib + 1 integration + 3 doc), 0 ignored — `cargo test -p physics`
 - Pure math/simulation — no GPU needed
 
 ## Godot Oracle — When Stuck
