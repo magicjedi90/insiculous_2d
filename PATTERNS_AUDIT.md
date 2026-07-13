@@ -22,9 +22,9 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-05 | Game Loop | Low | `crates/engine_core/src/game_loop_manager.rs` | No |
 | GPP-06 | Type Object / Bytecode | Medium | `crates/ecs/src/behavior.rs`, `scene_loader.rs` | Yes (engine_core ARCH-006) |
 | GPP-07 | Prototype | Medium | `crates/engine_core/src/scene_loader.rs` | Partial (DRY-010) |
-| GPP-08 | Event Queue | Medium | `crates/physics/src/physics_world/stepping.rs` | No |
+| GPP-08 | Event Queue | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_world/stepping.rs` | No |
 | GPP-09 | Dirty Flag / Observer | Medium | `crates/physics/src/physics_system/sync.rs` | No (documented footgun, untracked) |
-| GPP-10 | Observer | Medium | `crates/physics/src/physics_system/` | Partial (ARCH-002 resolved differently) |
+| GPP-10 | Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/` | Partial (ARCH-002 resolved differently) |
 | GPP-11 | Component | Medium | `../games/breakout/src/types.rs` | No |
 | GPP-12 | Type Object | Medium | `../games/breakout/src/levels.rs` | No (ARCH-101 same family) |
 | GPP-13 | Component / DRY | Medium | `crates/editor_integration/src/panel_renderer/inspector.rs` | No |
@@ -119,7 +119,7 @@ Promotion protocol per the standing directive: engine tests per piece, refactor 
 
 **Fix plan (Prototype):** Retain the prefab table on `SceneInstance` (or `SceneManager`) and add `spawn_prefab(world, assets, name, overrides) -> EntityId` reusing the existing `merge_components` + instantiate path. Games then declare a "Ball" prefab once in RON instead of duplicating spawn code (feeds GPP-03's spawner consolidation).
 
-### GPP-08 · Event Queue — collision buffer contract is implicit; consumers must `.to_vec()`
+### GPP-08 · Event Queue — collision buffer contract is implicit; consumers must `.to_vec()` — ✅ RESOLVED (Jul 13 2026, see `log_archive.md` § physics)
 
 **Evidence:** the collision pipeline is a correct Event Queue with two API-level footguns, both already paid for once:
 1. **Implicit clear/append ordering:** `PhysicsWorld::step()` appends and never clears; the driver must call `clear_collision_events()` exactly once before the first sub-step (`stepping.rs:41-49,191-197`; done in `physics_system/update.rs:48`). Any new driver that forgets re-delivers stale `started` events forever — the June 2026 "stale event re-emission" bug was this exact class.
@@ -135,7 +135,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan (Dirty Flag):** Piggyback on GPP-04's change tracking: when `Transform2D`/`Collider`/`RigidBody` on an entity with a live body is mutated, mark it; `sync_entity_to_physics` then pushes the edit (`set_body_transform` for transforms, collider rebuild for shape changes). This turns two documented footguns (this one and "editor collider edits don't reach the simulation") into working behavior. Until then it stays a footgun — now at least a *tracked* one.
 
-### GPP-10 · Observer — synchronous collision callbacks are a non-reentrant legacy channel
+### GPP-10 · Observer — synchronous collision callbacks are a non-reentrant legacy channel — ✅ RESOLVED (Jul 13 2026: callbacks deleted, see `log_archive.md` § physics)
 
 **Evidence:** collision callbacks are `Box<dyn FnMut(&CollisionData) + Send + Sync>` invoked inline while `PhysicsSystem::update` holds `&mut self` and `&mut world` (`physics_system/mod.rs:60-66`, `update.rs:82-89`). A callback cannot touch the world or physics — only captured `Arc`/atomics — which is the coupling problem the [Observer chapter](https://gameprogrammingpatterns.com/observer.html) warns about with synchronous notification. The engine already has the better channel: collision events go to the world event bus and to the polled `collision_events()` buffer, which is how the games and `engine_core::pickups` actually consume them.
 
@@ -197,7 +197,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 | GPP-L6 ✅ Jul 13 | Command | Ctrl+Z/Ctrl+Y call `mark_dirty()` even when the undo/redo stack is empty — a no-op keypress dirties a clean scene (`editor_integration/src/editor_game/shortcuts.rs:124-135`) | `mark_dirty()` only when `undo()`/`redo()` actually applied a command (return a bool) |
 | GPP-L7 | Command | Gizmo drags mutate `Transform2D` directly each frame, pushing one merged command only on release (`editor_integration/src/editor_game/viewport_interaction.rs:117-149`) | Intentional (live visual feedback) — document the invariant: nothing may depend on all scene mutations flowing through commands mid-drag |
 | GPP-L8 | Flyweight | `GlyphInfo` stores `character`/`font_size` duplicating its cache key (`ui/src/font/glyph_cache.rs:38-42`); `TextDrawData` duplicates chars (tracked ui ARCH-003). Per-entity `Behavior` components carry full copies of shared "kind" config (move speeds, ranges) — the Type Object of GPP-06 would make that shared | Strip redundant fields opportunistically; behavior-config sharing rides GPP-06 |
-| GPP-L9 | Command | Physics deferred ops are two parallel tuple-Vecs with ordering-by-convention — resets drained before velocities (`physics/src/physics_system/mod.rs:88-90`, `update.rs:33-39`) | Single `Vec<DeferredBodyOp>` enum queue: ordering becomes structural, next deferred op is one variant away |
+| GPP-L9 ✅ Jul 13 | Command | Physics deferred ops are two parallel tuple-Vecs with ordering-by-convention — resets drained before velocities (`physics/src/physics_system/mod.rs:88-90`, `update.rs:33-39`) | Single `Vec<DeferredBodyOp>` enum queue: ordering becomes structural, next deferred op is one variant away |
 | GPP-L10 | Object Pool | Breakout balls/pickups are spawn/destroy churned; physics allocates a `Vec<ContactPoint>` per contact pair per step (`physics_world/stepping.rs:161-183`) | Acceptable at arcade scale; pool if profiling ever says otherwise |
 | GPP-L11 | Update Method | `breakout/src/gameplay.rs` is one 495-line file where pong splits the identical structure into `gameplay/{mod,balls,flow,…}` | Mirror pong's split next time breakout is touched |
 | GPP-L12 | Event Queue | The ECS `EventBus` is single-buffered with per-frame flush — an event emitted after a reader ran that frame is missed | Acceptable; document the emit-before-read contract on `EventBus`. Double-buffer only if a real ordering bug appears |

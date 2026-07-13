@@ -60,8 +60,9 @@ encode lessons already learned here — following them is cheaper than re-learni
   field triggers Delete-entity/tool shortcuts, and clicks pass through open dropdowns.
 - **Same-frame spawns:** `PhysicsSystem::set_velocity` and `reset_body` are buffered
   and apply once the body syncs — use them, don't reach for rapier directly.
-- **Collision events:** snapshot with `.to_vec()` before consuming; the event buffer
-  follows a clear/append contract per step.
+- **Collision events:** drain once per frame with `physics.take_collision_events()`
+  (owned `Vec`, no borrow held) and share the Vec among all consumers (gameplay,
+  pickups). A second take in the same frame returns empty — never take twice.
 - **Destroying a body on contact-start cancels rapier's impulse.** An entity
   destroyed the frame its collision event fires may never push the other body
   back (corner/gap contacts especially) — the mover sails straight through.
@@ -103,7 +104,7 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
 2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
 3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (1001 tests, 0 failures, 0 ignored)
+4. **Verify**: `cargo test --workspace` must pass (998 tests, 0 failures, 0 ignored)
 5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
 6. **Release**: Remove the lock file
 

@@ -6,7 +6,7 @@ use glam::Vec2;
 
 use ecs::{EntityId, System, World};
 
-use super::{PhysicsSystem, MAX_STEPS_PER_UPDATE};
+use super::{DeferredBodyOp, PhysicsSystem, MAX_STEPS_PER_UPDATE};
 
 impl System for PhysicsSystem {
     fn initialize(&mut self, _world: &mut World) -> Result<(), String> {
@@ -28,14 +28,19 @@ impl System for PhysicsSystem {
             self.sync_entity_to_physics(world, entity);
         }
 
-        // Flush deferred resets first, then velocities, so the common
-        // "reset then launch" pattern lands with the velocity intact.
-        for (entity, position) in self.pending_resets.drain(..) {
-            self.physics_world.set_body_transform(entity, position, 0.0);
-            self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
-        }
-        for (entity, linear, angular) in self.pending_velocities.drain(..) {
-            self.physics_world.set_velocity(entity, linear, angular);
+        // Flush deferred body ops in call order: the documented "reset then
+        // launch" pattern works because the launch velocity is queued after
+        // the reset that would otherwise zero it.
+        for (entity, op) in self.pending_ops.drain(..) {
+            match op {
+                DeferredBodyOp::Reset { position } => {
+                    self.physics_world.set_body_transform(entity, position, 0.0);
+                    self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
+                }
+                DeferredBodyOp::SetVelocity { linear, angular } => {
+                    self.physics_world.set_velocity(entity, linear, angular);
+                }
+            }
         }
 
         // Fixed timestep physics updates, capped to avoid a death spiral
@@ -72,20 +77,12 @@ impl System for PhysicsSystem {
         // Sync physics results back to ECS
         self.sync_physics_to_ecs(world);
 
-        // Emit collision events to world event bus (available to any system)
+        // Emit collision events to the world event bus (available to any
+        // system). The buffer itself stays available for game code to drain
+        // via `take_collision_events()` after this update returns.
         let events = self.physics_world.collision_events();
         for collision in events {
             world.emit_event(collision.clone());
-        }
-
-        // Process legacy collision callbacks (all registered callbacks receive each event)
-        if !self.collision_callbacks.is_empty() {
-            let events = self.physics_world.collision_events();
-            for collision in events {
-                for callback in &mut self.collision_callbacks {
-                    callback(collision);
-                }
-            }
         }
     }
 

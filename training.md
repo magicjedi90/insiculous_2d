@@ -346,30 +346,16 @@ RigidBody::pushable()               // Dynamic, can be pushed
 Collider::platform(width, height)   // Static ground/platform
 Collider::bouncy()                  // High restitution
 
-// Multiple collision callbacks (all listeners receive each collision)
-let mut physics = PhysicsSystem::new()
-    .with_collision_callback(|collision| {
-        println!("Audio: collision!");
-    })
-    .with_collision_callback(|collision| {
-        println!("Particles: spawn sparks!");
-    });
-
-// Or add callbacks later
-physics.add_collision_callback(|collision| {
-    println!("Score system: check for pickup!");
-});
-
-// PREFERRED for game logic: poll the event buffer instead of callbacks.
-// Callbacks fire while physics holds &mut world (can't mutate anything);
-// polling lets you react freely. Snapshot with .to_vec() before consuming.
-let events = physics.collision_events().to_vec();
-for collision in &events {
-    if collision.started { /* destroy brick, play sound, ... */ }
+// Collision events: after each update, drain the frame's events ONCE and
+// share the Vec among all consumers (gameplay reactions, pickups, ...).
+// The Vec is owned — no borrow of physics is held, so handlers can freely
+// call set_velocity / destroy_entity while iterating. Events also reach the
+// world event bus (world.read_events::<CollisionData>()) for systems.
+physics_system.update(&mut world, delta_time);
+let collisions = physics_system.take_collision_events();
+for c in &collisions {
+    if c.event.started { /* destroy brick, play sound, ... */ }
 }
-
-// Update physics
-physics_system.update(&mut world, delta_time)?;
 ```
 
 **Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`, `physics/physics_system/`

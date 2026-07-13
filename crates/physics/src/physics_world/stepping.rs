@@ -184,8 +184,22 @@ impl PhysicsWorld {
 
     /// Get collision events accumulated since the last
     /// [`clear_collision_events`](Self::clear_collision_events).
+    ///
+    /// Borrow-based accessor used by the physics driver itself (event-bus
+    /// emission). Game code should prefer
+    /// `PhysicsSystem::take_collision_events`, which hands out an owned `Vec`
+    /// and empties the buffer — no borrow held, no snapshot clone needed.
     pub fn collision_events(&self) -> &[CollisionData] {
         &self.collision_events
+    }
+
+    /// Take ownership of the collision event buffer, leaving it empty.
+    ///
+    /// The drain-style counterpart to [`collision_events`](Self::collision_events):
+    /// consuming the buffer means no borrow of the physics world is held while
+    /// reacting to events, so callers can freely mutate physics/world state.
+    pub fn take_collision_events(&mut self) -> Vec<CollisionData> {
+        std::mem::take(&mut self.collision_events)
     }
 
     /// Clear the collision event buffer.

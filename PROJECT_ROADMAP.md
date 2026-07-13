@@ -15,7 +15,7 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | System | Status | Notes |
 |--------|--------|-------|
 | ECS | ✅ Complete | HashMap-based per-type storage, type-safe queries, hierarchy |
-| Physics | ✅ Complete | Rapier2d, platformer + top-down presets, collision callbacks |
+| Physics | ✅ Complete | Rapier2d, platformer + top-down presets, collision events (bus + `take_collision_events()`) |
 | Rendering | ✅ Complete | WGPU 28, instanced sprites, batching |
 | Sprite Animation | ✅ Complete | `SpriteAnimation` component + `SpriteAnimationSystem` |
 | Audio | ✅ Complete | Rodio backend, SFX/music/master buses (spatial audio components are editor-only data — no runtime system yet) |

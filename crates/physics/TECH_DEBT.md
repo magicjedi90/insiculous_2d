@@ -4,11 +4,10 @@ Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § physics.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-08 (Medium, Event Queue):** collision buffer contract is implicit (caller must `clear_collision_events()` once per frame) and consumers must `.to_vec()` the borrowed slice — replace with drain-style `take_collision_events() -> Vec<CollisionData>`; ordering becomes structural, snapshot clone disappears.
-- [ ] **GPP-09 (Medium, Dirty Flag):** sync only ADDS bodies (`physics_system/sync.rs:41-81`) — live `Transform2D`/`Collider` edits are silent no-ops; add change detection to push ECS→rapier edits (also fixes editor live collider edits). Rides ecs GPP-04's change tracking.
-- [ ] **GPP-10 (Medium, Observer):** synchronous collision callbacks are non-reentrant (fire under `&mut world`) and redundant with the event bus — deprecate in favor of bus + polled buffer.
-- [ ] **GPP-L9 (Low):** deferred ops as two parallel tuple-Vecs with ordering-by-convention (`physics_system/mod.rs:88-90`) — single `Vec<DeferredBodyOp>` enum queue.
+- [ ] **GPP-09 (Medium, Dirty Flag):** sync only ADDS bodies (`physics_system/sync.rs`) — live `Transform2D`/`Collider` edits are silent no-ops; add change detection to push ECS→rapier edits (also fixes editor live collider edits). Rides ecs GPP-04's change tracking.
 - [ ] **GPP-L10 (Low):** per-contact-pair `Vec<ContactPoint>` alloc per step (`stepping.rs:161-183`) — reuse buffers if profiling says so.
+
+(GPP-08, GPP-10, GPP-L9 resolved Jul 13 2026 — see `log_archive.md`.)
 
 ## Open Items (pre-July-2026 audits)
 
@@ -33,7 +32,7 @@ Resolved history: root `log_archive.md` § physics.
 | Metric | Value |
 |--------|-------|
 | Largest file | 600 lines (`physics_system/tests.rs`) |
-| Test coverage | 62 (58 lib + 1 integration + 3 doc), 0 ignored |
+| Test coverage | 59 (55 lib + 1 integration + 3 doc), 0 ignored |
 | High priority open | 0 |
-| Medium priority open | 3 (GPP-08/09/10) |
-| Low priority open | 6 |
+| Medium priority open | 1 (GPP-09) |
+| Low priority open | 5 |

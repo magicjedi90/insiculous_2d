@@ -62,7 +62,7 @@ fn ball_bounces_off_static_brick() {
 
     for _ in 0..120 {
         physics.update(&mut world, DT);
-        if !physics.collision_events().is_empty() {
+        if !physics.take_collision_events().is_empty() {
             saw_collision = true;
         }
         if let Some((vel, _)) = physics.get_body_velocity(ball) {

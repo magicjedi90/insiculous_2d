@@ -33,8 +33,7 @@ impl PhysicsSystem {
                 self.physics_world.remove_entity(entity);
             }
         }
-        self.pending_velocities.retain(|(e, _, _)| alive.contains(e));
-        self.pending_resets.retain(|(e, _)| alive.contains(e));
+        self.pending_ops.retain(|(e, _)| alive.contains(e));
     }
 
     /// Sync a single entity from ECS to physics world

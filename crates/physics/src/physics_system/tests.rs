@@ -71,7 +71,7 @@ fn test_direct_world_removal_cleans_up_physics_state() {
         !system.physics_world().has_collider(entity),
         "orphaned rapier collider should be garbage-collected"
     );
-    assert!(system.pending_velocities.is_empty());
+    assert!(system.pending_ops.is_empty());
 }
 
 #[test]
@@ -87,7 +87,11 @@ fn test_reset_body_is_deferred_for_same_frame_spawns() {
 
     system.reset_body(entity, Vec2::ZERO);
     system.set_velocity(entity, Vec2::new(200.0, 0.0), 0.0);
-    assert_eq!(system.pending_resets.len(), 1, "reset should be buffered");
+    assert_eq!(system.pending_ops.len(), 2, "reset + launch should both be buffered");
+    assert!(
+        matches!(system.pending_ops[0].1, super::DeferredBodyOp::Reset { .. }),
+        "ops must drain in call order: reset first"
+    );
 
     system.initialize(&mut world).unwrap();
     system.update(&mut world, 1.0 / 60.0);
@@ -101,7 +105,7 @@ fn test_reset_body_is_deferred_for_same_frame_spawns() {
     );
     let pos = world.get::<Transform2D>(entity).unwrap().position;
     assert!(pos.x < 25.0, "body should have been reset toward origin (got {:?})", pos);
-    assert!(system.pending_resets.is_empty());
+    assert!(system.pending_ops.is_empty());
 }
 
 #[test]
@@ -191,31 +195,6 @@ fn test_static_body_does_not_move() {
 }
 
 #[test]
-fn test_multiple_collision_callbacks() {
-    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
-
-    let counter1 = Arc::new(AtomicUsize::new(0));
-    let counter2 = Arc::new(AtomicUsize::new(0));
-
-    let counter1_clone = counter1.clone();
-    let counter2_clone = counter2.clone();
-
-    let system = PhysicsSystem::new()
-        .with_collision_callback(move |_| {
-            counter1_clone.fetch_add(1, Ordering::SeqCst);
-        })
-        .with_collision_callback(move |_| {
-            counter2_clone.fetch_add(1, Ordering::SeqCst);
-        });
-
-    // Verify both callbacks are registered
-    assert_eq!(system.collision_callback_count(), 2);
-
-    // Note: Without actual collisions, the callbacks won't be invoked,
-    // but this test verifies the API works correctly
-}
-
-#[test]
 fn test_clear_resets_physics_state() {
     let mut world = World::new();
     let mut system = PhysicsSystem::new();
@@ -269,43 +248,10 @@ fn test_clear_allows_resync_from_ecs() {
     assert_eq!(pos, Vec2::new(0.0, 100.0), "Position should match restored ECS state");
 }
 
-#[test]
-fn test_clear_preserves_callbacks() {
-    let mut system = PhysicsSystem::new();
-    system.add_collision_callback(|_| {});
-    system.add_collision_callback(|_| {});
-    assert_eq!(system.collision_callback_count(), 2);
-
-    system.clear();
-
-    assert_eq!(system.collision_callback_count(), 2, "Callbacks should survive clear");
-}
-
-#[test]
-fn test_add_collision_callback() {
-    let mut system = PhysicsSystem::new();
-    assert_eq!(system.collision_callback_count(), 0);
-
-    system.add_collision_callback(|_| {});
-    assert_eq!(system.collision_callback_count(), 1);
-
-    system.add_collision_callback(|_| {});
-    assert_eq!(system.collision_callback_count(), 2);
-
-    system.clear_collision_callbacks();
-    assert_eq!(system.collision_callback_count(), 0);
-}
-
 // === Collision event delivery tests ===
 
-/// Create a world with two overlapping no-gravity bodies and a started-event counter.
-fn overlapping_pair_with_started_counter() -> (
-    World,
-    PhysicsSystem,
-    std::sync::Arc<std::sync::atomic::AtomicUsize>,
-) {
-    use std::sync::{Arc, atomic::AtomicUsize};
-
+/// Create a world with two overlapping no-gravity bodies.
+fn overlapping_pair() -> (World, PhysicsSystem) {
     let mut world = World::new();
     let mut system = PhysicsSystem::with_config(PhysicsConfig::new(Vec2::ZERO));
 
@@ -318,58 +264,60 @@ fn overlapping_pair_with_started_counter() -> (
         world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
     }
 
-    let started_count = Arc::new(AtomicUsize::new(0));
-    let counter = started_count.clone();
-    system.add_collision_callback(move |collision| {
-        if collision.event.started {
-            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        }
-    });
+    system.initialize(&mut world).unwrap();
+    (world, system)
+}
 
-    (world, system, started_count)
+/// Drain the frame's events and count the `started` ones.
+fn take_started_count(system: &mut PhysicsSystem) -> usize {
+    system
+        .take_collision_events()
+        .iter()
+        .filter(|c| c.event.started)
+        .count()
 }
 
 #[test]
 fn test_started_event_is_delivered_exactly_once_across_zero_step_updates() {
-    use std::sync::atomic::Ordering;
-
-    let (mut world, mut system, started_count) = overlapping_pair_with_started_counter();
-    system.initialize(&mut world).unwrap();
+    let (mut world, mut system) = overlapping_pair();
 
     // First update runs exactly one fixed step: collision starts.
     system.update(&mut world, 1.0 / 60.0);
-    assert_eq!(started_count.load(Ordering::SeqCst), 1);
+    let mut started = take_started_count(&mut system);
+    assert_eq!(started, 1);
 
     // These updates are too small to produce a physics step. Stale events
     // from the last step must NOT be re-delivered.
     system.update(&mut world, 0.001);
+    started += take_started_count(&mut system);
     system.update(&mut world, 0.001);
+    started += take_started_count(&mut system);
     assert_eq!(
-        started_count.load(Ordering::SeqCst),
-        1,
+        started, 1,
         "started event must be delivered exactly once, not re-emitted on zero-step frames"
     );
 }
 
 #[test]
 fn test_zero_step_update_emits_no_collision_events() {
-    let (mut world, mut system, _) = overlapping_pair_with_started_counter();
-    system.initialize(&mut world).unwrap();
+    let (mut world, mut system) = overlapping_pair();
 
     system.update(&mut world, 1.0 / 60.0);
-    assert!(!system.collision_events().is_empty(), "stepped frame should have events");
+    assert!(
+        !system.take_collision_events().is_empty(),
+        "stepped frame should have events"
+    );
 
     system.update(&mut world, 0.001); // zero steps
     assert!(
-        system.collision_events().is_empty(),
+        system.take_collision_events().is_empty(),
         "a frame with zero physics steps must emit no collision events"
     );
 }
 
 #[test]
 fn test_events_from_all_sub_steps_in_one_update_survive() {
-    let (mut world, mut system, _) = overlapping_pair_with_started_counter();
-    system.initialize(&mut world).unwrap();
+    let (mut world, mut system) = overlapping_pair();
 
     // First update: collision starts.
     system.update(&mut world, 1.0 / 60.0);
@@ -379,7 +327,7 @@ fn test_events_from_all_sub_steps_in_one_update_survive() {
     // second sub-step must not wipe the first sub-step's events.
     system.update(&mut world, 2.0 / 60.0);
     let ongoing = system
-        .collision_events()
+        .take_collision_events()
         .iter()
         .filter(|e| !e.event.stopped)
         .count();
@@ -390,33 +338,22 @@ fn test_events_from_all_sub_steps_in_one_update_survive() {
 }
 
 #[test]
-fn test_collision_callbacks_fire_on_real_collision() {
-    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
-
-    let mut world = World::new();
-    let mut system = PhysicsSystem::with_config(PhysicsConfig::new(Vec2::ZERO));
-
-    for x in [0.0, 10.0] {
-        let entity = world.create_entity();
-        world.add_component(&entity, Transform2D::new(Vec2::new(x, 0.0))).unwrap();
-        world
-            .add_component(&entity, RigidBody::new_dynamic().with_gravity_scale(0.0))
-            .unwrap();
-        world.add_component(&entity, Collider::box_collider(32.0, 32.0)).unwrap();
-    }
-
-    let event_count = Arc::new(AtomicUsize::new(0));
-    let counter = event_count.clone();
-    system.add_collision_callback(move |_| {
-        counter.fetch_add(1, Ordering::SeqCst);
-    });
-
-    system.initialize(&mut world).unwrap();
+fn test_take_collision_events_drains_the_buffer() {
+    let (mut world, mut system) = overlapping_pair();
     system.update(&mut world, 1.0 / 60.0);
 
+    let events = system.take_collision_events();
     assert!(
-        event_count.load(Ordering::SeqCst) > 0,
-        "registered callback must be invoked when two bodies actually collide"
+        !events.is_empty(),
+        "take must return the events when two bodies actually collide"
+    );
+    assert!(
+        system.take_collision_events().is_empty(),
+        "taking is a drain: a second take in the same frame gets nothing"
+    );
+    assert!(
+        system.physics_world().collision_events().is_empty(),
+        "the underlying buffer is empty after take"
     );
 }
 

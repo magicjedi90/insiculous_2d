@@ -3,9 +3,19 @@
 //! This module provides a system that synchronizes ECS components with the physics world.
 //!
 //! Split by responsibility:
-//! - `mod.rs` — struct, builders, callbacks, pass-through API
+//! - `mod.rs` — struct, builders, pass-through API
 //! - `sync.rs` — ECS↔rapier synchronization and orphan garbage collection
 //! - `update.rs` — the `System` trait implementation (fixed-timestep driver)
+//!
+//! # Collision Event Delivery
+//!
+//! Events reach consumers through two channels, both fed by `update()`:
+//! - the world event bus (`world.emit_event(CollisionData)`) — for systems
+//! - [`take_collision_events`](PhysicsSystem::take_collision_events) — for
+//!   game code: an owned `Vec` drained once per frame, shared by every
+//!   consumer (gameplay, pickups). Taking ownership means no borrow of the
+//!   physics system is held while reacting, so handlers can freely call
+//!   `set_velocity` / `destroy_entity` / etc.
 //!
 //! # API Design: Pass-Through Methods
 //!
@@ -15,7 +25,7 @@
 //!   velocity V" API. Safe on bodies spawned this frame (defers until synced).
 //! - `apply_force()`
 //! - `raycast()`
-//! - `collision_events()`
+//! - `take_collision_events()`
 //!
 //! These pass-through methods exist intentionally for **API ergonomics**:
 //!
@@ -57,13 +67,17 @@ use ecs::{EntityId, World};
 use crate::components::CollisionData;
 use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 
-/// Type alias for collision callback to reduce complexity.
-///
-/// The `Send + Sync` bounds are required: `PhysicsSystem` implements
-/// `ecs::System`, whose supertraits are `Any + Send + Sync` (systems are
-/// stored as `Box<dyn System>` in the `SystemRegistry`), so every field of
-/// `PhysicsSystem` — including these callbacks — must be `Send + Sync`.
-type CollisionCallback = Box<dyn FnMut(&CollisionData) + Send + Sync>;
+/// A body operation deferred because the entity wasn't synced into rapier
+/// yet (same-frame spawn). Drained in call order during the next `update()`,
+/// so the documented "reset then launch" pattern applies the reset first and
+/// the launch velocity lands intact.
+#[derive(Debug, Clone, Copy)]
+enum DeferredBodyOp {
+    /// Move the body to a position and zero its velocity (`reset_body`).
+    Reset { position: Vec2 },
+    /// Set linear + angular velocity (`set_velocity`).
+    SetVelocity { linear: Vec2, angular: f32 },
+}
 
 /// Maximum number of fixed-timestep catch-up steps in a single update.
 ///
@@ -82,12 +96,9 @@ pub struct PhysicsSystem {
     fixed_timestep: f32,
     /// Maximum delta time to prevent spiral of death
     max_delta_time: f32,
-    /// Callbacks for collision events (supports multiple listeners)
-    collision_callbacks: Vec<CollisionCallback>,
-    /// Deferred velocities for entities not yet synced to Rapier
-    pending_velocities: Vec<(EntityId, Vec2, f32)>,
-    /// Deferred body resets for entities not yet synced to Rapier
-    pending_resets: Vec<(EntityId, Vec2)>,
+    /// Body ops deferred for entities not yet synced to Rapier
+    /// (applied in call order during the next `update()`)
+    pending_ops: Vec<(EntityId, DeferredBodyOp)>,
 }
 
 impl PhysicsSystem {
@@ -103,9 +114,7 @@ impl PhysicsSystem {
             time_accumulator: 0.0,
             fixed_timestep: 1.0 / 60.0,
             max_delta_time: 0.1,
-            collision_callbacks: Vec::new(),
-            pending_velocities: Vec::new(),
-            pending_resets: Vec::new(),
+            pending_ops: Vec::new(),
         }
     }
 
@@ -115,49 +124,15 @@ impl PhysicsSystem {
         self
     }
 
-    /// Add a collision callback (builder pattern)
-    ///
-    /// Multiple callbacks can be registered. They will all be invoked
-    /// for each collision event in the order they were added.
-    pub fn with_collision_callback<F>(mut self, callback: F) -> Self
-    where
-        F: FnMut(&CollisionData) + Send + Sync + 'static,
-    {
-        self.collision_callbacks.push(Box::new(callback));
-        self
-    }
-
-    /// Add a collision callback (mutable method)
-    ///
-    /// Multiple callbacks can be registered. They will all be invoked
-    /// for each collision event in the order they were added.
-    pub fn add_collision_callback<F>(&mut self, callback: F)
-    where
-        F: FnMut(&CollisionData) + Send + Sync + 'static,
-    {
-        self.collision_callbacks.push(Box::new(callback));
-    }
-
-    /// Remove all collision callbacks
-    pub fn clear_collision_callbacks(&mut self) {
-        self.collision_callbacks.clear();
-    }
-
-    /// Get the number of registered collision callbacks
-    pub fn collision_callback_count(&self) -> usize {
-        self.collision_callbacks.len()
-    }
-
     /// Clear all physics state, forcing re-sync from ECS on next update.
     ///
-    /// Preserves configuration (gravity, scale, callbacks) but resets all
-    /// rapier bodies, colliders, and entity mappings. Call this when the
-    /// editor restores a world snapshot to ensure physics re-initializes
-    /// from the restored ECS component values.
+    /// Preserves configuration (gravity, scale) but resets all rapier
+    /// bodies, colliders, and entity mappings. Call this when the editor
+    /// restores a world snapshot to ensure physics re-initializes from the
+    /// restored ECS component values.
     pub fn clear(&mut self) {
         self.physics_world.clear();
-        self.pending_velocities.clear();
-        self.pending_resets.clear();
+        self.pending_ops.clear();
         self.time_accumulator = 0.0;
     }
 
@@ -168,8 +143,7 @@ impl PhysicsSystem {
     pub fn destroy_entity(&mut self, world: &mut World, entity: EntityId) {
         self.physics_world.remove_entity(entity);
         world.remove_entity(&entity).ok();
-        self.pending_velocities.retain(|(e, _, _)| *e != entity);
-        self.pending_resets.retain(|(e, _)| *e != entity);
+        self.pending_ops.retain(|(e, _)| *e != entity);
     }
 
     /// Get a reference to the physics world
@@ -211,12 +185,17 @@ impl PhysicsSystem {
         self.physics_world.raycast(origin, direction, max_distance)
     }
 
-    /// Get collision events from the last update's physics steps.
+    /// Take the collision events from the last update's physics steps,
+    /// leaving the buffer empty.
     ///
-    /// Empty if the last update ran zero steps; contains the events of every
-    /// sub-step if the last update ran several.
-    pub fn collision_events(&self) -> &[CollisionData] {
-        self.physics_world.collision_events()
+    /// Call once per frame after `update()` and share the returned `Vec`
+    /// among all consumers (gameplay reactions, pickups, ...). Empty if the
+    /// last update ran zero steps; contains the events of every sub-step if
+    /// the last update ran several. Because the events are owned, handlers
+    /// can freely mutate physics/world state while iterating — no `.to_vec()`
+    /// snapshot dance.
+    pub fn take_collision_events(&mut self) -> Vec<CollisionData> {
+        self.physics_world.take_collision_events()
     }
 
     /// Set the velocity of a rigid body — the universal "launch / move this
@@ -230,7 +209,8 @@ impl PhysicsSystem {
         if self.physics_world.has_rigid_body(entity) {
             self.physics_world.set_velocity(entity, linear, angular);
         } else {
-            self.pending_velocities.push((entity, linear, angular));
+            self.pending_ops
+                .push((entity, DeferredBodyOp::SetVelocity { linear, angular }));
         }
     }
 
@@ -253,13 +233,14 @@ impl PhysicsSystem {
     ///
     /// Safe to call on entities spawned this same frame: if the body hasn't
     /// been synced into Rapier yet, the reset is buffered and applied during
-    /// the next `update()` (after the sync, before any pending velocities).
+    /// the next `update()` in call order — so `reset_body` followed by
+    /// `set_velocity` lands with the launch velocity intact.
     pub fn reset_body(&mut self, entity: EntityId, position: Vec2) {
         if self.physics_world.has_rigid_body(entity) {
             self.physics_world.set_body_transform(entity, position, 0.0);
             self.physics_world.set_velocity(entity, Vec2::ZERO, 0.0);
         } else {
-            self.pending_resets.push((entity, position));
+            self.pending_ops.push((entity, DeferredBodyOp::Reset { position }));
         }
     }
 }

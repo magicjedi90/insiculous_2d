@@ -9,8 +9,8 @@ PhysicsSystem
 │   ├── RigidBodySet, ColliderSet
 │   ├── IntegrationParameters
 │   └── PhysicsPipeline
-├── ECS sync: one-way per direction (see Update Flow)
-└── Collision callbacks (multiple listeners supported)
+└── ECS sync: one-way per direction (see Update Flow)
+    Collision events: world event bus + take_collision_events() drain
 ```
 
 ## Update Flow
@@ -25,9 +25,14 @@ PhysicsSystem
    (each `step()` APPENDS its events)
 6. Reset one-update forces (`apply_force`) if any steps ran
 7. Sync rapier body positions/velocities → ECS components (Dynamic/Kinematic)
-8. Emit collision events to the world event bus + fire collision callbacks
+8. Emit collision events to the world event bus (game code drains its copy
+   afterwards via `take_collision_events()`)
 
 ## Collision Event Contract
+- Game-facing API: **`PhysicsSystem::take_collision_events()`** — drain once
+  per frame after `update()`, share the owned `Vec` among all consumers
+  (gameplay, pickups). No borrow is held, so handlers can freely mutate
+  physics/world. A second take in the same frame returns empty.
 - `PhysicsWorld::step()` APPENDS events; it never clears the buffer.
 - `PhysicsWorld::clear_collision_events()` must be called once per frame
   before the first step (`PhysicsSystem::update` does this).
@@ -54,7 +59,7 @@ Pinned by `test_parented_entity_with_rigid_body_is_treated_as_world_space`.
   - `queries.rs` — `raycast` (direction normalized internally)
   - `tests.rs`
 - `physics_system/` — ECS driver
-  - `mod.rs` — struct, builders, callbacks, pass-through API
+  - `mod.rs` — struct, builders, deferred-op queue, pass-through API
   - `sync.rs` — ECS↔rapier sync + orphan GC
   - `update.rs` — `System` impl (fixed-timestep loop)
   - `tests.rs`
@@ -64,7 +69,6 @@ Pinned by `test_parented_entity_with_rigid_body_is_treated_as_world_space`.
 ## Key Patterns
 - All rapier types stay inside `PhysicsWorld` — ECS components are our own types
 - Body handles stored in RigidBody component for rapier lookup
-- Multiple collision callbacks: `physics.add_collision_callback(|c| { ... })`
 - Presets: `player_platformer()`, `pushable()`, `platform(w, h)`, `bouncy(w, h)`, `player_box(w, h)`
 - `PhysicsSystem::set_velocity` is the universal "launch this body" API
   (deferred-safe for same-frame spawns); `PhysicsWorld::apply_impulse` exists
@@ -74,12 +78,13 @@ Pinned by `test_parented_entity_with_rigid_body_is_treated_as_world_space`.
   `num_solver_iterations` / `num_additional_friction_iterations`
 
 ## Known Tech Debt
-See `TECH_DEBT.md` — remaining: SRP-001 (PhysicsWorld manages many rapier
-types), API-001 (timing getters), partial MISSING-001 (gravity/collider-dim
+See `TECH_DEBT.md` — remaining: GPP-09 (sync only ADDS bodies — live edits
+need change detection), SRP-001 (PhysicsWorld manages many rapier types),
+API-001 (timing getters), partial MISSING-001 (gravity/collider-dim
 validation).
 
 ## Testing
-- 62 passing (58 lib + 1 integration + 3 doc), 0 ignored — `cargo test -p physics`
+- 59 passing (55 lib + 1 integration + 3 doc), 0 ignored — `cargo test -p physics`
 - Pure math/simulation — no GPU needed
 
 ## Godot Oracle — When Stuck
@@ -91,7 +96,7 @@ Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`
 | PhysicsWorld | Physics server | `servers/physics_2d/godot_physics_server_2d.cpp` |
 | RigidBody presets | Body types | `scene/2d/physics_body_2d.cpp` — RigidBody2D, CharacterBody2D |
 | Collider (is_sensor) | Area2D | `scene/2d/area_2d.cpp` — overlap detection |
-| Collision callbacks | Contact monitoring | `scene/2d/physics_body_2d.cpp` — `_body_enter_tree` |
+| Collision events | Contact monitoring | `scene/2d/physics_body_2d.cpp` — `_body_enter_tree` |
 | Broad-phase | BVH broad-phase | `servers/physics_2d/godot_broad_phase_2d.cpp` |
 
 **Remember:** We use Rapier2d — study Godot's *API design* and *body type organization*, not its solver.

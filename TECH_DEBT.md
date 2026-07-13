@@ -22,7 +22,7 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 | `editor_integration` | Jul 2026 | 0 / 1 / 2 | GPP-13 registry-driven editable inspector; file picker, menu-label strings |
 | `engine_core` | Jul 2026 | 0 / 3 / 8 | ARCH-006 behavior registry, GPP-07 runtime prefabs, GPP-03 generic-subset promotion |
 | `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
-| `physics` | Jul 2026 | 0 / 3 / 6 | GPP-08 event drain API, GPP-09 sync change detection, GPP-10 callback deprecation |
+| `physics` | Jul 2026 | 0 / 1 / 5 | GPP-09 sync change detection (rides ecs GPP-04) |
 | `renderer` | Jul 2026 | 0 / 1 / 3 | GPP-15 static-scene batch rebuild |
 | `ui` | Jul 2026 | 0 / 1 / 4 | JUN-T1 general text input |
 | `../games` | Jul 2026 | 0 / 3 / 2 | GPP-03 (split), GPP-11 shadow bricks, GPP-12 brick-tag Type Object |
@@ -44,10 +44,8 @@ None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 - **[GPP-07]** Prefabs are load-time-only — add runtime `spawn_prefab(name)`
 - **[GPP-03]** pong↔breakout duplication — promote the game-agnostic subset (ChaosTheme structure, grid-emit, visibility helper, small utils) before game 3; genre-flavored subset waits for rule-of-three
 
-### physics (3)
-- **[GPP-08]** Collision event API: drain-style `take_collision_events()` replacing the implicit clear contract + `.to_vec()` footgun
-- **[GPP-09]** Sync only ADDS bodies — change detection to push live `Transform2D`/`Collider` edits to rapier
-- **[GPP-10]** Deprecate synchronous collision callbacks in favor of the event bus
+### physics (1)
+- **[GPP-09]** Sync only ADDS bodies — change detection to push live `Transform2D`/`Collider` edits to rapier (rides ecs GPP-04)
 
 ### ecs (2)
 - **[GPP-04]** Transform hierarchy recomputed every frame — dirty-flag propagation (unlocks physics GPP-09 and renderer GPP-15)

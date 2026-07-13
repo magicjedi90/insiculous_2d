@@ -191,6 +191,11 @@ The section now just points at the live debt docs.
 
 ## physics — Resolved Debt
 
+### July 13, 2026 — GPP-08 + GPP-10 + GPP-L9 (Event Queue / Observer / Command)
+- **GPP-08 (Event Queue)**: game-facing collision event API is now drain-style — `PhysicsSystem::take_collision_events() -> Vec<CollisionData>` (+ `PhysicsWorld::take_collision_events`). Consumers own the Vec, so no borrow is held while reacting (the `.to_vec()` snapshot footgun is gone) and a frame's events are consumed structurally. `PhysicsSystem::collision_events()` (borrow) deleted; `PhysicsWorld::collision_events()`/`clear_collision_events()` remain for the driver's internal clear/append contract. Migrated: engine_core pickups doc-test flow, pong + breakout gameplay (one take per frame, Vec shared with all consumers incl. `Pickups::collect`), physics integration + delivery tests. New regression test: `test_take_collision_events_drains_the_buffer` (take returns events; second take empty; buffer empty).
+- **GPP-10 (Observer)**: synchronous collision callbacks deleted outright (were labeled legacy; fired under `&mut world` so they couldn't mutate anything; zero users outside physics' own tests). `CollisionCallback` type, `with_collision_callback`, `add_collision_callback`, `clear_collision_callbacks`, `collision_callback_count`, and the update-loop invocation removed. The two delivery channels are now the world event bus (`world.emit_event`/`read_events::<CollisionData>()`) and `take_collision_events()`.
+- **GPP-L9 (Command)**: the two parallel deferred queues (`pending_velocities` + `pending_resets` tuple-Vecs with drain-resets-first-by-convention) replaced by a single `pending_ops: Vec<(EntityId, DeferredBodyOp)>` enum queue drained in call order — the documented "reset then launch" pattern works because the launch is queued after the reset. `destroy_entity`/`clear`/orphan-pruning updated; deferred-op ordering pinned by test.
+
 ### June 2026 Audit Remediation (all correctness findings fixed; 58 passing lib tests)
 - **Stale event re-emission**: `step()` no longer clears the event buffer; `clear_collision_events()` added, `PhysicsSystem::update()` clears once before the sub-step loop. Zero-step frames emit nothing.
 - **Sub-step event loss**: `step()` APPENDS events, so all catch-up sub-steps' events survive a single update.

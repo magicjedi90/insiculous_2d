@@ -2,8 +2,9 @@
 //!
 //! Games spawn pickup entities however they like (floating sensors in Pong,
 //! falling capsules in Breakout), `track` them here with a game-defined kind,
-//! and each frame call [`Pickups::collect`] with the collision snapshot and
-//! the set of collector entities. The engine owns the mechanism — collection
+//! and each frame call [`Pickups::collect`] with the frame's drained
+//! collision events (`physics.take_collision_events()`, taken once and
+//! shared) and the set of collector entities. The engine owns the mechanism — collection
 //! detection, once-per-pickup semantics, despawn bookkeeping — while games
 //! own the meaning: what kinds exist, what effects they grant, how pickups
 //! move and look. (Same split as `InputMapping<A>` and `ChaosMode`.)
@@ -382,7 +383,7 @@ mod tests {
         let mut got = Vec::new();
         for _ in 0..60 {
             physics.update(&mut world, 1.0 / 60.0);
-            let events = physics.collision_events().to_vec();
+            let events = physics.take_collision_events();
             got.extend(pickups.collect(&events, &[paddle], &mut physics, &mut world));
             if !got.is_empty() {
                 break;
