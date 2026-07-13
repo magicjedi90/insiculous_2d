@@ -19,7 +19,7 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 | `ecs` | Jul 2026 | 0 / 1 / 5 | GPP-16 registry extensibility; GPP-02 is a decision-of-record |
 | `ecs_macros` | Feb 2026 | 0 / 1 / 2 | Over-specified `syn` features |
 | `editor` | Jul 2026 | 0 / 1 / 1 | GPP-14 undo/redo entity-id staleness |
-| `editor_integration` | Jul 2026 | 0 / 1 / 2 | GPP-13 registry-driven editable inspector; file picker, menu-label strings |
+| `editor_integration` | Jul 2026 | 0 / 0 / 2 | Clean of Mediums (file picker, menu-label strings remain) |
 | `engine_core` | Jul 2026 | 0 / 3 / 8 | ARCH-006 behavior registry, GPP-07 runtime prefabs, GPP-03 generic-subset promotion |
 | `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
 | `physics` | Jul 2026 | 0 / 0 / 6 | Clean of Mediums; Lows incl. EDIT-001 (RigidBody config edits need rebuild) |
@@ -47,9 +47,8 @@ None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 ### ecs (1)
 - **[GPP-16]** `global_registry()` not extensible by games — one-shot init extension point
 
-### editor / editor_integration (2)
+### editor (1)
 - **[GPP-14]** Create/Delete undo/redo mints new EntityIds — remap selection
-- **[GPP-13]** Editable inspector not registry-driven — extend `editor_component_registry!`
 
 ### games (2)
 - **[GPP-11]** Breakout shadow `Vec<Brick>` → `BrickState` component

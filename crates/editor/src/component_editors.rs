@@ -324,6 +324,43 @@ pub fn edit_audio_source(
     hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
 
+/// Apply an inspector edit: write the new value to the world (for immediate
+/// visual feedback) and record it on the undo stack with merge support, so
+/// continuous slider drags collapse into a single undo entry.
+pub fn apply_component_edit<T: ecs::Component + Clone>(
+    world: &mut ecs::World,
+    entity: ecs::EntityId,
+    old: &T,
+    edit: Option<ComponentEdit<T>>,
+    history: &mut crate::commands::CommandHistory,
+    make_cmd: impl FnOnce(ecs::EntityId, T, T, &'static str) -> Box<dyn crate::commands::EditorCommand>,
+) {
+    if let Some(ComponentEdit { new_value, field_hint }) = edit {
+        if let Some(c) = world.get_mut::<T>(entity) {
+            *c = new_value.clone();
+        }
+        history.try_merge_or_push(make_cmd(entity, old.clone(), new_value, field_hint));
+    }
+}
+
+/// Render a small [X] remove button at the header position of a component
+/// whose `edit_*()` function renders the header internally — the button is
+/// overlaid at the same Y position. Used by the registry-generated
+/// `edit_all_components`.
+pub(crate) fn remove_button(
+    ui: &mut ui::UIContext,
+    component_index: usize,
+    x: f32,
+    header_y: f32,
+    style: &crate::EditableFieldStyle,
+) -> bool {
+    let btn_size = 18.0;
+    let btn_x = x + style.label_width + 90.0;
+    let btn_bounds = ui::Rect::new(btn_x, header_y, btn_size, btn_size);
+    let btn_id = crate::FieldId::new(component_index, 99, 0);
+    ui.button(btn_id, "X", btn_bounds)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

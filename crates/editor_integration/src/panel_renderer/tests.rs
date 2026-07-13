@@ -1,4 +1,4 @@
-use super::inspector::apply_component_edit;
+use editor::apply_component_edit;
 use ecs::World;
 use editor::ComponentEdit;
 use glam::Vec2;

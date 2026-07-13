@@ -52,17 +52,27 @@ section:
 - `builtin` — inspected, never removable (Transform2D)
 - `removable` — normal case; tag with a `ComponentCategory`
 
-This generates StoredComponent/ComponentKind/capture/inspect dispatch. Do NOT
-add match arms anywhere else — if you find yourself editing a ComponentKind
-match by hand, you're duplicating what the macro generates.
+Every entry also carries an edit spec in braces:
+- `{ readonly }` — serde-based read-only display with a remove button
+- `{ edit edit_my_component => SetMyComponentCommand }` — full field editing
+  with undo-recorded writeback
+
+This generates StoredComponent/ComponentKind/capture/inspect dispatch AND the
+editable-inspector dispatch (`edit_all_components`). Do NOT add match arms or
+inspector blocks anywhere else — if you find yourself editing a ComponentKind
+match or `panel_renderer/inspector.rs` by hand, you're duplicating what the
+macro generates.
 
 ## Step 5 — Editable in inspector (only if fields should be editable, not just visible)
 
 1. `crates/editor/src/commands/set_commands.rs` — add an
    `impl_set_component_command!` invocation (generates `SetMyComponentCommand`).
-2. `crates/editor_integration/src/panel_renderer/inspector.rs` — wire the edit
-   path through `apply_component_edit()` (the single writeback path; it
-   preserves `try_merge_or_push` undo merging via `field_hint`).
+2. `crates/editor/src/component_editors.rs` — write `edit_my_component()`
+   returning `Option<ComponentEdit<MyComponent>>` (follow `edit_sprite`).
+3. Change the component's registry entry from `{ readonly }` to
+   `{ edit edit_my_component => SetMyComponentCommand }` and import both in
+   `stored_component.rs`. That's it — writeback and undo merging flow through
+   `apply_component_edit()` automatically.
 
 ## Verify
 

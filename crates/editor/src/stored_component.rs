@@ -14,7 +14,82 @@ use ecs::{EntityId, World};
 use physics::components::{Collider, RigidBody};
 use ui::UIContext;
 
+use crate::behavior_editor::edit_behavior;
+use crate::commands::{
+    CommandHistory, RemoveComponentCommand, SetAudioSourceCommand, SetBehaviorCommand,
+    SetColliderCommand, SetRigidBodyCommand, SetSpriteCommand, SetTransformCommand,
+};
+use crate::component_editors::{
+    edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
+};
 use crate::inspector::{inspect_component, InspectorStyle};
+use crate::{EditableFieldStyle, EditableInspector};
+
+/// Expands one component's editable-inspector block for
+/// [`edit_all_components`] — dispatched on the edit spec written in the
+/// registry: `{ edit <fn> => <SetCommand> }` renders field editors with
+/// undo-recorded writeback, `{ readonly }` renders the registry header with
+/// a remove button plus the serde-based read-only display.
+macro_rules! registry_edit_block {
+    // Editable, NOT removable (builtin): the editor fn renders its own header.
+    (@fixed $name:ident, $ty:ty, (edit $edit_fn:ident => $cmd:ident),
+     $ui:ident, $world:ident, $entity:ident, $history:ident, $x:ident, $y:ident,
+     $inspect_style:ident, $field_style:ident, $gap:ident, $idx:ident, $removals:ident) => {
+        if let Some(value) = $world.get::<$ty>($entity).cloned() {
+            $y += $gap;
+            let mut inspector = EditableInspector::new($ui, $x, $y)
+                .with_component_index($idx)
+                .with_style($field_style.clone());
+            let edit = $edit_fn(&mut inspector, &value);
+            $y = inspector.y();
+            crate::component_editors::apply_component_edit($world, $entity, &value, edit, $history, |e, old, new, hint| {
+                Box::new($cmd::new(e, old, new, hint))
+            });
+            $idx += 1;
+        }
+    };
+    // Editable + removable: overlay the [X] at the header the editor fn drew.
+    (@removable $name:ident, $ty:ty, (edit $edit_fn:ident => $cmd:ident),
+     $ui:ident, $world:ident, $entity:ident, $history:ident, $x:ident, $y:ident,
+     $inspect_style:ident, $field_style:ident, $gap:ident, $idx:ident, $removals:ident) => {
+        if let Some(value) = $world.get::<$ty>($entity).cloned() {
+            $y += $gap;
+            let header_y = $y;
+            let mut inspector = EditableInspector::new($ui, $x, $y)
+                .with_component_index($idx)
+                .with_style($field_style.clone());
+            let edit = $edit_fn(&mut inspector, &value);
+            $y = inspector.y();
+            if crate::component_editors::remove_button($ui, $idx, $x, header_y, $field_style) {
+                $removals.push(ComponentKind::$name);
+            }
+            crate::component_editors::apply_component_edit($world, $entity, &value, edit, $history, |e, old, new, hint| {
+                Box::new($cmd::new(e, old, new, hint))
+            });
+            $idx += 1;
+        }
+    };
+    // Read-only + removable: registry header with [X] + serde inspection
+    // (components without a field editor yet).
+    (@removable $name:ident, $ty:ty, (readonly),
+     $ui:ident, $world:ident, $entity:ident, $history:ident, $x:ident, $y:ident,
+     $inspect_style:ident, $field_style:ident, $gap:ident, $idx:ident, $removals:ident) => {
+        if $world.get::<$ty>($entity).is_some() {
+            $y += $gap;
+            let mut inspector = EditableInspector::new($ui, $x, $y)
+                .with_component_index($idx)
+                .with_style($field_style.clone());
+            if inspector.header_with_remove(stringify!($name), true) {
+                $removals.push(ComponentKind::$name);
+            }
+            $y = inspector.y();
+            if let Some(value) = $world.get::<$ty>($entity) {
+                $y = inspect_component($ui, "", value, $x + 16.0, $y, $inspect_style);
+            }
+            $idx += 1;
+        }
+    };
+}
 
 /// Category grouping for the add-component popup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,8 +135,8 @@ impl ComponentCategory {
 macro_rules! editor_component_registry {
     (
         hidden:    [ $( $h:ident => $h_ty:ty ),+ $(,)? ],
-        builtin:   [ $( $b:ident => $b_ty:ty ),+ $(,)? ],
-        removable: [ $( $r:ident => $r_ty:ty : $cat:ident ),+ $(,)? ] $(,)?
+        builtin:   [ $( $b:ident => $b_ty:ty { $($b_edit:tt)+ } ),+ $(,)? ],
+        removable: [ $( $r:ident => $r_ty:ty : $cat:ident { $($r_edit:tt)+ } ),+ $(,)? ] $(,)?
     ) => {
         /// A captured component value for undo/redo storage.
         ///
@@ -157,6 +232,45 @@ macro_rules! editor_component_registry {
             }
         }
 
+        /// Render the editable inspector for every present component
+        /// (builtin + removable, in registry order): field editors with
+        /// undo-recorded writeback via [`apply_component_edit`], remove [X]
+        /// buttons (removals executed as commands), and a serde read-only
+        /// display for components marked `readonly` in the registry.
+        ///
+        /// Returns `(next_y, component_count)` — the count feeds the
+        /// add-component popup's widget-id offsets.
+        #[allow(clippy::too_many_arguments)]
+        pub fn edit_all_components(
+            ui: &mut UIContext,
+            world: &mut World,
+            entity: EntityId,
+            history: &mut CommandHistory,
+            x: f32,
+            mut y: f32,
+            inspect_style: &InspectorStyle,
+            field_style: &EditableFieldStyle,
+            section_gap: f32,
+        ) -> (f32, usize) {
+            let mut component_index: usize = 0;
+            let mut removals: Vec<ComponentKind> = Vec::new();
+
+            $( registry_edit_block!(@fixed $b, $b_ty, ($($b_edit)+),
+                ui, world, entity, history, x, y,
+                inspect_style, field_style, section_gap, component_index, removals); )+
+            $( registry_edit_block!(@removable $r, $r_ty, ($($r_edit)+),
+                ui, world, entity, history, x, y,
+                inspect_style, field_style, section_gap, component_index, removals); )+
+
+            for kind in &removals {
+                let cmd = RemoveComponentCommand::new(entity, *kind);
+                history.execute(Box::new(cmd), world);
+                log::info!("Removed component: {}", kind.display_name());
+            }
+
+            (y, component_index)
+        }
+
         /// Render a read-only inspection of every present inspectable component
         /// (builtin + removable), in registry order. Returns the next Y position.
         pub fn inspect_all_components(
@@ -188,18 +302,18 @@ editor_component_registry! {
         BehaviorState     => BehaviorState,
     ],
     builtin: [
-        Transform2D => common::Transform2D,
+        Transform2D => common::Transform2D { edit edit_transform2d => SetTransformCommand },
     ],
     removable: [
-        Camera          => common::Camera : Core,
-        Sprite          => Sprite : Rendering,
-        SpriteAnimation => SpriteAnimation : Rendering,
-        RigidBody       => RigidBody : Physics,
-        Collider        => Collider : Physics,
-        AudioSource     => AudioSource : Audio,
-        AudioListener   => AudioListener : Audio,
-        Behavior        => Behavior : Gameplay,
-        EntityTag       => EntityTag : Gameplay,
+        Camera          => common::Camera : Core { readonly },
+        Sprite          => Sprite : Rendering { edit edit_sprite => SetSpriteCommand },
+        SpriteAnimation => SpriteAnimation : Rendering { readonly },
+        RigidBody       => RigidBody : Physics { edit edit_rigid_body => SetRigidBodyCommand },
+        Collider        => Collider : Physics { edit edit_collider => SetColliderCommand },
+        AudioSource     => AudioSource : Audio { edit edit_audio_source => SetAudioSourceCommand },
+        AudioListener   => AudioListener : Audio { readonly },
+        Behavior        => Behavior : Gameplay { edit edit_behavior => SetBehaviorCommand },
+        EntityTag       => EntityTag : Gameplay { readonly },
     ],
 }
 
@@ -241,6 +355,43 @@ pub fn categorized_components() -> Vec<(ComponentCategory, Vec<ComponentKind>)> 
 mod tests {
     use super::*;
     use glam::Vec2;
+
+    #[test]
+    fn test_edit_all_components_covers_present_components_and_advances_y() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world
+            .add_component(&entity, common::Transform2D::new(Vec2::new(1.0, 2.0)))
+            .unwrap();
+        world.add_component(&entity, Sprite::new(0)).unwrap();
+        world.add_component(&entity, EntityTag::new("player")).unwrap();
+
+        let mut ui = UIContext::new();
+        let mut history = CommandHistory::new();
+        let inspect_style = InspectorStyle::default();
+        let field_style = EditableFieldStyle::default();
+
+        let start_y = 40.0;
+        let (y, count) = edit_all_components(
+            &mut ui, &mut world, entity, &mut history,
+            10.0, start_y, &inspect_style, &field_style, 10.0,
+        );
+
+        assert_eq!(count, 3, "one block per present registry component");
+        assert!(y > start_y, "rendering must advance the layout cursor");
+        assert!(
+            !history.can_undo(),
+            "rendering without input must not record any edit"
+        );
+        // Registry order is builtin-then-removable, so absent components
+        // (RigidBody etc.) contribute nothing.
+        let bare = world.create_entity();
+        let (_, none_count) = edit_all_components(
+            &mut ui, &mut world, bare, &mut history,
+            10.0, start_y, &inspect_style, &field_style, 10.0,
+        );
+        assert_eq!(none_count, 0, "an entity with no components renders no blocks");
+    }
 
     #[test]
     fn test_capture_empty_entity() {

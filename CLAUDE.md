@@ -34,7 +34,7 @@ encode lessons already learned here — following them is cheaper than re-learni
 | Dynamic component creation by name | `crates/ecs/src/component_registry.rs` — `registry.register::<T>()` in the global-registry fn |
 | Scene RON schema (load) | `crates/engine_core/src/scene_data.rs` — `ComponentData` enum + `scene_loader.rs` |
 | World → RON save | `crates/engine_core/src/scene_serializer.rs` — `extract_components()` (the ONLY save pipeline) |
-| Inspector writeback / undo merge | `apply_component_edit()` in `crates/editor_integration/src/panel_renderer/inspector.rs`; `impl_set_component_command!` in `crates/editor/src/commands/set_commands.rs` |
+| Inspector writeback / undo merge | `apply_component_edit()` in `crates/editor/src/component_editors.rs` (called by the registry-generated `edit_all_components`); `impl_set_component_command!` in `crates/editor/src/commands/set_commands.rs` |
 | Frame timing | `GameLoopManager` (`game_loop_manager.rs`) — there is no other frame timer |
 | Editor colors | `crates/editor/src/theme.rs` `EditorTheme` tokens — never hardcode colors in panels |
 | Behavior ↔ BehaviorData | The `From` impl pair in `scene_data.rs` |
@@ -107,7 +107,7 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
 2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
 3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (1017 tests, 0 failures, 0 ignored)
+4. **Verify**: `cargo test --workspace` must pass (1018 tests, 0 failures, 0 ignored)
 5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
 6. **Release**: Remove the lock file
 

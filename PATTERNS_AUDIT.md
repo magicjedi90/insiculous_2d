@@ -27,7 +27,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-10 | Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/` | Partial (ARCH-002 resolved differently) |
 | GPP-11 | Component | Medium | `../games/breakout/src/types.rs` | No |
 | GPP-12 | Type Object | Medium | `../games/breakout/src/levels.rs` | No (ARCH-101 same family) |
-| GPP-13 | Component / DRY | Medium | `crates/editor_integration/src/panel_renderer/inspector.rs` | No |
+| GPP-13 | Component / DRY | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/editor_integration/src/panel_renderer/inspector.rs` | No |
 | GPP-14 | Command | Medium | `crates/editor/src/commands/entity_commands.rs` | No |
 | GPP-15 | Dirty Flag | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/renderer/src/sprite/batch.rs` + `engine_core/src/game.rs` | No (ARCH-007 adjacent) |
 | GPP-16 | Singleton | Medium | `crates/ecs/src/component_registry.rs` | Partial (via ARCH-006) |
@@ -153,7 +153,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan (Type Object):** Promote `BrickSpec { hits: u8, drop: Option<DropKind> }` to a real serializable component (registered via `/add-component` so it's scene-loadable and inspector-editable with typed fields). Keep the tag string as authoring sugar if desired (loader converts tag → component once), but the runtime and editor operate on the typed form. Blocked-on note: game-defined components in scenes need GPP-06/GPP-16's registry extensibility — a breakout-local component can't ride `ComponentData::Dynamic` until `World::add_boxed` exists, so short-term the component is attached in `levels.rs` after load (still removes runtime re-parsing).
 
-### GPP-13 · Component / DRY — editable inspector bypasses the component registry
+### GPP-13 · Component / DRY — editable inspector bypasses the component registry — ✅ RESOLVED (Jul 13 2026, registry-generated edit_all_components; see `log_archive.md` § editor)
 
 **Evidence:** `crates/editor_integration/src/panel_renderer/inspector.rs:79-241` hand-writes ~11 near-identical blocks (`if let Some(c) = world.get::<T>() { EditableInspector … apply_component_edit … }`) — one per component type — while the *read-only* inspector path is already registry-driven via `inspect_all_components` from the `editor_component_registry!` macro. The "add a component = one registry line" claim holds everywhere except this file, which the `/add-component` skill must patch by hand.
 

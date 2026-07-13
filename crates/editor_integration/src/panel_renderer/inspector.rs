@@ -4,11 +4,9 @@
 use glam::Vec2;
 
 use editor::{
-    available_components, categorized_components, inspect_all_components,
-    CommandHistory, ComponentKind, EditorContext, InspectorStyle,
-    EditableInspector, FieldId,
-    edit_transform2d, edit_sprite, edit_rigid_body, edit_collider, edit_audio_source,
-    edit_behavior, inspect_component,
+    available_components, categorized_components, edit_all_components,
+    inspect_all_components, CommandHistory, ComponentKind, EditorContext,
+    FieldId, InspectorStyle,
 };
 use engine_core::contexts::GameContext;
 
@@ -70,182 +68,25 @@ fn render_inspector_editable(
     command_history: &mut CommandHistory,
 ) {
     let line_height = 20.0;
-    let mut component_index: usize = 0;
-    let mut removals: Vec<ComponentKind> = Vec::new();
     let inspect_style = editor.theme.inspector_style();
     let field_style = editor.theme.editable_field_style();
 
-    // --- Transform2D (not removable) ---
-    if let Some(transform) = ctx.world.get::<common::Transform2D>(entity_id).copied() {
-        y += line_height * 0.5;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_transform2d(&mut inspector, &transform);
-        y = inspector.y();
-
-        apply_component_edit(ctx.world, entity_id, &transform, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetTransformCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- Camera (removable, read-only display for now) ---
-    if let Some(camera) = ctx.world.get::<common::Camera>(entity_id) {
-        y += line_height * 0.5;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        if inspector.header_with_remove("Camera", true) {
-            removals.push(ComponentKind::Camera);
-        }
-        y = inspector.y();
-        y = inspect_component(ctx.ui, "", camera, content_x + 16.0, y, &inspect_style);
-        component_index += 1;
-    }
-
-    // --- Sprite (removable, uses edit_sprite which renders its own header) ---
-    if let Some(sprite) = ctx.world.get::<ecs::sprite_components::Sprite>(entity_id).cloned() {
-        y += line_height * 0.5;
-        let header_y = y;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_sprite(&mut inspector, &sprite);
-        y = inspector.y();
-
-        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
-            removals.push(ComponentKind::Sprite);
-        }
-
-        apply_component_edit(ctx.world, entity_id, &sprite, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetSpriteCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- SpriteAnimation (removable, read-only display for now) ---
-    if let Some(anim) = ctx.world.get::<ecs::sprite_components::SpriteAnimation>(entity_id) {
-        y += line_height * 0.5;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        if inspector.header_with_remove("SpriteAnimation", true) {
-            removals.push(ComponentKind::SpriteAnimation);
-        }
-        y = inspector.y();
-        y = inspect_component(ctx.ui, "", anim, content_x + 16.0, y, &inspect_style);
-        component_index += 1;
-    }
-
-    // --- RigidBody (removable, uses edit_rigid_body which renders its own header) ---
-    if let Some(body) = ctx.world.get::<physics::components::RigidBody>(entity_id).cloned() {
-        y += line_height * 0.5;
-        let header_y = y;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_rigid_body(&mut inspector, &body);
-        y = inspector.y();
-
-        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
-            removals.push(ComponentKind::RigidBody);
-        }
-
-        apply_component_edit(ctx.world, entity_id, &body, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetRigidBodyCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- Collider (removable, uses edit_collider which renders its own header) ---
-    if let Some(collider) = ctx.world.get::<physics::components::Collider>(entity_id).cloned() {
-        y += line_height * 0.5;
-        let header_y = y;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_collider(&mut inspector, &collider);
-        y = inspector.y();
-
-        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
-            removals.push(ComponentKind::Collider);
-        }
-
-        apply_component_edit(ctx.world, entity_id, &collider, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetColliderCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- AudioSource (removable, uses edit_audio_source which renders its own header) ---
-    if let Some(source) = ctx.world.get::<ecs::audio_components::AudioSource>(entity_id).cloned() {
-        y += line_height * 0.5;
-        let header_y = y;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_audio_source(&mut inspector, &source);
-        y = inspector.y();
-
-        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
-            removals.push(ComponentKind::AudioSource);
-        }
-
-        apply_component_edit(ctx.world, entity_id, &source, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetAudioSourceCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- AudioListener (removable, read-only display for now) ---
-    if let Some(listener) = ctx.world.get::<ecs::audio_components::AudioListener>(entity_id) {
-        y += line_height * 0.5;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        if inspector.header_with_remove("AudioListener", true) {
-            removals.push(ComponentKind::AudioListener);
-        }
-        y = inspector.y();
-        y = inspect_component(ctx.ui, "", listener, content_x + 16.0, y, &inspect_style);
-        component_index += 1;
-    }
-
-    // --- Behavior (removable, uses edit_behavior which renders its own header) ---
-    if let Some(behavior) = ctx.world.get::<ecs::behavior::Behavior>(entity_id).cloned() {
-        y += line_height * 0.5;
-        let header_y = y;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        let edit = edit_behavior(&mut inspector, &behavior);
-        y = inspector.y();
-
-        if render_remove_button(ctx.ui, component_index, content_x, header_y, &field_style) {
-            removals.push(ComponentKind::Behavior);
-        }
-
-        apply_component_edit(ctx.world, entity_id, &behavior, edit, command_history,
-            |e, old, new, hint| Box::new(editor::commands::SetBehaviorCommand::new(e, old, new, hint)));
-        component_index += 1;
-    }
-
-    // --- EntityTag (removable, read-only display for now) ---
-    if let Some(tag) = ctx.world.get::<ecs::behavior::EntityTag>(entity_id) {
-        y += line_height * 0.5;
-        let mut inspector = EditableInspector::new(ctx.ui, content_x, y)
-            .with_component_index(component_index)
-            .with_style(field_style.clone());
-        if inspector.header_with_remove("EntityTag", true) {
-            removals.push(ComponentKind::EntityTag);
-        }
-        y = inspector.y();
-        y = inspect_component(ctx.ui, "", tag, content_x + 16.0, y, &inspect_style);
-        component_index += 1;
-    }
-
-    // Apply removals via commands
-    for kind in &removals {
-        let cmd = editor::commands::RemoveComponentCommand::new(entity_id, *kind);
-        command_history.execute(Box::new(cmd), ctx.world);
-        log::info!("Removed component: {}", kind.display_name());
-    }
+    // Every per-component block (field editors, undo-recorded writeback,
+    // remove buttons, read-only fallbacks) is generated from the editor's
+    // component registry — adding a component to the registry is all it
+    // takes to appear here.
+    let (next_y, component_index) = edit_all_components(
+        ctx.ui,
+        ctx.world,
+        entity_id,
+        command_history,
+        content_x,
+        y,
+        &inspect_style,
+        &field_style,
+        line_height * 0.5,
+    );
+    y = next_y;
 
     // --- [+ Add Component] button ---
     y += line_height;
@@ -303,43 +144,6 @@ fn render_inspector_editable(
     }
 
     let _ = component_index;
-}
-
-/// Apply an inspector edit: write the new value to the world (for immediate
-/// visual feedback) and record it on the undo stack with merge support, so
-/// continuous slider drags collapse into a single undo entry.
-pub(super) fn apply_component_edit<T: ecs::Component + Clone>(
-    world: &mut ecs::World,
-    entity: ecs::EntityId,
-    old: &T,
-    edit: Option<editor::ComponentEdit<T>>,
-    history: &mut CommandHistory,
-    make_cmd: impl FnOnce(ecs::EntityId, T, T, &'static str) -> Box<dyn editor::EditorCommand>,
-) {
-    if let Some(editor::ComponentEdit { new_value, field_hint }) = edit {
-        if let Some(c) = world.get_mut::<T>(entity) {
-            *c = new_value.clone();
-        }
-        history.try_merge_or_push(make_cmd(entity, old.clone(), new_value, field_hint));
-    }
-}
-
-/// Render a small [X] remove button at the header position of a component.
-///
-/// Used for components that have their own `edit_*()` function which renders
-/// the header internally. The button is overlaid at the same Y position.
-fn render_remove_button(
-    ui: &mut ui::UIContext,
-    component_index: usize,
-    content_x: f32,
-    header_y: f32,
-    style: &editor::EditableFieldStyle,
-) -> bool {
-    let btn_size = 18.0;
-    let btn_x = content_x + style.label_width + 90.0;
-    let btn_bounds = ui::Rect::new(btn_x, header_y, btn_size, btn_size);
-    let btn_id = FieldId::new(component_index, 99, 0);
-    ui.button(btn_id, "X", btn_bounds)
 }
 
 /// Calculate the height needed for the categorized popup.

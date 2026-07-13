@@ -64,8 +64,8 @@ pub use collider_overlay::{
 };
 pub use commands::{CommandHistory, EditorCommand};
 pub use component_editors::{
-    edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
-    ComponentEdit,
+    apply_component_edit, edit_audio_source, edit_collider, edit_rigid_body, edit_sprite,
+    edit_transform2d, ComponentEdit,
 };
 pub use context::EditorContext;
 pub use editor_preferences::EditorPreferences;
@@ -87,8 +87,8 @@ pub use selection::Selection;
 pub use status_bar::{StatusBar, StatusBarStats, STATUS_BAR_HEIGHT};
 pub use stored_component::{
     available_components, capture_all_components, categorized_components,
-    inspect_all_components, restore_components, ComponentCategory, ComponentKind,
-    StoredComponent,
+    edit_all_components, inspect_all_components, restore_components,
+    ComponentCategory, ComponentKind, StoredComponent,
 };
 pub use theme::EditorTheme;
 pub use toolbar::{EditorTool, Toolbar};

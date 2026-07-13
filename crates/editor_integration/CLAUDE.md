@@ -29,14 +29,14 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
   - `shortcuts.rs` — keyboard shortcuts + play state transitions
   - `viewport_interaction.rs` — picking, rectangle selection, gizmo drag
 - `entity_ops.rs` — Pure entity CRUD (`&mut World` + `&mut Selection`, no UI). Component dispatch lives in `editor::ComponentKind` (registry macro)
-- `panel_renderer/` — Panel contents: `mod.rs` (dispatch, scene view, hierarchy), `inspector.rs` (editable/readonly inspector + `apply_component_edit()`)
+- `panel_renderer/` — Panel contents: `mod.rs` (dispatch, scene view, hierarchy), `inspector.rs` (thin shell: registry-generated `editor::edit_all_components()` for editing, `inspect_all_components` read-only during play, add-component popup)
 - `constants.rs` — `DEFAULT_SCENE_PATH`, min window size, `MIN_ENTITY_SCALE`, `DUPLICATE_OFFSET`
 - `lib.rs` — Public re-exports
 
 ## Key Patterns
 - `EditorGame::update()` — main orchestration. Editor input → conditional game update (only if Playing) → render panels
 - Input routing: Editing/Paused → editor gets input. Playing → game gets input, editor hotkeys still work.
-- Inspector writeback: `edit_*()` returns `Option<ComponentEdit<T>>` → `apply_component_edit()` writes to world and records undo via `try_merge_or_push` (continuous edits merge by `field_hint`)
+- Inspector writeback: generated per-component by `editor_component_registry!` (editor crate) — `edit_*()` returns `Option<ComponentEdit<T>>` → `editor::apply_component_edit()` writes to world and records undo via `try_merge_or_push` (continuous edits merge by `field_hint`)
 - Play/Stop: snapshot world on Play (typed clone via `WorldSnapshot`), restore on Stop
 - Save/Load: Ctrl+S / Ctrl+Shift+S / Ctrl+O / Ctrl+N — uses `scene_serializer::world_to_scene_data` for save, `SceneLoader` for load. Hardcoded paths (no file picker yet)
 - Status messages: `editor.status_bar.show_message("Saved")` after successful operations

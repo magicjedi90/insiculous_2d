@@ -4,7 +4,7 @@ Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § editor_integration.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-13 (Medium, Component/DRY):** the editable inspector hand-writes ~11 near-identical per-component blocks (`panel_renderer/inspector.rs:79-241`) while the read-only path is registry-driven — extend `editor_component_registry!` to generate the editable dispatch so `/add-component` is genuinely one line.
+(GPP-13 resolved Jul 13 2026 — editable inspector is registry-generated; see `log_archive.md`.)
 - **GPP-12 (cross-ref):** ARCH-101 below is the same stringly-typed Type Object smell as breakout's `parse_brick_tag` — see `../games/TECH_DEBT.md`.
 
 ## Open Items
@@ -22,9 +22,9 @@ Resolved history: root `log_archive.md` § editor_integration.
 
 | Metric | Value |
 |--------|-------|
-| Test coverage | 64 tests (100% pass rate) |
+| Test coverage | 66 tests (100% pass rate) |
 | Files over 600 lines | 0 |
 | Clippy warnings | 0 |
 | High priority open | 0 |
-| Medium priority open | 1 (GPP-13) |
+| Medium priority open | 0 |
 | Low priority open | 2 (UX-001, ARCH-101) |

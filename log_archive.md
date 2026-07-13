@@ -358,7 +358,401 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 
 ---
 
+# Log Archive — Completed Work
+
+**Convention (July 2026):** `TECH_DEBT.md` files (root + per-crate) and `PROJECT_ROADMAP.md` are **live documents** — they carry only work that still needs doing. Everything completed or resolved moves here, organized by area, so history is never lost but never clutters the working docs. When you resolve a tracked item: delete it from the live doc, append it here with the resolution and date.
+
+---
+
+## Completed Games (20 Games Challenge)
+
+### Game 1: Pong ☑ (June 2026)
+Two paddles, one ball, score display. The "Hello, World" of games. Lives in `../games/pong/`.
+
+- **Taught:** Physics bounce, score tracking, UI overlay, simple AI opponent
+- **Key components:** `RigidBody` (kinematic paddles, dynamic ball), `Collider`, `Sprite`, immediate-mode score UI
+- **Controls:** Player 1 W/S, Player 2 Up/Down. AI mode: right paddle tracks ball with lag. Win: first to 7.
+- Full chaos-mode + achievements support; 5 tests, clippy-clean.
+
+### Game 2: Breakout ☑ (June 2026)
+Ball bouncing off a paddle, destroying a grid of bricks. Lives in `../games/breakout/` — 43 tests, clippy-clean, full chaos-mode + achievements support, deforming grid background, particles, scene-driven levels (`level{1-4}.scene.ron`).
+
+- **Taught:** Dynamic entity despawning via collision events (bricks), grid layout spawning, lives system (bottom sensor + escape safety net), offset-based paddle bounce control, mouse+keyboard on one input
+- **Key components:** Ball (dynamic, CCD), paddle (kinematic `capsule_x`), brick grid (static, destroyed on hit)
+- **Controls:** Mouse or arrow keys/A/D; Space/Enter/click to launch. Win: clear all bricks.
+- **Engine gap found:** `MouseButton` wasn't re-exported in `engine_core::prelude` — added alongside `KeyCode`.
+- **July 2026 level system:** chaos = per-level flavor; brick tags via `EntityTag` (`armored{N}` + `drop_*`); pickups fall and paddle catches; `engine_core::pickups` promoted as the shared mechanism.
+
+---
+
+## Engine & Editor Milestones (moved from PROJECT_ROADMAP "Archive: Completed Work" and AGENTS.md)
+
+### Manager Pattern + File Refactoring (January 2026) — COMPLETE (from AGENTS.md)
+- SRP refactoring: `GameRunner.update_and_render()` 110+ lines → 25 lines; 7 focused orchestration methods extracted
+- 5 managers extracted: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager
+- 5 modules extracted (674 lines, 12 tests): `game_config.rs`, `contexts.rs`, `ui_integration.rs`, `scene_manager.rs`; `behavior_runner.rs` optimized (-85% per-frame allocations)
+- `game.rs`: 862 lines (mixed concerns) → 553 at extraction time (later ~594 after GlyphTextureCache and other additions)
+
+### Editor Integration (February 2026) — COMPLETE (from AGENTS.md)
+- New `editor_integration` crate: `EditorGame<G>` wrapper, `run_game_with_editor()`, `panel_renderer` extraction
+- Phase 1C play/pause/stop: `EditorPlayState` enum with border tint, `WorldSnapshot` typed-clone capture/restore, `PlayControls` widget (Ctrl+P, Ctrl+Shift+P, F5), conditional `inner.update()`, read-only inspector during play
+- Hard-coded Escape exit removed from `GameRunner` (flows to `Game::on_key_pressed()`); `editor_demo.rs` switched to full PlatformerGame
+
+### Engine Core (2025) — COMPLETE
+- Memory safety, thread-safe input, panic-safe system registry
+- Sprite rendering (WGPU 28), ECS with type-safe queries, asset management
+- Rapier2d physics, scene serialization (RON + prefabs), scene graph hierarchy
+- Audio (Rodio, spatial), immediate-mode UI, Simple Game API (`Game` trait, `run_game()`)
+- SRP refactoring: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager extracted
+- Test count at the time: 724 passing, 29 ignored (GPU/window only), 0 failed
+
+### Editor Phase 1 (January–February 2026) — COMPLETE
+- Dockable panel system, scene viewport (pan/zoom, grid overlay, LOD)
+- Entity picking (click, rectangle), transform gizmos (translate/rotate/scale)
+- Component inspector with live writeback (Transform2D, Sprite, RigidBody, Collider, AudioSource)
+- Generic serde-based read-only display for any component
+- Component add/remove (categorized popup, cascade removal)
+- Entity CRUD (create empty/sprite/physics, delete, duplicate Ctrl+D)
+- Hierarchy panel (tree view, expand/collapse, Ctrl+click multi-select)
+- Play/Pause/Stop with `WorldSnapshot` capture/restore (Ctrl+P, F5)
+- Undo/redo command system (11 command types, merging for continuous edits)
+- Scene save/load (Ctrl+S/Ctrl+O/Ctrl+N, RON format, dirty flag)
+- Editor preferences persistence (camera, zoom, grid, last scene)
+- `EditorTheme` system (30+ color tokens, converter methods)
+- Status bar (entity count, FPS, status messages)
+- Snap-to-grid (toggle, configurable grid size)
+
+### Phase 2A: Standalone Infrastructure (March 2026) — COMPLETE
+- Standalone editor binary (`cargo run --bin editor -- /path/to/project`)
+- Standalone game project (`my_platformer`) consuming engine as external dep
+- Editor font path fix, extended engine prelude
+
+---
+
+## PROJECT_ROADMAP — Resolved Technical-Debt Notes (moved from the roadmap)
+
+**Resolved by the June 2026 audit passes** (previously listed in the roadmap's Technical Debt section):
+renderer SRP-001 (`sprite.rs` split into `sprite/{batch,pipeline}.rs`) and
+ARCH-003 (all `#[allow(dead_code)]` removed, ~700 lines dead code deleted);
+audio ARCH-001 reclassified as a feature gap (streaming — audio crate has 0
+open debt); input TEST-001 superseded by GAP-001 (dead-zone tests land
+with the gamepad backend); physics TEST-001 mostly closed (sensor + collision
+response tests added; remaining friction/kinematic/tunneling gaps are Low).
+
+**Resolved June 11, 2026 (tech-debt pass):** engine_core SRP-001
+(`GlyphTextureCache` extracted to `glyph_texture_cache.rs`), SRP-002
+(BehaviorRunner match split into 7 handler methods), LOGIC-002 (`let-else`
+replaces the asset_manager `unwrap()`), ARCH-007 (`ToastStyle` on
+`AchievementManager`, `reset()` logs save errors), ARCH-003 (all `lib.rs`
+glob re-exports made explicit); ui SRP-001 (`font/` split: FontManager facade
++ `GlyphCache` + `layout`), SRP-002 (`context/` split: mod/text/widgets/tests,
+all files <600 lines).
+
+---
+
+## training.md — Retired "Known Limitations" entries (moved Jul 2026)
+
+All items from training.md's old "Current Known Limitations (January 2026)" list were fixed:
+SRP violations in GameRunner (managers extracted); bind groups created per frame (camera +
+texture bind groups cached); glyph texture cache color-in-key (Feb 2026 — `GlyphKey` excludes
+color, grayscale masks); first-frame UI placeholder flicker (font rendering bug); 40+
+allocations per frame in behavior system (behaviors accessed by reference); component
+registration requiring a separate ComponentMeta impl (`#[derive(ComponentMeta)]` macro).
+The section now just points at the live debt docs.
+
+---
+
+## Workspace Rollup — Resolved in the 2026 Audit Passes (from root TECH_DEBT.md)
+
+> Note: the pre-June-2026 version of the root TECH_DEBT.md was a January 2026 review of the
+> editor change set. All of its items were resolved or superseded by the June 2026
+> remediation passes: mouse-button release tracking now exists via the shared
+> `ButtonTracker` (`is_source_just_released`), editor shortcuts use real
+> modifier combinations (Ctrl+S, Ctrl+Shift+P, …), `EditorInputMapping`
+> delegates to the generic `InputMapping<EditorAction>`, and panel rendering
+> moved out of `examples/editor_demo.rs` into `editor_integration`.
+
+- **ecs (Feb):** broken archetype/dual storage deleted entirely (single HashMap-based path), hierarchy cycle detection, `WorldHierarchyExt` extraction, generation-validated component ops
+- **renderer (Jun):** bloom blur bug (uniform rewrite between passes), sprite overflow panic → growing `DynamicBuffer`, NaN-safe depth sort, per-frame bind-group/clone churn eliminated, `sprite.rs` split, ~700 lines dead code removed
+- **ui (Jun):** glyph bitmaps shared as `Arc<[u8]>` (no per-frame copies), focused-widget state survives unseen frames, theme bypass fixed (`TextInputStyle`), dead draw/interact APIs deleted
+- **input (Jun):** stale mouse-delta bug, unbind/rebind leak, strict action-edge semantics; `InputMapping<A>` made generic, `ButtonTracker<T>` deduplicates device state, `ThreadSafeInputHandler`/`init()`/`InputError` deleted (~250 lines)
+- **audio (Jun):** per-play full-buffer clone removed (`Arc<[u8]>` + `Cursor`), live-sink volume re-apply, clamping at point of use, `stop(handle)` implemented, dead `PlaybackState` deleted
+- **physics (Jun):** collision event clear/append contract (no stale re-emission, no sub-step loss), world-space contact points, one-update forces, raycast normalization, `PhysicsError`/`MovementConfig` deleted, directory splits under 600 lines
+- **engine_core (Jun):** orphaned `scene_saver.rs`/`file_operations.rs` deleted (single save pipeline), Behavior↔BehaviorData conversion collapsed to one `From` pair, dead `game_loop.rs` deleted, clippy-clean incl. `--all-targets`
+- **editor + editor_integration (Jun):** component registry macro (`stored_component.rs`) as single source of truth, `ComponentEdit<T>` writeback, 1,100-line files split into feature directories, full theme routing, duplicate `ComponentKind`/dispatch deleted
+- **engine_core (Jun 11 debt pass):** `GlyphTextureCache` extracted from `GameRunner`, BehaviorRunner match split into per-variant handlers, asset_manager `unwrap()` → `let-else`, `ToastStyle` on `AchievementManager` (+ `reset()` logs save errors), all `lib.rs` glob re-exports made explicit
+- **ui (Jun 11 debt pass):** `context.rs` (~990 lines) split into `context/` (mod/text/widgets/tests), `font.rs` split into `font/` (FontManager facade + `GlyphCache` + `layout`); public API unchanged, all files <600 lines
+
+---
+
+## ecs — Resolved Debt
+
+### July 13, 2026 — GPP-04 + SRP-003 (Dirty Flag, transform hierarchy)
+- **GPP-04**: `TransformHierarchySystem` no longer recomputes every `GlobalTransform2D` every frame. Design (Jesse-approved): **self-contained value-compare cache** — the system keeps a `HashMap<EntityId, CachedNode { local, parent, stamp }>` baseline; a node is dirty iff its local `Transform2D` or parent link differs from the baseline, its global is missing, or an ancestor was dirty. Clean frames recompute nothing (and do zero mutable World access). Chosen over store-level ECS dirty flags because value comparison catches every writer by construction (incl. editor `WorldSnapshot::restore`, which re-adds components) and identical physics writebacks stay clean; zero ECS API changes. **Decision of record:** no shared change-tracking infra — GPP-09 will keep its own last-pushed cache in physics, GPP-15 a coarse render-path counter.
+- **SRP-003** folded in: the old double iteration (root loop + recursive `propagate_transforms`) replaced by a single iterative DFS on a reusable stack — also killing the per-node children `Vec` allocs and the `entities()`/`get_root_entities()` per-frame allocations.
+- New API: `reset()` (drop all baselines — the `PhysicsSystem::clear()` analogue, called by the editor's Stop after snapshot restore), `recomputed_last_update()`, `visited_last_update()`, `tracked_entity_count()` for headless observability. `GlobalTransform2D` gained `Copy, PartialEq`. Cache pruning via frame stamps (removed entities fall out; stamps refreshed on every visit, including clean-under-dirty-ancestor).
+- Tests: 9 new in `crates/ecs/tests/hierarchy_dirty.rs` (clean-frame zero, leaf-only, subtree-only, reparent, orphan-on-parent-delete + prune, identical-write-stays-clean, re-enable self-heal, global re-added, reset) + editor_integration `test_stop_resets_transform_propagation_cache`; the 5 pre-existing propagation tests unchanged.
+
+### July 13, 2026 — GPP-01 (State pattern)
+- **GPP-01**: `BehaviorState` boolean-flag soup (`patrol_toward_b`/`is_chasing`/`is_waiting`) replaced with `StateMachine<BehaviorPhase>` — new `BehaviorPhase { Idle, Patrolling { toward }, Waiting { then_toward }, Chasing }` + `PatrolTarget { A, B }` enums in `behavior.rs`; patrol/chase handlers in `engine_core/behavior_runner.rs` rewritten as explicit FSM transitions (wait duration now uses the machine's `elapsed()` clock instead of a countdown timer; `timer` field retained for the platformer jump cooldown). Illegal states (waiting AND chasing) now unrepresentable; `state_machine.rs` gained its first real consumer. Regression tests: patrol arrive→wait→reverse, chase enter/hysteresis/leave, no-target stays Idle (`behavior_runner.rs` tests) + updated ecs behavior tests. Editor `WorldSnapshot`/registry unaffected (hidden-component capture is Clone-based).
+
+### February 2026 Fixes
+- **PATTERN-001**: Broken archetype storage removed entirely. ECS now uses single HashMap-based per-type storage. Proper archetype storage deferred as future ground-up rewrite. The `Component` trait still requires `as_any()` for downcasting — inherent to HashMap-based storage with `Box<dyn Component>`.
+- **PATTERN-002**: Dual-storage system removed. `World::new_optimized()`, `ComponentStorage` enum, `ArchetypeStorage`, and `archetype.rs` deleted. Single storage path via `ComponentRegistry` → `ComponentStore`. Documentation updated from "archetype-based" to "HashMap-based per-type storage".
+- **SRP-002**: `ComponentStorage` enum removed. Single `ComponentStore` type (no delegation/match arms).
+- **ARCH-003**: Archetype dead code removed (`archetype.rs` deleted, query types extracted to `query.rs`).
+- **ARCH-004**: Dual storage systems removed. Single HashMap-based storage path.
+- **KISS-002**: Over-engineered `ComponentColumn` raw pointer manipulation — originally resolved with safety documentation (January 2026); the entire `archetype.rs` file was then deleted in February 2026. The unsafe raw pointer code is no longer in the codebase.
+
+### January 2026 Fixes
+- **SRP-001**: Extracted 10 hierarchy methods (~150 lines) to `WorldHierarchyExt` extension trait (`set_parent`, `remove_parent`, `get_parent`, `get_children`, `get_root_entities`, `get_descendants`, `get_ancestors`, `is_ancestor_of`, `is_descendant_of`, `remove_entity_hierarchy`); 11 tests. World struct retains 6 core responsibilities (~400 lines).
+- **KISS-001**: Replaced non-functional `QueryIterator` scaffolding with working `query_entities::<Q>()` method (25 lines vs 45, actually works; test added).
+- **ARCH-001**: Module visibility strategy documented in `lib.rs` — private modules for core infrastructure, public modules for domain-specific concerns.
+- **ARCH-002**: Cycle detection added to `set_parent()` using `is_ancestor_of()`. Tests: `test_hierarchy_cycle_detection`, `test_hierarchy_self_parent_rejected`.
+- **DRY-002**: Extracted `set_global_transform()` helper in `hierarchy_system.rs` to eliminate the duplicate update-or-add pattern.
+
+### Earlier (from ANALYSIS.md)
+| Issue | Resolution |
+|-------|------------|
+| Deprecated PlayerTag alias | Removed, use EntityTag instead |
+| Incomplete test assertions (TODO comments) | All replaced with meaningful assertions |
+| Memory safety issues | Generation tracking implemented |
+| System registry memory safety | catch_unwind for panic isolation |
+
+---
+
+## engine_core — Resolved Debt
+
+| Issue | Resolution |
+|-------|------------|
+| DRY-001/DRY-006/DRY-007 placeholder audio + ctx duplication | Consolidated into `initialize_and_update()` |
+| DRY-002 coord transforms (ui_integration) | Helpers extracted (Feb 2026) |
+| DRY-004 hex color parsing | `parse_hex_byte` helper (Feb 2026) |
+| DRY-005 surface error recovery | `handle_render_error` helper (Feb 2026) |
+| SRP-003/ARCH-001 EngineApplication dual API | Deleted entirely (Feb 2026) |
+| KISS-001 glyph cache key color | Color removed from key; grayscale masks (Feb 2026) |
+| LOGIC-001 `partial_cmp().unwrap()` depth sort | `total_cmp()` (Feb 2026) |
+| LOGIC-003 lifecycle lock unwraps | All use `unwrap_or_else` poison recovery + test coverage |
+| ARCH-002 Timer vs GameLoopManager | Reclassified not-an-issue: Timer is a user-facing utility, GameLoopManager is the engine frame timer |
+| ARCH-004 duplicate UIManager accessors | Consolidated to `ui_context()` (Feb 2026) |
+| DRY-008 two parallel World→RON save pipelines | Resolved (Jun 2026): `scene_saver.rs` and `editor/file_operations.rs` were ORPHANED files — never declared as modules. Both deleted; `scene_serializer.rs` is the single save pipeline, consumed by `editor_integration`. |
+| DRY-009 Behavior ↔ BehaviorData conversion ×3 | Resolved (Jun 2026): single pair of `From` impls in `scene_data.rs` (load + save direction). Adding a variant now means: enum + the two `From` arms. |
+| DEAD-001 `game_loop.rs` dead code | Resolved (Jun 2026): `game_loop.rs` + tests deleted, exports removed. `GameLoopManager` is the only frame timer. |
+| QUAL-001 clippy warnings | Resolved (Jun 2026): orphaned doc comment, needless borrow, `push_arc` derives segment count from sweep angle, `!= true` assertion, trait placement. `cargo clippy -p engine_core --all-targets` clean. |
+| ARCH-005 `grid/` single-game code | Decision (Jun 2026): KEEP in engine as a general-purpose deformable-grid effect (candidate for editor grid visualization). Module docs updated. Pong remains the reference consumer. |
+| SRP-001 GameRunner owned glyph texture caching | Resolved (Jun 2026): extracted `GlyphTextureCache` (`glyph_texture_cache.rs`); `GameRunner` just calls `prepare()`/`textures()`. Unit-tested headless. |
+| SRP-002 BehaviorRunner giant match | Resolved (Jun 2026): one private handler per variant plus `BehaviorCommands` + `apply_commands()`; no logic change. |
+| LOGIC-002 `unwrap()` on asset_manager | Resolved (Jun 2026): `let Some(...) else { log::warn!(...); return; }` — production code is `unwrap()`-free. |
+| ARCH-007 achievement toast styling hardcoded | Resolved (Jun 2026): `ToastStyle` struct with `Default` matching the old appearance; `set_toast_style()`/`toast_style()`; `reset()` logs its save error. |
+| ARCH-003 glob re-exports in lib.rs | Resolved (Jun 2026): all 15 `pub use module::*` globs replaced with explicit re-export lists; prelude semantics unchanged. |
+
+### What's Healthy (June 2026 audit snapshot)
+- Manager pattern holds: `RenderManager`, `WindowManager`, `UIManager`, `SceneManager`, `GameLoopManager` are each single-purpose and small.
+- `SceneManager` vs `SceneLoader` separation is clean (stack management vs deserialization).
+- `particles/` is genuinely reusable (config builder, pooling, no game-specific tuning); the emitter-in-ECS / particles-in-manager split is intentional.
+- Production code is `unwrap()`-free; errors are typed (`thiserror`) throughout the scene pipeline.
+- `ChaosMode` correctly carries selection only — no gameplay logic in the engine.
+
+---
+
+## physics — Resolved Debt
+
+### July 13, 2026 — GPP-09 (Dirty Flag / Observer: external-edit detection)
+- The "sync only ADDS bodies" footgun is gone. `PhysicsSystem` keeps a per-entity `PushedState { position, rotation, collider }` baseline (the GPP-04 no-shared-infra pattern applied locally): during `sync_entity_to_physics`, live entities' components are value-compared against it — an edited `Transform2D` teleports the body via `set_body_transform` (velocity preserved), an edited `Collider` rebuilds the rapier collider (`add_collider` already removes-then-adds), a removed `Collider` component drops the rapier collider. The physics writeback (`sync_physics_to_ecs`, now `&mut self`) refreshes the baseline so rapier-driven motion is never mistaken for an external edit; identical-value writes stay clean. This also fixes the editor gap where inspector collider edits never reached the simulation.
+- `Collider`/`ColliderShape` gained `PartialEq`; observability via `external_edits_pushed_last_update()`; baselines pruned in `destroy_entity`/`clear`/orphan GC. Verified safe against existing Transform2D writers (games write only on pre-sync freshly-spawned entities).
+- Remaining (new Low, EDIT-001): `RigidBody` config edits still require body recreation (velocity fields are writeback-owned, so whole-struct compare would false-positive).
+- Tests: 5 new in `physics/tests/external_edits.rs` (teleport + velocity preserved, writeback-not-an-edit over 10 falling frames, identical write pushes nothing, collider enlarge → real rapier collision, collider removal drops rapier collider).
+
+### July 13, 2026 — GPP-08 + GPP-10 + GPP-L9 (Event Queue / Observer / Command)
+- **GPP-08 (Event Queue)**: game-facing collision event API is now drain-style — `PhysicsSystem::take_collision_events() -> Vec<CollisionData>` (+ `PhysicsWorld::take_collision_events`). Consumers own the Vec, so no borrow is held while reacting (the `.to_vec()` snapshot footgun is gone) and a frame's events are consumed structurally. `PhysicsSystem::collision_events()` (borrow) deleted; `PhysicsWorld::collision_events()`/`clear_collision_events()` remain for the driver's internal clear/append contract. Migrated: engine_core pickups doc-test flow, pong + breakout gameplay (one take per frame, Vec shared with all consumers incl. `Pickups::collect`), physics integration + delivery tests. New regression test: `test_take_collision_events_drains_the_buffer` (take returns events; second take empty; buffer empty).
+- **GPP-10 (Observer)**: synchronous collision callbacks deleted outright (were labeled legacy; fired under `&mut world` so they couldn't mutate anything; zero users outside physics' own tests). `CollisionCallback` type, `with_collision_callback`, `add_collision_callback`, `clear_collision_callbacks`, `collision_callback_count`, and the update-loop invocation removed. The two delivery channels are now the world event bus (`world.emit_event`/`read_events::<CollisionData>()`) and `take_collision_events()`.
+- **GPP-L9 (Command)**: the two parallel deferred queues (`pending_velocities` + `pending_resets` tuple-Vecs with drain-resets-first-by-convention) replaced by a single `pending_ops: Vec<(EntityId, DeferredBodyOp)>` enum queue drained in call order — the documented "reset then launch" pattern works because the launch is queued after the reset. `destroy_entity`/`clear`/orphan-pruning updated; deferred-op ordering pinned by test.
+
+### June 2026 Audit Remediation (all correctness findings fixed; 58 passing lib tests)
+- **Stale event re-emission**: `step()` no longer clears the event buffer; `clear_collision_events()` added, `PhysicsSystem::update()` clears once before the sub-step loop. Zero-step frames emit nothing.
+- **Sub-step event loss**: `step()` APPENDS events, so all catch-up sub-steps' events survive a single update.
+- **Contact points were collider-local**: now transformed through collider1's world isometry (point and normal) before meters→pixels.
+- **`apply_force` persisted forever**: forces reset after the step loop (`reset_forces()`); skipped on zero-step frames. Documented as one-update.
+- **Dead `RigidBody::apply_impulse`/`apply_force` component methods removed** (mutated a `velocity` field only read at body creation — silent no-op on live bodies).
+- **MISSING-001 (partial)**: `pixels_per_meter` validated in `with_scale` and at `PhysicsWorld::new` (non-finite or <= 0 → warn + default 100.0).
+- **CollisionPair bit-packing overflow**: canonical ordering compares `(value, generation)` tuples.
+- **`raycast` direction**: normalized internally; zero/non-finite returns `None`; distance always in pixels.
+- **Kinematic dead config**: removed ignored `linvel`/`angvel` on `kinematic_position_based` bodies.
+- **Non-test `unwrap()`**: `NonZeroUsize::new(8).unwrap()` replaced with `config.solver_iterations.max(1)` + `NonZeroUsize::MIN` fallback.
+- **Iteration names matched to rapier**: `velocity_iterations`/`position_iterations` → `solver_iterations`/`friction_iterations`.
+- **Unused deps removed**: `toml`, `common`, `thiserror` (after `PhysicsError` deletion).
+- **Dead public API deleted**: `PhysicsError`, `MovementConfig`; `Collider::player_box()` takes `(width, height)`.
+- **DRY-002/DRY-003**: `body(entity)`/`body_mut(entity)` helpers replace seven duplicated lookups; builder setup deduplicated across the three RigidBodyType arms.
+- **600-line rule**: `physics_world.rs` (977) → `physics_world/{mod,bodies,stepping,queries,tests}.rs`; `physics_system.rs` (775) → `physics_system/{mod,sync,update,tests}.rs`.
+- **Test gaps closed**: sensor intersection, real-collision callbacks, world-space contacts, scale validation, raycast normalization, event delivery contracts, physics+hierarchy pin (physics entities must be root entities).
+- ℹ️ `CollisionCallback` keeps `Send + Sync`: required because `ecs::System` has `Any + Send + Sync` supertraits.
+
+### January/February 2026
+- **ARCH-002**: multiple collision callbacks (`with_collision_callback`, `add_collision_callback`, `clear_collision_callbacks`, `collision_callback_count`) + tests.
+- **ARCH-001**: pass-through methods documented as intentional API ergonomics. Follow-up (April 2026): `set_body_velocity` + `apply_impulse` collapsed into game-facing `set_velocity` (deferred-safe on same-frame spawns); `PhysicsWorld::apply_impulse` remains for genuine mass-aware impulses.
+- **KISS-001**: proper collision start/stop tracking (`CollisionPair` canonical ordering, `previous_collisions` set, `started`/`stopped` flags) + 4 tests.
+- **DRY-001**: all 12+ locations use `pixels_to_meters`/`meters_to_pixels` helper methods.
+- Dead-code warning on conversion methods: now public API.
+
+### Code Quality Notes (June 2026 snapshot)
+Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep with accumulator; comprehensive builder API; `presets.rs` extends structs with `impl` blocks — clean pattern.
+
+---
+
+## renderer — Resolved Debt
+
+### July 13, 2026 — GPP-15 + ARCH-007 (Dirty Flag: static-scene upload skip)
+- **GPP-15**: sprite instance uploads are now change-gated. New `sprite/instance_cache.rs` `InstanceCache` (CPU-only, headless-tested): flattens batches into a reusable staging buffer and byte-compares (bytemuck, NaN-safe) instances + batch layout (texture, count) against the last upload; `SpritePipeline::prepare_sprites` skips `write_buffer` when nothing changed — a static scene re-renders from the buffer already on the GPU. Detection is on the *built* data (after `game.render()` runs), so procedural game render code stays fully supported; static UI frames (menus, pause screens) skip too. Per the GPP-04 decision: render-path-local detection, no ECS hooks.
+- **ARCH-007** folded in: the per-frame scratch `Vec` in `prepare_sprites` is gone — the cache's staging/snapshot buffers are persistent.
+- engine_core side: `GameRunner` now owns persistent `game_batcher`/`ui_batcher` fields (cleared per frame, capacity retained — no per-frame `SpriteBatcher::new()` HashMap churn) and the per-frame full clone of every batch (`.values().cloned().collect()`) is gone — `sort_batch_refs` orders `&SpriteBatch` refs (empty batches from persistent batchers filtered out; game-then-UI painter order preserved).
+- Tests: 4 new `InstanceCache` unit tests (identical-skip + counters, instance-move re-uploads, same-bytes-different-layout re-uploads, empty↔content transitions).
+| Issue | Resolution |
+|-------|------------|
+| **Bloom blur was vertical-only** | `queue.write_buffer` flushes at submit; rewriting one shared blur-params buffer between passes made every pass read the last write. Split into per-direction uniform buffers. |
+| **Sprite overflow panicked at 1,001 sprites** | `DynamicBuffer::update` grows the GPU buffer (next power of two) instead of `panic!`. Line pipeline's silent truncation replaced by the same growth path. |
+| **NaN depth panicked the batch sort** | `sort_by_depth` uses `f32::total_cmp` (NaN sorts last, deterministic). Regression test added. |
+| **Bloom created 2 + 2×iterations bind groups per frame** | Bind groups cached per render-target size, rebuilt on resize. Blur texel params written only on resize. |
+| **Texture map deep-cloned twice per frame** | White texture cached via `cache_texture_bind_group`; `game.rs` uses `assets.textures()` by reference; `textures_cloned()` removed. |
+| **`render_batcher` cloned every batch per frame** | Collects `&SpriteBatch` refs; sorts deterministically (min depth, then handle). |
+| **Magic white-texture handle `{ id: 0 }`** | `TextureHandle::WHITE` const. |
+| **`generate_mipmaps` produced broken textures** | Flag removed (allocated mips were never filled). |
+| **`render_pipeline_inspector.rs` (434 lines)** | Deleted — never declared in `lib.rs`, not even compiled. |
+| **`shaders/sprite.wgsl`** | Deleted — only `sprite_instanced.wgsl` is referenced. |
+| **`TextureResource::create_solid_color` stub** | Deleted — created textures without uploading pixel data, zero callers. |
+| **Legacy `Renderer::render()` + `render_basic()` + `run_with_app`** | Deleted — `Game` trait / `run_game()` is the only path. |
+| **4 unused `RendererError` variants** | Removed. |
+| **6 `#[allow(dead_code)]` suppressions** | All removed (fields deleted or became used). |
+| **Empty placeholder test** | Deleted. |
+| **`sprite.rs` at 1,059 lines** | Split: `sprite.rs`, `sprite/batch.rs`, `sprite/pipeline.rs`; atlas types in `atlas.rs`. |
+| **No renderer configuration** | `RendererConfig { vsync }` wired through `GameConfig::with_vsync()`. |
+| **Nondeterministic cross-batch draw order** | `render_batcher` sorts same as `game.rs::sort_batches`. |
+| **line_pipeline doc claimed shared camera layout** | Doc corrected (sharing tracked as DRY-006). |
+
+### January/February 2026
+| Issue | Resolution |
+|-------|------------|
+| Bind groups created every frame (sprites) | Camera bind group cached; texture bind groups cached per handle |
+| DRY-001: duplicate surface error handling | `acquire_frame()` helper |
+| DRY-002: duplicate sampler creation | `SamplerConfig::create_sampler()` |
+| KISS-002: unsafe transmute for surface lifetime | WGPU 28 infers `'static` from `Arc<Window>` |
+| ARCH-002: `Time` struct misplaced | Moved to `common` crate |
+| ARCH-004: inconsistent error types | `From<TextureError> for RendererError` |
+| SRP-002: Renderer init + rendering coupled | Documented as intentional (WGPU lifetimes) |
+
+---
+
+## ui — Resolved Debt
+
+### January–June 2026
+- **DRY-001**: `layout_to_draw_data()` helper — both `label_styled()` and `label_with_font()` use it (Jan 2026).
+- **DRY-002**: `widget_background_color(state)` helper for button/checkbox (Jan 2026).
+- **DRY-003**: `with_theme()` delegates to `new()` (Jan 2026).
+- **DRY-004**: text-drawing helpers extracted (`draw_text_with_font`, `draw_text_at_baseline`, `text_pos_in_bounds`, `estimate_text_size` — was 5 scattered magic-number copies) (Jun 2026).
+- **SRP-001**: `font.rs` → `font/` directory (`mod` facade, `glyph_cache.rs`, `layout.rs`); `FontLoader` deliberately not extracted (Jun 2026).
+- **SRP-002**: `context.rs` (~990 lines) → `context/{mod,text,widgets,tests}` (Jun 2026).
+- **KISS-001**: `WidgetPersistentState` unused `float_value`/`bool_value` deleted (Jun 2026).
+- **ARCH-001**: dual glyph caching is intentional (CPU bitmaps in ui, GPU textures in engine_core); real bug was `layout_text()` bypassing the cache — fixed (Jan 2026).
+- **ARCH-002**: `rect.rs` removed; `Rect` re-exported from `common` (Jan 2026).
+- **PERF-001**: `measure_text()` uses `font.metrics()` (no rasterization) (Feb 2026).
+- **DRY-005**: `next_depth()` helper in DrawList (Feb 2026). **DRY-006**: `baseline_y()` helper (Feb 2026). **DRY-007**: private `palette` module for theme hex constants (Jun 2026).
+- First-frame font rendering bug: static PRINTED flag removed; retries every frame.
+
+### June 2026 Audit (JUN-001..008)
+| ID | Issue | Resolution |
+|----|-------|------------|
+| JUN-001 | `unwrap()` outside tests in `font.rs` | Single fallible lookups with `ok_or_else` |
+| JUN-002 | Per-frame double glyph-bitmap clone | `Arc<[u8]>` bitmaps; clones are O(1) refcount bumps |
+| JUN-003 | Persistent-state GC dropped focused widget's state on skipped frame | `end_frame` retains focused widget's state; regression tests |
+| JUN-004 | `DrawCommand::depth()` = 0.0 for clip commands would tear pairs | Documented consume-in-submission-order contract |
+| JUN-005 | Dead public API | Deleted: `DrawList::button/text_simple/with_base_depth`, `interact_draggable`, `load_default_font` |
+| JUN-006 | `float_input` commit logic ×3 | `commit_float_input()` + `draw_float_value()` extracted |
+| JUN-007 | Theme bypass (hardcoded colors/paddings) | `TextInputStyle` on `Theme`; paddings routed through theme |
+| JUN-008 | Cosmetic re-export + clippy lints in tests | Fixed |
+
+---
+
+## input — Resolved Debt (June 2026 restructure)
+
+### July 13, 2026 — GPP-L4 (Double Buffer)
+- First-frame mouse warp fixed: `MouseState` gained `has_position: bool`; `update_position` only accumulates `frame_delta` once a real previous position exists, so the first move after startup no longer produces a spurious delta against the default `(0,0)` baseline. Four tests that had encoded the phantom jump were updated to the corrected semantics (incl. renamed `test_first_position_update_records_position_without_delta`); accumulation and per-frame-reset assertions preserved.
+
+- **BUG-001 Stale mouse movement delta**: `MouseState` accumulates `frame_delta` across move events, zeroed in `clear_frame_state()`; wheel delta accumulates. Regression tests added.
+- **BUG-002 Multi-action bindings leaked on unbind/rebind**: single source of truth `HashMap<A, Vec<InputSource>>`; `unbind_source()` removes from all actions.
+- **BUG-003 Incorrect action edge semantics**: `just_activated`/`just_deactivated` compare against reconstructed previous-frame state — strict inactive→active / active→inactive edges.
+- **ARCH-003 Engine-owned action enum**: `InputMapping<A>` made generic; `GameAction` survives as optional preset (`with_default_bindings()`); `EditorInputMapping` delegates.
+- **ARCH-004 Implicit default bindings in `new()`**: `new()` is empty; defaults opt-in.
+- **SRP-002 InputHandler owned the action mapping**: handler is device state + event queue only; action evaluation on `InputMapping`.
+- **DRY-001 Triplicated press-state tracking**: shared `ButtonTracker<T>`; press-while-held no longer re-triggers.
+- **DRY-002 / DEAD-001/2/3**: `ThreadSafeInputHandler` (158 lines) deleted (no consumer); `init()` + `InputError` deleted; redundant re-export removed.
+- **KISS-002**: device-state `update()` renamed `clear_frame_state()`.
+- Minor: gamepads auto-register on first event; scroll `PixelDelta` normalized to lines (÷16 px); clippy-clean; docs synced (training.md, README, CLAUDE.md).
+- Historical: Jan/Feb 2026 items (DRY-002/003, SRP-001, KISS-001, ARCH-001) resolved then or made moot by the June restructure. ARCH-002 (winit type coupling) remains an intentional documented choice.
+
+---
+
+## games — Resolved Debt
+
+### July 13, 2026 — GPP-17 (magic numbers, breakout)
+- 10 inline tuning literals hoisted from `breakout/src/gameplay.rs` into `constants.rs`: `LAUNCH_ANGLE_SPREAD` (0.6), `BRICK_DAMAGE_COLOR_FACTOR` (0.65), `BRICK_DAMAGE_EMISSIVE_FACTOR` (0.5), `BALL_LOST_BOUNDS_PAD` (60.0), and per-effect grid impulses `GRID_IMPULSE_{PADDLE_HIT,BRICK_DESTROY,BALL_LOST}_{STRENGTH,RADIUS}` (200/70, 260/90, 700/160). Structural literals (hash-recentering 0.5, velocity-epsilon guards) deliberately left in place. Behavior bit-identical; 43 tests green.
+
+---
+
+## audio — Resolved Debt (June 11, 2026 remediation)
+
+### July 13, 2026 — GPP-L3 (Singleton)
+- `SoundHandle::new()`'s process-global `static NEXT_ID: AtomicU32` replaced with an instance-local `next_sound_id: u32` on `AudioManager` (allocated in `load_sound_from_bytes` after decode validation, so failed loads consume no id); `SoundHandle::new()` → `pub(crate) from_id(u32)`. Ids are now manager-local and deterministic (fresh managers start at 1). Regression test: `test_sound_ids_are_manager_local_and_deterministic`.
+
+1. **Per-play full-buffer clone** — bytes are `Arc<[u8]>`, decoder reads `Cursor<Arc<[u8]>>` directly.
+2. **Master/SFX volume ignored live sounds** — `ActiveSound` stores `base_volume`; all volume setters re-apply `base * bus * master` to every live sink.
+3. **Clamping bypassable** — clamped at point of use via `clamp_volume`/`clamp_speed` (tested).
+4. **Dead `PlaybackState` enum** — deleted.
+5. **`AudioError::IoError` never constructed** — I/O failures convert via `#[from] io::Error`.
+6. **`#[allow(dead_code)]` on `ActiveSound.handle`** — fixed by implementing `stop(handle)`.
+7. **`AudioResult<T>` not exported** — re-exported from `lib.rs`.
+8. **Music always looped** — `play_music_once(path, volume)` added.
+9. **`play`/`unload` took `&SoundHandle`** — now take by value (Copy).
+10. **DRY: `load_sound` duplicated decode validation** — delegates to `load_sound_from_bytes`.
+11. **DRY: `set_music_volume` re-inlined `update_all_volumes`** — shared helper.
+12. **False "crossfade support" doc claims** — removed.
+13. **Missing `#[must_use]`** on builders and pure getters — added.
+
+---
+
 ## editor — Resolved Debt
+
+### July 13, 2026 — GPP-13 (Component/DRY: registry-generated editable inspector)
+- The ~11 hand-written per-component blocks in `editor_integration/panel_renderer/inspector.rs` are gone. `editor_component_registry!` entries now carry an edit spec — `{ edit edit_sprite => SetSpriteCommand }` for field editing or `{ readonly }` for serde display — and the macro generates `edit_all_components()` (field editors, undo-recorded writeback via `apply_component_edit`, remove [X] buttons, removal commands, in registry order; `registry_edit_block!` helper expands the three block shapes). `inspector.rs` shrank ~357 → 160 lines and is now a thin shell (readonly branch + add-component popup). `apply_component_edit` + `remove_button` moved to `editor/src/component_editors.rs` (exported from editor; editor_integration writeback tests re-pointed to `editor::apply_component_edit`). `/add-component` skill Steps 4–5 rewritten: a new component is one registry line (+ an `edit_*` fn and `Set*Command` only if its fields should be editable). New regression test: `test_edit_all_components_covers_present_components_and_advances_y`.
+
+### July 13, 2026 — GPP-L5 + GPP-L6 (Command)
+- **GPP-L5**: `CommandHistory.undo_stack` switched `Vec` → `VecDeque`; `enforce_limit` uses O(1) `pop_front()` instead of O(n) `remove(0)` (push/pop/last sites → push_back/pop_back/back/back_mut; redo_stack stays `Vec` — it never removes from the front). Regression test: `test_max_history_drops_oldest_and_preserves_undo_order`.
+- **GPP-L6**: `CommandHistory::undo()`/`redo()` now return `bool` (command actually applied); Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y shortcut handlers and the menu Undo/Redo actions in editor_integration gate `mark_dirty()` on it — a no-op undo/redo on an empty history no longer dirties a clean scene. Regression test: `test_undo_redo_on_empty_history_do_not_mark_dirty`.
+
+### June 2026 remediation + design decisions
+- **MAGIC-001**: all 13 slider ranges extracted to `mod ranges` constants; `EditableInspector::f32/vec2` take `RangeInclusive<f32>`.
+- **MAGIC-002**: widget-ID multipliers promoted to `COMPONENT_ID_STRIDE`/`FIELD_ID_STRIDE` with documented collision limits.
+- **MAGIC-003**: input widths/gaps/offsets are `EditableFieldStyle` fields (defaults preserve previous values).
+- **SRP-002**: `MenuBar.render()` is a 4-line orchestrator over `layout_titles()` (pure geometry, unit-tested), `render_title_bar()`, `apply_toggle()`, `render_open_dropdown()`.
+- **ARCH-001**: gizmo `render_translate()` split into `render_axis_handle()` + `begin_drag_if()`; colors from `GizmoPalette`.
+- **ARCH-002**: five `*EditResult` structs (26-33 fields each) replaced by generic `ComponentEdit<T> { new_value, field_hint }`; the five `Set*Command` impls collapsed into `impl_set_component_command!`.
+- **Design decisions of record:** (1) `stored_component.rs` holds the single `editor_component_registry!` invocation — add new editor-visible components there, one line; (2) `context.rs` state/delegation split evaluated and REJECTED (cohesive accessors; tests moved to `context/tests.rs` instead); (3) theme-driven colors — widgets take `&EditorTheme` or themed style structs, `Default` impls keep old literals.
+
+### February 2026
+- **DRY-001**: `has_exact_keys(map, keys)` helper; `is_vec_like()` 25→3 lines.
+- **SRP-001/DRY-002**: `check_action_with()` generic helper for the three action-check methods.
+- **DRY-003**: dropdown constants promoted to module level.
+- **DRY-004**: `centered_handle_rect()` helper (5 occurrences).
+
+---
+
+## editor_integration — Resolved Debt (June 2026)
+
+- **Duplicate `ComponentKind` enum + dispatch matches**: entity_ops.rs's own `ComponentKind`/`ComponentCategory`/dispatch helpers and panel_renderer's `to_command_kind()` converter all deleted. `editor::ComponentKind` (registry macro) is the single type. Adding a component type is one line in the editor crate's registry.
+- **Files over 600 lines**: `editor_game.rs` (1108) → `editor_game/` directory (mod/menu_actions/scene_io/shortcuts/viewport_interaction/tests); `panel_renderer.rs` (923) → `panel_renderer/` (mod/inspector/tests); `entity_ops.rs` 901 → 563.
+- **Duplicated inspector writeback (5×)**: one generic `apply_component_edit()` (world write + `try_merge_or_push`).
+- **Duplicated Delete/Duplicate logic**: single `delete_selected_entities()`/`duplicate_selected_entities()` called from menu and shortcuts.
+- **Magic numbers**: `src/constants.rs` holds `DEFAULT_SCENE_PATH` (was hardcoded 5×), `MIN_EDITOR_WINDOW_WIDTH/HEIGHT`, `MIN_ENTITY_SCALE`, `DUPLICATE_OFFSET`.
+- **Open Scene failures only logged**: `load_scene_with_feedback()` surfaces load errors on the status bar.
+
 
 ### July 13, 2026 — GPP-L5 + GPP-L6 (Command)
 - **GPP-L5**: `CommandHistory.undo_stack` switched `Vec` → `VecDeque`; `enforce_limit` uses O(1) `pop_front()` instead of O(n) `remove(0)` (push/pop/last sites → push_back/pop_back/back/back_mut; redo_stack stays `Vec` — it never removes from the front). Regression test: `test_max_history_drops_oldest_and_preserves_undo_order`.
