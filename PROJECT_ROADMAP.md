@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (June 2026):** Core systems complete. 936 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for renderer, ui, input, audio, physics, ecs, engine_core, editor, and editor_integration — see `TECH_DEBT.md` for the workspace rollup.
+**Engine Status (July 2026):** Core systems complete. 995 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (`PATTERNS_AUDIT.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
 
 ---
 
@@ -39,29 +39,8 @@ Each game lives in `../games/<name>/` as a standalone cargo project consuming th
 
 ---
 
-### Game 1: Pong ☑ COMPLETE (June 2026)
-
-Two paddles, one ball, score display. The "Hello, World" of games.
-
-**Teaches:** Physics bounce, score tracking, UI overlay, simple AI opponent
-**Key components:** `RigidBody` (kinematic paddles, dynamic ball), `Collider`, `Sprite`, immediate-mode score UI
-**Controls:** Player 1 W/S, Player 2 Up/Down. AI mode: right paddle tracks ball with lag.
-**Win condition:** First to 7 points.
-**Estimated scope:** ~200 lines game logic.
-
----
-
-### Game 2: Breakout ☑ COMPLETE (June 2026)
-
-Ball bouncing off a paddle, destroying a grid of bricks. Classic single-player.
-Lives in `../games/breakout/` — 18 tests, clippy-clean, full chaos-mode +
-achievements support, deforming grid background, particles.
-
-**Taught:** Dynamic entity despawning via collision events (bricks), grid layout spawning, lives system (bottom sensor + escape safety net), offset-based paddle bounce control, mouse+keyboard on one input
-**Key components:** Ball (dynamic, CCD), paddle (kinematic `capsule_x`), 10×6 brick grid (static, destroyed on hit)
-**Controls:** Mouse or arrow keys/A/D to move paddle; Space/Enter/click to launch.
-**Win condition:** Clear all bricks. Lives lost when all live balls fall off screen.
-**Engine gap found:** `MouseButton` wasn't re-exported in `engine_core::prelude` — added alongside `KeyCode`.
+### Game 1: Pong ☑ COMPLETE (June 2026) — details in `log_archive.md`
+### Game 2: Breakout ☑ COMPLETE (June 2026) — details in `log_archive.md`
 
 ---
 
@@ -246,26 +225,23 @@ WASM/Web export, mobile, desktop packaging. Not a prerequisite for making games;
 ## Technical Debt (High + Medium Only)
 
 Workspace rollup with per-crate counts: root `TECH_DEBT.md`. LOW priority items
-are tracked in `crates/*/TECH_DEBT.md` and are not listed here.
+are tracked in `crates/*/TECH_DEBT.md` and are not listed here. Resolved items
+live in `log_archive.md` (live docs carry open work only).
 
-**Resolved by the June 2026 audit passes** (previously listed here):
-renderer SRP-001 (`sprite.rs` split into `sprite/{batch,pipeline}.rs`) and
-ARCH-003 (all `#[allow(dead_code)]` removed, ~700 lines dead code deleted);
-audio ARCH-001 reclassified as a feature gap (streaming — audio crate has 0
-open debt); input TEST-001 superseded by GAP-001 below (dead-zone tests land
-with the gamepad backend); physics TEST-001 mostly closed (sensor + collision
-response tests added; remaining friction/kinematic/tunneling gaps are Low).
-The editor, editor_integration, physics, renderer, and audio crates currently
-carry **zero** High/Medium debt.
+### Game Programming Patterns Audit (July 2026)
 
-**Resolved June 11, 2026 (tech-debt pass):** engine_core SRP-001
-(`GlyphTextureCache` extracted to `glyph_texture_cache.rs`), SRP-002
-(BehaviorRunner match split into 7 handler methods), LOGIC-002 (`let-else`
-replaces the asset_manager `unwrap()`), ARCH-007 (`ToastStyle` on
-`AchievementManager`, `reset()` logs save errors), ARCH-003 (all `lib.rs`
-glob re-exports made explicit); ui SRP-001 (`font/` split: FontManager facade
-+ `GlyphCache` + `layout`), SRP-002 (`context/` split: mod/text/widgets/tests,
-all files <600 lines).
+Full-codebase audit against the [Game Programming Patterns](https://gameprogrammingpatterns.com/contents.html)
+catalog: **`PATTERNS_AUDIT.md`** (repo root) — 17 numbered findings + 12 Low items, each with
+evidence and a pattern-based fix plan, mirrored as pointer entries in the per-crate
+`TECH_DEBT.md` files and a new `../games/TECH_DEBT.md`. The **High** items:
+
+- [ ] **GPP-01 (State):** `BehaviorState` bool soup while the tested `ecs::StateMachine` has zero consumers
+- [ ] **GPP-02 (Data Locality):** HashMap-of-boxes component storage recorded as decision-of-record with a revisit trigger
+
+Notable Medium: **GPP-03 (Flyweight/DRY)** — pong↔breakout duplication; promote only the
+game-agnostic subset (ChaosTheme structure, grid-emit helper, visibility helper, small utils)
+now, defer the genre-flavored subset (spawners, flow skeleton) until game 3 confirms rule-of-three
+(Jesse's call, July 2026).
 
 ### Medium Priority
 
@@ -391,38 +367,4 @@ Derived from `crates/editor/IdealEditor.png`.
 
 ---
 
-## Archive: Completed Work
-
-<details>
-<summary>Click to expand</summary>
-
-### Engine Core (2025) — COMPLETE
-- Memory safety, thread-safe input, panic-safe system registry
-- Sprite rendering (WGPU 28), ECS with type-safe queries, asset management
-- Rapier2d physics, scene serialization (RON + prefabs), scene graph hierarchy
-- Audio (Rodio, spatial), immediate-mode UI, Simple Game API (`Game` trait, `run_game()`)
-- SRP refactoring: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager extracted
-- Test count: 724 passing, 29 ignored (GPU/window only), 0 failed
-
-### Editor Phase 1 (January–February 2026) — COMPLETE
-- Dockable panel system, scene viewport (pan/zoom, grid overlay, LOD)
-- Entity picking (click, rectangle), transform gizmos (translate/rotate/scale)
-- Component inspector with live writeback (Transform2D, Sprite, RigidBody, Collider, AudioSource)
-- Generic serde-based read-only display for any component
-- Component add/remove (categorized popup, cascade removal)
-- Entity CRUD (create empty/sprite/physics, delete, duplicate Ctrl+D)
-- Hierarchy panel (tree view, expand/collapse, Ctrl+click multi-select)
-- Play/Pause/Stop with `WorldSnapshot` capture/restore (Ctrl+P, F5)
-- Undo/redo command system (11 command types, merging for continuous edits)
-- Scene save/load (Ctrl+S/Ctrl+O/Ctrl+N, RON format, dirty flag)
-- Editor preferences persistence (camera, zoom, grid, last scene)
-- `EditorTheme` system (30+ color tokens, converter methods)
-- Status bar (entity count, FPS, status messages)
-- Snap-to-grid (toggle, configurable grid size)
-
-### Phase 2A: Standalone Infrastructure (March 2026) — COMPLETE
-- Standalone editor binary (`cargo run --bin editor -- /path/to/project`)
-- Standalone game project (`my_platformer`) consuming engine as external dep
-- Editor font path fix, extended engine prelude
-
-</details>
+Completed milestones (Engine Core 2025, Editor Phase 1, Phase 2A standalone infrastructure) live in `log_archive.md`.

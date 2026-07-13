@@ -5,50 +5,56 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
 
 ## Directory Map
 - **crates/engine_core/** - Core functionality including Game API, lifecycle management, and scene coordination
-  - `game.rs` - **Simple Game API** - `Game` trait, `GameConfig`, `run_game()` orchestration
-  - `game_loop_manager.rs` - Game loop timing and frame delta management (NEW)
-  - `ui_manager.rs` - UI lifecycle and draw command collection (NEW)
-  - `render_manager.rs` - Renderer lifecycle and sprite pipeline management
-  - `window_manager.rs` - Window creation and size tracking
-  - `assets.rs` - Asset loading and management (textures, fonts, etc.)
-  - `scene.rs` - Scene lifecycle management and world coordination
-  - `scene_loader.rs` - Scene deserialization from RON files
-  - `scene_data.rs` - Scene data structures (prefabs, entities, components)
-  - `behavior_runner.rs` - Behavior system for entity logic
-  - `lifecycle.rs` - FSM for scene lifecycle management
-  - `timing.rs` - Timer utilities for frame timing and delta calculation
+  - `game.rs` - **Simple Game API** - `Game` trait, `run_game()`, GameRunner orchestration
+  - `game_config.rs` - `GameConfig` (window, clear color, target FPS, chaos mode, asset base path)
+  - `game_loop_manager.rs` - Game loop timing and frame delta management (the only frame timer)
+  - `ui_manager.rs` / `render_manager.rs` / `window_manager.rs` / `scene_manager.rs` - Focused managers (UI lifecycle, renderer lifecycle, window creation, scene stack)
+  - `contexts.rs` - `GameContext` / `RenderContext` passed to Game methods
+  - `assets.rs` - Asset loading and caching (tracks handle→path for scene save)
+  - `scene.rs` / `scene_loader.rs` / `scene_data.rs` / `scene_serializer.rs` - Scene lifecycle, RON load, schema, World→RON save (the ONLY save pipeline)
+  - `behavior_runner.rs` / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
+  - `chaos_mode.rs` - `ChaosMode` enum (cross-game intensity theme)
+  - `pickups.rs` - Generic pickup tracking (`Pickups<K>`, `EffectTimer`)
+  - `achievements.rs` - Achievement registry, JSON persistence, toasts
+  - `particles/` - Pooled particle system (ring buffer, config builder)
+  - `grid/` - Deformable spring-mass grid effect (general-purpose visual)
+  - `glyph_texture_cache.rs` - UI glyph bitmap → GPU texture cache
+  - `texture_ref.rs` - Scene texture references (`#white`, `#solid:RRGGBB`, paths)
+  - `ui_integration.rs` - UI-to-renderer bridge; `debug.rs` - collider outline drawing
+  - `lifecycle.rs` - FSM for scene lifecycle; `timing.rs` - Timer utilities
 
-- **crates/renderer/** - WGPU-based rendering system with instancing and batching
-  - `renderer.rs` - Core WGPU rendering functionality
-  - `sprite.rs` - Sprite pipeline with instanced rendering and batching
-  - `sprite_data.rs` - GPU data structures (Vertex, Instance, Camera uniforms)
-  - `texture.rs` - Texture manager with caching and atlas building
-  - `shader/` - WGSL shaders for sprite rendering
+- **crates/renderer/** - WGPU-based rendering system with instancing, batching, HDR + bloom
+  - `renderer.rs` - WGPU device/queue/surface lifecycle, `RendererConfig`
+  - `sprite.rs` + `sprite/batch.rs` + `sprite/pipeline.rs` - Sprite type, CPU batching, GPU pipeline
+  - `sprite_data.rs` - GPU data structures (Vertex, Instance, DynamicBuffer)
+  - `texture.rs` - Texture manager with caching (`TextureHandle::WHITE`); `atlas.rs` - atlas building
+  - `line_pipeline.rs` - Line-list geometry (grid effect); `bloom.rs` + `render_targets.rs` - HDR post-processing
+  - `shaders/` - WGSL shaders
 
 - **crates/ecs/** - Entity Component System for game object management
-  - `lib.rs` - ECS world, entity management, component storage
-  - `component.rs` - Component trait and HashMap-based per-type storage
+  - `world.rs` - World: entity/component CRUD, queries, resources, events
+  - `component.rs` - Component trait and HashMap-based per-type storage (`ComponentStore`)
+  - `component_registry.rs` - Global type registry (create components by name), `define_component!`
   - `query.rs` - Type-safe query types (Single, Pair, Triple)
-  - `hierarchy_system.rs` - Parent-child transform propagation
-  - `sprite_components.rs` - Sprite, Transform2D, Camera2D components
+  - `hierarchy.rs` / `hierarchy_extension.rs` / `hierarchy_system.rs` - Parent/child links, `WorldHierarchyExt`, transform propagation
+  - `sprite_components.rs` - Sprite, Transform2D, Camera components; `sprite_system.rs` - animation
+  - `behavior.rs` - Scene-driven `Behavior` enum + `BehaviorState`
+  - `state_machine.rs` - `StateMachine` / `HierarchicalStateMachine` FSM components
+  - `event.rs` - `EventBus` (typed per-frame event queue)
+  - `audio_components.rs` - AudioSource/AudioListener (editor-inspectable data only)
 
-- **crates/input/** - Comprehensive input handling with event queuing
-  - `lib.rs` - InputHandler facade and thread-safe wrapper
-  - `input_handler.rs` - Main input state and event processing
-  - `input_mapping.rs` - Action-based input binding system
-  - `keyboard.rs` - Keyboard state (pressed, just_pressed, just_released)
-  - `mouse.rs` - Mouse position, buttons, wheel tracking
-  - `gamepad.rs` - Gamepad button and axis management
-  - `thread_safe_input.rs` - Arc<Mutex<>> wrapper for multi-threaded access
+- **crates/input/** - Event-based input with a generic action-mapping layer
+  - `input_handler.rs` - Device state (keyboard/mouse/gamepads) + event queue
+  - `input_mapping.rs` - Generic `InputMapping<A>` action bindings (games define action enums)
+  - `button_tracker.rs` - Shared `ButtonTracker<T>` (pressed/just_pressed/just_released)
+  - `keyboard.rs` / `mouse.rs` / `gamepad.rs` - Per-device state
 
 - **crates/ui/** - Immediate-mode UI framework
-  - `lib.rs` - UIContext, widget creation, theming
-  - `context.rs` - Immediate-mode UI entry point
-  - `font.rs` - Font loading and glyph rasterization via fontdue
+  - `context/` - UIContext: lifecycle + primitives (`mod.rs`), labels (`text.rs`), widgets (`widgets.rs`)
+  - `font/` - FontManager facade (`mod.rs`), `glyph_cache.rs`, `layout.rs` (fontdue)
   - `draw.rs` - Draw command generation
-  - `interaction.rs` - Widget state and mouse interaction
-  - `rect.rs` - Rectangle utilities for layout and hit detection
-  - `style.rs` - Color and Theme definitions
+  - `interaction.rs` - Widget state, mouse interaction, focus
+  - `style.rs` - Theme definitions (`Color`/`Rect` re-exported from `common`)
 
 - **crates/physics/** - Rapier2d-based 2D physics integration
   - `lib.rs` - Physics system integration with ECS
@@ -58,17 +64,25 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `presets.rs` - Pre-configured physics presets for common scenarios
 
 - **crates/audio/** - Audio playback via rodio
-  - `lib.rs` - AudioManager facade
-  - `manager.rs` - Sound loading, playback, volume control
-  - `sound.rs` - SoundHandle, SoundSettings
+  - `lib.rs` - crate docs + re-exports
+  - `manager.rs` - Sound loading, playback, volume buses; `sound.rs` - SoundHandle, SoundSettings; `error.rs` - AudioError
   - Note: AudioSource/AudioListener/PlaySoundEffect live in `crates/ecs/src/audio_components.rs`
     and are editor-inspectable data only — no runtime system consumes them yet
 
 - **crates/common/** - Shared types and utilities
-  - `math.rs` - Common mathematical constants and utilities
+  - `rect.rs` / `color.rs` / `transform.rs` / `camera.rs` / `time.rs` / `macros.rs` - Rect, Color, transforms, CameraUniform, Time
+
+- **crates/editor/** - Editor data + widgets (panels, inspector, gizmos, undo/redo). NO engine_core dep. See `crates/editor/CLAUDE.md` for the file map; `stored_component.rs` holds the component registry macro (single source of truth).
+
+- **crates/editor_integration/** - Bridges editor and engine_core (`EditorGame<G>` wrapper, `run_game_with_editor()`, panel rendering, inspector writeback). See its `CLAUDE.md`.
+
+- **crates/ecs_macros/** - `#[derive(ComponentMeta)]` proc macro
 
 - **examples/** - Working demonstrations of engine features
   - `hello_world.rs` - Physics platformer with UI, audio, ECS, and scene graph
+  - `editor_demo.rs` - Editor wrapping the platformer (`--features editor`)
+  - `behavior_demo.rs` - Scene-driven behaviors
+  - Real games live in `../games/` (pong, breakout) — see `PROJECT_ROADMAP.md`
 
 ## Coding Guidelines
 
@@ -96,7 +110,7 @@ Use descriptive names that clearly communicate purpose:
 
 ## Patterns Reference
 
-### Manager Pattern (NEW - January 2026)
+### Manager Pattern (January 2026)
 Extracts responsibilities from monolithic classes into focused managers following SRP:
 
 ```rust
@@ -139,8 +153,8 @@ impl Game for MyGame {
         ctx.world.add_component(&player, Transform2D::new(Vec2::ZERO)).ok();
         ctx.world.add_component(&player, Sprite::new(0)).ok();
         
-        // Load textures
-        let player_tex = ctx.assets.load_texture("player.png")?;
+        // Load textures (init returns (), so handle the Result explicitly)
+        let player_tex = ctx.assets.load_texture("player.png").expect("missing player.png");
     }
 
     fn update(&mut self, ctx: &mut GameContext) {
@@ -225,7 +239,7 @@ if ui.button("play", "Play", button_rect) {
 ui.end_frame();
 ```
 
-**Files:** `ui/lib.rs`, `ui/context.rs`, `ui/draw.rs`
+**Files:** `ui/lib.rs`, `ui/context/`, `ui/draw.rs`
 
 ### Asset Manager Pattern
 Centralized asset loading with caching:
@@ -311,7 +325,7 @@ SceneData(
 SceneLoader::load_and_instantiate("scene.ron", &mut world, &mut assets)?;
 ```
 
-**Files:** `scene_loader.rs`, `scene_data.rs`, `assets/scenes/*.ron`
+**Files:** `scene_loader.rs`, `scene_data.rs`, `examples/assets/scenes/*.ron` (games keep theirs in `../games/<name>/assets/scenes/`)
 
 ### Physics Integration Pattern
 ECS-friendly 2D physics via rapier2d. Game-facing movement API is a single
@@ -346,11 +360,19 @@ physics.add_collision_callback(|collision| {
     println!("Score system: check for pickup!");
 });
 
+// PREFERRED for game logic: poll the event buffer instead of callbacks.
+// Callbacks fire while physics holds &mut world (can't mutate anything);
+// polling lets you react freely. Snapshot with .to_vec() before consuming.
+let events = physics.collision_events().to_vec();
+for collision in &events {
+    if collision.started { /* destroy brick, play sound, ... */ }
+}
+
 // Update physics
 physics_system.update(&mut world, delta_time)?;
 ```
 
-**Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`, `physics/physics_system.rs`
+**Files:** `physics/lib.rs`, `physics/components.rs`, `physics/presets.rs`, `physics/physics_system/`
 
 ### Input Mapping Pattern
 Action-based input bindings. `InputMapping<A>` is generic — **games define their
@@ -478,17 +500,13 @@ let component = registry.create_component("Health", json)?;
 
 **Files:** `ecs/src/component_registry.rs`, `ecs/src/sprite_components.rs`, `ecs_macros/src/lib.rs`
 
-## Current Known Limitations (Updated January 2026)
+## Current Known Limitations
 
-**Technical Debt Tracking:**
-- ~~SRP violations in GameRunner~~ ✅ FIXED: Managers extracted, game.rs refactored
-- ~~Bind groups created per frame~~ ✅ FIXED: Camera bind group cached, texture bind groups cached per handle
-- Glyph texture cache includes color in key (memory waste)
-- ~~First-frame UI placeholder flicker~~ ✅ FIXED: Font rendering bug fixed
-- ~~40+ allocations per frame in behavior system~~ ✅ FIXED: Behaviors accessed by reference
-- ~~Component registration still requires separate ComponentMeta impl~~ ✅ FIXED: #[derive(ComponentMeta)] macro added
-
-**All tracked in:** `PROJECT_ROADMAP.md` Technical Debt section
+Open technical debt lives in the **live docs**: root `TECH_DEBT.md` (workspace rollup),
+`crates/*/TECH_DEBT.md` (per-crate detail), `../games/TECH_DEBT.md`, and the
+`PROJECT_ROADMAP.md` Technical Debt section. Design-pattern findings with fix plans:
+`PATTERNS_AUDIT.md`. Resolved history: `log_archive.md`. Do not list debt here —
+this file documents APIs and patterns, not status.
 
 ---
 
@@ -497,22 +515,27 @@ let component = registry.create_component("Health", json)?;
 ### File Structure
 ```
 /home/jedi/RustroverProjects/insiculous_2d/
-├── AGENTS.md                    # Main project documentation
-├── PROJECT_ROADMAP.md          # Updated with verified test counts
-├── README.md                   # Project overview
-├── TEST_IMPROVEMENTS.md        # Test enhancement documentation
+├── AGENTS.md                   # Main project documentation
 ├── training.md                 # This file - AI pair programming guide
+├── PROJECT_ROADMAP.md          # LIVE: tasks, priorities, engine gaps
+├── TECH_DEBT.md                # LIVE: workspace debt rollup (per-crate detail in crates/*/TECH_DEBT.md)
+├── PATTERNS_AUDIT.md           # Game Programming Patterns audit + fix plans
+├── log_archive.md              # Completed/resolved work (history)
+├── README.md                   # Project overview
 ├── crates/
-│   ├── engine_core/           # Core engine (game.rs, managers, lifecycle)
-│   ├── renderer/              # WGPU rendering (sprite.rs, texture.rs)
+│   ├── engine_core/           # Core engine (Game API, managers, scene pipeline)
+│   ├── renderer/              # WGPU rendering (sprites, batching, bloom)
 │   ├── ecs/                   # Entity Component System
-│   ├── input/                 # Input handling with event queuing
+│   ├── ecs_macros/            # #[derive(ComponentMeta)]
+│   ├── input/                 # Input handling + generic action mapping
 │   ├── ui/                    # Immediate-mode UI framework
 │   ├── physics/               # Rapier2d physics integration
 │   ├── audio/                 # Audio playback via rodio
-│   └── common/                # Shared types and utilities
-└── examples/                  # Working demonstrations
-    └── hello_world.rs        # Full-featured physics platformer demo
+│   ├── common/                # Shared types (Rect, Color, Time, CameraUniform)
+│   ├── editor/                # Editor panels, inspector, gizmos, undo/redo
+│   └── editor_integration/    # EditorGame<G> wrapper, run_game_with_editor()
+├── examples/                  # hello_world, editor_demo, behavior_demo
+└── ../games/                  # Sibling dir: one cargo project per game (pong, breakout)
 ```
 
 ### Key Commands
@@ -525,8 +548,9 @@ cargo test -p engine_core
 cargo test -p renderer
 cargo test -p ecs
 
-# Run demo
+# Run demos
 cargo run --example hello_world
+cargo run --example editor_demo --features editor
 
 # Check for TODOs (should be 0)
 grep -r "TODO:" crates/ --include="*.rs" | wc -l
@@ -553,23 +577,24 @@ For more game programming patterns, refer to the [Game Programming Patterns](htt
 
 ### Struct Documentation
 ```rust
-/// The main game loop
-pub struct GameLoop {
-    config: GameLoopConfig,
-    timer: Timer,
-    running: bool,
+/// Manages game loop timing and frame delta calculations
+pub struct GameLoopManager {
+    last_frame_time: Instant,
+    delta_time: f32,
+    frame_count: u64,
+    total_time: f32,
+    /// Minimum duration of a frame, derived from the target FPS.
+    /// `None` means uncapped (rely on vsync / present mode).
+    min_frame_time: Option<Duration>,
 }
 ```
 
 ### Method Documentation
 ```rust
-/// Create a new game loop with the given configuration
-pub fn new(config: GameLoopConfig) -> Self {
-    Self {
-        config,
-        timer: Timer::new(),
-        running: false,
-    }
+/// Cap the frame rate at `fps`. Pass 0 to uncap (vsync still applies).
+pub fn set_target_fps(&mut self, fps: u32) {
+    self.min_frame_time =
+        (fps > 0).then(|| Duration::from_secs_f64(1.0 / fps as f64));
 }
 ```
 
