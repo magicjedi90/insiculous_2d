@@ -6,7 +6,9 @@ description: Scaffold a new game for the 20 Games Challenge following the establ
 # New Game — 20 Games Challenge Scaffold
 
 Games are **standalone cargo projects in `../games/<name>/`** (sibling of the
-engine repo) — NOT workspace members, NOT git repos. Before writing anything,
+engine repo) — NOT workspace members; each is its OWN git repo (`git init -b
+main`, copy breakout's `.gitignore`, commit when the game is green). Before
+writing anything,
 open `../games/space_invaders/` (most recent) and `../games/breakout/` and
 mirror their structure. When conventions here conflict with what those games
 actually do, the newest game wins — read the code.
