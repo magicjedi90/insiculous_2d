@@ -25,7 +25,7 @@ Grid of invaders marching left/right and descending; player fires upward. Lives 
 - **Taught:** Formation movement (one shared offset over kinematic bodies via `set_kinematic_target`), bullets as `Lifetime`-carrying dynamic sensors (engine auto-despawn), one `take_collision_events()` drain shared by every consumer, game-side AABB fallbacks for pairs rapier never reports (kinematic-vs-static barrier chomping, kinematic-vs-kinematic invader-vs-player, fast bullet-vs-bullet cancels)
 - **Key components:** Player cannon (kinematic box), 5×10 invader fleet (kinematic, per-row colors/values), barrier bunkers (grids of static sensor blocks), bullets (dynamic sensors + `Lifetime`)
 - **Controls:** Mouse or arrows/A/D; hold Space/click to fire (cooldown). Win: clear the fleet. Lose: cannon out of lives, or any invader reaches the invasion line / the cannon.
-- **Chaos meanings:** Insane = 1.8× march + 2.4× invader fire; Ridiculous = twin cannons + stacked volleys; Insiculous = both.
+- **Chaos meanings (split Jul 13 2026, Jesse's tuning):** Insane = 1.8× march speed, player compensated with a 4-bullet cap (vs the classic 1); Ridiculous = 2.4× invader fire rate, player answers with twin cannons (one 2-bullet volley in flight); Insiculous = both fleet buffs, twin cannons with 3 stacked volleys (6-bullet cap). Single sources: `player_fire_caps(mode)` + `invader_fire_rate(mode)` in `gameplay/combat.rs`, `march_speed` in `gameplay/formation.rs`.
 - **GPP-03 part 2 rule-of-three (closed with this game):** third literal duplications promoted to the engine — `default_playfield_grid` (was `build_grid` verbatim in pong+breakout), `MenuInput` (pong's struct == breakout's `nav_keys`/`menu_navigate`), `spawn_background`, and the `RENDER_UNIT = 80.0` constant (now defined once in `engine_core`, used by the renderer path in `game.rs`). Pong + breakout refactored onto all four. NOT promoted (no third use, stays game-side by the rule): `spawn_paddle`/`spawn_ball`/`spawn_wall` shapes (SI has no paddle-bounce ball or bouncy walls), the particle preset semantics (SI's bursts are its own), and the `Serving` flow skeleton (SI has no serve state).
 
 ### Game 2: Breakout ☑ (June 2026)
@@ -36,6 +36,15 @@ Ball bouncing off a paddle, destroying a grid of bricks. Lives in `../games/brea
 - **Controls:** Mouse or arrow keys/A/D; Space/Enter/click to launch. Win: clear all bricks.
 - **Engine gap found:** `MouseButton` wasn't re-exported in `engine_core::prelude` — added alongside `KeyCode`.
 - **July 2026 level system:** chaos = per-level flavor; brick tags via `EntityTag` (`armored{N}` + `drop_*`); pickups fall and paddle catches; `engine_core::pickups` promoted as the shared mechanism.
+
+### Game 4: Snake ☑ (July 13, 2026)
+Growing snake in four directions, eat food to grow, avoid self. Lives in `../games/snake/` — 31 tests, clippy-clean, full chaos-mode + achievements support (9), deforming grid background, particles. **First game with NO physics at all** — segments/food/walls are sprite-only entities; every rule is grid-cell math in pure functions (`step_snake`, `next_direction`, `place_food`, `tick_interval`), fully headless-testable.
+
+- **Taught:** Grid-based movement (cells `VecDeque<IVec2>` head-first as the single source of truth, index-parallel segment sprites resynced per tick), fixed-tick accumulator (`tick_timer += interval` catch-up loop — first game with a discrete step), buffered turn input (cap-2 queue, 180° reversals rejected at apply time so two buffered turns can never combine into one), deterministic food placement (`hash_u32(frame_count)` → linear probe to first free cell)
+- **Key components:** `Name` + `Transform2D` + `Sprite` only. No `RigidBody`/`Collider`/`PhysicsSystem` anywhere.
+- **Controls:** Arrows/WASD to turn; Esc to title. Survive and maximize length; eating within the vacating-tail rule (stepping into the cell the tail leaves this tick is legal — unless that step eats and the tail stays).
+- **Chaos meanings:** Insane = faster base tick (0.10s vs 0.14s) that shrinks 2ms per food down to a 0.05s floor; Ridiculous = wrap-around walls (dimmed wall frame — portals, not hazards) + two pellets on the board; Insiculous = both. Single sources: `tick_interval(mode, foods_eaten)`, `food_count(mode)`, `walls_wrap(mode)` in `gameplay.rs`.
+- **Rule-of-three check:** nothing new to promote — the tick accumulator is Snake-first (one use), and all shared scaffolding (`MenuInput`, `spawn_background`, `default_playfield_grid` + `step_and_emit_grid`, `RENDER_UNIT`, `set_sprites_visible`, `hash_u32`, `game_root!`) was consumed from the engine as promoted. No engine changes.
 
 ---
 

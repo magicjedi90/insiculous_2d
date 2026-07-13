@@ -21,10 +21,10 @@
 ### Key Metrics
 - **Total Tests**: 1048/1048 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
-- Games (in `../games/`): breakout 41 tests, pong 5, space_invaders 25 — all clippy-clean
+- Games (in `../games/`): breakout 41 tests, pong 5, space_invaders 25, snake 31 — all clippy-clean
 
 ### Current Priority
-**The 20 Games Challenge** drives the roadmap (see `PROJECT_ROADMAP.md`): Pong ☑, Breakout ☑, and Space Invaders ☑ shipped; **Snake (game 4) is next** (no engine gaps — grid logic is pure game code). After the Phase A arcade five: Gap 1 `CameraFollow`, Gap 3 `Tilemap`. Editor: Phase 1 complete; Phase 2 (Ideal Editor UI) in progress (2F Status Bar done, 2G Theme started).
+**The 20 Games Challenge** drives the roadmap (see `PROJECT_ROADMAP.md`): Pong ☑, Breakout ☑, Space Invaders ☑, and Snake ☑ shipped; **Asteroids (game 5) is next** (no engine gaps — rotation/thrust, screen wrap, and asteroid splitting are game code over existing physics). After the Phase A arcade five: Gap 1 `CameraFollow`, Gap 3 `Tilemap`. Editor: Phase 1 complete; Phase 2 (Ideal Editor UI) in progress (2F Status Bar done, 2G Theme started).
 
 ### Technical Debt (live docs — open work only)
 - Root `TECH_DEBT.md` — workspace rollup with per-crate open counts; detail in `crates/*/TECH_DEBT.md` and `../games/TECH_DEBT.md`

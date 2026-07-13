@@ -1,25 +1,27 @@
 # Task Queue - Insiculous 2D
 
 
-## TASK-SNAKE-001: Snake (Game 4 of the 20 Games Challenge) — NEXT UP
+## TASK-ASTEROIDS-001: Asteroids (Game 5 of the 20 Games Challenge) — NEXT UP
 
-**Start with `/new-game snake`.** Roadmap spec (PROJECT_ROADMAP Phase A, Game 4):
-growing snake controlled in four directions, eat food to grow, avoid self.
-No physics needed — grid-based movement and self-collision are pure game logic
-(timer-driven steps). ~300 lines.
+**Start with `/new-game asteroids`.** Roadmap spec (PROJECT_ROADMAP Phase A, Game 5):
+ship rotates and thrusts in 2D space, asteroids split on hit, screen wraps.
+~400 lines.
 
 Build notes:
-- **No engine gaps**: grid logic, segment-following, food spawning are all game code.
-  `hash_u32(frame_count)` for food placement (deterministic, no rand).
+- **No engine gaps**: rotation-based movement (dynamic ship with angular
+  velocity via `set_velocity`), screen-wrap teleports (`Transform2D` writes —
+  GPP-09 means live physics bodies follow), splitting = destroy + spawn
+  smaller pair, invincibility frames.
+- Bullets: dynamic sensors + `Lifetime` (space_invaders recipe). Prove every
+  physics pair the game depends on with a headless sim test first — rapier
+  does not report kinematic-vs-kinematic/static pairs.
 - **Shared scaffolding** (prelude): `MenuInput`, `spawn_background`,
-  `default_playfield_grid` + `step_and_emit_grid`, `RENDER_UNIT`, `set_sprites_visible`.
-- **Chaos meanings are the game's to define** (e.g. Insane = faster ticks,
-  Ridiculous = two food items / wrap-around walls?, Insiculous = both).
-- Segments are plain sprites (no colliders) — self/wall collision is grid-cell math,
-  headless-testable.
+  `default_playfield_grid` + `step_and_emit_grid`, `RENDER_UNIT`,
+  `set_sprites_visible`, `hash_u32`/`hash_f32` for asteroid shapes/spawns.
+- Chaos meanings are the game's to define.
 - Verify: game `cargo test` headless green + engine `/finish-task` if the engine changed.
 
-(TASK-SI-001 Space Invaders shipped Jul 13 2026 — see PROGRESS.md and `log_archive.md`.)
+(TASK-SNAKE-001 Snake shipped Jul 13 2026 — see PROGRESS.md and `log_archive.md`.)
 
 **Instructions for agents:** Claim a task by creating `current_tasks/TASK-XXX.lock` with your agent ID and timestamp. Work the task, push, then remove the lock and move the task to PROGRESS.md.
 

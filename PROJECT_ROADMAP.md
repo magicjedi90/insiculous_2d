@@ -48,15 +48,7 @@ Each game lives in `../games/<name>/` as a standalone cargo project consuming th
 
 ---
 
-### Game 4: Snake ☐
-
-Growing snake controlled in four directions, eat food to grow, avoid self.
-
-**Teaches:** Grid-based movement (no physics needed), segment-following logic, game-over detection, procedural food spawning
-**Key components:** Head entity + tail segment entities, timer-driven movement, grid logic in game code
-**Controls:** Arrow keys or WASD.
-**Win condition:** Survive as long as possible, maximize length.
-**Estimated scope:** ~300 lines.
+### Game 4: Snake ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
 ---
 
