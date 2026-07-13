@@ -66,6 +66,7 @@ pub use scene_data::{
     PrefabData, RigidBodyTypeData, SceneData, SceneLoadError,
 };
 pub use scene_loader::{SceneInstance, SceneLoader};
+pub use texture_ref::TextureResolver;
 pub use scene_serializer::{save_scene_to_file, serialize_to_ron, world_to_scene_data};
 pub use render_manager::RenderManager;
 pub use window_manager::{WindowConfig, WindowManager};

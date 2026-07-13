@@ -10,9 +10,8 @@ use glam::Vec2;
 
 use ecs::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
 use ecs::{EntityId, World, WorldHierarchyExt};
-use renderer::TextureHandle;
 
-use crate::assets::AssetManager;
+use crate::texture_ref::TextureResolver;
 use crate::scene_data::{
     ColliderShapeData, ComponentData, EntityData, PhysicsSettings, PrefabData,
     RigidBodyTypeData, SceneData, SceneLoadError,
@@ -31,12 +30,51 @@ pub struct SceneInstance {
     pub entities: Vec<EntityId>,
     /// Number of entities created
     pub entity_count: usize,
+    /// The scene's prefab table, retained for runtime spawning via
+    /// [`spawn_prefab`](Self::spawn_prefab).
+    pub prefabs: HashMap<String, PrefabData>,
 }
 
 impl SceneInstance {
     /// Get an entity by name
     pub fn get_entity(&self, name: &str) -> Option<EntityId> {
         self.named_entities.get(name).copied()
+    }
+
+    /// Whether the scene defines a prefab with this name.
+    pub fn has_prefab(&self, name: &str) -> bool {
+        self.prefabs.contains_key(name)
+    }
+
+    /// Spawn a new entity from a named prefab at runtime (Prototype pattern).
+    ///
+    /// `overrides` replace matching component types from the prefab — the
+    /// same semantics as scene-file `overrides`. Returns the new entity, or
+    /// an error if the prefab doesn't exist or a component fails to build
+    /// (in which case no half-built entity is left behind). The spawned
+    /// entity is NOT added to `entities`/`named_entities` — the caller owns
+    /// its lifecycle.
+    pub fn spawn_prefab(
+        &self,
+        world: &mut World,
+        assets: &mut impl TextureResolver,
+        prefab_name: &str,
+        overrides: &[ComponentData],
+    ) -> Result<EntityId, SceneLoadError> {
+        let prefab = self
+            .prefabs
+            .get(prefab_name)
+            .ok_or_else(|| SceneLoadError::PrefabNotFound(prefab_name.to_string()))?;
+
+        let entity_id = world.create_entity();
+        let merged = SceneLoader::merge_components(&prefab.components, overrides, &[]);
+        for component in &merged {
+            if let Err(e) = SceneLoader::add_component_to_entity(entity_id, component, world, assets) {
+                world.remove_entity(&entity_id).ok();
+                return Err(e);
+            }
+        }
+        Ok(entity_id)
     }
 }
 
@@ -63,7 +101,7 @@ impl SceneLoader {
     pub fn instantiate(
         data: &SceneData,
         world: &mut World,
-        assets: &mut AssetManager,
+        assets: &mut impl TextureResolver,
     ) -> Result<SceneInstance, SceneLoadError> {
         let mut named_entities = HashMap::new();
         let mut entities = Vec::new();
@@ -122,6 +160,7 @@ impl SceneLoader {
             named_entities,
             entities,
             entity_count,
+            prefabs: data.prefabs.clone(),
         })
     }
 
@@ -148,7 +187,7 @@ impl SceneLoader {
         entity_data: &EntityData,
         prefabs: &HashMap<String, PrefabData>,
         world: &mut World,
-        assets: &mut AssetManager,
+        assets: &mut impl TextureResolver,
         named_entities: &mut HashMap<String, EntityId>,
         entities: &mut Vec<EntityId>,
         parent_id: Option<EntityId>,
@@ -199,7 +238,7 @@ impl SceneLoader {
     pub fn load_and_instantiate(
         path: impl AsRef<Path>,
         world: &mut World,
-        assets: &mut AssetManager,
+        assets: &mut impl TextureResolver,
     ) -> Result<SceneInstance, SceneLoadError> {
         let data = Self::load_from_file(path)?;
         Self::instantiate(&data, world, assets)
@@ -210,7 +249,7 @@ impl SceneLoader {
         entity_data: &EntityData,
         prefabs: &HashMap<String, PrefabData>,
         world: &mut World,
-        assets: &mut AssetManager,
+        assets: &mut impl TextureResolver,
     ) -> Result<EntityId, SceneLoadError> {
         let entity_id = world.create_entity();
 
@@ -243,34 +282,26 @@ impl SceneLoader {
         inline: &[ComponentData],
     ) -> Vec<ComponentData> {
         let mut result: Vec<ComponentData> = base.to_vec();
-
-        // Apply overrides (replace matching component types)
-        for override_comp in overrides {
-            let component_type = Self::component_type_name(override_comp);
-            if let Some(pos) = result
-                .iter()
-                .position(|c| Self::component_type_name(c) == component_type)
-            {
-                result[pos] = override_comp.clone();
-            } else {
-                result.push(override_comp.clone());
-            }
-        }
-
-        // Add inline components (these take precedence over everything)
-        for inline_comp in inline {
-            let component_type = Self::component_type_name(inline_comp);
-            if let Some(pos) = result
-                .iter()
-                .position(|c| Self::component_type_name(c) == component_type)
-            {
-                result[pos] = inline_comp.clone();
-            } else {
-                result.push(inline_comp.clone());
-            }
-        }
-
+        // Later layers win: overrides replace base, inline replaces both.
+        Self::apply_component_layer(&mut result, overrides);
+        Self::apply_component_layer(&mut result, inline);
         result
+    }
+
+    /// Replace-or-append each component of `layer` into `result`, matching
+    /// by component type name.
+    fn apply_component_layer(result: &mut Vec<ComponentData>, layer: &[ComponentData]) {
+        for comp in layer {
+            let component_type = Self::component_type_name(comp);
+            if let Some(pos) = result
+                .iter()
+                .position(|c| Self::component_type_name(c) == component_type)
+            {
+                result[pos] = comp.clone();
+            } else {
+                result.push(comp.clone());
+            }
+        }
     }
 
     /// Get a simple type name for component matching
@@ -293,7 +324,7 @@ impl SceneLoader {
         entity_id: EntityId,
         component: &ComponentData,
         world: &mut World,
-        assets: &mut AssetManager,
+        assets: &mut impl TextureResolver,
     ) -> Result<(), SceneLoadError> {
         match component {
             ComponentData::Transform2D {
@@ -318,7 +349,7 @@ impl SceneLoader {
                 depth,
                 emissive,
             } => {
-                let texture_handle = Self::resolve_texture(texture, assets)?;
+                let texture_handle = assets.resolve_texture(texture)?;
                 let sprite = Sprite {
                     texture_handle: texture_handle.id,
                     offset: Vec2::new(offset.0, offset.1),
@@ -509,15 +540,6 @@ impl SceneLoader {
         Ok(())
     }
 
-    /// Resolve a texture reference to a TextureHandle.
-    ///
-    /// Reference syntax lives in `crate::texture_ref`.
-    fn resolve_texture(
-        texture_ref: &str,
-        assets: &mut AssetManager,
-    ) -> Result<TextureHandle, SceneLoadError> {
-        crate::texture_ref::resolve_texture(texture_ref, assets)
-    }
 }
 
 // Parse-level tests (public API) live in `tests/scene_loader_parse.rs`;

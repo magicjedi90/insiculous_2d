@@ -21,7 +21,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-04 | Dirty Flag | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/ecs/src/hierarchy_system.rs` | No (SRP-003 adjacent) |
 | GPP-05 | Game Loop | Low | `crates/engine_core/src/game_loop_manager.rs` | No |
 | GPP-06 | Type Object / Bytecode | Medium | `crates/ecs/src/behavior.rs`, `scene_loader.rs` | Yes (engine_core ARCH-006) |
-| GPP-07 | Prototype | Medium | `crates/engine_core/src/scene_loader.rs` | Partial (DRY-010) |
+| GPP-07 | Prototype | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/engine_core/src/scene_loader.rs` | Partial (DRY-010) |
 | GPP-08 | Event Queue | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_world/stepping.rs` | No |
 | GPP-09 | Dirty Flag / Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/sync.rs` | No (documented footgun, untracked) |
 | GPP-10 | Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/` | Partial (ARCH-002 resolved differently) |
@@ -113,7 +113,7 @@ Promotion protocol per the standing directive: engine tests per piece, refactor 
 
 **Fix plan (Type Object):** Covered by ARCH-006; this audit adds the concrete unblocking step — implement `World::add_boxed` so `ComponentData::Dynamic` actually attaches components, then migrate behaviors to registry-created components with game-registered factories. Until Phase 4, the enum is acceptable; the dead `Dynamic` path silently swallowing data is the part worth fixing early (it logs a warn and drops user scene data on the floor).
 
-### GPP-07 · Prototype — prefabs are load-time-only
+### GPP-07 · Prototype — prefabs are load-time-only — ✅ RESOLVED (Jul 13 2026, SceneInstance::spawn_prefab; see `log_archive.md` § engine_core)
 
 **Evidence:** `PrefabData` + override merging (`scene_data.rs:92-97`, `scene_loader.rs:240-274`) is a solid data-driven Prototype for *scene instantiation* — but `SceneInstance` (`scene_loader.rs:22-34`) discards `data.prefabs` after loading. There is no runtime "instantiate prefab by name", so the pattern can't serve its primary purpose from the [Prototype chapter](https://gameprogrammingpatterns.com/prototype.html): spawning many copies at runtime (bullets, enemies, drops). Breakout works around it by spawning balls/pickups from hand-rolled component code. Related: `merge_components` is O(n²) string-name matching (tracked as DRY-010 for its duplicated loop).
 

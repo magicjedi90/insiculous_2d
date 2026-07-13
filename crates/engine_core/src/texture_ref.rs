@@ -10,6 +10,22 @@ use renderer::TextureHandle;
 use crate::assets::AssetManager;
 use crate::scene_data::SceneLoadError;
 
+/// Resolves scene texture references (`#white`, `#solid:RRGGBB`, file paths)
+/// to texture handles.
+///
+/// [`AssetManager`] is the production implementation; tests substitute a
+/// stub so scene and prefab instantiation stay headless-testable (no GPU).
+pub trait TextureResolver {
+    /// Resolve a texture reference string to a handle.
+    fn resolve_texture(&mut self, texture_ref: &str) -> Result<TextureHandle, SceneLoadError>;
+}
+
+impl TextureResolver for AssetManager {
+    fn resolve_texture(&mut self, texture_ref: &str) -> Result<TextureHandle, SceneLoadError> {
+        resolve_texture(texture_ref, self)
+    }
+}
+
 /// Resolve a texture reference to a TextureHandle.
 pub(crate) fn resolve_texture(
     texture_ref: &str,

@@ -20,7 +20,7 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 | `ecs_macros` | Feb 2026 | 0 / 1 / 2 | Over-specified `syn` features |
 | `editor` | Jul 2026 | 0 / 0 / 1 | Clean of Mediums (GPP-L7 doc note remains) |
 | `editor_integration` | Jul 2026 | 0 / 0 / 2 | Clean of Mediums (file picker, menu-label strings remain) |
-| `engine_core` | Jul 2026 | 0 / 3 / 8 | ARCH-006 behavior registry, GPP-07 runtime prefabs, GPP-03 generic-subset promotion |
+| `engine_core` | Jul 2026 | 0 / 2 / 7 | ARCH-006 behavior registry, GPP-03 generic-subset promotion |
 | `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
 | `physics` | Jul 2026 | 0 / 0 / 6 | Clean of Mediums; Lows incl. EDIT-001 (RigidBody config edits need rebuild) |
 | `renderer` | Jul 2026 | 0 / 0 / 2 | Clean of Mediums (DRY-006, ARCH-006 remain) |
@@ -39,9 +39,8 @@ None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 
 ## Open Medium-Priority Items
 
-### engine_core (3)
+### engine_core (2)
 - **[ARCH-006]** Behaviors hardcoded in scene serialization, bypassing `ComponentRegistry` — route through a registry/`Custom` variant; pairs with Phase 4 scripting and ecs GPP-16 (Large)
-- **[GPP-07]** Prefabs are load-time-only — add runtime `spawn_prefab(name)`
 - **[GPP-03]** pong↔breakout duplication — promote the game-agnostic subset (ChaosTheme structure, grid-emit, visibility helper, small utils) before game 3; genre-flavored subset waits for rule-of-three
 
 ### ecs (1)

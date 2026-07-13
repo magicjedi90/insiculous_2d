@@ -1,4 +1,4 @@
-# Technical Debt: ecs — LIVE (open items only)
+let# Technical Debt: ecs — LIVE (open items only)
 
 Last audited: February 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § ecs.

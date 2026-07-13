@@ -20,11 +20,11 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `window_manager.rs` — Window creation
 - `scene.rs` — Scene lifecycle / world coordination
 - `scene_manager.rs` — Scene loading and entity instantiation
-- `scene_loader.rs` — RON → World deserialization
+- `scene_loader.rs` — RON → World deserialization; `SceneInstance` retains the prefab table and offers runtime `spawn_prefab(world, assets, name, overrides)` (Prototype pattern, override semantics; failed spawns leave no debris)
 - `scene_serializer.rs` — World → SceneData (inverse of scene_loader, used by editor save)
 - `scene_data.rs` — SceneData / PrefabData / EntityData structs (schema incl. `ComponentData::EntityTag`, Sprite `emissive`)
 - `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
-- `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths)
+- `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths); `TextureResolver` trait is the GPU seam (AssetManager = production impl, tests stub it)
 - `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save
 - `behavior_runner.rs` — Entity behavior system
 - `lifecycle.rs` — FSM for scene lifecycle
@@ -42,7 +42,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 181 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 186 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

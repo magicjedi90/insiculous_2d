@@ -322,7 +322,11 @@ SceneData(
 )
 
 // Load in code
-SceneLoader::load_and_instantiate("scene.ron", &mut world, &mut assets)?;
+let instance = SceneLoader::load_and_instantiate("scene.ron", &mut world, &mut assets)?;
+
+// Spawn more copies of a prefab at runtime (Prototype pattern) — overrides
+// replace matching component types, same semantics as scene-file overrides
+let ball = instance.spawn_prefab(&mut world, &mut assets, "Player", &[])?;
 ```
 
 **Files:** `scene_loader.rs`, `scene_data.rs`, `examples/assets/scenes/*.ron` (games keep theirs in `../games/<name>/assets/scenes/`)
