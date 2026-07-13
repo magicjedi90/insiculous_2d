@@ -19,7 +19,9 @@ impl System for PhysicsSystem {
         let dt = delta_time.min(self.max_delta_time);
 
         // Get all entities, garbage-collect physics state for entities no
-        // longer in the ECS, and sync new ones to physics.
+        // longer in the ECS, sync new ones to physics, and push any external
+        // ECS-side edits (Transform2D/Collider) into rapier.
+        self.pushed_edits_last_update = 0;
         let entities: Vec<EntityId> = world.entities();
         let alive: HashSet<EntityId> = entities.iter().copied().collect();
         self.prune_removed_entities(&alive);

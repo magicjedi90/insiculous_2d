@@ -44,8 +44,11 @@ encode lessons already learned here — following them is cheaper than re-learni
   scaled via `scale` will visually drift from their collider. Games use
   `RENDER_UNIT = 80` (scale × 80 = pixel size). Check the collider overlay (C key in
   editor) when sprites and physics disagree.
-- **`PhysicsSystem` sync only ADDS bodies** — editing a collider on a live entity does
-  not rebuild its rapier body; edits apply when the body is (re)created.
+- **Live physics edits now apply (GPP-09):** editing `Transform2D` on a live physics
+  entity teleports the body (velocity preserved) and editing `Collider` rebuilds its
+  rapier collider — detected by value-compare against a last-pushed baseline.
+  Exception: `RigidBody` config edits (body_type, damping, gravity_scale) still
+  require the body to be recreated.
 - **`Box<dyn Component>` + blanket `Any` impl:** call `.as_ref().as_any()` /
   `.as_mut().as_any_mut()` before downcasting. Bare `.as_any()` on the Box resolves to
   the Box's own TypeId and every downcast fails (bit us in `ecs/component.rs`).
@@ -104,7 +107,7 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
 2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
 3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (1008 tests, 0 failures, 0 ignored)
+4. **Verify**: `cargo test --workspace` must pass (1013 tests, 0 failures, 0 ignored)
 5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
 6. **Release**: Remove the lock file
 

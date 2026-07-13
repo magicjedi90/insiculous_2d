@@ -23,7 +23,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-06 | Type Object / Bytecode | Medium | `crates/ecs/src/behavior.rs`, `scene_loader.rs` | Yes (engine_core ARCH-006) |
 | GPP-07 | Prototype | Medium | `crates/engine_core/src/scene_loader.rs` | Partial (DRY-010) |
 | GPP-08 | Event Queue | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_world/stepping.rs` | No |
-| GPP-09 | Dirty Flag / Observer | Medium | `crates/physics/src/physics_system/sync.rs` | No (documented footgun, untracked) |
+| GPP-09 | Dirty Flag / Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/sync.rs` | No (documented footgun, untracked) |
 | GPP-10 | Observer | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/physics/src/physics_system/` | Partial (ARCH-002 resolved differently) |
 | GPP-11 | Component | Medium | `../games/breakout/src/types.rs` | No |
 | GPP-12 | Type Object | Medium | `../games/breakout/src/levels.rs` | No (ARCH-101 same family) |
@@ -129,7 +129,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan (Event Queue):** Replace the borrow-read with a drain: `PhysicsSystem::take_collision_events() -> Vec<CollisionData>` (internally swaps with an empty pooled Vec). Taking ownership removes the `.to_vec()` requirement, removes one clone per consumer, and makes "clear" structural — the buffer is empty because it was taken, so the ordering contract enforces itself. Keep `collision_events()` briefly as a deprecated shim; migrate pong/breakout/pickups. The event-bus delivery path (`world.emit_event`) is unaffected.
 
-### GPP-09 · Dirty Flag / Observer — physics sync only ADDS; live edits are silent no-ops
+### GPP-09 · Dirty Flag / Observer — physics sync only ADDS; live edits are silent no-ops — ✅ RESOLVED (Jul 13 2026, last-pushed baseline; see `log_archive.md` § physics)
 
 **Evidence:** `sync_entity_to_physics` (`crates/physics/src/physics_system/sync.rs:41-81`) inserts bodies/colliders only when absent; after creation rapier is authoritative and editing `Transform2D` or `Collider` on a live entity does nothing (documented in physics/CLAUDE.md and the root CLAUDE.md footguns, and visible in the editor: the collider overlay updates instantly while the simulation keeps stale shapes). This is a missing change-detection design — the engine has no way to *notice* the ECS-side edit.
 

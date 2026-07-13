@@ -16,10 +16,12 @@ PhysicsSystem
 ## Update Flow
 1. `PhysicsSystem::update(world, delta_time)`
 2. Garbage-collect rapier state for entities removed from the ECS directly
-3. Sync ECS → physics: **only ADDS missing bodies/colliders**. Once a body
-   exists, rapier is authoritative — editing `Transform2D` on a live physics
-   entity has no effect. Use `set_body_transform` / `set_velocity` /
-   `reset_body` to move live bodies.
+3. Sync ECS → physics: adds missing bodies/colliders AND pushes **external
+   ECS-side edits** (GPP-09, value-compare vs a last-pushed baseline):
+   editing `Transform2D` teleports the live body (velocity preserved),
+   editing `Collider` rebuilds its rapier collider, removing `Collider`
+   drops it. `set_body_transform` / `set_velocity` / `reset_body` remain the
+   explicit APIs. `RigidBody` config edits still require body recreation.
 4. Flush deferred resets/velocities (for entities spawned the same frame)
 5. Clear the collision event buffer, then run 0..=8 fixed-timestep sub-steps
    (each `step()` APPENDS its events)
@@ -78,13 +80,13 @@ Pinned by `test_parented_entity_with_rigid_body_is_treated_as_world_space`.
   `num_solver_iterations` / `num_additional_friction_iterations`
 
 ## Known Tech Debt
-See `TECH_DEBT.md` — remaining: GPP-09 (sync only ADDS bodies — live edits
-need change detection), SRP-001 (PhysicsWorld manages many rapier types),
-API-001 (timing getters), partial MISSING-001 (gravity/collider-dim
-validation).
+See `TECH_DEBT.md` — remaining (all Low): RigidBody config edits on live
+bodies not pushed (rebuild required), SRP-001 (PhysicsWorld manages many
+rapier types), API-001 (timing getters), partial MISSING-001
+(gravity/collider-dim validation).
 
 ## Testing
-- 59 passing (55 lib + 1 integration + 3 doc), 0 ignored — `cargo test -p physics`
+- 64 passing (55 lib + 6 integration + 3 doc), 0 ignored — `cargo test -p physics`
 - Pure math/simulation — no GPU needed
 
 ## Godot Oracle — When Stuck

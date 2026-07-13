@@ -60,11 +60,13 @@ mod update;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashMap;
+
 use glam::Vec2;
 
 use ecs::{EntityId, World};
 
-use crate::components::CollisionData;
+use crate::components::{Collider, CollisionData};
 use crate::physics_world::{PhysicsConfig, PhysicsWorld};
 
 /// A body operation deferred because the entity wasn't synced into rapier
@@ -77,6 +79,22 @@ enum DeferredBodyOp {
     Reset { position: Vec2 },
     /// Set linear + angular velocity (`set_velocity`).
     SetVelocity { linear: Vec2, angular: f32 },
+}
+
+/// The state last pushed into (or read back from) rapier for a live entity.
+///
+/// The GPP-09 dirty-flag baseline: during sync, the current ECS components
+/// are value-compared against this; a mismatch means game/editor code edited
+/// them externally, and the edit is pushed into rapier (teleport the body /
+/// rebuild the collider). The physics writeback updates the baseline too, so
+/// rapier-driven motion is never mistaken for an external edit.
+struct PushedState {
+    /// Body position as last pushed/read back (pixels).
+    position: Vec2,
+    /// Body rotation as last pushed/read back (radians).
+    rotation: f32,
+    /// Collider component as last built into rapier (None = no collider).
+    collider: Option<Collider>,
 }
 
 /// Maximum number of fixed-timestep catch-up steps in a single update.
@@ -99,6 +117,11 @@ pub struct PhysicsSystem {
     /// Body ops deferred for entities not yet synced to Rapier
     /// (applied in call order during the next `update()`)
     pending_ops: Vec<(EntityId, DeferredBodyOp)>,
+    /// Per-entity baseline of the state last pushed into rapier — external
+    /// ECS-side edits are detected by value comparison against this.
+    baselines: HashMap<EntityId, PushedState>,
+    /// How many external edits were pushed into rapier during the last update.
+    pushed_edits_last_update: usize,
 }
 
 impl PhysicsSystem {
@@ -115,6 +138,8 @@ impl PhysicsSystem {
             fixed_timestep: 1.0 / 60.0,
             max_delta_time: 0.1,
             pending_ops: Vec::new(),
+            baselines: HashMap::new(),
+            pushed_edits_last_update: 0,
         }
     }
 
@@ -133,7 +158,15 @@ impl PhysicsSystem {
     pub fn clear(&mut self) {
         self.physics_world.clear();
         self.pending_ops.clear();
+        self.baselines.clear();
         self.time_accumulator = 0.0;
+    }
+
+    /// How many external ECS-side edits (Transform2D teleports, collider
+    /// rebuilds, collider removals) were pushed into rapier during the most
+    /// recent `update()`. A frame where only rapier moved things reports 0.
+    pub fn external_edits_pushed_last_update(&self) -> usize {
+        self.pushed_edits_last_update
     }
 
     /// Remove an entity from both the physics world and the ECS world.
@@ -144,6 +177,7 @@ impl PhysicsSystem {
         self.physics_world.remove_entity(entity);
         world.remove_entity(&entity).ok();
         self.pending_ops.retain(|(e, _)| *e != entity);
+        self.baselines.remove(&entity);
     }
 
     /// Get a reference to the physics world

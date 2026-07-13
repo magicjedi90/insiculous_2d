@@ -4,10 +4,14 @@ Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § physics.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-09 (Medium, Dirty Flag):** sync only ADDS bodies (`physics_system/sync.rs`) — live `Transform2D`/`Collider` edits are silent no-ops; add change detection to push ECS→rapier edits (also fixes editor live collider edits). Rides ecs GPP-04's change tracking.
 - [ ] **GPP-L10 (Low):** per-contact-pair `Vec<ContactPoint>` alloc per step (`stepping.rs:161-183`) — reuse buffers if profiling says so.
 
-(GPP-08, GPP-10, GPP-L9 resolved Jul 13 2026 — see `log_archive.md`.)
+(GPP-08, GPP-09, GPP-10, GPP-L9 resolved Jul 13 2026 — see `log_archive.md`.)
+
+### [EDIT-001] RigidBody config edits on live bodies not pushed — Low
+- **File:** `physics_system/sync.rs`
+- **Issue:** GPP-09's external-edit detection covers `Transform2D` (teleport) and `Collider` (rebuild); changing `RigidBody` config (body_type, damping, gravity_scale, can_rotate) on a live body still requires recreating it. Complication: `velocity`/`angular_velocity` are writeback fields, so a naive whole-struct compare would false-positive every frame.
+- **Fix:** compare only the config fields (or a config sub-struct) against a baseline and rebuild the body on mismatch (preserving pose + velocity).
 
 ## Open Items (pre-July-2026 audits)
 
@@ -32,7 +36,7 @@ Resolved history: root `log_archive.md` § physics.
 | Metric | Value |
 |--------|-------|
 | Largest file | 600 lines (`physics_system/tests.rs`) |
-| Test coverage | 59 (55 lib + 1 integration + 3 doc), 0 ignored |
+| Test coverage | 64 (55 lib + 6 integration + 3 doc), 0 ignored |
 | High priority open | 0 |
-| Medium priority open | 1 (GPP-09) |
-| Low priority open | 5 |
+| Medium priority open | 0 |
+| Low priority open | 6 |

@@ -137,7 +137,7 @@ impl RigidBody {
 }
 
 /// Collider shape types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ColliderShape {
     /// A box with half-extents (width/2, height/2)
     Box { half_extents: Vec2 },
@@ -188,7 +188,7 @@ impl ColliderShape {
 }
 
 /// Collider component for collision detection
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Collider {
     /// Shape of the collider
     pub shape: ColliderShape,
