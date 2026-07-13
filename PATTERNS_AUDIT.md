@@ -29,7 +29,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-12 | Type Object | Medium | `../games/breakout/src/levels.rs` | No (ARCH-101 same family) |
 | GPP-13 | Component / DRY | Medium | `crates/editor_integration/src/panel_renderer/inspector.rs` | No |
 | GPP-14 | Command | Medium | `crates/editor/src/commands/entity_commands.rs` | No |
-| GPP-15 | Dirty Flag | Medium | `crates/renderer/src/sprite/batch.rs` + `engine_core/src/game.rs` | No (ARCH-007 adjacent) |
+| GPP-15 | Dirty Flag | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/renderer/src/sprite/batch.rs` + `engine_core/src/game.rs` | No (ARCH-007 adjacent) |
 | GPP-16 | Singleton | Medium | `crates/ecs/src/component_registry.rs` | Partial (via ARCH-006) |
 | GPP-17 | — (magic numbers) | ~~Medium~~ ✅ Resolved Jul 13 2026 | `../games/breakout/src/gameplay.rs` | No |
 | GPP-L1..L12 | various | Low | see Low table | mixed |
@@ -165,7 +165,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan (Command):** Cheapest correct fix at current scope: after any undo/redo that recreated an entity, remap — have the command expose `(old_id, new_id)` and `CommandHistory`/caller update `Selection` and any queued commands. Longer-term (if command chains referencing entities grow): reserve/reuse stable ids on recreate (the ECS generation counter currently forbids resurrection, so remapping is the pragmatic choice). Add a regression test: create → delete → undo → assert selection still resolves.
 
-### GPP-15 · Dirty Flag — sprite batches rebuilt from scratch every frame
+### GPP-15 · Dirty Flag — sprite batches rebuilt from scratch every frame — ✅ RESOLVED (Jul 13 2026, InstanceCache upload gate; see `log_archive.md` § renderer)
 
 **Evidence:** every frame, engine_core re-queries all sprites and rebuilds every batch (`crates/engine_core/src/game.rs:419-453`: fresh `SpriteBatcher`, re-add every sprite, re-sort, clone batches out), and `SpriteBatcher::clear()` (`renderer/src/sprite/batch.rs:116-120`) empties instance Vecs. Capacity is retained (good), the per-batch `sorted` bool is a proper mini dirty flag (good), but for a mostly-static scene the entire CPU-side rebuild is waste the [Dirty Flag chapter](https://gameprogrammingpatterns.com/dirty-flag.html) targets. Related tracked item: renderer ARCH-007 (the scratch-Vec copy in `prepare_sprites`).
 

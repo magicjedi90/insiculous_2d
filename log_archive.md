@@ -241,7 +241,11 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 
 ## renderer — Resolved Debt
 
-### June 2026 Audit
+### July 13, 2026 — GPP-15 + ARCH-007 (Dirty Flag: static-scene upload skip)
+- **GPP-15**: sprite instance uploads are now change-gated. New `sprite/instance_cache.rs` `InstanceCache` (CPU-only, headless-tested): flattens batches into a reusable staging buffer and byte-compares (bytemuck, NaN-safe) instances + batch layout (texture, count) against the last upload; `SpritePipeline::prepare_sprites` skips `write_buffer` when nothing changed — a static scene re-renders from the buffer already on the GPU. Detection is on the *built* data (after `game.render()` runs), so procedural game render code stays fully supported; static UI frames (menus, pause screens) skip too. Per the GPP-04 decision: render-path-local detection, no ECS hooks.
+- **ARCH-007** folded in: the per-frame scratch `Vec` in `prepare_sprites` is gone — the cache's staging/snapshot buffers are persistent.
+- engine_core side: `GameRunner` now owns persistent `game_batcher`/`ui_batcher` fields (cleared per frame, capacity retained — no per-frame `SpriteBatcher::new()` HashMap churn) and the per-frame full clone of every batch (`.values().cloned().collect()`) is gone — `sort_batch_refs` orders `&SpriteBatch` refs (empty batches from persistent batchers filtered out; game-then-UI painter order preserved).
+- Tests: 4 new `InstanceCache` unit tests (identical-skip + counters, instance-move re-uploads, same-bytes-different-layout re-uploads, empty↔content transitions).
 | Issue | Resolution |
 |-------|------------|
 | **Bloom blur was vertical-only** | `queue.write_buffer` flushes at submit; rewriting one shared blur-params buffer between passes made every pass read the last write. Split into per-direction uniform buffers. |

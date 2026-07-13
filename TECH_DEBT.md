@@ -23,7 +23,7 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 | `engine_core` | Jul 2026 | 0 / 3 / 8 | ARCH-006 behavior registry, GPP-07 runtime prefabs, GPP-03 generic-subset promotion |
 | `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
 | `physics` | Jul 2026 | 0 / 0 / 6 | Clean of Mediums; Lows incl. EDIT-001 (RigidBody config edits need rebuild) |
-| `renderer` | Jul 2026 | 0 / 1 / 3 | GPP-15 static-scene batch rebuild |
+| `renderer` | Jul 2026 | 0 / 0 / 2 | Clean of Mediums (DRY-006, ARCH-006 remain) |
 | `ui` | Jul 2026 | 0 / 1 / 4 | JUN-T1 general text input |
 | `../games` | Jul 2026 | 0 / 3 / 2 | GPP-03 (split), GPP-11 shadow bricks, GPP-12 brick-tag Type Object |
 
@@ -54,9 +54,6 @@ None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 ### games (2)
 - **[GPP-11]** Breakout shadow `Vec<Brick>` → `BrickState` component
 - **[GPP-12]** Stringly-typed brick tags → typed `BrickSpec` component
-
-### renderer (1)
-- **[GPP-15]** Sprite batches rebuilt every frame for static scenes — per the GPP-04 decision (no shared infra): a coarse change counter in the render path, not ECS-level tracking
 
 ### ui (1)
 - **[JUN-T1]** Text input is numeric-only and keyboard-layout-blind — blocks editor rename/search widgets

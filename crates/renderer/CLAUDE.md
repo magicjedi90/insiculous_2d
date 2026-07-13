@@ -9,6 +9,7 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 ├── SpritePipeline (instanced quads -> HDR target)
 │   ├── Vertex/index buffers (quad geometry)
 │   ├── Instance buffer (DynamicBuffer — grows on demand, never panics)
+│   ├── InstanceCache — skips the instance upload when nothing changed (GPP-15)
 │   ├── Camera uniform buffer + bind group (cached)
 │   └── Texture bind groups (cached per handle; TextureHandle::WHITE = built-in 1x1 white)
 ├── LinePipeline (line-list geometry -> HDR target, e.g. spring-mass grid)
@@ -43,10 +44,10 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 - All tests run headless (GPU-dependent doc examples are compile-only `no_run`)
 
 ## Known Tech Debt
-See `TECH_DEBT.md` — 3 open issues, all Low (shared camera binding, cross-batch transparency vs depth writes, prepare_sprites scratch Vec).
+See `TECH_DEBT.md` — 2 open issues, both Low (shared camera binding, cross-batch transparency vs depth writes).
 
 ## Testing
-- 70 tests (69 unit + 1 compile-only doc), run with `cargo test -p renderer`
+- 74 tests (73 unit + 1 compile-only doc), run with `cargo test -p renderer`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`
