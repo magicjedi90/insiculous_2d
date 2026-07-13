@@ -419,6 +419,44 @@ fn test_max_history_limit() {
     assert_eq!(undo_count, 100);
 }
 
+#[test]
+fn test_max_history_drops_oldest_and_preserves_undo_order() {
+    // GPP-L5: enforce_limit drops from the FRONT (oldest), so undoing back to
+    // the bottom of the stack lands on the state captured by the oldest
+    // *surviving* command, not the very first one — and undo runs LIFO.
+    let mut world = World::new();
+    let entity = setup_entity(&mut world);
+
+    let mut history = CommandHistory::new();
+    // Command i (1..=102) moves position from i-1 to i, starting at 0.
+    // With a limit of 100, commands 1 and 2 (oldest) are evicted; the stack
+    // holds commands 3..=102, whose oldest `old` is position 2.
+    for i in 1..=102 {
+        let old = common::Transform2D::new(Vec2::new((i - 1) as f32, 0.0));
+        let new = common::Transform2D::new(Vec2::new(i as f32, 0.0));
+        history.execute(
+            Box::new(SetTransformCommand::new(entity, old, new, "position")),
+            &mut world,
+        );
+    }
+
+    assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::new(102.0, 0.0));
+
+    // Undo runs newest-first: first undo returns to 101, and after draining the
+    // whole (100-entry) stack we land on the oldest survivor's `old` == 2,
+    // proving commands 1 and 2 were dropped from the front, not the back.
+    assert!(history.undo(&mut world));
+    assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::new(101.0, 0.0));
+
+    let mut remaining = 1;
+    while history.undo(&mut world) {
+        remaining += 1;
+    }
+    assert_eq!(remaining, 100);
+    assert_eq!(world.get::<common::Transform2D>(entity).unwrap().position, Vec2::new(2.0, 0.0));
+    assert!(!history.can_undo());
+}
+
 // -- StoredComponent round-trip (via commands) --
 
 #[test]

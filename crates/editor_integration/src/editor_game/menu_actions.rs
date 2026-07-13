@@ -47,15 +47,17 @@ impl<G: Game> EditorGame<G> {
                 if let Some(name) = self.command_history.undo_name() {
                     self.editor.status_bar.show_message(format!("Undo: {}", name));
                 }
-                self.command_history.undo(ctx.world);
-                self.editor.mark_dirty();
+                if self.command_history.undo(ctx.world) {
+                    self.editor.mark_dirty();
+                }
             }
             "Redo" if !self.editor.is_playing() => {
                 if let Some(name) = self.command_history.redo_name() {
                     self.editor.status_bar.show_message(format!("Redo: {}", name));
                 }
-                self.command_history.redo(ctx.world);
-                self.editor.mark_dirty();
+                if self.command_history.redo(ctx.world) {
+                    self.editor.mark_dirty();
+                }
             }
             "New Scene" if !self.editor.is_playing() => {
                 self.new_scene(ctx.world);

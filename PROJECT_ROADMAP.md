@@ -235,7 +235,7 @@ catalog: **`PATTERNS_AUDIT.md`** (repo root) — 17 numbered findings + 12 Low i
 evidence and a pattern-based fix plan, mirrored as pointer entries in the per-crate
 `TECH_DEBT.md` files and a new `../games/TECH_DEBT.md`. The **High** items:
 
-- [ ] **GPP-01 (State):** `BehaviorState` bool soup while the tested `ecs::StateMachine` has zero consumers
+- [x] **GPP-01 (State):** ~~`BehaviorState` bool soup~~ Resolved Jul 13 2026 (`StateMachine<BehaviorPhase>`; see `log_archive.md`)
 - [ ] **GPP-02 (Data Locality):** HashMap-of-boxes component storage recorded as decision-of-record with a revisit trigger
 
 Notable Medium: **GPP-03 (Flyweight/DRY)** — pong↔breakout duplication; promote only the

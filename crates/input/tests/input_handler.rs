@@ -64,13 +64,16 @@ fn test_mouse_access() {
     // Get mutable reference to mouse state
     let mouse_mut = input_handler.mouse_mut();
 
-    // Update mouse position
+    // Update mouse position. The first update after startup is delta-suppressed
+    // (it only establishes the position), so move a second time to see a delta.
     mouse_mut.update_position(10.0, 20.0);
+    assert_eq!(mouse_mut.movement_delta(), (0.0, 0.0));
+    mouse_mut.update_position(15.0, 30.0);
 
-    // Assert that the position was updated
-    assert_eq!(mouse_mut.position().x, 10.0);
-    assert_eq!(mouse_mut.position().y, 20.0);
-    assert_eq!(mouse_mut.movement_delta(), (10.0, 20.0));
+    // Assert that the position was updated and the second move reports a delta
+    assert_eq!(mouse_mut.position().x, 15.0);
+    assert_eq!(mouse_mut.position().y, 30.0);
+    assert_eq!(mouse_mut.movement_delta(), (5.0, 10.0));
 }
 
 #[test]

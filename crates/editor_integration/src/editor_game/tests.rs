@@ -399,3 +399,24 @@ fn test_scene_display_in_status() {
     assert_eq!(editor.editor.scene_display_name(), "Untitled");
     assert_eq!(editor.editor.title_bar_text(), "Untitled - Insiculous Editor");
 }
+
+#[test]
+fn test_undo_redo_on_empty_history_do_not_mark_dirty() {
+    // GPP-L6: an Undo/Redo keypress on an empty history is a no-op and must
+    // not dirty a clean scene. The shortcut/menu handlers gate mark_dirty()
+    // on the bool returned by undo()/redo(), so mirror that gating here.
+    let mut editor = EditorGame::new(DummyGame);
+    let mut world = World::new();
+    assert!(!editor.editor.is_dirty());
+
+    if editor.command_history.undo(&mut world) {
+        editor.editor.mark_dirty();
+    }
+    if editor.command_history.redo(&mut world) {
+        editor.editor.mark_dirty();
+    }
+
+    assert!(!editor.command_history.undo(&mut world));
+    assert!(!editor.command_history.redo(&mut world));
+    assert!(!editor.editor.is_dirty());
+}

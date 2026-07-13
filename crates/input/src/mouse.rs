@@ -17,6 +17,10 @@ pub struct MousePosition {
 pub struct MouseState {
     /// Current position of the mouse
     position: MousePosition,
+    /// Whether a real position has been recorded yet. Until the first
+    /// `update_position`, `position` is the default `(0, 0)`; suppressing the
+    /// delta on that first update avoids reporting a spurious startup warp.
+    has_position: bool,
     /// Movement accumulated over the current frame (sum of all move events)
     frame_delta: (f32, f32),
     /// Button press state
@@ -35,10 +39,16 @@ impl MouseState {
     ///
     /// Multiple position updates within one frame (common at high polling rates)
     /// are summed, so `movement_delta()` reflects the full frame movement.
+    ///
+    /// The very first update after construction only records the position: its
+    /// delta against the default `(0, 0)` would be a spurious startup warp.
     pub fn update_position(&mut self, x: f32, y: f32) {
-        self.frame_delta.0 += x - self.position.x;
-        self.frame_delta.1 += y - self.position.y;
+        if self.has_position {
+            self.frame_delta.0 += x - self.position.x;
+            self.frame_delta.1 += y - self.position.y;
+        }
         self.position = MousePosition { x, y };
+        self.has_position = true;
     }
 
     /// Update the mouse state with a button press event

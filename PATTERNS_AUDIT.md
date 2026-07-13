@@ -15,7 +15,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 
 | ID | Pattern | Severity | Location | Tracked before this audit? |
 |----|---------|----------|----------|---------------------------|
-| GPP-01 | State | High | `crates/ecs/src/behavior.rs` | No |
+| GPP-01 | State | ~~High~~ ✅ Resolved Jul 13 2026 | `crates/ecs/src/behavior.rs` | No |
 | GPP-02 | Data Locality | High (latent) | `crates/ecs/src/component.rs` | Partial (ecs "Future Enhancements") |
 | GPP-03 | Flyweight / DRY | Medium | `../games/pong` ↔ `../games/breakout` | No |
 | GPP-04 | Dirty Flag | Medium | `crates/ecs/src/hierarchy_system.rs` | No (SRP-003 adjacent) |
@@ -31,14 +31,14 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-14 | Command | Medium | `crates/editor/src/commands/entity_commands.rs` | No |
 | GPP-15 | Dirty Flag | Medium | `crates/renderer/src/sprite/batch.rs` + `engine_core/src/game.rs` | No (ARCH-007 adjacent) |
 | GPP-16 | Singleton | Medium | `crates/ecs/src/component_registry.rs` | Partial (via ARCH-006) |
-| GPP-17 | — (magic numbers) | Medium | `../games/breakout/src/gameplay.rs` | No |
+| GPP-17 | — (magic numbers) | ~~Medium~~ ✅ Resolved Jul 13 2026 | `../games/breakout/src/gameplay.rs` | No |
 | GPP-L1..L12 | various | Low | see Low table | mixed |
 
 ---
 
 ## High Severity
 
-### GPP-01 · State — behavior bool soup while a real FSM sits unused
+### GPP-01 · State — behavior bool soup while a real FSM sits unused — ✅ RESOLVED (Jul 13 2026, see `log_archive.md` § ecs)
 
 **Evidence:** `crates/ecs/src/behavior.rs:215-225`:
 
@@ -177,7 +177,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan:** Provide a one-shot extension point before first use — e.g. `init_global_registry(extra: impl FnOnce(&mut ComponentRegistry))` called from `run_game` with registrations supplied via `GameConfig`, falling back to built-ins-only. Keeps the immutable-after-init property; removes the closed-world limitation.
 
-### GPP-17 · Magic numbers — breakout tuning escaped constants.rs
+### GPP-17 · Magic numbers — breakout tuning escaped constants.rs — ✅ RESOLVED (Jul 13 2026, see `log_archive.md` § games)
 
 **Evidence:** `../games/breakout/src/gameplay.rs` — inline grid-impulse tuning (`strength: 200.0/260.0/700.0`, `radius: 70.0/90.0/160.0` at `:277-278, 373-374, 415-416`), brick battle-damage factors (`*= 0.65` ×3, `emissive *= 0.5` at `:316-319`), lost-ball bounds pad (`+60.0` at `:392-393`) — while `constants.rs` exists for exactly this.
 
@@ -191,10 +191,10 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 |----|---------|---------|-----|
 | GPP-L1 | Object Pool / Data Locality | `world.entities()` allocates a fresh `Vec<EntityId>` per call in hot paths: render scan (`engine_core/src/game.rs:75`), behavior runner (`behavior_runner.rs:126`), hierarchy (`hierarchy_system.rs:94`), physics (`physics_system/update.rs:23`, `sync.rs:85`) | Use the non-allocating `entity_ids()` iterator where no mutation follows; reusable scratch buffers elsewhere. (Renderer's `prepare_sprites` scratch Vec already tracked as ARCH-007.) |
 | GPP-L2 | Spatial Partition | O(n²) tag-proximity scans: `find_nearest_tagged_position` / `check_tagged_overlap` (`engine_core/src/behavior_runner.rs:473-496`) scan all entities per querying entity. Rapier's BVH broad-phase correctly covers physics; these tag scans bypass it | Fine at current entity counts. If chaser/collectible counts grow: uniform grid keyed by tag, or route overlap checks through rapier sensors. Note: `engine_core/src/grid/` is a *visual* spring-mass effect, not a spatial partition — don't reach for it |
-| GPP-L3 | Singleton | `SoundHandle::new()` uses a process-global `static NEXT_ID: AtomicU32` (`audio/src/sound.rs:14-16`) — ids survive across `AudioManager` instances, unusable for serialization/determinism | Instance-local `next_handle` counter on `AudioManager`, like `TextureManager` (`texture.rs:127`) |
-| GPP-L4 | Double Buffer | First mouse move after startup computes delta against baseline `(0,0)` → spurious warp (`input/src/mouse.rs:38-42`) | Skip delta on the first `update_position` (Option-al previous position) |
-| GPP-L5 | Command / Data Locality | `CommandHistory::enforce_limit` uses `Vec::remove(0)` — O(n) shift per push past the cap (`editor/src/commands/mod.rs:164-168`) | `VecDeque` + `pop_front` |
-| GPP-L6 | Command | Ctrl+Z/Ctrl+Y call `mark_dirty()` even when the undo/redo stack is empty — a no-op keypress dirties a clean scene (`editor_integration/src/editor_game/shortcuts.rs:124-135`) | `mark_dirty()` only when `undo()`/`redo()` actually applied a command (return a bool) |
+| GPP-L3 ✅ Jul 13 | Singleton | `SoundHandle::new()` uses a process-global `static NEXT_ID: AtomicU32` (`audio/src/sound.rs:14-16`) — ids survive across `AudioManager` instances, unusable for serialization/determinism | Instance-local `next_handle` counter on `AudioManager`, like `TextureManager` (`texture.rs:127`) |
+| GPP-L4 ✅ Jul 13 | Double Buffer | First mouse move after startup computes delta against baseline `(0,0)` → spurious warp (`input/src/mouse.rs:38-42`) | Skip delta on the first `update_position` (Option-al previous position) |
+| GPP-L5 ✅ Jul 13 | Command / Data Locality | `CommandHistory::enforce_limit` uses `Vec::remove(0)` — O(n) shift per push past the cap (`editor/src/commands/mod.rs:164-168`) | `VecDeque` + `pop_front` |
+| GPP-L6 ✅ Jul 13 | Command | Ctrl+Z/Ctrl+Y call `mark_dirty()` even when the undo/redo stack is empty — a no-op keypress dirties a clean scene (`editor_integration/src/editor_game/shortcuts.rs:124-135`) | `mark_dirty()` only when `undo()`/`redo()` actually applied a command (return a bool) |
 | GPP-L7 | Command | Gizmo drags mutate `Transform2D` directly each frame, pushing one merged command only on release (`editor_integration/src/editor_game/viewport_interaction.rs:117-149`) | Intentional (live visual feedback) — document the invariant: nothing may depend on all scene mutations flowing through commands mid-drag |
 | GPP-L8 | Flyweight | `GlyphInfo` stores `character`/`font_size` duplicating its cache key (`ui/src/font/glyph_cache.rs:38-42`); `TextDrawData` duplicates chars (tracked ui ARCH-003). Per-entity `Behavior` components carry full copies of shared "kind" config (move speeds, ranges) — the Type Object of GPP-06 would make that shared | Strip redundant fields opportunistically; behavior-config sharing rides GPP-06 |
 | GPP-L9 | Command | Physics deferred ops are two parallel tuple-Vecs with ordering-by-convention — resets drained before velocities (`physics/src/physics_system/mod.rs:88-90`, `update.rs:33-39`) | Single `Vec<DeferredBodyOp>` enum queue: ordering becomes structural, next deferred op is one variant away |

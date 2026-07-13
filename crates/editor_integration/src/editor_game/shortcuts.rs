@@ -122,16 +122,19 @@ impl<G: Game> EditorGame<G> {
         // Editor shortcuts (only during Editing/Paused)
         match key {
             KeyCode::KeyZ if ctrl && !shift => {
-                self.command_history.undo(ctx.world);
-                self.editor.mark_dirty();
+                if self.command_history.undo(ctx.world) {
+                    self.editor.mark_dirty();
+                }
             }
             KeyCode::KeyZ if ctrl && shift => {
-                self.command_history.redo(ctx.world);
-                self.editor.mark_dirty();
+                if self.command_history.redo(ctx.world) {
+                    self.editor.mark_dirty();
+                }
             }
             KeyCode::KeyY if ctrl => {
-                self.command_history.redo(ctx.world);
-                self.editor.mark_dirty();
+                if self.command_history.redo(ctx.world) {
+                    self.editor.mark_dirty();
+                }
             }
             KeyCode::KeyG => self.editor.toggle_grid(),
             KeyCode::KeyC if !ctrl => self.editor.toggle_colliders(),

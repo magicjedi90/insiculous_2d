@@ -14,18 +14,18 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 
 | Crate | Last Audited | Open (High / Med / Low) | Notes |
 |-------|--------------|--------------------------|-------|
-| `audio` | Jul 2026 | 0 / 0 / 1 | GPP-L3 global sound-handle counter |
+| `audio` | Jul 2026 | 0 / 0 / 0 | Clean |
 | `common` | Feb 2026 | 0 / 2 / 3 | `CameraUniform` duplicated in renderer; cross-crate volume clamping |
-| `ecs` | Jul 2026 | 1 / 2 / 6 | GPP-01 behavior FSM; GPP-04 transform dirty flag, GPP-16 registry extensibility; GPP-02 is a decision-of-record |
+| `ecs` | Jul 2026 | 0 / 2 / 6 | GPP-04 transform dirty flag, GPP-16 registry extensibility; GPP-02 is a decision-of-record |
 | `ecs_macros` | Feb 2026 | 0 / 1 / 2 | Over-specified `syn` features |
-| `editor` | Jul 2026 | 0 / 1 / 3 | GPP-14 undo/redo entity-id staleness |
+| `editor` | Jul 2026 | 0 / 1 / 1 | GPP-14 undo/redo entity-id staleness |
 | `editor_integration` | Jul 2026 | 0 / 1 / 2 | GPP-13 registry-driven editable inspector; file picker, menu-label strings |
 | `engine_core` | Jul 2026 | 0 / 3 / 8 | ARCH-006 behavior registry, GPP-07 runtime prefabs, GPP-03 generic-subset promotion |
-| `input` | Jul 2026 | 0 / 1 / 4 | GAP-001 gamepad backend; GPP-L4 first-frame mouse warp |
+| `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
 | `physics` | Jul 2026 | 0 / 3 / 6 | GPP-08 event drain API, GPP-09 sync change detection, GPP-10 callback deprecation |
 | `renderer` | Jul 2026 | 0 / 1 / 3 | GPP-15 static-scene batch rebuild |
 | `ui` | Jul 2026 | 0 / 1 / 4 | JUN-T1 general text input |
-| `../games` | Jul 2026 | 0 / 4 / 2 | GPP-03 (split), GPP-11 shadow bricks, GPP-12 brick-tag Type Object, GPP-17 magic numbers |
+| `../games` | Jul 2026 | 0 / 3 / 2 | GPP-03 (split), GPP-11 shadow bricks, GPP-12 brick-tag Type Object |
 
 Workspace-wide invariants (verified by the June 2026 audits): no files over
 600 lines, no `#[allow(dead_code)]`, no `unwrap()` outside tests, and
@@ -35,7 +35,7 @@ Workspace-wide invariants (verified by the June 2026 audits): no files over
 
 ## Open High-Priority Items
 
-- **ecs [GPP-01]** `BehaviorState` bool soup while the tested `ecs::StateMachine` has zero consumers — model patrol/chase/wait as `StateMachine<enum>` (`PATTERNS_AUDIT.md`)
+None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 
 ## Open Medium-Priority Items
 
@@ -57,10 +57,9 @@ Workspace-wide invariants (verified by the June 2026 audits): no files over
 - **[GPP-14]** Create/Delete undo/redo mints new EntityIds — remap selection
 - **[GPP-13]** Editable inspector not registry-driven — extend `editor_component_registry!`
 
-### games (3)
+### games (2)
 - **[GPP-11]** Breakout shadow `Vec<Brick>` → `BrickState` component
 - **[GPP-12]** Stringly-typed brick tags → typed `BrickSpec` component
-- **[GPP-17]** Breakout inline tuning → `constants.rs`
 
 ### renderer (1)
 - **[GPP-15]** Sprite batches rebuilt every frame for static scenes — gate on world change flag (after GPP-04)

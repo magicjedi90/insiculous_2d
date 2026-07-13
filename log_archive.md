@@ -25,7 +25,18 @@ Ball bouncing off a paddle, destroying a grid of bricks. Lives in `../games/brea
 
 ---
 
-## Engine & Editor Milestones (moved from PROJECT_ROADMAP "Archive: Completed Work")
+## Engine & Editor Milestones (moved from PROJECT_ROADMAP "Archive: Completed Work" and AGENTS.md)
+
+### Manager Pattern + File Refactoring (January 2026) — COMPLETE (from AGENTS.md)
+- SRP refactoring: `GameRunner.update_and_render()` 110+ lines → 25 lines; 7 focused orchestration methods extracted
+- 5 managers extracted: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager
+- 5 modules extracted (674 lines, 12 tests): `game_config.rs`, `contexts.rs`, `ui_integration.rs`, `scene_manager.rs`; `behavior_runner.rs` optimized (-85% per-frame allocations)
+- `game.rs`: 862 lines (mixed concerns) → 553 at extraction time (later ~594 after GlyphTextureCache and other additions)
+
+### Editor Integration (February 2026) — COMPLETE (from AGENTS.md)
+- New `editor_integration` crate: `EditorGame<G>` wrapper, `run_game_with_editor()`, `panel_renderer` extraction
+- Phase 1C play/pause/stop: `EditorPlayState` enum with border tint, `WorldSnapshot` typed-clone capture/restore, `PlayControls` widget (Ctrl+P, Ctrl+Shift+P, F5), conditional `inner.update()`, read-only inspector during play
+- Hard-coded Escape exit removed from `GameRunner` (flows to `Game::on_key_pressed()`); `editor_demo.rs` switched to full PlatformerGame
 
 ### Engine Core (2025) — COMPLETE
 - Memory safety, thread-safe input, panic-safe system registry
@@ -115,6 +126,9 @@ The section now just points at the live debt docs.
 ---
 
 ## ecs — Resolved Debt
+
+### July 13, 2026 — GPP-01 (State pattern)
+- **GPP-01**: `BehaviorState` boolean-flag soup (`patrol_toward_b`/`is_chasing`/`is_waiting`) replaced with `StateMachine<BehaviorPhase>` — new `BehaviorPhase { Idle, Patrolling { toward }, Waiting { then_toward }, Chasing }` + `PatrolTarget { A, B }` enums in `behavior.rs`; patrol/chase handlers in `engine_core/behavior_runner.rs` rewritten as explicit FSM transitions (wait duration now uses the machine's `elapsed()` clock instead of a countdown timer; `timer` field retained for the platformer jump cooldown). Illegal states (waiting AND chasing) now unrepresentable; `state_machine.rs` gained its first real consumer. Regression tests: patrol arrive→wait→reverse, chase enter/hysteresis/leave, no-target stays Idle (`behavior_runner.rs` tests) + updated ecs behavior tests. Editor `WorldSnapshot`/registry unaffected (hidden-component capture is Clone-based).
 
 ### February 2026 Fixes
 - **PATTERN-001**: Broken archetype storage removed entirely. ECS now uses single HashMap-based per-type storage. Proper archetype storage deferred as future ground-up rewrite. The `Component` trait still requires `as_any()` for downcasting — inherent to HashMap-based storage with `Box<dyn Component>`.
@@ -278,6 +292,9 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 
 ## input — Resolved Debt (June 2026 restructure)
 
+### July 13, 2026 — GPP-L4 (Double Buffer)
+- First-frame mouse warp fixed: `MouseState` gained `has_position: bool`; `update_position` only accumulates `frame_delta` once a real previous position exists, so the first move after startup no longer produces a spurious delta against the default `(0,0)` baseline. Four tests that had encoded the phantom jump were updated to the corrected semantics (incl. renamed `test_first_position_update_records_position_without_delta`); accumulation and per-frame-reset assertions preserved.
+
 - **BUG-001 Stale mouse movement delta**: `MouseState` accumulates `frame_delta` across move events, zeroed in `clear_frame_state()`; wheel delta accumulates. Regression tests added.
 - **BUG-002 Multi-action bindings leaked on unbind/rebind**: single source of truth `HashMap<A, Vec<InputSource>>`; `unbind_source()` removes from all actions.
 - **BUG-003 Incorrect action edge semantics**: `just_activated`/`just_deactivated` compare against reconstructed previous-frame state — strict inactive→active / active→inactive edges.
@@ -292,7 +309,17 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 
 ---
 
+## games — Resolved Debt
+
+### July 13, 2026 — GPP-17 (magic numbers, breakout)
+- 10 inline tuning literals hoisted from `breakout/src/gameplay.rs` into `constants.rs`: `LAUNCH_ANGLE_SPREAD` (0.6), `BRICK_DAMAGE_COLOR_FACTOR` (0.65), `BRICK_DAMAGE_EMISSIVE_FACTOR` (0.5), `BALL_LOST_BOUNDS_PAD` (60.0), and per-effect grid impulses `GRID_IMPULSE_{PADDLE_HIT,BRICK_DESTROY,BALL_LOST}_{STRENGTH,RADIUS}` (200/70, 260/90, 700/160). Structural literals (hash-recentering 0.5, velocity-epsilon guards) deliberately left in place. Behavior bit-identical; 43 tests green.
+
+---
+
 ## audio — Resolved Debt (June 11, 2026 remediation)
+
+### July 13, 2026 — GPP-L3 (Singleton)
+- `SoundHandle::new()`'s process-global `static NEXT_ID: AtomicU32` replaced with an instance-local `next_sound_id: u32` on `AudioManager` (allocated in `load_sound_from_bytes` after decode validation, so failed loads consume no id); `SoundHandle::new()` → `pub(crate) from_id(u32)`. Ids are now manager-local and deterministic (fresh managers start at 1). Regression test: `test_sound_ids_are_manager_local_and_deterministic`.
 
 1. **Per-play full-buffer clone** — bytes are `Arc<[u8]>`, decoder reads `Cursor<Arc<[u8]>>` directly.
 2. **Master/SFX volume ignored live sounds** — `ActiveSound` stores `base_volume`; all volume setters re-apply `base * bus * master` to every live sink.
@@ -311,6 +338,10 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 ---
 
 ## editor — Resolved Debt
+
+### July 13, 2026 — GPP-L5 + GPP-L6 (Command)
+- **GPP-L5**: `CommandHistory.undo_stack` switched `Vec` → `VecDeque`; `enforce_limit` uses O(1) `pop_front()` instead of O(n) `remove(0)` (push/pop/last sites → push_back/pop_back/back/back_mut; redo_stack stays `Vec` — it never removes from the front). Regression test: `test_max_history_drops_oldest_and_preserves_undo_order`.
+- **GPP-L6**: `CommandHistory::undo()`/`redo()` now return `bool` (command actually applied); Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y shortcut handlers and the menu Undo/Redo actions in editor_integration gate `mark_dirty()` on it — a no-op undo/redo on an empty history no longer dirties a clean scene. Regression test: `test_undo_redo_on_empty_history_do_not_mark_dirty`.
 
 ### June 2026 remediation + design decisions
 - **MAGIC-001**: all 13 slider ranges extracted to `mod ranges` constants; `EditableInspector::f32/vec2` take `RangeInclusive<f32>`.

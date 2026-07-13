@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use glam::Vec2;
 
-use ecs::behavior::{Behavior, BehaviorState, EntityTag};
+use ecs::behavior::{Behavior, BehaviorPhase, BehaviorState, EntityTag, PatrolTarget};
 use ecs::sprite_components::Transform2D;
 use ecs::{EntityId, World};
 use input::{GameAction, InputHandler, InputMapping};
@@ -149,7 +149,7 @@ impl BehaviorRunner {
 
                 Behavior::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
                     Self::update_chase_tagged(
-                        world, entity, target_tag,
+                        world, entity, delta_time, target_tag,
                         *detection_range, *chase_speed, *lose_interest_range,
                         &mut state, &mut commands,
                     );
@@ -263,10 +263,14 @@ impl BehaviorRunner {
 
     /// `Behavior::ChaseTagged` — chase the nearest tagged entity once it is
     /// inside detection range, give up beyond lose-interest range.
+    ///
+    /// Phase FSM: `Idle` ⇄ `Chasing` — enter on `distance < detection_range`,
+    /// leave on `distance > lose_interest_range` or when no target exists.
     #[allow(clippy::too_many_arguments)]
     fn update_chase_tagged(
         world: &World,
         entity: EntityId,
+        delta_time: f32,
         target_tag: &str,
         detection_range: f32,
         chase_speed: f32,
@@ -274,18 +278,20 @@ impl BehaviorRunner {
         state: &mut BehaviorState,
         commands: &mut BehaviorCommands,
     ) {
+        state.phase.tick(delta_time);
+
         if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
             if let Some(entity_pos) = Self::get_position(world, entity) {
                 let distance = (target_pos - entity_pos).length();
 
-                // Update chase state
-                if !state.is_chasing && distance < detection_range {
-                    state.is_chasing = true;
-                } else if state.is_chasing && distance > lose_interest_range {
-                    state.is_chasing = false;
+                let chasing = state.phase.is(&BehaviorPhase::Chasing);
+                if !chasing && distance < detection_range {
+                    state.phase.transition_to(BehaviorPhase::Chasing);
+                } else if chasing && distance > lose_interest_range {
+                    state.phase.transition_to(BehaviorPhase::Idle);
                 }
 
-                if state.is_chasing {
+                if state.phase.is(&BehaviorPhase::Chasing) {
                     let vel = (target_pos - entity_pos).normalize_or_zero() * chase_speed;
                     commands.velocities.push((entity, vel));
                 } else {
@@ -293,13 +299,17 @@ impl BehaviorRunner {
                 }
             }
         } else {
-            state.is_chasing = false;
+            state.phase.transition_to(BehaviorPhase::Idle);
             commands.velocities.push((entity, Vec2::ZERO));
         }
     }
 
     /// `Behavior::Patrol` — walk back and forth between two points, pausing
     /// at each end for `wait_time` seconds.
+    ///
+    /// Phase FSM: `Idle` → `Patrolling { toward }` → (on arrival)
+    /// `Waiting { then_toward }` → (after `wait_time`, via the machine's
+    /// `elapsed()` clock) → `Patrolling` toward the other endpoint.
     #[allow(clippy::too_many_arguments)]
     fn update_patrol(
         world: &World,
@@ -312,19 +322,30 @@ impl BehaviorRunner {
         state: &mut BehaviorState,
         commands: &mut BehaviorCommands,
     ) {
-        if state.is_waiting {
-            state.timer -= delta_time;
-            if state.timer <= 0.0 {
-                state.is_waiting = false;
-                state.patrol_toward_b = !state.patrol_toward_b;
+        state.phase.tick(delta_time);
+
+        if let BehaviorPhase::Waiting { then_toward } = *state.phase.current() {
+            if state.phase.elapsed() >= wait_time {
+                state.phase.transition_to(BehaviorPhase::Patrolling { toward: then_toward });
             }
             commands.velocities.push((entity, Vec2::ZERO));
         } else if let Some(entity_pos) = Self::get_position(world, entity) {
-            let target = if state.patrol_toward_b { point_b } else { point_a };
+            // Idle (first update) starts the patrol toward A, matching the
+            // pre-FSM default direction.
+            let toward = match *state.phase.current() {
+                BehaviorPhase::Patrolling { toward } => toward,
+                _ => {
+                    state.phase.transition_to(BehaviorPhase::Patrolling { toward: PatrolTarget::A });
+                    PatrolTarget::A
+                }
+            };
+            let target = match toward {
+                PatrolTarget::A => point_a,
+                PatrolTarget::B => point_b,
+            };
 
             if (target - entity_pos).length() < 5.0 {
-                state.is_waiting = true;
-                state.timer = wait_time;
+                state.phase.transition_to(BehaviorPhase::Waiting { then_toward: toward.other() });
                 commands.velocities.push((entity, Vec2::ZERO));
             } else {
                 let vel = (target - entity_pos).normalize() * speed;
@@ -539,5 +560,139 @@ mod tests {
         named.insert("player".to_string(), EntityId::with_generation(1, 1));
         runner.set_named_entities(named);
         assert!(runner.named_entities.contains_key("player"));
+    }
+
+    fn phase_of(world: &World, entity: EntityId) -> BehaviorPhase {
+        *world
+            .get::<BehaviorState>(entity)
+            .expect("stateful behavior should have a BehaviorState")
+            .phase
+            .current()
+    }
+
+    #[test]
+    fn test_patrol_arrival_enters_waiting_then_reverses_direction() {
+        let mut world = World::new();
+        let mut runner = BehaviorRunner::new();
+        let input = InputHandler::new();
+        let dt = 0.016;
+
+        // Entity starts exactly at point A, so the first update arrives
+        // immediately (< 5.0 arrival threshold) and begins the wait.
+        let patroller = world.create_entity();
+        world
+            .add_component(&patroller, Transform2D::new(Vec2::ZERO))
+            .unwrap();
+        world
+            .add_component(
+                &patroller,
+                Behavior::Patrol {
+                    point_a: (0.0, 0.0),
+                    point_b: (100.0, 0.0),
+                    speed: 50.0,
+                    wait_time: 0.1,
+                },
+            )
+            .unwrap();
+
+        runner.update(&mut world, &input, dt, None);
+        assert_eq!(
+            phase_of(&world, patroller),
+            BehaviorPhase::Waiting { then_toward: PatrolTarget::B },
+            "arriving at A should enter Waiting headed for B"
+        );
+
+        // Wait out wait_time (0.1s) via the FSM's elapsed clock: 7 more
+        // updates at 16ms = 0.112s in the Waiting state.
+        for _ in 0..7 {
+            runner.update(&mut world, &input, dt, None);
+        }
+        assert_eq!(
+            phase_of(&world, patroller),
+            BehaviorPhase::Patrolling { toward: PatrolTarget::B },
+            "after wait_time elapses the patrol should head for B"
+        );
+
+        // Without physics the entity never moves, so it stays far from B
+        // and remains in the Patrolling phase.
+        runner.update(&mut world, &input, dt, None);
+        assert_eq!(
+            phase_of(&world, patroller),
+            BehaviorPhase::Patrolling { toward: PatrolTarget::B }
+        );
+    }
+
+    #[test]
+    fn test_chase_enters_and_leaves_chasing_phase_on_range() {
+        let mut world = World::new();
+        let mut runner = BehaviorRunner::new();
+        let input = InputHandler::new();
+        let dt = 0.016;
+
+        let chaser = world.create_entity();
+        world
+            .add_component(&chaser, Transform2D::new(Vec2::ZERO))
+            .unwrap();
+        world
+            .add_component(
+                &chaser,
+                Behavior::ChaseTagged {
+                    target_tag: "player".to_string(),
+                    detection_range: 50.0,
+                    chase_speed: 100.0,
+                    lose_interest_range: 80.0,
+                },
+            )
+            .unwrap();
+
+        let target = world.create_entity();
+        world
+            .add_component(&target, Transform2D::new(Vec2::new(30.0, 0.0)))
+            .unwrap();
+        world.add_component(&target, EntityTag::new("player")).unwrap();
+
+        // Target within detection range -> Chasing.
+        runner.update(&mut world, &input, dt, None);
+        assert_eq!(phase_of(&world, chaser), BehaviorPhase::Chasing);
+
+        // Inside lose-interest range the chase persists (hysteresis band).
+        world.get_mut::<Transform2D>(target).unwrap().position = Vec2::new(70.0, 0.0);
+        runner.update(&mut world, &input, dt, None);
+        assert_eq!(
+            phase_of(&world, chaser),
+            BehaviorPhase::Chasing,
+            "chase persists between detection and lose-interest ranges"
+        );
+
+        // Beyond lose-interest range -> back to Idle.
+        world.get_mut::<Transform2D>(target).unwrap().position = Vec2::new(200.0, 0.0);
+        runner.update(&mut world, &input, dt, None);
+        assert_eq!(phase_of(&world, chaser), BehaviorPhase::Idle);
+    }
+
+    #[test]
+    fn test_chase_with_no_target_stays_idle() {
+        let mut world = World::new();
+        let mut runner = BehaviorRunner::new();
+        let input = InputHandler::new();
+
+        let chaser = world.create_entity();
+        world
+            .add_component(&chaser, Transform2D::new(Vec2::ZERO))
+            .unwrap();
+        world
+            .add_component(
+                &chaser,
+                Behavior::ChaseTagged {
+                    target_tag: "player".to_string(),
+                    detection_range: 50.0,
+                    chase_speed: 100.0,
+                    lose_interest_range: 80.0,
+                },
+            )
+            .unwrap();
+
+        runner.update(&mut world, &input, 0.016, None);
+        assert_eq!(phase_of(&world, chaser), BehaviorPhase::Idle);
     }
 }

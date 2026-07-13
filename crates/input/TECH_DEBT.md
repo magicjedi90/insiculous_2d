@@ -4,7 +4,7 @@ Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § input.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-L4 (Low, Double Buffer):** first mouse move after startup computes delta against baseline `(0,0)` → spurious warp (`mouse.rs:38-42`); skip delta until a previous position exists.
+No open items (GPP-L4 resolved Jul 13 2026 — see `log_archive.md`).
 
 ## Open Items
 
@@ -29,4 +29,4 @@ No save/load for `InputMapping` (serde on `InputSource` + remapping UI). Needed 
 | Clippy warnings | 0 (including `--all-targets`) |
 | High priority open | 0 |
 | Medium priority open | 1 (GAP-001) |
-| Low priority open | 4 |
+| Low priority open | 3 |

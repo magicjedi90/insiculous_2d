@@ -4,7 +4,6 @@ Last audited: February 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § ecs.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-01 (High, State):** `BehaviorState` bool soup (`behavior.rs:215-225`) while the tested `state_machine.rs` FSM has zero consumers — model patrol/chase/wait as `StateMachine<enum>`.
 - [ ] **GPP-02 (Decision of record, Data Locality):** `ComponentStore` = `HashMap<EntityId, Box<dyn Component>>` is the accepted simplicity tradeoff. Future path: dense `Vec<T>` columns / archetype storage + bitset queries (see Future Enhancements below). **Trigger to revisit:** profiling shows component access dominating a frame, or games routinely exceed ~a few thousand live entities.
 - [ ] **GPP-04 (Medium, Dirty Flag):** `TransformHierarchySystem` recomputes every `GlobalTransform2D` every frame (`hierarchy_system.rs:88-164`) — add change tracking, propagate dirty subtrees only (folds in SRP-003 below).
 - [ ] **GPP-16 (Medium, Singleton):** `global_registry()` registration list is hardcoded (`component_registry.rs:92-107`) — games can't register components; add a one-shot init extension point (root of engine_core ARCH-006).
@@ -44,6 +43,6 @@ Resolved history: root `log_archive.md` § ecs.
 |--------|-------|
 | Test coverage | 177 tests (100% pass rate) |
 | `#[allow(dead_code)]` | 0 |
-| High priority open | 1 (GPP-01) |
+| High priority open | 0 |
 | Medium priority open | 2 (GPP-04, GPP-16) |
 | Low priority open | 6 |

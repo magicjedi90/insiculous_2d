@@ -1,7 +1,5 @@
 //! Sound data types and playback settings.
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
 /// Unique identifier for a loaded sound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SoundHandle {
@@ -9,12 +7,13 @@ pub struct SoundHandle {
 }
 
 impl SoundHandle {
-    /// Create a new sound handle with a unique ID.
-    pub(crate) fn new() -> Self {
-        static NEXT_ID: AtomicU32 = AtomicU32::new(1);
-        Self {
-            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
-        }
+    /// Wrap a manager-allocated id in a handle.
+    ///
+    /// Ids are allocated by the owning [`crate::AudioManager`] from an
+    /// instance-local counter, so handles are unique within one manager but
+    /// deterministic across managers (both start from the same base).
+    pub(crate) fn from_id(id: u32) -> Self {
+        Self { id }
     }
 
     /// Get the numeric ID of this handle.

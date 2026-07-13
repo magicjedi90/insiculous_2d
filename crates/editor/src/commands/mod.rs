@@ -6,6 +6,7 @@
 //! (e.g., dragging a gizmo or scrubbing a slider).
 
 use std::any::Any;
+use std::collections::VecDeque;
 
 use ecs::World;
 
@@ -60,7 +61,7 @@ pub trait EditorCommand: Send {
 
 /// Manages undo/redo stacks for editor commands.
 pub struct CommandHistory {
-    undo_stack: Vec<Box<dyn EditorCommand>>,
+    undo_stack: VecDeque<Box<dyn EditorCommand>>,
     redo_stack: Vec<Box<dyn EditorCommand>>,
     max_history: usize,
 }
@@ -69,7 +70,7 @@ impl CommandHistory {
     /// Create a new command history with default max history (100).
     pub fn new() -> Self {
         Self {
-            undo_stack: Vec::new(),
+            undo_stack: VecDeque::new(),
             redo_stack: Vec::new(),
             max_history: 100,
         }
@@ -78,24 +79,30 @@ impl CommandHistory {
     /// Execute a command and push it onto the undo stack. Clears the redo stack.
     pub fn execute(&mut self, mut cmd: Box<dyn EditorCommand>, world: &mut World) {
         cmd.execute(world);
-        self.undo_stack.push(cmd);
+        self.undo_stack.push_back(cmd);
         self.redo_stack.clear();
         self.enforce_limit();
     }
 
-    /// Undo the most recent command.
-    pub fn undo(&mut self, world: &mut World) {
-        if let Some(mut cmd) = self.undo_stack.pop() {
+    /// Undo the most recent command. Returns `true` if a command was applied.
+    pub fn undo(&mut self, world: &mut World) -> bool {
+        if let Some(mut cmd) = self.undo_stack.pop_back() {
             cmd.undo(world);
             self.redo_stack.push(cmd);
+            true
+        } else {
+            false
         }
     }
 
-    /// Redo the most recently undone command.
-    pub fn redo(&mut self, world: &mut World) {
+    /// Redo the most recently undone command. Returns `true` if a command was applied.
+    pub fn redo(&mut self, world: &mut World) -> bool {
         if let Some(mut cmd) = self.redo_stack.pop() {
             cmd.execute(world);
-            self.undo_stack.push(cmd);
+            self.undo_stack.push_back(cmd);
+            true
+        } else {
+            false
         }
     }
 
@@ -111,7 +118,7 @@ impl CommandHistory {
 
     /// Display name of the command that would be undone, if any.
     pub fn undo_name(&self) -> Option<&str> {
-        self.undo_stack.last().map(|c| c.display_name())
+        self.undo_stack.back().map(|c| c.display_name())
     }
 
     /// Display name of the command that would be redone, if any.
@@ -128,7 +135,7 @@ impl CommandHistory {
     /// Push a pre-executed command onto the undo stack without calling execute().
     /// Use when the action was already performed and you just need to record it for undo.
     pub fn push_already_executed(&mut self, cmd: Box<dyn EditorCommand>) {
-        self.undo_stack.push(cmd);
+        self.undo_stack.push_back(cmd);
         self.redo_stack.clear();
         self.enforce_limit();
     }
@@ -138,7 +145,7 @@ impl CommandHistory {
     /// Used for continuous edits like gizmo drags or slider scrubs to avoid
     /// flooding the undo history with one entry per frame.
     pub fn try_merge_or_execute(&mut self, cmd: Box<dyn EditorCommand>, world: &mut World) {
-        if let Some(last) = self.undo_stack.last_mut() {
+        if let Some(last) = self.undo_stack.back_mut() {
             if last.try_merge(cmd.as_ref()) {
                 // Merged into existing command — no new push needed.
                 return;
@@ -153,7 +160,7 @@ impl CommandHistory {
     /// writeback for immediate visual feedback). The command is recorded for undo/redo
     /// but `execute()` is not called.
     pub fn try_merge_or_push(&mut self, cmd: Box<dyn EditorCommand>) {
-        if let Some(last) = self.undo_stack.last_mut() {
+        if let Some(last) = self.undo_stack.back_mut() {
             if last.try_merge(cmd.as_ref()) {
                 return;
             }
@@ -163,7 +170,7 @@ impl CommandHistory {
 
     fn enforce_limit(&mut self) {
         while self.undo_stack.len() > self.max_history {
-            self.undo_stack.remove(0);
+            self.undo_stack.pop_front();
         }
     }
 }

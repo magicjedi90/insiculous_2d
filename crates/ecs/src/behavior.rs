@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::state_machine::StateMachine;
+
 /// Behavior component that defines how an entity responds to input and events.
 ///
 /// Each variant represents a different type of behavior with its own configuration.
@@ -208,20 +210,71 @@ impl Behavior {
 // Note: Component trait is implemented via blanket impl in component.rs
 // for all types that implement Any + Send + Sync
 
+/// Which patrol endpoint a patrolling entity is headed toward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PatrolTarget {
+    /// Patrol point A.
+    A,
+    /// Patrol point B.
+    B,
+}
+
+impl PatrolTarget {
+    /// The opposite endpoint.
+    pub fn other(self) -> Self {
+        match self {
+            Self::A => Self::B,
+            Self::B => Self::A,
+        }
+    }
+}
+
+/// The phase a stateful behavior is currently in.
+///
+/// An entity has exactly one `Behavior`, so a single phase enum covers all
+/// stateful variants — and makes illegal combinations (waiting AND chasing
+/// at once) unrepresentable, unlike the boolean flags this replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BehaviorPhase {
+    /// No phase-driven activity (initial state; for `ChaseTagged` this
+    /// means "not chasing").
+    Idle,
+    /// `Patrol`: moving toward an endpoint.
+    Patrolling {
+        /// The endpoint being approached.
+        toward: PatrolTarget,
+    },
+    /// `Patrol`: paused at an endpoint; resumes toward `then_toward` once
+    /// the wait elapses (tracked via the state machine's `elapsed()`).
+    Waiting {
+        /// The endpoint to head for after the wait.
+        then_toward: PatrolTarget,
+    },
+    /// `ChaseTagged`: pursuing the target.
+    Chasing,
+}
+
 /// Runtime state for behaviors (not serialized in scene files).
 ///
-/// This component stores transient state that behaviors need during execution,
-/// such as timers and flags. It's automatically added by the BehaviorRunner.
-#[derive(Debug, Clone, Default)]
+/// This component stores transient state that behaviors need during
+/// execution. It's automatically added by the BehaviorRunner. Phase-driven
+/// behaviors (patrol, chase) track their mode in a [`StateMachine`] rather
+/// than boolean flags; wait durations use the machine's `elapsed()` clock.
+#[derive(Debug, Clone)]
 pub struct BehaviorState {
-    /// General-purpose timer (used for jump cooldown, wait time, etc.)
+    /// Countdown timer for cooldowns (jump cooldown in `PlayerPlatformer`).
     pub timer: f32,
-    /// Patrol direction (false = toward A, true = toward B)
-    pub patrol_toward_b: bool,
-    /// Whether currently chasing (for ChasePlayer behavior)
-    pub is_chasing: bool,
-    /// Whether waiting at a patrol point
-    pub is_waiting: bool,
+    /// Phase FSM for patrol/chase behaviors.
+    pub phase: StateMachine<BehaviorPhase>,
+}
+
+impl Default for BehaviorState {
+    fn default() -> Self {
+        Self {
+            timer: 0.0,
+            phase: StateMachine::new(BehaviorPhase::Idle),
+        }
+    }
 }
 
 /// Tag component for entity identification.
@@ -304,12 +357,17 @@ mod tests {
     }
 
     #[test]
-    fn test_behavior_state_default() {
+    fn test_behavior_state_default_is_idle() {
         let state = BehaviorState::default();
         assert_eq!(state.timer, 0.0);
-        assert!(!state.patrol_toward_b);
-        assert!(!state.is_chasing);
-        assert!(!state.is_waiting);
+        assert!(state.phase.is(&BehaviorPhase::Idle));
+        assert!(state.phase.just_entered());
+    }
+
+    #[test]
+    fn test_patrol_target_other_flips_endpoint() {
+        assert_eq!(PatrolTarget::A.other(), PatrolTarget::B);
+        assert_eq!(PatrolTarget::B.other(), PatrolTarget::A);
     }
 
     #[test]

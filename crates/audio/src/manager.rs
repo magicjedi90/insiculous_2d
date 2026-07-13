@@ -62,6 +62,9 @@ pub struct AudioManager {
     output: Option<AudioOutput>,
     /// Cached sound data by handle.
     sounds: HashMap<u32, SoundData>,
+    /// Next sound id to hand out. Instance-local so handle ids are unique
+    /// within this manager and deterministic across managers.
+    next_sound_id: u32,
     /// Currently active sound instances.
     active_sounds: Vec<ActiveSound>,
     /// Current background music sink.
@@ -123,6 +126,7 @@ impl AudioManager {
         Self {
             output,
             sounds: HashMap::new(),
+            next_sound_id: 1,
             active_sounds: Vec::new(),
             music_sink: None,
             music_base_volume: 1.0,
@@ -171,7 +175,8 @@ impl AudioManager {
         Decoder::new(Cursor::new(Arc::clone(&bytes)))
             .map_err(|e| AudioError::DecodeError(e.to_string()))?;
 
-        let handle = SoundHandle::new();
+        let handle = SoundHandle::from_id(self.next_sound_id);
+        self.next_sound_id += 1;
         self.sounds.insert(handle.id, SoundData { bytes });
 
         log::debug!("Loaded sound from bytes (handle: {})", handle.id);
@@ -480,10 +485,19 @@ mod tests {
     }
 
     #[test]
-    fn test_sound_handle_unique() {
-        let handle1 = SoundHandle::new();
-        let handle2 = SoundHandle::new();
-        assert_ne!(handle1.id, handle2.id);
+    fn test_sound_ids_are_manager_local_and_deterministic() {
+        // Ids come from an instance-local counter, so two independent managers
+        // hand out the same first id (no process-global drift across managers).
+        let mut first = AudioManager::disabled();
+        let mut second = AudioManager::disabled();
+
+        let a = first.load_sound_from_bytes(tiny_wav()).unwrap();
+        let b = second.load_sound_from_bytes(tiny_wav()).unwrap();
+        assert_eq!(a.id(), b.id(), "fresh managers must start from the same id");
+
+        // Ids still climb within a single manager.
+        let a2 = first.load_sound_from_bytes(tiny_wav()).unwrap();
+        assert_ne!(a.id(), a2.id(), "ids within one manager must be unique");
     }
 
     /// Minimal valid WAV file (44-byte header + one silent 16-bit sample).
@@ -533,7 +547,7 @@ mod tests {
     #[test]
     fn test_disabled_manager_still_rejects_invalid_handles() {
         let mut manager = AudioManager::disabled();
-        let bogus = SoundHandle::new();
+        let bogus = SoundHandle::from_id(9999);
         assert!(manager.play(bogus).is_err());
     }
 
@@ -613,7 +627,7 @@ mod tests {
     #[test]
     fn test_stop_on_unknown_handle_is_noop() {
         let mut manager = AudioManager::disabled();
-        let bogus = SoundHandle::new();
+        let bogus = SoundHandle::from_id(9999);
         manager.stop(bogus);
         assert_eq!(manager.active_sound_count(), 0);
     }

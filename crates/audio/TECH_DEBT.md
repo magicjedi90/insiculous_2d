@@ -4,7 +4,7 @@ Last audited: June 11, 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § audio.
 
 ## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
-- [ ] **GPP-L3 (Low, Singleton):** `SoundHandle::new()` uses a process-global `static NEXT_ID: AtomicU32` (`sound.rs:14-16`) — ids survive across `AudioManager` instances and can't serialize deterministically; move to an instance-local counter like `TextureManager`.
+No open items (GPP-L3 resolved Jul 13 2026 — see `log_archive.md`).
 
 ## Known Limitations (By Design — current constraints, not open work)
 
@@ -31,4 +31,4 @@ Resolved history: root `log_archive.md` § audio.
 | Test count | 21 (all headless) |
 | High priority open | 0 |
 | Medium priority open | 0 |
-| Low priority open | 1 (GPP-L3) |
+| Low priority open | 0 |
