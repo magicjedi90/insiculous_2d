@@ -28,7 +28,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-11 | Component | Medium | `../games/breakout/src/types.rs` | No |
 | GPP-12 | Type Object | Medium | `../games/breakout/src/levels.rs` | No (ARCH-101 same family) |
 | GPP-13 | Component / DRY | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/editor_integration/src/panel_renderer/inspector.rs` | No |
-| GPP-14 | Command | Medium | `crates/editor/src/commands/entity_commands.rs` | No |
+| GPP-14 | Command | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/editor/src/commands/entity_commands.rs` | No |
 | GPP-15 | Dirty Flag | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/renderer/src/sprite/batch.rs` + `engine_core/src/game.rs` | No (ARCH-007 adjacent) |
 | GPP-16 | Singleton | Medium | `crates/ecs/src/component_registry.rs` | Partial (via ARCH-006) |
 | GPP-17 | — (magic numbers) | ~~Medium~~ ✅ Resolved Jul 13 2026 | `../games/breakout/src/gameplay.rs` | No |
@@ -159,7 +159,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Fix plan (registry dispatch):** Extend `editor_component_registry!` to also generate the editable-path dispatch (each entry already knows its type and editor function; generate the `capture → edit → apply_component_edit` block per entry, mirroring how `ComponentKind`/`capture_all_components` are generated). Then `/add-component` genuinely becomes one line, and the 11 blocks collapse.
 
-### GPP-14 · Command — undo/redo of create/delete mints new EntityIds
+### GPP-14 · Command — undo/redo of create/delete mints new EntityIds — ✅ RESOLVED (Jul 13 2026, stable-id resurrection; see `log_archive.md` § editor)
 
 **Evidence:** `crates/editor/src/commands/entity_commands.rs:45-48,114-125` — `CreateEntityCommand::execute` and `DeleteEntityCommand::undo` create a **new** entity and overwrite `self.entity`. Any `Selection` (or later command in the history referencing the old id) silently goes stale across an undo/redo cycle. The [Command chapter](https://gameprogrammingpatterns.com/command.html) calls this out: commands that reify object identity must keep references valid across undo (Godot's UndoRedo keeps stable object pointers for the same reason).
 

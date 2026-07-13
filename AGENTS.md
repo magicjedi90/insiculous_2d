@@ -15,11 +15,11 @@
 - **Input**: Event-based, 62 tests, generic action mapping (`InputMapping<A>`)
 - **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
 - **Engine Core**: Game API, managers, scene serializer, generic pickups, 181 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 252 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, 255 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 66 tests
 
 ### Key Metrics
-- **Total Tests**: 1018/1018 passing (100% success rate), 0 ignored
+- **Total Tests**: 1021/1021 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
 - Games (in `../games/`): breakout 43 tests, pong 5 — both clippy-clean
 
@@ -110,7 +110,7 @@ Notes: Escape is NOT a hard-coded exit — it flows to `Game::on_key_pressed()`.
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 1018 tests
+cargo test --workspace               # Run all 1021 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -135,7 +135,7 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 1018/1018 (100%)
+passed: 1021/1021 (100%)
 ignored: 0
 failed: 0
 ```

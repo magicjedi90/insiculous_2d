@@ -16,8 +16,9 @@ use super::EditorCommand;
 ///
 /// On first execute the entity is already created by the caller — the command
 /// captures its ID and all component data. On undo the entity is removed.
-/// On redo a new entity is created with the stored components (the stored
-/// entity ID is updated since IDs cannot be reused).
+/// On redo the entity is recreated **with the same EntityId** (ids are never
+/// recycled, so the slot is free), keeping selections and other history
+/// commands that reference it valid across undo/redo cycles.
 pub struct CreateEntityCommand {
     entity: EntityId,
     components: Vec<StoredComponent>,
@@ -41,10 +42,11 @@ impl EditorCommand for CreateEntityCommand {
             // First execute — entity already exists. Nothing to do.
             self.captured = false;
         } else {
-            // Redo — create a new entity and restore components.
-            let new_entity = world.create_entity();
-            restore_components(world, new_entity, &self.components);
-            self.entity = new_entity;
+            // Redo — resurrect the entity under its ORIGINAL id (GPP-14):
+            // ids are never recycled, so the slot is guaranteed free, and
+            // selections / later commands referencing it stay valid.
+            world.create_entity_with_id(self.entity);
+            restore_components(world, self.entity, &self.components);
         }
     }
 
@@ -52,6 +54,10 @@ impl EditorCommand for CreateEntityCommand {
         // Capture latest component state before removing.
         self.components = capture_all_components(world, self.entity);
         world.remove_entity(&self.entity).ok();
+        // Any execute after an undo is a redo and must recreate — also for
+        // commands pushed via push_already_executed, where execute() was
+        // never called and the flag would otherwise still be set.
+        self.captured = false;
     }
 
     fn display_name(&self) -> &str {
@@ -110,19 +116,19 @@ impl EditorCommand for DeleteEntityCommand {
     }
 
     fn undo(&mut self, world: &mut World) {
-        // Recreate entity and restore components.
-        let new_entity = world.create_entity();
-        restore_components(world, new_entity, &self.components);
+        // Resurrect the entity under its ORIGINAL id (GPP-14): ids are never
+        // recycled, so the slot is guaranteed free, and selections / later
+        // commands referencing it stay valid across the undo.
+        world.create_entity_with_id(self.entity);
+        restore_components(world, self.entity, &self.components);
 
         // Restore hierarchy.
         if let Some(parent) = self.parent {
-            world.set_parent(new_entity, parent).ok();
+            world.set_parent(self.entity, parent).ok();
         }
         for &child in &self.children {
-            world.set_parent(child, new_entity).ok();
+            world.set_parent(child, self.entity).ok();
         }
-
-        self.entity = new_entity;
     }
 
     fn display_name(&self) -> &str {

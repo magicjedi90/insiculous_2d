@@ -484,3 +484,71 @@ fn test_stored_component_capture_and_restore() {
     assert!(world.get::<RigidBody>(restored).is_some());
     assert!(world.get::<Collider>(restored).is_some());
 }
+
+// -- GPP-14: undo/redo preserves EntityIds (no stale selections/commands) --
+
+#[test]
+fn test_delete_undo_resurrects_same_entity_id() {
+    let mut world = World::new();
+    let entity = setup_entity(&mut world);
+    let mut history = CommandHistory::new();
+
+    history.execute(Box::new(DeleteEntityCommand::new(entity)), &mut world);
+    assert!(world.get::<common::Transform2D>(entity).is_none(), "deleted");
+
+    history.undo(&mut world);
+    // The ORIGINAL id must resolve again — a Selection holding it stays valid.
+    assert!(
+        world.get::<common::Transform2D>(entity).is_some(),
+        "undo must resurrect the entity under its original id"
+    );
+    assert_eq!(world.get::<Name>(entity).unwrap().as_str(), "Test");
+}
+
+#[test]
+fn test_create_redo_resurrects_same_entity_id() {
+    let mut world = World::new();
+    let entity = setup_entity(&mut world);
+    let mut history = CommandHistory::new();
+
+    history.push_already_executed(Box::new(CreateEntityCommand::already_created(&world, entity)));
+
+    history.undo(&mut world);
+    assert!(world.get::<common::Transform2D>(entity).is_none(), "undo removes it");
+
+    history.redo(&mut world);
+    assert!(
+        world.get::<common::Transform2D>(entity).is_some(),
+        "redo must recreate the entity under its original id"
+    );
+}
+
+#[test]
+fn test_set_command_survives_delete_undo_cycle() {
+    let mut world = World::new();
+    let entity = setup_entity(&mut world);
+    let mut history = CommandHistory::new();
+
+    // Edit the transform (recorded), then delete, then undo both.
+    let old = *world.get::<common::Transform2D>(entity).unwrap();
+    let mut new = old;
+    new.position = Vec2::new(50.0, 0.0);
+    history.execute(
+        Box::new(SetTransformCommand::new(entity, old, new, "position")),
+        &mut world,
+    );
+    history.execute(Box::new(DeleteEntityCommand::new(entity)), &mut world);
+
+    history.undo(&mut world); // un-delete (same id)
+    history.undo(&mut world); // un-edit — previously targeted a dead id and silently no-opped
+    let pos = world.get::<common::Transform2D>(entity).unwrap().position;
+    assert_eq!(
+        pos,
+        Vec2::ZERO,
+        "the earlier Set command must still resolve after a delete/undo cycle"
+    );
+
+    history.redo(&mut world); // re-edit
+    let pos = world.get::<common::Transform2D>(entity).unwrap().position;
+    assert_eq!(pos, Vec2::new(50.0, 0.0));
+}
