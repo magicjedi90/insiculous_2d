@@ -45,6 +45,8 @@ pub mod contexts;
 pub mod ui_integration;
 pub mod chaos_mode;
 pub mod achievements;
+pub mod menu_input;
+pub mod spawn_helpers;
 #[cfg(feature = "physics")]
 pub mod pickups;
 pub mod particles;
@@ -90,6 +92,14 @@ pub use chaos_mode::ChaosMode;
 pub use achievements::{
     Achievement, AchievementError, AchievementManager, ToastStyle, DEFAULT_TOAST_DURATION,
 };
+pub use menu_input::MenuInput;
+pub use spawn_helpers::spawn_background;
+
+/// Pixels per world unit: the renderer draws a sprite at
+/// `Transform2D.scale × RENDER_UNIT` pixels. Physics colliders are sized in
+/// absolute pixels and IGNORE `Transform2D.scale`, so games size both from
+/// the same pixel constants divided/multiplied by this.
+pub const RENDER_UNIT: f32 = 80.0;
 
 /// Initialize the engine core
 pub fn init() -> Result<(), EngineError> {

@@ -22,6 +22,18 @@ mod impulse;
 pub use grid_mesh::GridMesh;
 pub use impulse::GridImpulse;
 
+/// The shared playfield backdrop: a 32×24-node grid at 36px spacing, tinted
+/// to the chaos theme, sized to cover an ~800×600 window with overscan.
+/// Every arcade game uses this exact preset; override fields per game only
+/// where the art genuinely differs.
+pub fn default_playfield_grid(theme: &crate::chaos_theme::ChaosTheme) -> GridMesh {
+    GridMesh::new(32, 24, 36.0, glam::Vec2::ZERO)
+        .with_color(theme.grid_color)
+        .with_emissive(0.7)
+        .with_stiffness(60.0)
+        .with_damping(0.07)
+}
+
 /// Advance a spring-mass grid (if any) and push its line vertices into the
 /// engine's per-frame line buffer; when `debug_colliders` is set, overlay
 /// collider outlines in bright emissive magenta so they bloom above sprites.
@@ -64,5 +76,17 @@ mod step_and_emit_tests {
         let mut lines = Vec::new();
         step_and_emit_grid(None, &world, &mut lines, 1.0 / 60.0, false);
         assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn test_default_playfield_grid_adopts_theme_grid_color() {
+        use crate::chaos_mode::ChaosMode;
+        use crate::chaos_theme::ChaosTheme;
+
+        for mode in ChaosMode::ALL {
+            let theme = ChaosTheme::for_mode(mode);
+            let grid = default_playfield_grid(&theme);
+            assert_eq!(grid.color, theme.grid_color, "grid tint must follow {mode:?}");
+        }
     }
 }

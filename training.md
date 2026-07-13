@@ -14,6 +14,8 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `scene.rs` / `scene_loader.rs` / `scene_data.rs` / `scene_serializer.rs` - Scene lifecycle, RON load, schema, World→RON save (the ONLY save pipeline)
   - `behavior_runner.rs` / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
   - `chaos_mode.rs` - `ChaosMode` enum (cross-game intensity theme)
+  - `menu_input.rs` - `MenuInput` shared menu navigation (read keys once, wraparound `navigate`)
+  - `spawn_helpers.rs` - Shared entity recipes (`spawn_background`); crate root exports `RENDER_UNIT = 80.0` (pixels per world unit)
   - `pickups.rs` - Generic pickup tracking (`Pickups<K>`, `EffectTimer`)
   - `achievements.rs` - Achievement registry, JSON persistence, toasts
   - `particles/` - Pooled particle system (ring buffer, config builder)
@@ -82,7 +84,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `hello_world.rs` - Physics platformer with UI, audio, ECS, and scene graph
   - `editor_demo.rs` - Editor wrapping the platformer (`--features editor`)
   - `behavior_demo.rs` - Scene-driven behaviors
-  - Real games live in `../games/` (pong, breakout) — see `PROJECT_ROADMAP.md`
+  - Real games live in `../games/` (pong, breakout, space_invaders) — see `PROJECT_ROADMAP.md`
 
 ## Coding Guidelines
 
@@ -529,7 +531,7 @@ here — this file documents APIs and patterns, not status.
 │   ├── editor/                # Editor panels, inspector, gizmos, undo/redo
 │   └── editor_integration/    # EditorGame<G> wrapper, run_game_with_editor()
 ├── examples/                  # hello_world, editor_demo, behavior_demo
-└── ../games/                  # Sibling dir: one cargo project per game (pong, breakout)
+└── ../games/                  # Sibling dir: one cargo project per game (pong, breakout, space_invaders)
 ```
 
 ### Key Commands

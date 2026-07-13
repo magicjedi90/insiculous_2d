@@ -7,9 +7,9 @@ description: Scaffold a new game for the 20 Games Challenge following the establ
 
 Games are **standalone cargo projects in `../games/<name>/`** (sibling of the
 engine repo) — NOT workspace members, NOT git repos. Before writing anything,
-open `../games/breakout/` (most recent) and `../games/pong/` and mirror their
-structure. When conventions here conflict with what breakout actually does,
-breakout wins — read the code.
+open `../games/space_invaders/` (most recent) and `../games/breakout/` and
+mirror their structure. When conventions here conflict with what those games
+actually do, the newest game wins — read the code.
 
 ## Cargo setup
 
@@ -21,9 +21,10 @@ breakout wins — read the code.
 
 `main.rs` (Game impl; asset anchoring via `engine_core::game_root!()` — a
 macro so YOUR crate's manifest dir is baked in), `constants.rs`, `types.rs`,
-`spawning.rs`, `gameplay.rs`, `menu.rs`, `drawing.rs`, `achievements.rs`,
-`effects.rs`. A `chaos_theme.rs` is only needed if you override the engine
-palette (see below) — pong uses the engine defaults directly.
+`spawning.rs`, `gameplay.rs` (or a `gameplay/` split like pong/space_invaders
+once it grows), `menu.rs`, `drawing.rs`, `achievements.rs`, `effects.rs`.
+A `chaos_theme.rs` is only needed if you override the engine palette (see
+below) — pong and space_invaders use the engine defaults directly.
 
 ## Non-negotiable conventions
 
@@ -40,20 +41,27 @@ palette (see below) — pong uses the engine defaults directly.
 2. **Achievements**: engine `AchievementManager`, persisted to
    `saves/<game>_achievements.json`, plus a `DISPLAY_SECTIONS` coverage test
    (every registered achievement appears in a display section).
-3. **Neon look**: GridMesh deforming background driven by
-   `engine_core::grid::step_and_emit_grid(self.grid.as_mut(), ctx.world,
-   ctx.lines, ctx.delta_time, self.debug_colliders)` (also gives you the F1
-   collider overlay), emissive sprites, particle bursts via `ParticleConfig`.
-4. **Sizing**: `RENDER_UNIT = 80` — `Transform2D.scale × 80` = pixel size.
+3. **Neon look**: `self.grid = Some(default_playfield_grid(&theme))` (prelude)
+   builds the deforming background; drive it per frame with
+   `step_and_emit_grid(self.grid.as_mut(), ctx.world, ctx.lines,
+   ctx.delta_time, self.debug_colliders)` (also prelude — gives you the F1
+   collider overlay). Backdrop sprite via the engine's
+   `spawn_background(world, tex, theme.bg_color, Vec2::new(WIN_W, WIN_H))`.
+   Emissive sprites, particle bursts via `ParticleConfig`.
+4. **Sizing**: `RENDER_UNIT` (prelude, = 80) — `Transform2D.scale × RENDER_UNIT`
+   = pixel size. Do NOT redefine it locally.
    **Colliders use absolute pixels; physics IGNORES Transform2D.scale.** Size
    them from the same constants or sprites and colliders drift apart.
 5. **Determinism**: pseudo-random via `hash_f32(frame_count)` /
    `hash_u32(...)` from the prelude. No `rand` crate, no hand-rolled hashing.
 6. **Headless tests** for all pure logic: layout math, bounce/steering
-   direction, menu navigation, achievement registration. Every test must run
-   without GPU/window.
+   direction, achievement registration, and physics-pair sims for any
+   collision the game depends on (see space_invaders `gameplay_tests.rs`).
+   Every test must run without GPU/window.
+7. **Menus**: `MenuInput::read(ctx.input)` + `input.navigate(selection, count)`
+   (prelude) — never hand-roll the up/down/confirm/back reads.
 
-## Proven gameplay patterns (from breakout — reuse, don't reinvent)
+## Proven gameplay patterns (from breakout + space_invaders — reuse, don't reinvent)
 
 - Offset-based paddle bounce (`paddle_bounce_direction`).
 - Minimum-vertical-velocity enforcement (anti-stalemate).
@@ -71,14 +79,19 @@ palette (see below) — pong uses the engine defaults directly.
   (prelude) — you supply the entity list and the state match.
 - Scene-defined templates: `instance.spawn_prefab(world, assets, "Name", &overrides)`
   stamps runtime copies of RON prefabs (breakout levels are scene-driven).
+- Formation movement: kinematic bodies + per-frame `set_kinematic_target`
+  toward home-slot + one shared offset (space_invaders fleet).
+- **Rapier does NOT report kinematic-vs-static or kinematic-vs-kinematic
+  pairs.** For those, use a game-side AABB test (`rects_overlap` in
+  space_invaders) — and prove every physics pair the game depends on with a
+  headless sim test before building on it.
 
-## Rule-of-three check (game 3+)
+## Rule-of-three check
 
-`../games/TECH_DEBT.md` GPP-03 part 2 lists genre-flavored duplication
-deferred from pong/breakout (spawner shapes, particle preset semantics, the
-Serving/Playing/GameOver flow skeleton). If this game duplicates one of them
-a THIRD time, promote it to the engine as part of this task (engine tests +
-refactor all games onto it); if not, leave it game-side.
+The GPP-03 audit closed with game 3, but the standing directive remains:
+any mechanism this game copies from TWO existing games gets promoted to the
+engine as part of this task (engine tests + refactor all games onto it +
+doc updates); anything genre-specific stays game-side.
 
 ## If the engine is missing something
 

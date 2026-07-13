@@ -21,7 +21,11 @@ pub use crate::{
     // Particle system (CPU pool; spawn bursts or attach a ParticleEmitter)
     particles::{Particle, ParticleConfig, ParticleEmitter, ParticleManager, ParticleSystem},
     // Spring-mass grid (Geometry-Wars style deforming background)
-    grid::{GridImpulse, GridMesh},
+    grid::{default_playfield_grid, step_and_emit_grid, GridImpulse, GridMesh},
+    // Shared arcade scaffolding
+    menu_input::MenuInput,
+    spawn_helpers::spawn_background,
+    RENDER_UNIT,
     // Debug-draw helpers (collider outlines, etc.)
     debug,
     init,

@@ -4,8 +4,7 @@ Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § engine_core.
 
 ## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
-(GPP-07 and DRY-010 resolved Jul 13 2026 — runtime `spawn_prefab` + merge-layer helper; see `log_archive.md`.)
-- [ ] **GPP-03 (Medium, Flyweight/DRY):** pong↔breakout duplication — promote only the game-agnostic subset now (ChaosTheme structure, grid-emit helper, visibility helper, `hash_f32`/`game_root`); genre-flavored spawners/flow skeleton wait for game 3's rule-of-three (see `../games/TECH_DEBT.md`).
+(GPP-07 and DRY-010 resolved Jul 13 2026 — runtime `spawn_prefab` + merge-layer helper; GPP-03 closed Jul 13 2026 with game 3's rule-of-three — both promotion rounds in `log_archive.md`.)
 - [ ] **GPP-06 (cross-ref):** = ARCH-006 below; the concrete unblocking step is `World::add_boxed` so `ComponentData::Dynamic` (`scene_loader.rs:477-506`) stops silently discarding validated components. Pairs with ecs GPP-16.
 - [ ] **GPP-05 (Low, Game Loop):** no render interpolation between fixed physics steps — only act if stutter observed on high-refresh displays.
 - [ ] **GPP-L2 (Low, Spatial Partition):** O(n²) tag scans in `behavior_runner.rs:473-496` — grid/sensor-based lookup if chaser/collectible counts grow.

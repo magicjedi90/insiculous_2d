@@ -92,7 +92,7 @@ pub trait Game: Sized + 'static {
                 let renderer_sprite = renderer::Sprite::new(texture)
                     .with_position(position)
                     .with_rotation(rotation)
-                    .with_scale(scale * ecs_sprite.scale * 80.0)
+                    .with_scale(scale * ecs_sprite.scale * crate::RENDER_UNIT)
                     .with_color(ecs_sprite.color)
                     .with_depth(ecs_sprite.depth)
                     .with_emissive(ecs_sprite.emissive);

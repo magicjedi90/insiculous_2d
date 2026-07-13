@@ -19,6 +19,15 @@ Two paddles, one ball, score display. The "Hello, World" of games. Lives in `../
 - **Controls:** Player 1 W/S, Player 2 Up/Down. AI mode: right paddle tracks ball with lag. Win: first to 7.
 - Full chaos-mode + achievements support; 5 tests, clippy-clean.
 
+### Game 3: Space Invaders ☑ (July 13, 2026)
+Grid of invaders marching left/right and descending; player fires upward. Lives in `../games/space_invaders/` — 25 tests, clippy-clean, full chaos-mode + achievements support (10, incl. sharpshooter streak), deforming grid background, particles, destructible barriers.
+
+- **Taught:** Formation movement (one shared offset over kinematic bodies via `set_kinematic_target`), bullets as `Lifetime`-carrying dynamic sensors (engine auto-despawn), one `take_collision_events()` drain shared by every consumer, game-side AABB fallbacks for pairs rapier never reports (kinematic-vs-static barrier chomping, kinematic-vs-kinematic invader-vs-player, fast bullet-vs-bullet cancels)
+- **Key components:** Player cannon (kinematic box), 5×10 invader fleet (kinematic, per-row colors/values), barrier bunkers (grids of static sensor blocks), bullets (dynamic sensors + `Lifetime`)
+- **Controls:** Mouse or arrows/A/D; hold Space/click to fire (cooldown). Win: clear the fleet. Lose: cannon out of lives, or any invader reaches the invasion line / the cannon.
+- **Chaos meanings:** Insane = 1.8× march + 2.4× invader fire; Ridiculous = twin cannons + stacked volleys; Insiculous = both.
+- **GPP-03 part 2 rule-of-three (closed with this game):** third literal duplications promoted to the engine — `default_playfield_grid` (was `build_grid` verbatim in pong+breakout), `MenuInput` (pong's struct == breakout's `nav_keys`/`menu_navigate`), `spawn_background`, and the `RENDER_UNIT = 80.0` constant (now defined once in `engine_core`, used by the renderer path in `game.rs`). Pong + breakout refactored onto all four. NOT promoted (no third use, stays game-side by the rule): `spawn_paddle`/`spawn_ball`/`spawn_wall` shapes (SI has no paddle-bounce ball or bouncy walls), the particle preset semantics (SI's bursts are its own), and the `Serving` flow skeleton (SI has no serve state).
+
 ### Game 2: Breakout ☑ (June 2026)
 Ball bouncing off a paddle, destroying a grid of bricks. Lives in `../games/breakout/` — 43 tests, clippy-clean, full chaos-mode + achievements support, deforming grid background, particles, scene-driven levels (`level{1-4}.scene.ron`).
 

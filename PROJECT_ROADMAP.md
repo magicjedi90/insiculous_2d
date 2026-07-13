@@ -44,15 +44,7 @@ Each game lives in `../games/<name>/` as a standalone cargo project consuming th
 
 ---
 
-### Game 3: Space Invaders ☐
-
-Grid of enemies marching left/right and descending, player fires upward.
-
-**Teaches:** Formation movement, projectile firing from game logic (spawn bullet entity each frame), enemy death, wave management
-**Key components:** Enemy formation (ECS entities, shared direction state), player bullets (spawned/despawned manually), barrier entities
-**Controls:** Arrow keys to move, Space to fire.
-**Win condition:** Eliminate all invaders. Lose if any reach the bottom.
-**Estimated scope:** ~400 lines.
+### Game 3: Space Invaders ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
 ---
 
@@ -212,7 +204,7 @@ live in `log_archive.md` (live docs carry open work only).
 Full-codebase audit against the [Game Programming Patterns](https://gameprogrammingpatterns.com/contents.html)
 catalog, run and largely resolved Jul 13 2026 (15 of 17 numbered findings fixed same-day —
 summary + per-crate resolutions in `log_archive.md`). Remaining open GPP items live in the
-per-crate `TECH_DEBT.md` files and `../games/TECH_DEBT.md` (GPP-03 part 2 awaits game 3's
+per-crate `TECH_DEBT.md` files and `../games/TECH_DEBT.md` (GPP-03 closed with game 3's
 rule-of-three; GPP-06/16 are parked with Phase 4 scripting; GPP-02 is a decision of record).
 
 ### Medium Priority
