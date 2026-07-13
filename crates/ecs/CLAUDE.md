@@ -35,7 +35,7 @@ components like any other type, but the physics crate owns their definitions.
 - `component.rs` — Component trait, ComponentStore
 - `query.rs` — Type-safe query system (Single, Pair, Triple)
 - `hierarchy_extension.rs` — Hierarchy operations (WorldHierarchyExt trait)
-- `hierarchy_system.rs` — Transform propagation system
+- `hierarchy_system.rs` — Dirty-flagged transform propagation (value-compare cache; clean frames recompute nothing; `reset()` after wholesale world replacement)
 - `component_registry.rs` — Global component type registry
 - `sprite_components.rs` — Built-in component definitions
 
@@ -59,11 +59,12 @@ components like any other type, but the physics crate owns their definitions.
 - `Box<dyn Component>` is NOT clonable — there is no `dyn_clone`/`CloneComponent` machinery. Storage is plain `HashMap<EntityId, Box<dyn Component>>`; anything that needs to copy components (e.g. `WorldSnapshot`, entity duplication) downcasts to each known concrete type and calls its own `Clone`
 - When downcasting a `Box<dyn Component>`, call `.as_ref().as_any()` (or `.as_mut().as_any_mut()`) — calling `.as_any()` directly on the Box hits the blanket impl on the Box itself, not the concrete type (see component.rs comments)
 - TypeId is per-concrete-type — different generic params = different TypeIds
+- `GlobalTransform2D` is system-owned (computed by `TransformHierarchySystem`); manual writes to it are NOT change-tracked and get overwritten the next time the entity is dirty. Edit `Transform2D` instead
 - Always check for circular references when reparenting in hierarchy
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 178 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
+- 187 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 

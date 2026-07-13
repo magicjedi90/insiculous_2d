@@ -18,7 +18,7 @@ Severity: **High** = architectural gap worth scheduling; **Medium** = real desig
 | GPP-01 | State | ~~High~~ ✅ Resolved Jul 13 2026 | `crates/ecs/src/behavior.rs` | No |
 | GPP-02 | Data Locality | High (latent) | `crates/ecs/src/component.rs` | Partial (ecs "Future Enhancements") |
 | GPP-03 | Flyweight / DRY | Medium | `../games/pong` ↔ `../games/breakout` | No |
-| GPP-04 | Dirty Flag | Medium | `crates/ecs/src/hierarchy_system.rs` | No (SRP-003 adjacent) |
+| GPP-04 | Dirty Flag | ~~Medium~~ ✅ Resolved Jul 13 2026 | `crates/ecs/src/hierarchy_system.rs` | No (SRP-003 adjacent) |
 | GPP-05 | Game Loop | Low | `crates/engine_core/src/game_loop_manager.rs` | No |
 | GPP-06 | Type Object / Bytecode | Medium | `crates/ecs/src/behavior.rs`, `scene_loader.rs` | Yes (engine_core ARCH-006) |
 | GPP-07 | Prototype | Medium | `crates/engine_core/src/scene_loader.rs` | Partial (DRY-010) |
@@ -93,7 +93,7 @@ Promotion protocol per the standing directive: engine tests per piece, refactor 
 
 **Fix plan, part 2 — deferred (genre-flavored; wait for rule-of-three):** `spawn_paddle`/`spawn_ball`/`spawn_wall` shapes, the particle preset *semantics* (`paddle_hit_burst` etc. — the builder API they share is already engine), and the `Serving`/`Playing`/`GameOver` input-flow skeleton. These may be paddle-genre coincidence. Decision point: when Space Invaders (game 3) is built, promote whatever it duplicates a third time; whatever it doesn't need stays game code. Promoting them now risks an `arcade` module shaped like "games we happened to build first" — exactly the utility pollution to avoid.
 
-### GPP-04 · Dirty Flag — transform hierarchy fully recomputed every frame
+### GPP-04 · Dirty Flag — transform hierarchy fully recomputed every frame — ✅ RESOLVED (Jul 13 2026, value-compare cache; see `log_archive.md` § ecs)
 
 **Evidence:** `crates/ecs/src/hierarchy_system.rs:88-113` — `TransformHierarchySystem::update` unconditionally recomputes `GlobalTransform2D` for every entity every frame: full root scan, then recursive `propagate_transforms` (`:141-164`) which clones the parent global and allocates a children `Vec` per node. Static subtrees pay full price forever. This is the exact motivating example of the [Dirty Flag chapter](https://gameprogrammingpatterns.com/dirty-flag.html).
 
@@ -133,7 +133,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Evidence:** `sync_entity_to_physics` (`crates/physics/src/physics_system/sync.rs:41-81`) inserts bodies/colliders only when absent; after creation rapier is authoritative and editing `Transform2D` or `Collider` on a live entity does nothing (documented in physics/CLAUDE.md and the root CLAUDE.md footguns, and visible in the editor: the collider overlay updates instantly while the simulation keeps stale shapes). This is a missing change-detection design — the engine has no way to *notice* the ECS-side edit.
 
-**Fix plan (Dirty Flag):** Piggyback on GPP-04's change tracking: when `Transform2D`/`Collider`/`RigidBody` on an entity with a live body is mutated, mark it; `sync_entity_to_physics` then pushes the edit (`set_body_transform` for transforms, collider rebuild for shape changes). This turns two documented footguns (this one and "editor collider edits don't reach the simulation") into working behavior. Until then it stays a footgun — now at least a *tracked* one.
+**Fix plan (Dirty Flag):** *Decision of record (GPP-04, Jul 13 2026): no shared ECS change-tracking infra to piggyback on — GPP-04 was resolved with a system-local value-compare cache.* Physics does the same locally: keep a last-pushed `Transform2D`/`Collider` baseline per live body and compare during sync; on mismatch push the edit (`set_body_transform` for transforms, collider rebuild for shape changes). Physics must update its baseline after its own writeback so rapier-driven motion isn't mistaken for an external edit. This turns two documented footguns (this one and "editor collider edits don't reach the simulation") into working behavior. Until then it stays a footgun — now at least a *tracked* one.
 
 ### GPP-10 · Observer — synchronous collision callbacks are a non-reentrant legacy channel — ✅ RESOLVED (Jul 13 2026: callbacks deleted, see `log_archive.md` § physics)
 
@@ -169,7 +169,7 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 
 **Evidence:** every frame, engine_core re-queries all sprites and rebuilds every batch (`crates/engine_core/src/game.rs:419-453`: fresh `SpriteBatcher`, re-add every sprite, re-sort, clone batches out), and `SpriteBatcher::clear()` (`renderer/src/sprite/batch.rs:116-120`) empties instance Vecs. Capacity is retained (good), the per-batch `sorted` bool is a proper mini dirty flag (good), but for a mostly-static scene the entire CPU-side rebuild is waste the [Dirty Flag chapter](https://gameprogrammingpatterns.com/dirty-flag.html) targets. Related tracked item: renderer ARCH-007 (the scratch-Vec copy in `prepare_sprites`).
 
-**Fix plan (Dirty Flag):** Once GPP-04's change tracking exists, reuse it: rebuild batches only when any `Sprite`/`Transform2D`/`GlobalTransform2D` changed or an entity was created/destroyed (a world change-counter is enough — no per-sprite granularity needed at first). Static scenes then upload nothing new. Measure before doing anything finer-grained.
+**Fix plan (Dirty Flag):** *Decision of record (GPP-04, Jul 13 2026): no shared ECS change-tracking infra to reuse — GPP-04 was resolved with a system-local value-compare cache that only covers transforms.* Use a coarse change counter in the render path instead: rebuild batches only when any `Sprite`/`Transform2D` changed or an entity was created/destroyed. Static scenes then upload nothing new. Measure before doing anything finer-grained.
 
 ### GPP-16 · Singleton — global component registry is not extensible
 
@@ -235,5 +235,5 @@ The [Event Queue chapter](https://gameprogrammingpatterns.com/event-queue.html)'
 1b. **GPP-03 part 1** (generic subset: ChaosTheme structure, grid-emit helper, visibility helper, small utils) — do before game 3 so `/new-game` inherits it; part 2 waits for Space Invaders to confirm rule-of-three.
 3. **GPP-08 + GPP-10** (physics event API) — one crate, removes two documented footguns.
 4. **GPP-13** (registry-driven editable inspector) — makes `/add-component` honest.
-5. **GPP-04 → GPP-09 → GPP-15** (change tracking, then its two consumers) — one design, three payoffs.
+5. ~~**GPP-04 → GPP-09 → GPP-15**~~ GPP-04 done (Jul 13 2026, value-compare — no shared infra); GPP-09 and GPP-15 follow the same local-detection pattern independently.
 6. GPP-11/GPP-12/GPP-17 next time breakout is touched; GPP-14 next time editor commands are touched; the rest opportunistically.

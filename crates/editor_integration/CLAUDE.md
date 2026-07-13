@@ -50,7 +50,7 @@ Currently in Phase 2 (Ideal Editor UI). See `PROJECT_ROADMAP.md`.
 See `TECH_DEBT.md` (all files < 600 lines since June 2026; remaining: no file picker, menu-label string matching)
 
 ## Testing
-- 65 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
+- 66 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
 - `entity_ops` is fully headless-testable (no UI dependency)
 
 ## Godot Oracle — When Stuck

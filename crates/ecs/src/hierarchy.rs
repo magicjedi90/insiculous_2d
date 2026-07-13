@@ -99,7 +99,7 @@ impl Children {
 /// (those without a Parent), this equals their local Transform2D. For child entities,
 /// this is the result of multiplying the parent's GlobalTransform2D with the child's
 /// local Transform2D.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GlobalTransform2D {
     /// World-space position
     pub position: Vec2,

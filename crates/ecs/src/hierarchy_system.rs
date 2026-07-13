@@ -2,6 +2,16 @@
 //!
 //! This module provides a system that propagates transforms through the entity hierarchy,
 //! updating GlobalTransform2D components based on the local Transform2D and parent transforms.
+//!
+//! Propagation is dirty-flagged: the system caches the last-propagated local
+//! transform and parent link per entity (value comparison, not mutation
+//! hooks), so a frame where nothing moved recomputes nothing. Any writer is
+//! detected automatically — `get_mut` edits, snapshot restores, reparenting —
+//! because dirtiness is derived from current values. `GlobalTransform2D` is
+//! system-owned: manual writes to it are NOT change-tracked and will be
+//! overwritten the next time the owning entity is dirty.
+
+use std::collections::HashMap;
 
 use crate::entity::EntityId;
 use crate::hierarchy::{GlobalTransform2D, Parent};
@@ -9,6 +19,21 @@ use crate::hierarchy_extension::WorldHierarchyExt;
 use crate::sprite_components::Transform2D;
 use crate::system::System;
 use crate::world::World;
+
+/// One DFS traversal frame: `(entity, parent (id, global) — None for roots,
+/// ancestor_dirty)`.
+type TraversalFrame = (EntityId, Option<(EntityId, GlobalTransform2D)>, bool);
+
+/// Last-propagated state for one entity (the dirty-flag baseline).
+struct CachedNode {
+    /// Local transform as of the last propagation.
+    local: Transform2D,
+    /// Parent link as of the last propagation (None = root).
+    parent: Option<EntityId>,
+    /// Frame stamp of the last visit — entries with a stale stamp belong to
+    /// removed entities and get pruned.
+    stamp: u64,
+}
 
 /// System that propagates transforms through the entity hierarchy
 ///
@@ -54,12 +79,29 @@ use crate::world::World;
 pub struct TransformHierarchySystem {
     /// Whether the system is enabled
     enabled: bool,
+    /// Per-entity dirty-flag baseline (last-propagated local + parent link).
+    cache: HashMap<EntityId, CachedNode>,
+    /// Reusable DFS stack, kept across frames to avoid per-frame allocations.
+    stack: Vec<TraversalFrame>,
+    /// Monotonic update counter used to stamp cache entries.
+    frame: u64,
+    /// How many entities had their global transform recomputed last update.
+    recomputed_last_update: usize,
+    /// How many entities were visited (checked) last update.
+    visited_last_update: usize,
 }
 
 impl TransformHierarchySystem {
     /// Create a new transform hierarchy system
     pub fn new() -> Self {
-        Self { enabled: true }
+        Self {
+            enabled: true,
+            cache: HashMap::new(),
+            stack: Vec::new(),
+            frame: 0,
+            recomputed_last_update: 0,
+            visited_last_update: 0,
+        }
     }
 
     /// Enable or disable the system
@@ -70,6 +112,37 @@ impl TransformHierarchySystem {
     /// Check if the system is enabled
     pub fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// Forget all cached propagation state, forcing a full recompute on the
+    /// next update.
+    ///
+    /// The analogue of `PhysicsSystem::clear()`: call after wholesale world
+    /// replacement (e.g. the editor restoring a `WorldSnapshot`) so no stale
+    /// baseline survives. Not needed for ordinary edits — those are detected
+    /// by value comparison automatically.
+    pub fn reset(&mut self) {
+        self.cache.clear();
+        self.stack.clear();
+        self.recomputed_last_update = 0;
+        self.visited_last_update = 0;
+    }
+
+    /// How many entities had their `GlobalTransform2D` recomputed during the
+    /// most recent update. A fully clean frame reports 0.
+    pub fn recomputed_last_update(&self) -> usize {
+        self.recomputed_last_update
+    }
+
+    /// How many entities were visited (dirty-checked) during the most recent
+    /// update.
+    pub fn visited_last_update(&self) -> usize {
+        self.visited_last_update
+    }
+
+    /// Number of entities currently tracked in the propagation cache.
+    pub fn tracked_entity_count(&self) -> usize {
+        self.cache.len()
     }
 }
 
@@ -90,26 +163,106 @@ impl System for TransformHierarchySystem {
             return;
         }
 
-        // Get all entities - we'll process them in hierarchical order
-        let entities: Vec<EntityId> = world.entities();
+        self.frame += 1;
+        let mut recomputed = 0usize;
+        let mut visited = 0usize;
+        // Cache entries stamped or (re)inserted this frame. If the cache
+        // holds more entries than this afterwards, entities were removed and
+        // the stale entries get pruned.
+        let mut live_entries = 0usize;
 
-        // First, update root entities (entities without Parent component)
-        for &entity in &entities {
-            if world.get::<Parent>(entity).is_none() {
-                // Root entity - GlobalTransform equals local Transform
-                if let Some(local_transform) = world.get::<Transform2D>(entity) {
-                    let global = GlobalTransform2D::from_transform(local_transform);
-                    Self::set_global_transform(world, entity, global);
+        // Seed the reusable stack with root entities (single pass — no
+        // get_root_entities()/entities() Vec allocations).
+        self.stack.clear();
+        self.stack.extend(
+            world
+                .entity_ids()
+                .filter(|&e| world.get::<Parent>(e).is_none())
+                .map(|e| (e, None, false)),
+        );
+
+        while let Some((entity, parent, ancestor_dirty)) = self.stack.pop() {
+            visited += 1;
+
+            let Some(local) = world.get::<Transform2D>(entity).copied() else {
+                // No local transform: nothing to propagate for this entity.
+                // Drop any stale baseline (dirtying the subtree for this
+                // transition frame) and let children propagate against this
+                // entity's stored global, preserving pre-dirty-flag behavior.
+                let was_cached = self.cache.remove(&entity).is_some();
+                let node_global = world
+                    .get::<GlobalTransform2D>(entity)
+                    .copied()
+                    .unwrap_or_default();
+                if let Some(children) = world.get_children(entity) {
+                    let inherit_dirty = ancestor_dirty || was_cached;
+                    self.stack.extend(
+                        children
+                            .iter()
+                            .map(|&c| (c, Some((entity, node_global)), inherit_dirty)),
+                    );
                 }
+                continue;
+            };
+
+            let parent_id = parent.map(|(id, _)| id);
+
+            // Dirty check. The cache stamp must be refreshed on EVERY visit
+            // (not short-circuited past), or pruning would evict live
+            // entities that happened to be clean under a dirty ancestor.
+            let mut dirty = ancestor_dirty;
+            match self.cache.get_mut(&entity) {
+                Some(cached) => {
+                    cached.stamp = self.frame;
+                    live_entries += 1;
+                    if cached.local != local || cached.parent != parent_id {
+                        dirty = true;
+                    }
+                }
+                None => dirty = true,
+            }
+            if !dirty && world.get::<GlobalTransform2D>(entity).is_none() {
+                // Someone removed the (system-owned) global — restore it.
+                dirty = true;
+            }
+
+            let node_global = match parent {
+                None => GlobalTransform2D::from_transform(&local),
+                Some((_, parent_global)) => parent_global.mul_transform(&local),
+            };
+
+            if dirty {
+                recomputed += 1;
+                Self::set_global_transform(world, entity, node_global);
+                if self
+                    .cache
+                    .insert(
+                        entity,
+                        CachedNode { local, parent: parent_id, stamp: self.frame },
+                    )
+                    .is_none()
+                {
+                    live_entries += 1;
+                }
+            }
+
+            if let Some(children) = world.get_children(entity) {
+                self.stack.extend(
+                    children
+                        .iter()
+                        .map(|&c| (c, Some((entity, node_global)), dirty)),
+                );
             }
         }
 
-        // Then, propagate to children in hierarchical order
-        // We need to process entities level by level to ensure parents are updated before children
-        let root_entities = world.get_root_entities();
-        for root in root_entities {
-            self.propagate_transforms(world, root);
+        // Prune baselines of removed entities (only when something vanished).
+        if self.cache.len() > live_entries {
+            let frame = self.frame;
+            self.cache.retain(|_, c| c.stamp == frame);
         }
+
+        self.recomputed_last_update = recomputed;
+        self.visited_last_update = visited;
     }
 
     fn shutdown(&mut self, _world: &mut World) -> Result<(), String> {
@@ -124,42 +277,11 @@ impl System for TransformHierarchySystem {
 
 impl TransformHierarchySystem {
     /// Set or add a GlobalTransform2D component on an entity.
-    ///
-    /// If the entity already has a GlobalTransform2D, updates it.
-    /// Otherwise, adds a new GlobalTransform2D component.
     fn set_global_transform(world: &mut World, entity: EntityId, global: GlobalTransform2D) {
-        if world.get::<GlobalTransform2D>(entity).is_some() {
-            if let Some(global_transform) = world.get_mut::<GlobalTransform2D>(entity) {
-                *global_transform = global;
-            }
+        if let Some(existing) = world.get_mut::<GlobalTransform2D>(entity) {
+            *existing = global;
         } else {
             world.add_component(&entity, global).ok();
-        }
-    }
-
-    /// Recursively propagate transforms from parent to children
-    fn propagate_transforms(&self, world: &mut World, entity: EntityId) {
-        // Get the parent's global transform (if this entity has children)
-        let parent_global = world
-            .get::<GlobalTransform2D>(entity)
-            .cloned()
-            .unwrap_or_default();
-
-        // Get children of this entity
-        let children: Vec<EntityId> = world
-            .get_children(entity)
-            .map(|c| c.to_vec())
-            .unwrap_or_default();
-
-        // Update each child's global transform
-        for child in children {
-            if let Some(local_transform) = world.get::<Transform2D>(child) {
-                let child_global = parent_global.mul_transform(local_transform);
-                Self::set_global_transform(world, child, child_global);
-            }
-
-            // Recursively propagate to grandchildren
-            self.propagate_transforms(world, child);
         }
     }
 }

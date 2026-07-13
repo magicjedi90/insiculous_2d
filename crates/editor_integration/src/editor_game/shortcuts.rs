@@ -69,6 +69,10 @@ impl<G: Game> EditorGame<G> {
                     // Restore world from snapshot
                     if let Some(snapshot) = self.world_snapshot.take() {
                         snapshot.restore(world);
+                        // The world was wholesale-replaced: drop the transform
+                        // system's propagation baselines so no stale cache
+                        // entry survives the restore.
+                        self.transform_system.reset();
                         log::info!("Stop: world restored from snapshot");
                     }
                     self.editor.set_play_state(EditorPlayState::Editing);

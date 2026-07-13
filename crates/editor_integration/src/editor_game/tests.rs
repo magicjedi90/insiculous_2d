@@ -126,6 +126,38 @@ fn test_stop_restores_world_state() {
 }
 
 #[test]
+fn test_stop_resets_transform_propagation_cache() {
+    use ecs::System;
+
+    let mut editor = EditorGame::new(DummyGame);
+    let mut world = ecs::World::new();
+    let entity = world.create_entity();
+    world.add_component(&entity, common::Transform2D::new(glam::Vec2::new(10.0, 20.0))).ok();
+
+    // Propagate once so the transform system has a cached baseline.
+    editor.transform_system.update(&mut world, 0.016);
+    assert_eq!(editor.transform_system.tracked_entity_count(), 1);
+
+    // Play, mutate during play, Stop (restores the snapshot).
+    editor.handle_play_action(PlayControlAction::Play, &mut world);
+    if let Some(t) = world.get_mut::<common::Transform2D>(entity) {
+        t.position = glam::Vec2::new(999.0, 999.0);
+    }
+    editor.handle_play_action(PlayControlAction::Stop, &mut world);
+
+    // The restore wholesale-replaced the world — the propagation baseline
+    // must have been dropped so the next update recomputes from scratch.
+    assert_eq!(
+        editor.transform_system.tracked_entity_count(),
+        0,
+        "Stop must reset the transform system's cache"
+    );
+    editor.transform_system.update(&mut world, 0.016);
+    let global = world.get::<ecs::GlobalTransform2D>(entity).unwrap();
+    assert_eq!(global.position, glam::Vec2::new(10.0, 20.0));
+}
+
+#[test]
 fn test_build_pickable_entities_with_both_components() {
     let mut world = ecs::World::new();
     let entity = world.create_entity();
