@@ -216,6 +216,11 @@ struct GameRunner<G: Game> {
     /// Line vertex buffer that the game fills each frame and the engine
     /// uploads to the renderer. Cleared before every `update()`.
     lines: Vec<renderer::line_pipeline::LineVertex>,
+    /// Persistent sprite batchers, cleared (capacity retained) each frame —
+    /// no per-frame HashMap/Vec churn (GPP-15). Game and UI sprites batch
+    /// separately so UI never shares a batch with (and paints over) sprites.
+    game_batcher: SpriteBatcher,
+    ui_batcher: SpriteBatcher,
     /// Whether the game's init() has been called
     initialized: bool,
 }
@@ -254,6 +259,8 @@ impl<G: Game> GameRunner<G> {
             achievements,
             particles: crate::particles::ParticleManager::default(),
             lines: Vec::new(),
+            game_batcher: SpriteBatcher::new(),
+            ui_batcher: SpriteBatcher::new(),
             initialized: false,
         }
     }
@@ -415,13 +422,15 @@ impl<G: Game> GameRunner<G> {
 
         // Phase 1: Game sprites — render into their own batcher so they never
         // share a batch with UI elements (which would cause UI panel backgrounds
-        // to paint over game sprites due to painter's algorithm).
-        let mut game_batcher = SpriteBatcher::new();
+        // to paint over game sprites due to painter's algorithm). The batchers
+        // are persistent fields: clear() retains capacity, so a steady-state
+        // frame allocates nothing here (GPP-15).
+        self.game_batcher.clear();
         {
             let empty_commands: &[DrawCommand] = &[];
             let mut ctx = RenderContext {
                 world: &self.scene.world,
-                sprites: &mut game_batcher,
+                sprites: &mut self.game_batcher,
                 camera: self.render_manager.camera_mut(),
                 window_size,
                 ui_commands: empty_commands,
@@ -433,25 +442,24 @@ impl<G: Game> GameRunner<G> {
         // Append particle sprites into the game batcher. Particles render
         // after gameplay sprites so they appear on top of static objects
         // but below UI.
-        append_particle_sprites(&mut game_batcher, &self.particles);
+        append_particle_sprites(&mut self.game_batcher, &self.particles);
 
         // Phase 2: UI sprites — separate batcher
-        let mut ui_batcher = SpriteBatcher::new();
-        render_ui_commands(&mut ui_batcher, ui_commands, window_size, self.glyph_textures.textures());
+        self.ui_batcher.clear();
+        render_ui_commands(&mut self.ui_batcher, ui_commands, window_size, self.glyph_textures.textures());
 
-        // Collect and sort game batches (by depth then texture handle for stability)
-        game_batcher.sort_all_batches();
-        let mut game_batches: Vec<SpriteBatch> = game_batcher.batches().values().cloned().collect();
-        Self::sort_batches(&mut game_batches);
-
-        // Collect and sort UI batches
-        ui_batcher.sort_all_batches();
-        let mut ui_batches: Vec<SpriteBatch> = ui_batcher.batches().values().cloned().collect();
-        Self::sort_batches(&mut ui_batches);
-
-        // Combine: game batches first, then UI batches on top
-        game_batches.extend(ui_batches);
-        let batch_refs: Vec<&SpriteBatch> = game_batches.iter().collect();
+        // Sort within each batch, then order the batch refs (game first, then
+        // UI on top; by min depth then texture handle for determinism). Refs
+        // only — batches are never cloned. A persistent batcher can hold
+        // now-empty batches for textures with no sprites this frame; skip them.
+        self.game_batcher.sort_all_batches();
+        self.ui_batcher.sort_all_batches();
+        let mut batch_refs: Vec<&SpriteBatch> =
+            self.game_batcher.batches().values().filter(|b| !b.instances.is_empty()).collect();
+        Self::sort_batch_refs(&mut batch_refs);
+        let game_batch_count = batch_refs.len();
+        batch_refs.extend(self.ui_batcher.batches().values().filter(|b| !b.instances.is_empty()));
+        Self::sort_batch_refs(&mut batch_refs[game_batch_count..]);
 
         // Get textures from asset manager (need to reborrow after RenderContext)
         if let Some(asset_manager) = &self.asset_manager {
@@ -462,8 +470,8 @@ impl<G: Game> GameRunner<G> {
         }
     }
 
-    /// Sort sprite batches by depth (min, then max, then texture handle for determinism).
-    fn sort_batches(batches: &mut [SpriteBatch]) {
+    /// Sort sprite batch refs by depth (min, then max, then texture handle for determinism).
+    fn sort_batch_refs(batches: &mut [&SpriteBatch]) {
         batches.sort_by(|a, b| {
             let a_min = a.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);
             let b_min = b.instances.iter().map(|i| i.depth).min_by(|x, y| x.total_cmp(y)).unwrap_or(0.0);

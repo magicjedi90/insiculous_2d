@@ -10,9 +10,11 @@ use crate::sprite_data::SpriteInstance;
 use crate::texture::TextureHandle;
 
 mod batch;
+mod instance_cache;
 mod pipeline;
 
 pub use batch::{SpriteBatch, SpriteBatcher};
+pub use instance_cache::InstanceCache;
 pub use pipeline::SpritePipeline;
 
 /// A single sprite to be rendered

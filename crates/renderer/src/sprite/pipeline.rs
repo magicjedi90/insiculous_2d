@@ -30,6 +30,9 @@ pub struct SpritePipeline {
     camera_bind_group: wgpu::BindGroup,
     /// Cached texture bind groups (keyed by TextureHandle)
     texture_bind_group_cache: HashMap<TextureHandle, wgpu::BindGroup>,
+    /// Change detector + staging buffer: skips the instance upload when
+    /// nothing on screen changed (GPP-15)
+    instance_cache: super::InstanceCache,
     /// Device reference for creating bind groups and growing buffers
     device: Arc<Device>,
 }
@@ -214,6 +217,7 @@ impl SpritePipeline {
             camera_bind_group_layout,
             camera_bind_group,
             texture_bind_group_cache: HashMap::new(),
+            instance_cache: super::InstanceCache::new(),
             device: device_arc,
         }
     }
@@ -409,19 +413,18 @@ impl SpritePipeline {
         &self.texture_bind_group_layout
     }
 
-    /// Prepare sprite data for rendering by updating instance buffer and creating batches
+    /// Prepare sprite data for rendering by updating the instance buffer.
+    ///
+    /// The upload happens only when the flattened instances or batch layout
+    /// actually changed since the last upload (GPP-15) — a static scene
+    /// re-renders from the buffer already on the GPU.
     pub fn prepare_sprites(&mut self, queue: &Queue, batches: &[&SpriteBatch]) {
-        let mut all_instances = Vec::new();
-
-        // Collect all instances from batches
-        for batch in batches {
-            all_instances.extend_from_slice(&batch.instances);
-        }
-
-        // Update the instance buffer
-        if !all_instances.is_empty() {
-            log::debug!("Preparing {} sprite instances for GPU upload", all_instances.len());
-            self.update_instance_buffer(queue, &all_instances);
+        if self.instance_cache.stage(batches) {
+            let staged = self.instance_cache.staged();
+            if !staged.is_empty() {
+                log::debug!("Uploading {} sprite instances to GPU", staged.len());
+                self.instance_buffer.update(&self.device, queue, staged);
+            }
         }
     }
 }
