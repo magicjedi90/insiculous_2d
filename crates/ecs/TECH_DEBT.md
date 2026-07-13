@@ -28,7 +28,7 @@ Resolved history: root `log_archive.md` § ecs.
 
 ## Future Enhancements (Not Technical Debt)
 
-- **Proper archetype storage (ground-up rewrite):** dense columnar `Vec<T>`, typed push/get without `Box<dyn Component>`, archetype migration, drop handling. Gated on the GPP-02 trigger above.
+- **Cache-friendly storage (gated on the GPP-02 trigger above).** When the trigger fires, evaluate the cheaper step FIRST: a **sparse-set layout** (dense `Vec<T>` per component type + entity→index map) gets the cache contiguity without archetype-migration complexity — and migration cost matters here, because the editor adds/removes components constantly (inspector, undo/redo), a workload archetypes punish and HashMaps tolerate. Full archetype storage (typed columns, migration on add/remove, drop handling) only if sparse sets measurably aren't enough. Decision of record Jul 13 2026.
 - **System scheduling:** dependency graph, parallel execution, system groups.
 - **Component introspection:** reflection, dynamic add/remove by name (pairs with GPP-16), editor integration.
 - **Memory pooling** for entity/component allocations.

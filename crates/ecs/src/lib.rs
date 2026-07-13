@@ -27,6 +27,7 @@ mod world;
 // Domain modules - public for documentation, also re-exported at crate root
 pub mod audio_components;
 pub mod behavior;
+pub mod lifetime;
 pub mod component_registry;
 pub mod event;
 pub mod generation;
@@ -45,6 +46,7 @@ pub mod prelude;
 pub use query::*;
 pub use audio_components::*;
 pub use behavior::*;
+pub use lifetime::{Lifetime, LifetimeSystem};
 pub use component::*;
 pub use component_registry::{global_registry, ComponentMeta};
 pub use ecs_macros::ComponentMeta as DeriveComponentMeta;

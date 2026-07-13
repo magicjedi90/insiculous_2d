@@ -42,6 +42,7 @@ pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::{set_sprites_visible, Name, Sprite};
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;
+pub use ecs::lifetime::{Lifetime, LifetimeSystem};
 pub use ecs::WorldHierarchyExt;
 pub use ecs::System;
 pub use ecs::behavior::{Behavior, EntityTag};
