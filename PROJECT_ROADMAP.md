@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (July 2026):** Core systems complete. 1036 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
+**Engine Status (July 2026):** Core systems complete. 1040 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
 
 ---
 
@@ -26,7 +26,7 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | Scene Editor | ✅ Complete | Entity CRUD, inspector, gizmos, play/pause/stop, undo/redo, save/load |
 | Standalone Editor | ✅ Complete | `cargo run --bin editor -- /path/to/project` |
 | Camera Follow | ❌ Missing | Needed by ~75% of games |
-| Lifetime/Auto-Despawn | ❌ Missing | Bullets, effects, explosions — needed by ~80% of games |
+| Lifetime/Auto-Despawn | ✅ Complete | `Lifetime` component + `LifetimeSystem` (ecs, in prelude) |
 | Tilemap | ❌ Missing | Grid-based levels — needed for Pac-Man, Zelda, roguelikes |
 
 ---
@@ -109,27 +109,7 @@ Behavior::CameraFollow {
 
 ---
 
-### Gap 2: `Lifetime` Component + `LifetimeSystem`
-
-**Blocks:** Game 8 (Galaga — multiple projectiles), 11 (Run & Gun), 16 (Bullet Hell)
-**Nice-to-have for:** Game 3 (Space Invaders), 5 (Asteroids) — buildable without it via manual despawn
-
-**What:** A component that auto-despawns an entity after a given duration. Replaces manual timer tracking in game code for bullets, effects, and debris.
-
-**Location:** `crates/ecs/src/sprite_components.rs` (component) + a new `LifetimeSystem` in `crates/ecs/src/`
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Lifetime {
-    pub remaining: f32,  // Seconds until despawn
-}
-```
-
-`LifetimeSystem::update(&mut world, delta)` decrements all `Lifetime` components and calls `world.destroy_entity()` when `remaining <= 0`.
-
-**Acceptance criteria:** Entity with `Lifetime { remaining: 0.5 }` is despawned exactly once, 0.5s after spawn. Test: entity exists at t=0.4, is gone at t=0.6.
-
-**Estimated scope:** ~60 lines + 4 tests.
+### Gap 2: `Lifetime` Component + `LifetimeSystem` ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
 ---
 

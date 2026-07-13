@@ -32,6 +32,9 @@ Ball bouncing off a paddle, destroying a grid of bricks. Lives in `../games/brea
 
 ## Engine & Editor Milestones (moved from PROJECT_ROADMAP "Archive: Completed Work" and AGENTS.md)
 
+### Roadmap Phase B, Gap 2: Lifetime auto-despawn ☑ (July 13, 2026)
+- `ecs::lifetime` — `Lifetime { remaining }` component + `LifetimeSystem` (both in the engine prelude): ticks every carrier down by the frame delta and `remove_entity`s on expiry (hierarchy auto-detaches; physics GC reclaims rapier state next update). 4 headless tests incl. the roadmap acceptance criterion (alive at t=0.4, gone at t=0.6 for a 0.5s lifetime). Unblocks bullets/effects for Space Invaders, Galaga, Run & Gun, Bullet Hell.
+
 ### Manager Pattern + File Refactoring (January 2026) — COMPLETE (from AGENTS.md)
 - SRP refactoring: `GameRunner.update_and_render()` 110+ lines → 25 lines; 7 focused orchestration methods extracted
 - 5 managers extracted: GameLoopManager, UIManager, RenderManager, WindowManager, SceneManager

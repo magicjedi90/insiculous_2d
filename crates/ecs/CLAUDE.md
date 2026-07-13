@@ -36,6 +36,7 @@ components like any other type, but the physics crate owns their definitions.
 - `query.rs` — Type-safe query system (Single, Pair, Triple)
 - `hierarchy_extension.rs` — Hierarchy operations (WorldHierarchyExt trait)
 - `hierarchy_system.rs` — Dirty-flagged transform propagation (value-compare cache; clean frames recompute nothing; `reset()` after wholesale world replacement)
+- `lifetime.rs` — `Lifetime` component + `LifetimeSystem` (auto-despawn after N seconds; bullets/effects)
 - `component_registry.rs` — Global component type registry
 - `sprite_components.rs` — Built-in component definitions
 
@@ -64,7 +65,7 @@ components like any other type, but the physics crate owns their definitions.
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 188 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
+- 192 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 

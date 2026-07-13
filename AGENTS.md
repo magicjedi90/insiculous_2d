@@ -8,7 +8,7 @@
 ## Project Status (July 2026)
 
 ### Core Systems Complete
-- **ECS**: HashMap-based per-type storage, 188 tests, type-safe queries
+- **ECS**: HashMap-based per-type storage, 192 tests, type-safe queries
 - **Renderer**: WGPU 28.0.0, instanced sprites, 74 tests
 - **Physics**: Rapier2d integration, 64 tests, presets
 - **UI**: Immediate-mode, 80 tests, fontdue integration
@@ -19,7 +19,7 @@
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 66 tests
 
 ### Key Metrics
-- **Total Tests**: 1036/1036 passing (100% success rate), 0 ignored
+- **Total Tests**: 1040/1040 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
 - Games (in `../games/`): breakout 43 tests, pong 5 — both clippy-clean
 
@@ -109,7 +109,7 @@ Notes: Escape is NOT a hard-coded exit — it flows to `Game::on_key_pressed()`.
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 1036 tests
+cargo test --workspace               # Run all 1040 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -133,7 +133,7 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 1036/1036 (100%)
+passed: 1040/1040 (100%)
 ignored: 0
 failed: 0
 ```
