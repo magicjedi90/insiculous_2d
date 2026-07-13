@@ -268,3 +268,37 @@ impl crate::component_registry::ComponentMeta for Camera {
         &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]
     }
 }
+
+/// Set sprite visibility for a batch of entities — the shared mechanism for
+/// "hide gameplay sprites while a menu state is active" (each game decides
+/// WHICH entities and WHEN; the engine owns the loop). Entities without a
+/// `Sprite` are skipped.
+pub fn set_sprites_visible(
+    world: &mut crate::World,
+    entities: impl IntoIterator<Item = crate::EntityId>,
+    visible: bool,
+) {
+    for entity in entities {
+        if let Some(sprite) = world.get_mut::<Sprite>(entity) {
+            sprite.visible = visible;
+        }
+    }
+}
+
+#[cfg(test)]
+mod visibility_tests {
+    use super::*;
+
+    #[test]
+    fn test_set_sprites_visible_toggles_and_skips_spriteless() {
+        let mut world = crate::World::new();
+        let a = world.create_entity();
+        world.add_component(&a, Sprite::new(0)).unwrap();
+        let b = world.create_entity(); // no sprite — must be skipped, not panic
+
+        set_sprites_visible(&mut world, [a, b], false);
+        assert!(!world.get::<Sprite>(a).unwrap().visible);
+        set_sprites_visible(&mut world, [a], true);
+        assert!(world.get::<Sprite>(a).unwrap().visible);
+    }
+}

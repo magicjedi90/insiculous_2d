@@ -30,6 +30,7 @@ mod scene;
 pub mod scene_manager;
 pub mod lifecycle;
 pub mod assets;
+pub mod chaos_theme;
 pub mod behavior_data;
 pub mod scene_data;
 pub mod scene_loader;
@@ -65,8 +66,20 @@ pub use scene_data::{
     BehaviorData, ColliderShapeData, ComponentData, EditorSettings, EntityData, PhysicsSettings,
     PrefabData, RigidBodyTypeData, SceneData, SceneLoadError,
 };
+pub use chaos_theme::ChaosTheme;
 pub use scene_loader::{SceneInstance, SceneLoader};
 pub use texture_ref::TextureResolver;
+
+/// The game's root directory for asset/save anchoring (exe dir when shipped
+/// with an `assets/` folder beside it, the game crate's directory under
+/// `cargo run`). Expands `CARGO_MANIFEST_DIR` at the CALL SITE, so it must
+/// be a macro — a plain engine function would bake in the engine's own path.
+#[macro_export]
+macro_rules! game_root {
+    () => {
+        $crate::assets::game_root_from(env!("CARGO_MANIFEST_DIR"))
+    };
+}
 pub use scene_serializer::{save_scene_to_file, serialize_to_ron, world_to_scene_data};
 pub use render_manager::RenderManager;
 pub use window_manager::{WindowConfig, WindowManager};

@@ -1,9 +1,9 @@
-let# Technical Debt: ecs — LIVE (open items only)
+# Technical Debt: ecs — LIVE (open items only)
 
 Last audited: February 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § ecs.
 
-## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
+## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 (GPP-04 + SRP-003 resolved Jul 13 2026 — dirty-flagged transform propagation, see `log_archive.md`.)
 - [ ] **GPP-02 (Decision of record, Data Locality):** `ComponentStore` = `HashMap<EntityId, Box<dyn Component>>` is the accepted simplicity tradeoff. Future path: dense `Vec<T>` columns / archetype storage + bitset queries (see Future Enhancements below). **Trigger to revisit:** profiling shows component access dominating a frame, or games routinely exceed ~a few thousand live entities.
 - [ ] **GPP-16 (Medium, Singleton):** `global_registry()` registration list is hardcoded (`component_registry.rs:92-107`) — games can't register components; add a one-shot init extension point (root of engine_core ARCH-006).

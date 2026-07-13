@@ -4,6 +4,7 @@
 //! eliminating duplication and ensuring consistency.
 
 pub mod color;
+pub mod hash;
 pub mod transform;
 pub mod camera;
 pub mod rect;
@@ -24,6 +25,7 @@ pub mod prelude {
 
 // Re-export at crate root for convenience
 pub use color::Color;
+pub use hash::{hash_f32, hash_u32};
 pub use transform::Transform2D;
 pub use camera::Camera;
 pub use rect::Rect;

@@ -1,6 +1,6 @@
 # Technical Debt — Workspace Rollup — LIVE (open items only)
 
-Last updated: July 13, 2026 (Game Programming Patterns audit — see `PATTERNS_AUDIT.md`).
+Last updated: July 13, 2026 (Game Programming Patterns audit — closed; history in `log_archive.md`).
 Resolved history for every crate: `log_archive.md`.
 
 This file is the high-level index of open technical debt across the workspace.

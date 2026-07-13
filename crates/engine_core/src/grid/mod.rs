@@ -21,3 +21,48 @@ mod impulse;
 
 pub use grid_mesh::GridMesh;
 pub use impulse::GridImpulse;
+
+/// Advance a spring-mass grid (if any) and push its line vertices into the
+/// engine's per-frame line buffer; when `debug_colliders` is set, overlay
+/// collider outlines in bright emissive magenta so they bloom above sprites.
+///
+/// The shared per-frame driver every game's render path calls:
+/// `grid::step_and_emit_grid(self.grid.as_mut(), ctx.world, ctx.lines, ctx.delta_time, self.debug_colliders)`.
+pub fn step_and_emit_grid(
+    grid: Option<&mut GridMesh>,
+    world: &ecs::World,
+    lines: &mut Vec<renderer::line_pipeline::LineVertex>,
+    delta_time: f32,
+    debug_colliders: bool,
+) {
+    if let Some(grid) = grid {
+        grid.step(delta_time);
+        let verts = grid.build_line_vertices();
+        lines.extend_from_slice(verts);
+    }
+    if debug_colliders {
+        crate::debug::draw_colliders(world, lines, glam::Vec4::new(1.0, 0.2, 1.0, 0.9), 2.0);
+    }
+}
+
+#[cfg(test)]
+mod step_and_emit_tests {
+    use super::*;
+
+    #[test]
+    fn test_step_and_emit_pushes_grid_vertices() {
+        let mut grid = GridMesh::new(4, 4, 10.0, glam::Vec2::ZERO);
+        let world = ecs::World::new();
+        let mut lines = Vec::new();
+        step_and_emit_grid(Some(&mut grid), &world, &mut lines, 1.0 / 60.0, false);
+        assert!(!lines.is_empty(), "grid line vertices must land in the buffer");
+    }
+
+    #[test]
+    fn test_step_and_emit_without_grid_or_colliders_is_a_noop() {
+        let world = ecs::World::new();
+        let mut lines = Vec::new();
+        step_and_emit_grid(None, &world, &mut lines, 1.0 / 60.0, false);
+        assert!(lines.is_empty());
+    }
+}

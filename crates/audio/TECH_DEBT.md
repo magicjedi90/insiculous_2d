@@ -3,7 +3,7 @@
 Last audited: June 11, 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § audio.
 
-## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
+## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 No open items (GPP-L3 resolved Jul 13 2026 — see `log_archive.md`).
 
 ## Known Limitations (By Design — current constraints, not open work)

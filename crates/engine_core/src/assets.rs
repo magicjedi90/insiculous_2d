@@ -303,3 +303,32 @@ mod tests {
         assert!(format!("{}", err).contains("player.png"));
     }
 }
+
+/// Resolve a game's root directory for asset/save anchoring: the
+/// executable's directory when it has an `assets/` folder next to it
+/// (shipped layout), otherwise the given manifest directory so `cargo run`
+/// works from any working directory.
+///
+/// Games call this through the [`game_root!`](crate::game_root) macro so the
+/// *game crate's* `CARGO_MANIFEST_DIR` is baked in, not the engine's.
+pub fn game_root_from(manifest_dir: &str) -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            if dir.join("assets").is_dir() {
+                return dir.to_path_buf();
+            }
+        }
+    }
+    std::path::PathBuf::from(manifest_dir)
+}
+
+#[cfg(test)]
+mod game_root_tests {
+    #[test]
+    fn test_game_root_falls_back_to_manifest_dir() {
+        // The test binary has no assets/ folder next to it, so the manifest
+        // fallback must win.
+        let root = super::game_root_from("/some/game/crate");
+        assert_eq!(root, std::path::PathBuf::from("/some/game/crate"));
+    }
+}

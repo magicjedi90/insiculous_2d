@@ -25,12 +25,13 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `scene_data.rs` — SceneData / PrefabData / EntityData structs (schema incl. `ComponentData::EntityTag`, Sprite `emissive`)
 - `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
 - `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths); `TextureResolver` trait is the GPU seam (AssetManager = production impl, tests stub it)
-- `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save
+- `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save; `game_root_from()` + the `game_root!()` macro (asset/save anchoring — macro so the game crate's manifest dir is baked in)
 - `behavior_runner.rs` — Entity behavior system
 - `lifecycle.rs` — FSM for scene lifecycle
 - `timing.rs` — Timer utilities
 - `contexts.rs` — GameContext, RenderContext
 - `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
+- `chaos_theme.rs` — `ChaosTheme` per-mode presentation tokens (bg/structure/accent/grid colors, banner, particle mult); engine owns structure + default palette, games override via struct-update syntax
 - `pickups.rs` — generic pickup/collectible tracking (`Pickups<K>` keyed by a game-defined kind, `EffectTimer` for timed effects); collection = started-collision events vs a collector set, once per pickup. Used by BOTH Pong (floating power-ups, balls collect) and Breakout (falling drops, paddle collects) — engine owns the mechanism, games own the meaning
 - `ui_integration.rs` — UI-to-renderer bridge
 - `prelude.rs` — Re-exports for `use engine_core::prelude::*`
@@ -42,7 +43,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 186 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 193 passing (incl. 8 doc tests, 3 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

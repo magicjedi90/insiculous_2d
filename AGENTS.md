@@ -8,28 +8,27 @@
 ## Project Status (July 2026)
 
 ### Core Systems Complete
-- **ECS**: HashMap-based per-type storage, 187 tests, type-safe queries
+- **ECS**: HashMap-based per-type storage, 188 tests, type-safe queries
 - **Renderer**: WGPU 28.0.0, instanced sprites, 74 tests
 - **Physics**: Rapier2d integration, 64 tests, presets
 - **UI**: Immediate-mode, 80 tests, fontdue integration
 - **Input**: Event-based, 62 tests, generic action mapping (`InputMapping<A>`)
 - **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
-- **Engine Core**: Game API, managers, scene serializer, generic pickups, 186 tests
+- **Engine Core**: Game API, managers, scene serializer, generic pickups, 193 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 255 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 66 tests
 
 ### Key Metrics
-- **Total Tests**: 1026/1026 passing (100% success rate), 0 ignored
+- **Total Tests**: 1036/1036 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
 - Games (in `../games/`): breakout 43 tests, pong 5 — both clippy-clean
 
 ### Current Priority
-**The 20 Games Challenge** drives the roadmap (see `PROJECT_ROADMAP.md`): Pong ☑ and Breakout ☑ shipped; **Space Invaders (game 3) is next** — promote the game-agnostic shared utilities first (PATTERNS_AUDIT.md GPP-03 part 1) so `/new-game` inherits them. Editor: Phase 1 complete; Phase 2 (Ideal Editor UI) in progress (2F Status Bar done, 2G Theme started).
+**The 20 Games Challenge** drives the roadmap (see `PROJECT_ROADMAP.md`): Pong ☑ and Breakout ☑ shipped; **Space Invaders (game 3) is next** — the game-agnostic shared utilities (ChaosTheme, grid driver, visibility helper, hashing, `game_root!`) are already promoted, so `/new-game` inherits them. Editor: Phase 1 complete; Phase 2 (Ideal Editor UI) in progress (2F Status Bar done, 2G Theme started).
 
 ### Technical Debt (live docs — open work only)
 - Root `TECH_DEBT.md` — workspace rollup with per-crate open counts; detail in `crates/*/TECH_DEBT.md` and `../games/TECH_DEBT.md`
-- `PATTERNS_AUDIT.md` — Game Programming Patterns audit findings with fix plans (GPP-xx ids)
-- `log_archive.md` — resolved/completed history; when you resolve an item, MOVE it there (never leave ✅/strikethrough entries in the live docs)
+- `log_archive.md` — resolved/completed history (incl. the closed Jul 2026 Game Programming Patterns audit); when you resolve an item, MOVE it there (never leave ✅/strikethrough entries in the live docs)
 
 ## AI-Friendly Development Principles
 
@@ -110,7 +109,7 @@ Notes: Escape is NOT a hard-coded exit — it flows to `Game::on_key_pressed()`.
 **Commands:**
 ```bash
 cargo check --workspace              # Fast compile check (no tests)
-cargo test --workspace               # Run all 1026 tests
+cargo test --workspace               # Run all 1036 tests
 cargo test -p editor                 # Run editor tests only
 cargo test -p editor_integration     # Run editor integration tests
 cargo test -p ecs                    # Run ECS tests only
@@ -125,7 +124,6 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 - `training.md` - Detailed API, patterns, examples
 - `PROJECT_ROADMAP.md` - LIVE: tasks, priorities, engine gaps
 - `TECH_DEBT.md` + `crates/*/TECH_DEBT.md` + `../games/TECH_DEBT.md` - LIVE: open debt only
-- `PATTERNS_AUDIT.md` - Game Programming Patterns audit (findings + fix plans)
 - `log_archive.md` - Resolved/completed history (move finished items here)
 - `examples/hello_world.rs` - Working game demonstration
 - `examples/editor_demo.rs` - Editor demo (requires `--features editor`)
@@ -135,7 +133,7 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 1026/1026 (100%)
+passed: 1036/1036 (100%)
 ignored: 0
 failed: 0
 ```

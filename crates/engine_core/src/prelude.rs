@@ -9,6 +9,7 @@ pub use crate::{
     contexts::{GameContext, RenderContext, GlyphCacheKey},
     game_config::GameConfig,
     chaos_mode::ChaosMode,
+    chaos_theme::ChaosTheme,
     achievements::{Achievement, AchievementManager, AchievementError},
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
@@ -31,13 +32,14 @@ pub use crate::{
 
 // Re-export common types (Color, Transform2D, Camera2D, Rect)
 pub use common::{Color, Transform2D, Camera, Rect};
+pub use common::{hash_f32, hash_u32};
 
 // Re-export commonly used types from dependencies
 pub use glam::{Vec2, Vec4};
 
 // Re-export ECS types
 pub use ecs::{EntityId, World};
-pub use ecs::sprite_components::{Name, Sprite};
+pub use ecs::sprite_components::{set_sprites_visible, Name, Sprite};
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;
 pub use ecs::WorldHierarchyExt;

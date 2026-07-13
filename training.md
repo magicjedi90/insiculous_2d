@@ -429,6 +429,11 @@ for mode in ChaosMode::ALL { println!("{}", mode.label()); }
 both flags independently gives you "both behaviors at once" for Insiculous
 mode for free.
 
+For the *look* of each mode, `ChaosTheme::for_mode(mode)` (prelude) provides
+the shared per-mode palette (bg/structure/accent/grid colors, HUD banner,
+particle-count multiplier); games override individual fields with
+struct-update syntax where their art differs.
+
 **Files:** `crates/engine_core/src/chaos_mode.rs`, `game_config.rs`, `contexts.rs`
 
 ### Resource Acquisition Is Initialization (RAII)
@@ -494,9 +499,9 @@ let component = registry.create_component("Health", json)?;
 
 Open technical debt lives in the **live docs**: root `TECH_DEBT.md` (workspace rollup),
 `crates/*/TECH_DEBT.md` (per-crate detail), `../games/TECH_DEBT.md`, and the
-`PROJECT_ROADMAP.md` Technical Debt section. Design-pattern findings with fix plans:
-`PATTERNS_AUDIT.md`. Resolved history: `log_archive.md`. Do not list debt here —
-this file documents APIs and patterns, not status.
+`PROJECT_ROADMAP.md` Technical Debt section. Resolved history (incl. the closed
+Jul 2026 Game Programming Patterns audit): `log_archive.md`. Do not list debt
+here — this file documents APIs and patterns, not status.
 
 ---
 
@@ -509,7 +514,6 @@ this file documents APIs and patterns, not status.
 ├── training.md                 # This file - AI pair programming guide
 ├── PROJECT_ROADMAP.md          # LIVE: tasks, priorities, engine gaps
 ├── TECH_DEBT.md                # LIVE: workspace debt rollup (per-crate detail in crates/*/TECH_DEBT.md)
-├── PATTERNS_AUDIT.md           # Game Programming Patterns audit + fix plans
 ├── log_archive.md              # Completed/resolved work (history)
 ├── README.md                   # Project overview
 ├── crates/

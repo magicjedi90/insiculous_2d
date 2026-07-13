@@ -3,7 +3,7 @@
 Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § ui.
 
-## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
+## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 - [ ] **GPP-L8 (Low, Flyweight):** `GlyphInfo` stores `character`/`font_size` duplicating its cache key (`font/glyph_cache.rs:38-42`); `TextDrawData` char duplication tracked as ARCH-003 below. Strip opportunistically.
 
 ## Open Items

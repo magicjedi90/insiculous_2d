@@ -3,7 +3,7 @@
 Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § physics.
 
-## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
+## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 - [ ] **GPP-L10 (Low):** per-contact-pair `Vec<ContactPoint>` alloc per step (`stepping.rs:161-183`) — reuse buffers if profiling says so.
 
 (GPP-08, GPP-09, GPP-10, GPP-L9 resolved Jul 13 2026 — see `log_archive.md`.)

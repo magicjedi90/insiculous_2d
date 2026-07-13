@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (July 2026):** Core systems complete. 995 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (`PATTERNS_AUDIT.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
+**Engine Status (July 2026):** Core systems complete. 1036 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
 
 ---
 
@@ -228,20 +228,12 @@ Workspace rollup with per-crate counts: root `TECH_DEBT.md`. LOW priority items
 are tracked in `crates/*/TECH_DEBT.md` and are not listed here. Resolved items
 live in `log_archive.md` (live docs carry open work only).
 
-### Game Programming Patterns Audit (July 2026)
-
+### Game Programming Patterns Audit (July 2026) — CLOSED
 Full-codebase audit against the [Game Programming Patterns](https://gameprogrammingpatterns.com/contents.html)
-catalog: **`PATTERNS_AUDIT.md`** (repo root) — 17 numbered findings + 12 Low items, each with
-evidence and a pattern-based fix plan, mirrored as pointer entries in the per-crate
-`TECH_DEBT.md` files and a new `../games/TECH_DEBT.md`. The **High** items:
-
-- [x] **GPP-01 (State):** ~~`BehaviorState` bool soup~~ Resolved Jul 13 2026 (`StateMachine<BehaviorPhase>`; see `log_archive.md`)
-- [ ] **GPP-02 (Data Locality):** HashMap-of-boxes component storage recorded as decision-of-record with a revisit trigger
-
-Notable Medium: **GPP-03 (Flyweight/DRY)** — pong↔breakout duplication; promote only the
-game-agnostic subset (ChaosTheme structure, grid-emit helper, visibility helper, small utils)
-now, defer the genre-flavored subset (spawners, flow skeleton) until game 3 confirms rule-of-three
-(Jesse's call, July 2026).
+catalog, run and largely resolved Jul 13 2026 (15 of 17 numbered findings fixed same-day —
+summary + per-crate resolutions in `log_archive.md`). Remaining open GPP items live in the
+per-crate `TECH_DEBT.md` files and `../games/TECH_DEBT.md` (GPP-03 part 2 awaits game 3's
+rule-of-three; GPP-06/16 are parked with Phase 4 scripting; GPP-02 is a decision of record).
 
 ### Medium Priority
 

@@ -3,7 +3,7 @@
 Last audited: June 2026 (July 2026: Game Programming Patterns audit).
 Resolved history: root `log_archive.md` § editor_integration.
 
-## Game Programming Patterns Audit (July 2026) — see root `PATTERNS_AUDIT.md`
+## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 (GPP-13 resolved Jul 13 2026 — editable inspector is registry-generated; see `log_archive.md`.)
 - **GPP-12 (cross-ref):** ARCH-101 below is the same stringly-typed Type Object smell as breakout's `parse_brick_tag` — see `../games/TECH_DEBT.md`.
 

@@ -4,6 +4,11 @@
 
 ---
 
+## Game Programming Patterns Audit (July 13, 2026) — CLOSED
+A full-codebase audit against Robert Nystrom's *Game Programming Patterns* catalog ran on Jul 13 2026 (originally `PATTERNS_AUDIT.md`, retired the same day once its open items were re-homed in the live TECH_DEBT docs). Final score: **15 of 17 numbered findings resolved same-day** (GPP-01 behavior FSM, GPP-04 dirty-flag transforms, GPP-07 runtime prefabs, GPP-08/09/10 physics event+edit APIs, GPP-13 registry inspector, GPP-14 stable undo ids, GPP-15 upload gating, GPP-17 + 7 of 12 lows, GPP-03 part 1 promotions) — per-crate resolutions below. Still open, tracked in live docs: GPP-02 (data-locality decision of record + revisit trigger — ecs), GPP-03 part 2 / GPP-11 / GPP-12 (games), GPP-06/GPP-16 (behavior/registry extensibility — parked with Phase 4 scripting, engine_core ARCH-006 + ecs), GPP-05/L2/L7/L10/L12 (lows, per-crate). Standing verdict: Command/Event Queue/Component/Object Pool/Flyweight/Service Locator were textbook already; Spatial Partition correctly delegated to rapier.
+
+---
+
 ## Completed Games (20 Games Challenge)
 
 ### Game 1: Pong ☑ (June 2026)
@@ -336,6 +341,15 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 ---
 
 ## games — Resolved Debt
+
+### July 13, 2026 — GPP-03 part 1 (Flyweight/DRY: game-agnostic promotions, promotion #2 under the standing directive)
+- Five pieces of pong↔breakout copy-paste moved into the engine (engine owns the mechanism, games keep semantics/tuning):
+  - **`engine_core::ChaosTheme`** (new `chaos_theme.rs`, in prelude): per-mode presentation tokens (`bg_color`, `structure_color`, `accent_color`, `banner_text`/`banner_color`, `grid_color`, `particle_count_mult`) with the shared neon palette as `for_mode()` defaults; games override via struct-update syntax (breakout keeps a thin `theme_for()` with its 3 Normal-mode colors; pong uses the defaults directly). Fields de-genre'd: `ball_color`→`accent_color`, `wall_color`→`structure_color`.
+  - **`engine_core::grid::step_and_emit_grid(grid, world, lines, dt, debug_colliders)`** — the per-frame grid driver + F1 magenta collider overlay, headless-testable (takes narrow params, not GameContext, since GameContext can't be built without a GPU).
+  - **`ecs::sprite_components::set_sprites_visible(world, entities, visible)`** — the hide-gameplay-sprites-in-menus loop; games keep their entity lists and state matching.
+  - **`common::{hash_u32, hash_f32}`** (new `hash.rs`) — deterministic frame-count hashing, re-exported via the engine prelude.
+  - **`engine_core::game_root!()`** macro + `assets::game_root_from(manifest_dir)` — exe-dir-with-assets → manifest-dir fallback; a macro so the GAME crate's `CARGO_MANIFEST_DIR` is baked in, not the engine's.
+- Both games refactored onto every piece (their tests stay green — the sustainability proof); ~120 lines of duplication deleted. Part 2 (genre-flavored spawners/particle semantics/flow skeleton) deferred to game 3's rule-of-three — tracked in `../games/TECH_DEBT.md`.
 
 ### July 13, 2026 — GPP-17 (magic numbers, breakout)
 - 10 inline tuning literals hoisted from `breakout/src/gameplay.rs` into `constants.rs`: `LAUNCH_ANGLE_SPREAD` (0.6), `BRICK_DAMAGE_COLOR_FACTOR` (0.65), `BRICK_DAMAGE_EMISSIVE_FACTOR` (0.5), `BALL_LOST_BOUNDS_PAD` (60.0), and per-effect grid impulses `GRID_IMPULSE_{PADDLE_HIT,BRICK_DESTROY,BALL_LOST}_{STRENGTH,RADIUS}` (200/70, 260/90, 700/160). Structural literals (hash-recentering 0.5, velocity-epsilon guards) deliberately left in place. Behavior bit-identical; 43 tests green.
