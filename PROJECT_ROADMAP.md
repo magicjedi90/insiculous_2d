@@ -31,9 +31,9 @@ The 20 games challenge is a structured progression: each game teaches new patter
 
 ---
 
-## Phase A: Games 1–5 — Start Now
+## Phase A: Games 1–5 — ☑ COMPLETE (July 2026)
 
-**Engine work required:** None. All five games are buildable today.
+**Engine work required:** None (confirmed — all five shipped without engine changes beyond the planned promotions).
 
 Each game lives in `../games/<name>/` as a standalone cargo project consuming the engine via path deps.
 
@@ -52,15 +52,9 @@ Each game lives in `../games/<name>/` as a standalone cargo project consuming th
 
 ---
 
-### Game 5: Asteroids ☐
+### Game 5: Asteroids ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
-Ship rotates and thrusts in 2D space, asteroids split on hit, screen wraps.
-
-**Teaches:** Rotation-based movement, screen wrap logic, asteroid splitting (spawn new smaller entities), invincibility frames
-**Key components:** `RigidBody` (dynamic ship with angular velocity), asteroid entities (dynamic), bullet entities (kinematic), transform-based rotation
-**Controls:** Left/Right to rotate, Up to thrust, Space to fire.
-**Win condition:** Survive waves, maximize score.
-**Estimated scope:** ~400 lines.
+Phase A is done — all five arcade games shipped.
 
 ---
 

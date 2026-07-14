@@ -84,7 +84,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `hello_world.rs` - Physics platformer with UI, audio, ECS, and scene graph
   - `editor_demo.rs` - Editor wrapping the platformer (`--features editor`)
   - `behavior_demo.rs` - Scene-driven behaviors
-  - Real games live in `../games/` (pong, breakout, space_invaders) — see `PROJECT_ROADMAP.md`
+  - Real games live in `../games/` (pong, breakout, space_invaders, snake, asteroids) — see `PROJECT_ROADMAP.md`
 
 ## Coding Guidelines
 
@@ -531,7 +531,7 @@ here — this file documents APIs and patterns, not status.
 │   ├── editor/                # Editor panels, inspector, gizmos, undo/redo
 │   └── editor_integration/    # EditorGame<G> wrapper, run_game_with_editor()
 ├── examples/                  # hello_world, editor_demo, behavior_demo
-└── ../games/                  # Sibling dir: one cargo project per game (pong, breakout, space_invaders)
+└── ../games/                  # Sibling dir: one cargo project per game (pong, breakout, space_invaders, snake, asteroids)
 ```
 
 ### Key Commands
