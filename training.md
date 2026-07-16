@@ -22,6 +22,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `grid/` - Deformable spring-mass grid effect (general-purpose visual)
   - `glyph_texture_cache.rs` - UI glyph bitmap → GPU texture cache
   - `texture_ref.rs` - Scene texture references (`#white`, `#solid:RRGGBB`, paths)
+  - `tilemap_render.rs` - Tilemap → sprite-batch expansion (default `Game::render` calls it; one batch per tileset)
   - `ui_integration.rs` - UI-to-renderer bridge; `debug.rs` - collider outline drawing
   - `lifecycle.rs` - FSM for scene lifecycle; `timing.rs` - Timer utilities
 
@@ -40,7 +41,8 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `query.rs` - Type-safe query types (Single, Pair, Triple)
   - `hierarchy.rs` / `hierarchy_extension.rs` / `hierarchy_system.rs` - Parent/child links, `WorldHierarchyExt`, transform propagation
   - `sprite_components.rs` - Sprite, Transform2D, Camera components; `sprite_system.rs` - animation
-  - `behavior.rs` - Scene-driven `Behavior` enum + `BehaviorState`
+  - `behavior.rs` - Scene-driven `Behavior` enum + `BehaviorState` (incl. `CameraFollow`)
+  - `tilemap.rs` - `Tilemap` component (row-major tile grid over a tileset; `sprite_instances()` yields plain per-tile data)
   - `state_machine.rs` - `StateMachine` / `HierarchicalStateMachine` FSM components
   - `event.rs` - `EventBus` (typed per-frame event queue)
   - `audio_components.rs` - AudioSource/AudioListener (editor-inspectable data only)

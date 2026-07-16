@@ -59,6 +59,18 @@ Rotating/thrusting ship in zero-g, rocks split on hit, everything wraps. Lives i
 
 ## Engine & Editor Milestones (moved from PROJECT_ROADMAP "Archive: Completed Work" and AGENTS.md)
 
+### Roadmap Phase B, Gap 1: CameraFollow behavior ☑ (July 16, 2026) — PHASE B COMPLETE
+- `Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone }` (8th variant): dt-corrected exponential lerp toward the nearest tagged entity — `alpha = 1 - (1 - lerp_speed)^(dt·60)`, so `lerp_speed` is fraction-per-frame at 60 FPS exactly (0.5 converges within 10 frames per the roadmap acceptance test; 1.0 snaps in one frame), frame-rate independent otherwise. `dead_zone: Some((w, h))` = full-size box centered on the entity, platformer clamp-to-edge semantics (no movement while the focus point is inside; lerps the focus back to the box edge when outside). Offset/dead_zone use `(f32, f32)` tuples per the enum's serde convention.
+- Applied via a new `positions` channel on `BehaviorCommands` (absolute `Transform2D.position` write after velocities — CameraFollow entities carry no RigidBody, no physics branch).
+- **New engine mechanism — main-camera sync:** `RenderManager::sync_main_camera(world)` copies the first `Camera { is_main_camera: true }` + `Transform2D` entity's position onto the render camera each frame, called in `GameRunner::render_frame` before `game.render()` (games can still override `ctx.camera`; worlds without a main-camera entity are untouched — position only, zoom/rotation/viewport stay render-managed). This closed the "world Camera components are inert" gap.
+- Editor: CameraFollow arm in the behavior variant editor (new `ranges::FRACTION` 0..=1 for lerp_speed; dead_zone read-only pending an Option widget). 10 new tests (6 acceptance in `engine_core/tests/camera_follow.rs`, 2 sync, 2 serde).
+
+### Roadmap Phase B, Gap 3: Tilemap component ☑ (July 16, 2026)
+- `ecs::Tilemap { width, height, tile_size, tileset, tiles, tile_uv_size, depth }` (new `crates/ecs/src/tilemap.rs`): row-major grid of tile indices, `0` = empty, value `t` = tileset cell `t-1` counted row-major across `1/tile_uv_size.x` columns. `Transform2D.position` anchors the **center of tile (0,0)**, row 0 on top, rows grow downward (world Y up); `tile_size` in pixels (positions never go through RENDER_UNIT); transform rotation/scale ignored. `depth` defaults to **-1.0** (behind default-depth sprites). `sprite_instances()` yields plain `TileInstance { offset, tex_region }` data (ecs has no renderer dep); short `tiles` vecs truncate instead of panicking.
+- `engine_core/src/tilemap_render.rs` expands every Tilemap+Transform2D entity into the game batcher at the top of the default `Game::render` — whole map shares the tileset's batch (one draw call), static maps upload once via the GPP-15 InstanceCache byte-compare.
+- Wired through all component touchpoints: global ECS registry, scene RON schema (`ComponentData::Tilemap` with `tileset` as a texture-ref string, load via `TextureResolver`, save via `texture_path_fn`), editor registry (`readonly`, Rendering category). 11 new tests (7 component, 2 render expansion, 1 loader round-trip, 1 serializer).
+- Unblocks Frogger (game 6), Tetris, Pac-Man, Zelda, Tower Defense, Sokoban, Roguelike.
+
 ### Roadmap Phase B, Gap 2: Lifetime auto-despawn ☑ (July 13, 2026)
 - `ecs::lifetime` — `Lifetime { remaining }` component + `LifetimeSystem` (both in the engine prelude): ticks every carrier down by the frame delta and `remove_entity`s on expiry (hierarchy auto-detaches; physics GC reclaims rapier state next update). 4 headless tests incl. the roadmap acceptance criterion (alive at t=0.4, gone at t=0.6 for a 0.5s lifetime). Unblocks bullets/effects for Space Invaders, Galaga, Run & Gun, Bullet Hell.
 

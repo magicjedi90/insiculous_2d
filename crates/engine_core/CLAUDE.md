@@ -11,12 +11,13 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Managers: `GameLoopManager`, `UIManager`, `RenderManager`, `WindowManager`, `SceneManager`
 
 ## File Map
-- `game.rs` — Game trait, GameConfig, run_game(), GameRunner orchestration (594 lines)
+- `game.rs` — Game trait, GameConfig, run_game(), GameRunner orchestration (608 lines — over the 600 cap; split before adding logic, new render passes go in their own module like `tilemap_render.rs`)
 - `glyph_texture_cache.rs` — GlyphTextureCache: UI glyph bitmap → GPU texture cache (extracted from GameRunner)
 - `game_config.rs` — GameConfig struct
 - `game_loop_manager.rs` — Frame timing and delta
 - `ui_manager.rs` — UI lifecycle and draw commands
-- `render_manager.rs` — Renderer lifecycle
+- `render_manager.rs` — Renderer lifecycle; `sync_main_camera(world)` copies the main-camera entity's Transform2D position onto the render camera each frame (position only; no-op without a `Camera { is_main_camera: true }` entity)
+- `tilemap_render.rs` — expands `Tilemap` + `Transform2D` entities into the game sprite batcher (called at the top of the default `Game::render`; one batch per tileset)
 - `window_manager.rs` — Window creation
 - `scene.rs` — Scene lifecycle / world coordination
 - `scene_manager.rs` — Scene loading and entity instantiation
@@ -45,7 +46,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 201 passing (incl. 10 doc tests, 4 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 213 passing (incl. 10 doc tests, 4 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

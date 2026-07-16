@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (July 2026):** Core systems complete. 1040 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
+**Engine Status (July 2026):** Core systems complete. 1069 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
 
 ---
 
@@ -22,12 +22,12 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | Input | ✅ Complete | Keyboard/mouse, generic `InputMapping<A>` action layer (gamepad state model ready, no gilrs backend yet) |
 | UI | ✅ Complete | Immediate-mode, buttons, sliders, panels |
 | Scene Serialization | ✅ Complete | RON format, prefabs, scene graph hierarchy |
-| Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible` |
+| Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible`, `CameraFollow` |
 | Scene Editor | ✅ Complete | Entity CRUD, inspector, gizmos, play/pause/stop, undo/redo, save/load |
 | Standalone Editor | ✅ Complete | `cargo run --bin editor -- /path/to/project` |
-| Camera Follow | ❌ Missing | Needed by ~75% of games |
+| Camera Follow | ✅ Complete | `Behavior::CameraFollow` + main-camera-entity → render-camera sync |
 | Lifetime/Auto-Despawn | ✅ Complete | `Lifetime` component + `LifetimeSystem` (ecs, in prelude) |
-| Tilemap | ❌ Missing | Grid-based levels — needed for Pac-Man, Zelda, roguelikes |
+| Tilemap | ✅ Complete | `Tilemap` component, batched through the sprite pipeline |
 
 ---
 
@@ -58,64 +58,15 @@ Phase A is done — all five arcade games shipped.
 
 ---
 
-## Phase B: Engine Gap Work
+## Phase B: Engine Gap Work — ☑ COMPLETE (July 2026)
 
-**Three additions unblock Games 6–15.** Each is a small, focused addition with tests. No architectural changes.
+**Three additions unblock Games 6–15.** All shipped.
 
----
-
-### Gap 1: `CameraFollow` Behavior
-
-**Blocks:** Game 10 (Platformer), 11 (Run & Gun), 12 (Zelda), 15 (Metroidvania), 16 (Bullet Hell), 17 (Roguelike), 19 (RTS)
-
-**What:** A built-in behavior that smoothly moves the camera toward a target entity each frame.
-
-**Location:** `crates/ecs/src/behavior.rs` (new variant) + `crates/engine_core/src/behavior_runner.rs` (new handler)
-
-```rust
-Behavior::CameraFollow {
-    target_tag: String,      // Tag of entity to follow
-    lerp_speed: f32,         // 0.0–1.0, how fast camera catches up
-    offset: Vec2,            // Fixed offset from target (e.g. (0, 50) to show above)
-    dead_zone: Option<Vec2>, // Optional: don't move camera inside this box
-}
-```
-
-**Acceptance criteria:** Camera entity with this behavior smoothly follows tagged target. `lerp_speed = 1.0` snaps instantly, `0.05` gives smooth lag. Test: camera converges within 10 frames at lerp 0.5.
-
-**Estimated scope:** ~80 lines + 3 tests.
-
----
+### Gap 1: `CameraFollow` Behavior ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
 ### Gap 2: `Lifetime` Component + `LifetimeSystem` ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
----
-
-### Gap 3: `Tilemap` Component + Rendering
-
-**Blocks:** Game 6 (Frogger), 7 (Tetris overlay), 9 (Pac-Man), 12 (Zelda), 13 (Tower Defense), 14 (Sokoban), 17 (Roguelike)
-
-**What:** A component that holds a grid of tile indices and renders them efficiently using the sprite batch pipeline.
-
-**Location:** `crates/ecs/src/sprite_components.rs` (component) + new rendering pass
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Tilemap {
-    pub width: u32,
-    pub height: u32,
-    pub tile_size: f32,           // World units per tile
-    pub tileset: u32,             // Texture handle for the tileset
-    pub tiles: Vec<u32>,          // tile_index per cell, 0 = empty
-    pub tile_uv_size: Vec2,       // Fraction of tileset per tile (e.g. 1/8 for 8x8 tileset)
-}
-```
-
-Rendering: Each non-zero tile becomes a sprite instance in the existing batch pipeline. No new GPU pipeline needed.
-
-**Acceptance criteria:** Tilemap with a 16x16 grid of tiles renders correctly. Test: `Tilemap::sprite_instances()` returns correct count and UV regions for known input.
-
-**Estimated scope:** ~150 lines + 5 tests.
+### Gap 3: `Tilemap` Component + Rendering ☑ COMPLETE (July 2026) — details in `log_archive.md`
 
 ---
 
