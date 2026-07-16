@@ -5,7 +5,7 @@
 
 use glam::Vec2;
 use ecs::World;
-use input::InputHandler;
+use input::{InputHandler, InputSettings};
 use audio::AudioManager;
 use ui::UIContext;
 use renderer::{line_pipeline::LineVertex, sprite::SpriteBatcher, Camera, texture::TextureHandle};
@@ -45,6 +45,12 @@ impl GlyphCacheKey {
 pub struct GameContext<'a> {
     /// Input handler for keyboard, mouse, and gamepad
     pub input: &'a InputHandler,
+    /// Player-aware input bindings: the universal per-player mapping layer.
+    /// Query with `ctx.players.is_active(PlayerId::P1, GameAction::Action1,
+    /// ctx.input)` or `ctx.players.move_x(PlayerId::P2, ctx.input)`.
+    /// Mutable so games can re-point pads at runtime (`assign_pad`); loaded
+    /// from `GameConfig::input_settings_path` when set.
+    pub players: &'a mut InputSettings,
     /// The ECS world for entity/component management
     pub world: &'a mut World,
     /// Asset manager for loading textures and other resources

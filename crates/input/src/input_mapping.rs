@@ -44,15 +44,20 @@
 //!   and was active last frame (releasing one source while another is still
 //!   held does **not** trigger)
 
-use crate::gamepad::GamepadButton;
+use crate::gamepad::{AxisDirection, GamepadAxis, GamepadButton};
 use crate::input_handler::InputHandler;
 use std::collections::HashMap;
 use std::hash::Hash;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
+/// How far an analog axis must travel (after dead-zone normalization) before
+/// an axis-bound action counts as "pressed". Fixed engine-wide; per-binding
+/// thresholds are future work.
+pub const AXIS_ACTIVATION_THRESHOLD: f32 = 0.5;
+
 /// Represents different types of input sources
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum InputSource {
     /// Keyboard key
     Keyboard(KeyCode),
@@ -60,6 +65,10 @@ pub enum InputSource {
     Mouse(MouseButton),
     /// Gamepad button (with gamepad ID)
     Gamepad(u32, GamepadButton),
+    /// Gamepad analog axis used as a digital input (with gamepad ID).
+    /// Active while the axis is past [`AXIS_ACTIVATION_THRESHOLD`] in the
+    /// given direction.
+    GamepadAxis(u32, GamepadAxis, AxisDirection),
 }
 
 /// Built-in action preset for the engine's data-driven behaviors and demos.
@@ -68,7 +77,7 @@ pub enum InputSource {
 /// enums and use them with [`InputMapping`] directly. The engine uses this
 /// preset for scene-defined behaviors (e.g. `PlayerControlled` movement),
 /// bound via [`InputMapping::with_default_bindings`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum GameAction {
     /// Movement actions
     MoveUp,
@@ -203,15 +212,20 @@ impl<A: Copy + Eq + Hash> InputMapping<A> {
     }
 
     /// Whether the action was active on the previous frame.
-    ///
-    /// A source was pressed last frame if it is currently pressed but not
-    /// just-pressed, or if it was just released this frame.
     fn was_active(&self, action: A, input: &InputHandler) -> bool {
-        self.bindings(action).iter().any(|source| {
-            (input.is_source_pressed(source) && !input.is_source_just_pressed(source))
-                || input.is_source_just_released(source)
-        })
+        self.bindings(action)
+            .iter()
+            .any(|source| source_was_pressed(source, input))
     }
+}
+
+/// Whether a source was pressed on the previous frame, reconstructed from the
+/// current frame's state: currently pressed but not just-pressed, or just
+/// released this frame. Shared by [`InputMapping`] and the player-aware
+/// settings layer so edge semantics never diverge.
+pub(crate) fn source_was_pressed(source: &InputSource, input: &InputHandler) -> bool {
+    (input.is_source_pressed(source) && !input.is_source_just_pressed(source))
+        || input.is_source_just_released(source)
 }
 
 impl InputMapping<GameAction> {
@@ -230,6 +244,28 @@ impl InputMapping<GameAction> {
         mapping.bind(GameAction::MoveLeft, InputSource::Keyboard(KeyCode::ArrowLeft));
         mapping.bind(GameAction::MoveRight, InputSource::Keyboard(KeyCode::KeyD));
         mapping.bind(GameAction::MoveRight, InputSource::Keyboard(KeyCode::ArrowRight));
+
+        // Gamepad 0 movement: dpad + left stick (stick Y positive = up)
+        mapping.bind(GameAction::MoveUp, InputSource::Gamepad(0, GamepadButton::DPadUp));
+        mapping.bind(GameAction::MoveDown, InputSource::Gamepad(0, GamepadButton::DPadDown));
+        mapping.bind(GameAction::MoveLeft, InputSource::Gamepad(0, GamepadButton::DPadLeft));
+        mapping.bind(GameAction::MoveRight, InputSource::Gamepad(0, GamepadButton::DPadRight));
+        mapping.bind(
+            GameAction::MoveUp,
+            InputSource::GamepadAxis(0, GamepadAxis::LeftStickY, AxisDirection::Positive),
+        );
+        mapping.bind(
+            GameAction::MoveDown,
+            InputSource::GamepadAxis(0, GamepadAxis::LeftStickY, AxisDirection::Negative),
+        );
+        mapping.bind(
+            GameAction::MoveLeft,
+            InputSource::GamepadAxis(0, GamepadAxis::LeftStickX, AxisDirection::Negative),
+        );
+        mapping.bind(
+            GameAction::MoveRight,
+            InputSource::GamepadAxis(0, GamepadAxis::LeftStickX, AxisDirection::Positive),
+        );
 
         // Actions
         mapping.bind(GameAction::Action1, InputSource::Keyboard(KeyCode::Space));

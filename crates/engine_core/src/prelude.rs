@@ -53,7 +53,10 @@ pub use ecs::behavior::{Behavior, EntityTag};
 pub use ecs::{StateMachine, HierarchicalStateMachine, EventBus, ResourceStorage};
 
 // Re-export input types (KeyCode/MouseButton re-exported through input crate, not directly from winit)
-pub use input::prelude::{KeyCode, MouseButton};
+pub use input::prelude::{
+    AxisDirection, GameAction, GamepadAxis, GamepadButton, InputSettings, KeyCode, MouseButton,
+    PlayerId,
+};
 
 // Re-export renderer types
 pub use renderer::{TextureHandle, TextureLoadConfig};

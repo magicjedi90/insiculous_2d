@@ -209,3 +209,93 @@ fn test_source_checks_on_handler() {
     assert!(!input.is_source_pressed(&space));
     assert!(input.is_source_just_released(&space));
 }
+
+#[test]
+fn test_axis_source_drives_action_across_frames() {
+    let mut input = InputHandler::new();
+    let mut actions = InputMapping::new();
+    actions.bind(
+        GameAction::MoveRight,
+        InputSource::GamepadAxis(0, GamepadAxis::LeftStickX, AxisDirection::Positive),
+    );
+
+    // Frame 1: stick pushed right past the threshold — edge fires
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, 0.8));
+    input.process_queued_events();
+    assert!(actions.is_active(GameAction::MoveRight, &input));
+    assert!(actions.just_activated(GameAction::MoveRight, &input));
+    input.end_frame();
+
+    // Frame 2: stick still held — active, but no re-trigger
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, 0.9));
+    input.process_queued_events();
+    assert!(actions.is_active(GameAction::MoveRight, &input));
+    assert!(!actions.just_activated(GameAction::MoveRight, &input));
+    input.end_frame();
+
+    // Frame 3: stick released — deactivation edge fires
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, 0.0));
+    input.process_queued_events();
+    assert!(!actions.is_active(GameAction::MoveRight, &input));
+    assert!(actions.just_deactivated(GameAction::MoveRight, &input));
+}
+
+#[test]
+fn test_negative_axis_binding_ignores_positive_deflection() {
+    let mut input = InputHandler::new();
+    let mut actions = InputMapping::new();
+    actions.bind(
+        GameAction::MoveLeft,
+        InputSource::GamepadAxis(0, GamepadAxis::LeftStickX, AxisDirection::Negative),
+    );
+
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, 0.6));
+    input.process_queued_events();
+    assert!(!actions.is_active(GameAction::MoveLeft, &input));
+    input.end_frame();
+
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, -0.6));
+    input.process_queued_events();
+    assert!(actions.is_active(GameAction::MoveLeft, &input));
+    assert!(actions.just_activated(GameAction::MoveLeft, &input));
+}
+
+#[test]
+fn test_connect_event_registers_and_disconnect_drops_state() {
+    let mut input = InputHandler::new();
+
+    input.queue_event(InputEvent::GamepadConnected(1));
+    input.process_queued_events();
+    assert!(input.gamepads().get_gamepad(1).is_some());
+
+    // Hold a button, then unplug the pad mid-hold
+    input.queue_event(InputEvent::GamepadButtonPressed(1, GamepadButton::A));
+    input.process_queued_events();
+    let source = InputSource::Gamepad(1, GamepadButton::A);
+    assert!(input.is_source_pressed(&source));
+
+    input.queue_event(InputEvent::GamepadDisconnected(1));
+    input.process_queued_events();
+    assert!(input.gamepads().get_gamepad(1).is_none());
+    // State dropped: source reads released, without a just-released edge
+    assert!(!input.is_source_pressed(&source));
+    assert!(!input.is_source_just_released(&source));
+}
+
+#[test]
+fn test_default_bindings_include_pad_zero_movement() {
+    let mut input = InputHandler::new();
+    let actions = InputMapping::with_default_bindings();
+
+    // DPad
+    input.queue_event(InputEvent::GamepadButtonPressed(0, GamepadButton::DPadLeft));
+    input.process_queued_events();
+    assert!(actions.is_active(GameAction::MoveLeft, &input));
+    input.end_frame();
+
+    // Left stick up (positive Y = up)
+    input.queue_event(InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickY, 1.0));
+    input.process_queued_events();
+    assert!(actions.is_active(GameAction::MoveUp, &input));
+    assert!(!actions.is_active(GameAction::MoveDown, &input));
+}

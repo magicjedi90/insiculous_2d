@@ -42,6 +42,8 @@ pub mod window_manager;
 pub mod game_loop_manager;
 pub mod ui_manager;
 pub mod game_config;
+pub mod gamepad_backend;
+pub mod input_settings_io;
 pub mod contexts;
 pub mod ui_integration;
 pub mod chaos_mode;
@@ -89,6 +91,7 @@ pub use window_manager::{WindowConfig, WindowManager};
 pub use game_loop_manager::{GameLoopManager, MAX_DELTA_TIME};
 pub use ui_manager::UIManager;
 pub use game_config::GameConfig;
+pub use input_settings_io::{load_or_create as load_input_settings, save as save_input_settings, InputSettingsError};
 pub use chaos_mode::ChaosMode;
 pub use achievements::{
     Achievement, AchievementError, AchievementManager, ToastStyle, DEFAULT_TOAST_DURATION,

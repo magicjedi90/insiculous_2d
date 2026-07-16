@@ -33,7 +33,8 @@ Resolved history: root `log_archive.md` § engine_core.
 
 ### [SIZE-001] File sizes vs 600-line guideline
 - `scene_loader.rs`: ~583 non-test lines — extract component factory helpers from the `add_component_to_entity` match.
-- `game.rs`: 643 total incl. docs — extracting `GameRunner` to `game_runner.rs` would resolve.
+- `game.rs`: RESOLVED Jul 16 2026 — render tail extracted to child module `game/render.rs` (530 lines remain).
+- `behavior_runner.rs`: 763 lines (pre-existing) — split the per-behavior handlers into a `behavior_runner/` directory on the next substantive change.
 
 ### [DOC-001] Doc gaps
 - `scene_serializer.rs:190` `behavior_to_data()` undocumented; `ui_manager.rs:22` `begin_frame()` undocumented; `contexts.rs:77` `lines` buffer append-vs-replace contract undocumented.

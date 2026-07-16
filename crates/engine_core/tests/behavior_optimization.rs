@@ -109,3 +109,39 @@ fn test_behavior_runner_with_physics_integration() {
     assert!(world.get::<BehaviorState>(player).is_some(), "Player should have BehaviorState component");
     // FollowEntity behavior doesn't persist state, so no BehaviorState expected
 }
+#[test]
+fn test_platformer_jump_fires_from_gamepad_action_and_from_space() {
+    // Jump reads GameAction::Action1 (not a raw Space key), so pad-0 A must
+    // trigger it. Observable headlessly: the jump cooldown timer arms.
+    use input::{GamepadButton, InputEvent};
+    use winit::keyboard::KeyCode;
+
+    for event in [
+        InputEvent::GamepadButtonPressed(0, GamepadButton::A),
+        InputEvent::KeyPressed(KeyCode::Space),
+    ] {
+        let mut world = World::new();
+        let mut behavior_runner = BehaviorRunner::new();
+        let mut input = InputHandler::new();
+
+        let player = world.create_entity();
+        world.add_component(&player, Transform2D::new(Vec2::ZERO)).unwrap();
+        world.add_component(&player, Behavior::PlayerPlatformer {
+            move_speed: 120.0,
+            jump_impulse: 420.0,
+            jump_cooldown: 0.3,
+            tag: "player".to_string(),
+        }).unwrap();
+
+        input.queue_event(event.clone());
+        input.process_queued_events();
+        behavior_runner.update(&mut world, &input, 0.016, None);
+
+        let state = world.get::<BehaviorState>(player).expect("platformer keeps state");
+        assert!(
+            state.timer > 0.0,
+            "jump cooldown should arm after {:?} — jump did not fire",
+            event
+        );
+    }
+}

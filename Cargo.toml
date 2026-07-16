@@ -27,7 +27,8 @@ common = { path = "crates/common" }
 log = "0.4"
 env_logger = "0.11"
 wgpu = "28.0"
-winit = "0.30"
+winit = { version = "0.30", features = ["serde"] }
+gilrs = "0.11"
 thiserror = "2.0"
 pollster = "0.4"
 serde = { version = "1.0", features = ["derive"] }

@@ -12,19 +12,20 @@
 - **Renderer**: WGPU 28.0.0, instanced sprites, 74 tests
 - **Physics**: Rapier2d integration, 64 tests, presets
 - **UI**: Immediate-mode, 80 tests, fontdue integration
-- **Input**: Event-based, 62 tests, generic action mapping (`InputMapping<A>`)
+- **Input**: Event-based, 77 tests, generic action mapping (`InputMapping<A>`) + player-aware `InputSettings` layer (P1/P2 device routing, axis-as-button, serde bindings) + gilrs hardware backend in engine_core (GAP-001 closed Jul 2026)
 - **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
-- **Engine Core**: Game API, managers, scene serializer, generic pickups, shared arcade scaffolding (`MenuInput`, `spawn_background`, `default_playfield_grid`, `RENDER_UNIT`), tilemap render pass, main-camera sync, 213 tests
+- **Engine Core**: Game API, managers, scene serializer, generic pickups, shared arcade scaffolding (`MenuInput`, `spawn_background`, `default_playfield_grid`, `RENDER_UNIT`), tilemap render pass, main-camera sync, input-settings JSON persistence, gilrs gamepad backend, 227 tests
 - **Editor**: Dockable panels, viewport, inspector, hierarchy, 255 tests
 - **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 66 tests
 
 ### Key Metrics
-- **Total Tests**: 1069/1069 passing (100% success rate), 0 ignored
+- **Total Tests**: 1098/1098 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
-- Games (in `../games/`): breakout 41 tests, pong 5, space_invaders 25, snake 31, asteroids 37 — all clippy-clean
+- Games (in `../games/`): breakout 47 tests, pong 8, space_invaders 36, snake 38, asteroids 42 — all clippy-clean, all 2-player (Jul 2026)
 
 ### Current Priority
 **The 20 Games Challenge** drives the roadmap (see `PROJECT_ROADMAP.md`): **Phase A complete** — Pong ☑, Breakout ☑, Space Invaders ☑, Snake ☑, Asteroids ☑. **Phase B complete (Jul 2026)** — Gap 1 `CameraFollow` (+ main-camera-entity → render-camera sync), Gap 2 `Lifetime`, Gap 3 `Tilemap` (batched through the sprite pipeline). **Next: game 6 (Frogger)** in `../games/`, first Tilemap consumer. Editor: Phase 1 complete; Phase 2 (Ideal Editor UI) in progress (2F Status Bar done, 2G Theme started).
+**2-Player + universal input (Jul 16 2026)**: every game is now 2-player (Pong 2P human/AI, Breakout co-op top/bottom paddles + dedicated `*_2p` level scenes, Space Invaders & Asteroids co-op, Snake versus) on the engine's player-aware `InputSettings` layer (`ctx.players`, `GameContext`) with JSON-persisted bindings and gamepad-ready menus. Controller hardware works end-to-end via the gilrs backend (GAP-001 closed same day).
 
 ### Technical Debt (live docs — open work only)
 - Root `TECH_DEBT.md` — workspace rollup with per-crate open counts; detail in `crates/*/TECH_DEBT.md` and `../games/TECH_DEBT.md`
@@ -133,7 +134,7 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 1069/1069 (100%)
+passed: 1098/1098 (100%)
 ignored: 0
 failed: 0
 ```

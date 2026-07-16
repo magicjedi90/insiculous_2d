@@ -8,3 +8,4 @@ description = "Input abstraction for the insiculous_2d game engine"
 log = { workspace = true }
 winit = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }

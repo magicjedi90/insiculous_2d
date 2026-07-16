@@ -1,0 +1,511 @@
+//! Player-aware input settings: the universal mapping layer games consume.
+//!
+//! [`InputSettings`] holds one [`PlayerBindings`] per local player. Bindings
+//! are **device-relative**: a [`PlayerSource::PadButton`] means "this player's
+//! assigned pad", and the concrete gamepad id lives in a single field per
+//! player — re-pointing a player at another pad never rewrites bindings.
+//!
+//! Actions use the fixed engine vocabulary [`GameAction`], which is what makes
+//! one persisted settings schema serve every game (see
+//! [`crate::InputMapping`] for game-private action enums).
+//!
+//! ```
+//! use input::{AxisDirection, GameAction, GamepadAxis, InputEvent, InputHandler, InputSettings, PlayerId};
+//! use winit::keyboard::KeyCode;
+//!
+//! let settings = InputSettings::default_two_player();
+//! let mut input = InputHandler::new();
+//!
+//! // W drives player 1's MoveUp; player 2 is on arrows / pad 1
+//! input.queue_event(InputEvent::KeyPressed(KeyCode::KeyW));
+//! input.process_queued_events();
+//! assert!(settings.is_active(PlayerId::P1, GameAction::MoveUp, &input));
+//! assert!(!settings.is_active(PlayerId::P2, GameAction::MoveUp, &input));
+//!
+//! // Merged digital+analog movement, -1.0..=1.0 (+y = up)
+//! assert_eq!(settings.move_y(PlayerId::P1, &input), 1.0);
+//! ```
+
+use crate::gamepad::{AxisDirection, GamepadAxis, GamepadButton};
+use crate::input_handler::InputHandler;
+use crate::input_mapping::{source_was_pressed, GameAction, InputSource};
+use std::collections::HashMap;
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
+
+/// Identifies a local player slot (0-based).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlayerId(pub u8);
+
+impl PlayerId {
+    /// Player 1
+    pub const P1: PlayerId = PlayerId(0);
+    /// Player 2
+    pub const P2: PlayerId = PlayerId(1);
+
+    /// The player's 0-based slot index
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// A device-relative input source in a player's bindings.
+///
+/// Pad sources name no gamepad id — they resolve against the owning
+/// [`PlayerBindings`]' assigned pad at query time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum PlayerSource {
+    /// Keyboard key
+    Keyboard(KeyCode),
+    /// Mouse button
+    Mouse(MouseButton),
+    /// A button on this player's assigned pad
+    PadButton(GamepadButton),
+    /// An analog axis on this player's assigned pad, used as a digital input
+    PadAxis(GamepadAxis, AxisDirection),
+}
+
+/// One player's device assignment and action bindings.
+#[derive(Debug, Clone, Default)]
+pub struct PlayerBindings {
+    /// The gamepad id this player's pad sources resolve against.
+    /// `None` makes every `PadButton`/`PadAxis` binding inert.
+    pad: Option<u32>,
+    /// Action → bound sources
+    bindings: HashMap<GameAction, Vec<PlayerSource>>,
+}
+
+impl PlayerBindings {
+    /// Create empty bindings with no assigned pad
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The gamepad id assigned to this player, if any
+    pub fn pad(&self) -> Option<u32> {
+        self.pad
+    }
+
+    /// Assign (or clear) this player's gamepad
+    pub fn set_pad(&mut self, pad: Option<u32>) {
+        self.pad = pad;
+    }
+
+    /// Bind a source to an action. Binding the same pair twice is a no-op.
+    pub fn bind(&mut self, action: GameAction, source: PlayerSource) {
+        let sources = self.bindings.entry(action).or_default();
+        if !sources.contains(&source) {
+            sources.push(source);
+        }
+    }
+
+    /// Remove one source from an action's bindings
+    pub fn unbind(&mut self, action: GameAction, source: &PlayerSource) {
+        if let Some(sources) = self.bindings.get_mut(&action) {
+            sources.retain(|s| s != source);
+            if sources.is_empty() {
+                self.bindings.remove(&action);
+            }
+        }
+    }
+
+    /// All sources bound to an action
+    pub fn bindings(&self, action: GameAction) -> &[PlayerSource] {
+        self.bindings
+            .get(&action)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// All (action, sources) pairs, for persistence and inspection
+    pub fn all_bindings(&self) -> impl Iterator<Item = (GameAction, &[PlayerSource])> {
+        self.bindings.iter().map(|(a, s)| (*a, s.as_slice()))
+    }
+
+    /// Resolve a device-relative source to a concrete [`InputSource`].
+    /// Pad sources resolve to `None` when no pad is assigned.
+    pub fn resolve(&self, source: PlayerSource) -> Option<InputSource> {
+        match source {
+            PlayerSource::Keyboard(key) => Some(InputSource::Keyboard(key)),
+            PlayerSource::Mouse(button) => Some(InputSource::Mouse(button)),
+            PlayerSource::PadButton(button) => {
+                self.pad.map(|id| InputSource::Gamepad(id, button))
+            }
+            PlayerSource::PadAxis(axis, direction) => self
+                .pad
+                .map(|id| InputSource::GamepadAxis(id, axis, direction)),
+        }
+    }
+
+    /// Resolved sources for an action, filtered by `keep`
+    fn resolved_sources<'a>(
+        &'a self,
+        action: GameAction,
+        keep: impl Fn(&PlayerSource) -> bool + 'a,
+    ) -> impl Iterator<Item = InputSource> + 'a {
+        self.bindings(action)
+            .iter()
+            .filter(move |s| keep(s))
+            .filter_map(|s| self.resolve(*s))
+    }
+
+    fn is_active(&self, action: GameAction, input: &InputHandler) -> bool {
+        self.resolved_sources(action, |_| true)
+            .any(|source| input.is_source_pressed(&source))
+    }
+
+    fn was_active(&self, action: GameAction, input: &InputHandler) -> bool {
+        self.resolved_sources(action, |_| true)
+            .any(|source| source_was_pressed(&source, input))
+    }
+
+    /// Like `is_active`, but only over digital (non-axis) sources — used by
+    /// the merged movement queries so analog granularity isn't flattened to
+    /// ±1 by the axis' own threshold binding.
+    fn is_active_digital(&self, action: GameAction, input: &InputHandler) -> bool {
+        self.resolved_sources(action, |s| !matches!(s, PlayerSource::PadAxis(..)))
+            .any(|source| input.is_source_pressed(&source))
+    }
+}
+
+/// Per-player input settings: device assignment + bindings for every local
+/// player, evaluated against an [`InputHandler`]'s device state.
+#[derive(Debug, Clone)]
+pub struct InputSettings {
+    players: Vec<PlayerBindings>,
+}
+
+impl Default for InputSettings {
+    fn default() -> Self {
+        Self::default_two_player()
+    }
+}
+
+impl InputSettings {
+    /// Build settings from explicit per-player bindings
+    pub fn from_players(players: Vec<PlayerBindings>) -> Self {
+        Self { players }
+    }
+
+    /// The engine's default two-player pairing:
+    ///
+    /// - **P1** — WASD movement, Space + left mouse = Action1, LeftShift =
+    ///   Action2, Escape = Menu, gamepad **0**
+    /// - **P2** — arrow-key movement, Enter = Action1, RightShift = Action2,
+    ///   Escape = Menu, gamepad **1**
+    ///
+    /// Both players' pads bind dpad + left stick to movement, A/B/X/Y to
+    /// Action1-4, Start to Menu, Select to Select. 2-player works with zero,
+    /// one, or two pads connected.
+    pub fn default_two_player() -> Self {
+        let mut p1 = PlayerBindings::new();
+        p1.set_pad(Some(0));
+        p1.bind(GameAction::MoveUp, PlayerSource::Keyboard(KeyCode::KeyW));
+        p1.bind(GameAction::MoveDown, PlayerSource::Keyboard(KeyCode::KeyS));
+        p1.bind(GameAction::MoveLeft, PlayerSource::Keyboard(KeyCode::KeyA));
+        p1.bind(GameAction::MoveRight, PlayerSource::Keyboard(KeyCode::KeyD));
+        p1.bind(GameAction::Action1, PlayerSource::Keyboard(KeyCode::Space));
+        p1.bind(GameAction::Action1, PlayerSource::Mouse(MouseButton::Left));
+        p1.bind(GameAction::Action2, PlayerSource::Keyboard(KeyCode::ShiftLeft));
+        p1.bind(GameAction::Menu, PlayerSource::Keyboard(KeyCode::Escape));
+        bind_standard_pad_layout(&mut p1);
+
+        let mut p2 = PlayerBindings::new();
+        p2.set_pad(Some(1));
+        p2.bind(GameAction::MoveUp, PlayerSource::Keyboard(KeyCode::ArrowUp));
+        p2.bind(GameAction::MoveDown, PlayerSource::Keyboard(KeyCode::ArrowDown));
+        p2.bind(GameAction::MoveLeft, PlayerSource::Keyboard(KeyCode::ArrowLeft));
+        p2.bind(GameAction::MoveRight, PlayerSource::Keyboard(KeyCode::ArrowRight));
+        p2.bind(GameAction::Action1, PlayerSource::Keyboard(KeyCode::Enter));
+        p2.bind(GameAction::Action2, PlayerSource::Keyboard(KeyCode::ShiftRight));
+        p2.bind(GameAction::Menu, PlayerSource::Keyboard(KeyCode::Escape));
+        bind_standard_pad_layout(&mut p2);
+
+        Self {
+            players: vec![p1, p2],
+        }
+    }
+
+    /// Number of configured player slots
+    pub fn player_count(&self) -> usize {
+        self.players.len()
+    }
+
+    /// A player's bindings, if the slot exists
+    pub fn player(&self, player: PlayerId) -> Option<&PlayerBindings> {
+        self.players.get(player.index())
+    }
+
+    /// Mutable access to a player's bindings, if the slot exists
+    pub fn player_mut(&mut self, player: PlayerId) -> Option<&mut PlayerBindings> {
+        self.players.get_mut(player.index())
+    }
+
+    /// Point a player at a different gamepad (or `None` for no pad)
+    pub fn assign_pad(&mut self, player: PlayerId, pad: Option<u32>) {
+        if let Some(bindings) = self.player_mut(player) {
+            bindings.set_pad(pad);
+        }
+    }
+
+    /// The gamepad id assigned to a player, if any
+    pub fn pad_of(&self, player: PlayerId) -> Option<u32> {
+        self.player(player).and_then(|b| b.pad())
+    }
+
+    // ================== Action Queries ==================
+
+    /// Check if a player's action is currently active
+    pub fn is_active(&self, player: PlayerId, action: GameAction, input: &InputHandler) -> bool {
+        self.player(player)
+            .is_some_and(|b| b.is_active(action, input))
+    }
+
+    /// Check if a player's action became active this frame (strict edge:
+    /// pressing a second bound source while one is held does not re-trigger)
+    pub fn just_activated(
+        &self,
+        player: PlayerId,
+        action: GameAction,
+        input: &InputHandler,
+    ) -> bool {
+        self.player(player)
+            .is_some_and(|b| b.is_active(action, input) && !b.was_active(action, input))
+    }
+
+    /// Check if a player's action became inactive this frame
+    pub fn just_deactivated(
+        &self,
+        player: PlayerId,
+        action: GameAction,
+        input: &InputHandler,
+    ) -> bool {
+        self.player(player)
+            .is_some_and(|b| !b.is_active(action, input) && b.was_active(action, input))
+    }
+
+    /// Check if the action is active for **any** player (shared pause,
+    /// restart, "press anything" screens)
+    pub fn is_active_any(&self, action: GameAction, input: &InputHandler) -> bool {
+        self.players.iter().any(|b| b.is_active(action, input))
+    }
+
+    /// Check if the action became active this frame for any player
+    pub fn just_activated_any(&self, action: GameAction, input: &InputHandler) -> bool {
+        (0..self.players.len() as u8)
+            .any(|i| self.just_activated(PlayerId(i), action, input))
+    }
+
+    // ================== Analog Queries ==================
+
+    /// Raw value of an axis on the player's assigned pad (0.0 without a pad)
+    pub fn axis_value(&self, player: PlayerId, axis: GamepadAxis, input: &InputHandler) -> f32 {
+        let Some(pad) = self.pad_of(player) else {
+            return 0.0;
+        };
+        input
+            .gamepads()
+            .get_gamepad(pad)
+            .map(|g| g.axis_value(axis))
+            .unwrap_or(0.0)
+    }
+
+    /// Horizontal movement in `-1.0..=1.0`: digital MoveLeft/MoveRight
+    /// (keys, dpad) merged with the left stick's X axis, clamped.
+    pub fn move_x(&self, player: PlayerId, input: &InputHandler) -> f32 {
+        self.merged_move(
+            player,
+            GameAction::MoveLeft,
+            GameAction::MoveRight,
+            GamepadAxis::LeftStickX,
+            input,
+        )
+    }
+
+    /// Vertical movement in `-1.0..=1.0` with **+1.0 = up**: digital
+    /// MoveDown/MoveUp merged with the left stick's Y axis, clamped.
+    pub fn move_y(&self, player: PlayerId, input: &InputHandler) -> f32 {
+        self.merged_move(
+            player,
+            GameAction::MoveDown,
+            GameAction::MoveUp,
+            GamepadAxis::LeftStickY,
+            input,
+        )
+    }
+
+    /// Digital direction (−1/0/+1 from non-axis sources) plus the raw analog
+    /// axis, clamped to `-1.0..=1.0`. Axis-threshold bindings are excluded
+    /// from the digital half so a half-deflected stick reads as 0.5, not 1.5.
+    fn merged_move(
+        &self,
+        player: PlayerId,
+        negative: GameAction,
+        positive: GameAction,
+        axis: GamepadAxis,
+        input: &InputHandler,
+    ) -> f32 {
+        let Some(bindings) = self.player(player) else {
+            return 0.0;
+        };
+        let digital = (bindings.is_active_digital(positive, input) as i8
+            - bindings.is_active_digital(negative, input) as i8) as f32;
+        let analog = self.axis_value(player, axis, input);
+        (digital + analog).clamp(-1.0, 1.0)
+    }
+}
+
+/// The shared pad layout both default players get: dpad + left stick →
+/// movement, A/B/X/Y → Action1-4, Start → Menu, Select → Select.
+fn bind_standard_pad_layout(bindings: &mut PlayerBindings) {
+    bindings.bind(GameAction::MoveUp, PlayerSource::PadButton(GamepadButton::DPadUp));
+    bindings.bind(GameAction::MoveDown, PlayerSource::PadButton(GamepadButton::DPadDown));
+    bindings.bind(GameAction::MoveLeft, PlayerSource::PadButton(GamepadButton::DPadLeft));
+    bindings.bind(GameAction::MoveRight, PlayerSource::PadButton(GamepadButton::DPadRight));
+    bindings.bind(
+        GameAction::MoveUp,
+        PlayerSource::PadAxis(GamepadAxis::LeftStickY, AxisDirection::Positive),
+    );
+    bindings.bind(
+        GameAction::MoveDown,
+        PlayerSource::PadAxis(GamepadAxis::LeftStickY, AxisDirection::Negative),
+    );
+    bindings.bind(
+        GameAction::MoveLeft,
+        PlayerSource::PadAxis(GamepadAxis::LeftStickX, AxisDirection::Negative),
+    );
+    bindings.bind(
+        GameAction::MoveRight,
+        PlayerSource::PadAxis(GamepadAxis::LeftStickX, AxisDirection::Positive),
+    );
+    bindings.bind(GameAction::Action1, PlayerSource::PadButton(GamepadButton::A));
+    bindings.bind(GameAction::Action2, PlayerSource::PadButton(GamepadButton::B));
+    bindings.bind(GameAction::Action3, PlayerSource::PadButton(GamepadButton::X));
+    bindings.bind(GameAction::Action4, PlayerSource::PadButton(GamepadButton::Y));
+    bindings.bind(GameAction::Menu, PlayerSource::PadButton(GamepadButton::Start));
+    bindings.bind(GameAction::Select, PlayerSource::PadButton(GamepadButton::Select));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_handler::InputEvent;
+
+    fn frame(input: &mut InputHandler, events: &[InputEvent]) {
+        for event in events {
+            input.queue_event(event.clone());
+        }
+        input.process_queued_events();
+    }
+
+    #[test]
+    fn default_pairing_isolates_player_devices() {
+        let settings = InputSettings::default_two_player();
+        let mut input = InputHandler::new();
+
+        // P1's W and pad-0 A belong to P1 only
+        frame(&mut input, &[
+            InputEvent::KeyPressed(KeyCode::KeyW),
+            InputEvent::GamepadButtonPressed(0, GamepadButton::A),
+        ]);
+        assert!(settings.is_active(PlayerId::P1, GameAction::MoveUp, &input));
+        assert!(settings.is_active(PlayerId::P1, GameAction::Action1, &input));
+        assert!(!settings.is_active(PlayerId::P2, GameAction::MoveUp, &input));
+        assert!(!settings.is_active(PlayerId::P2, GameAction::Action1, &input));
+        input.end_frame();
+
+        // P2's ArrowUp and pad-1 dpad belong to P2 only
+        frame(&mut input, &[
+            InputEvent::KeyReleased(KeyCode::KeyW),
+            InputEvent::GamepadButtonReleased(0, GamepadButton::A),
+            InputEvent::KeyPressed(KeyCode::ArrowUp),
+            InputEvent::GamepadButtonPressed(1, GamepadButton::DPadUp),
+        ]);
+        assert!(settings.is_active(PlayerId::P2, GameAction::MoveUp, &input));
+        assert!(!settings.is_active(PlayerId::P1, GameAction::MoveUp, &input));
+    }
+
+    #[test]
+    fn assign_pad_repoints_pad_sources_without_touching_keyboard() {
+        let mut settings = InputSettings::default_two_player();
+        let mut input = InputHandler::new();
+
+        // Re-point P1 at pad 3: pad 0 stops driving P1, pad 3 starts
+        settings.assign_pad(PlayerId::P1, Some(3));
+        frame(&mut input, &[InputEvent::GamepadButtonPressed(0, GamepadButton::A)]);
+        assert!(!settings.is_active(PlayerId::P1, GameAction::Action1, &input));
+        input.end_frame();
+
+        frame(&mut input, &[InputEvent::GamepadButtonPressed(3, GamepadButton::A)]);
+        assert!(settings.is_active(PlayerId::P1, GameAction::Action1, &input));
+        input.end_frame();
+
+        // Keyboard cluster unaffected by the re-point
+        frame(&mut input, &[InputEvent::KeyPressed(KeyCode::KeyW)]);
+        assert!(settings.is_active(PlayerId::P1, GameAction::MoveUp, &input));
+    }
+
+    #[test]
+    fn unassigned_pad_makes_pad_sources_inert() {
+        let mut settings = InputSettings::default_two_player();
+        settings.assign_pad(PlayerId::P1, None);
+        let mut input = InputHandler::new();
+
+        frame(&mut input, &[
+            InputEvent::GamepadButtonPressed(0, GamepadButton::A),
+            InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickX, 1.0),
+        ]);
+        assert!(!settings.is_active(PlayerId::P1, GameAction::Action1, &input));
+        assert_eq!(settings.move_x(PlayerId::P1, &input), 0.0);
+    }
+
+    #[test]
+    fn move_y_merges_digital_and_stick_and_clamps() {
+        let settings = InputSettings::default_two_player();
+        let mut input = InputHandler::new();
+
+        // Stick alone: analog granularity preserved (not flattened to 1.0
+        // by the stick's own threshold binding)
+        frame(&mut input, &[InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickY, 0.6)]);
+        assert!((settings.move_y(PlayerId::P1, &input) - 0.6).abs() < f32::EPSILON);
+        input.end_frame();
+
+        // Key + stick together: clamped to 1.0
+        frame(&mut input, &[InputEvent::KeyPressed(KeyCode::KeyW)]);
+        assert_eq!(settings.move_y(PlayerId::P1, &input), 1.0);
+        input.end_frame();
+
+        // Digital down only: -1.0
+        frame(&mut input, &[
+            InputEvent::KeyReleased(KeyCode::KeyW),
+            InputEvent::GamepadAxisUpdated(0, GamepadAxis::LeftStickY, 0.0),
+            InputEvent::KeyPressed(KeyCode::KeyS),
+        ]);
+        assert_eq!(settings.move_y(PlayerId::P1, &input), -1.0);
+    }
+
+    #[test]
+    fn is_active_any_sees_either_players_menu() {
+        let settings = InputSettings::default_two_player();
+        let mut input = InputHandler::new();
+
+        frame(&mut input, &[InputEvent::GamepadButtonPressed(1, GamepadButton::Start)]);
+        assert!(settings.is_active_any(GameAction::Menu, &input));
+        assert!(!settings.is_active(PlayerId::P1, GameAction::Menu, &input));
+    }
+
+    #[test]
+    fn just_activated_edges_for_pad_relative_axis_source() {
+        let settings = InputSettings::default_two_player();
+        let mut input = InputHandler::new();
+
+        // P2's stick right crosses the threshold: edge fires once
+        frame(&mut input, &[InputEvent::GamepadAxisUpdated(1, GamepadAxis::LeftStickX, 0.8)]);
+        assert!(settings.just_activated(PlayerId::P2, GameAction::MoveRight, &input));
+        input.end_frame();
+
+        frame(&mut input, &[InputEvent::GamepadAxisUpdated(1, GamepadAxis::LeftStickX, 0.9)]);
+        assert!(settings.is_active(PlayerId::P2, GameAction::MoveRight, &input));
+        assert!(!settings.just_activated(PlayerId::P2, GameAction::MoveRight, &input));
+    }
+}

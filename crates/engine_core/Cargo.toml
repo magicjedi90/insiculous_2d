@@ -13,6 +13,7 @@ common = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
 winit = { workspace = true }
+gilrs = { workspace = true }
 pollster = { workspace = true }
 glam = { workspace = true }
 serde = { workspace = true }

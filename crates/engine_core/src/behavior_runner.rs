@@ -236,8 +236,10 @@ impl BehaviorRunner {
             commands.velocities.push((entity, vel));
         }
 
-        // Jump - collect impulse to apply AFTER velocity commands
-        if input.is_key_just_pressed(winit::keyboard::KeyCode::Space) && state.timer <= 0.0 {
+        // Jump - collect impulse to apply AFTER velocity commands.
+        // Action1 (Space / pad-0 A / mouse left in the default preset) so
+        // rebinds and gamepad jump work — never a raw key read.
+        if self.actions.just_activated(GameAction::Action1, input) && state.timer <= 0.0 {
             commands.impulses.push((entity, Vec2::new(0.0, jump_impulse)));
             state.timer = jump_cooldown;
         }

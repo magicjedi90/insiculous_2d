@@ -6,7 +6,8 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
 ## Directory Map
 - **crates/engine_core/** - Core functionality including Game API, lifecycle management, and scene coordination
   - `game.rs` - **Simple Game API** - `Game` trait, `run_game()`, GameRunner orchestration
-  - `game_config.rs` - `GameConfig` (window, clear color, target FPS, chaos mode, asset base path)
+  - `game_config.rs` - `GameConfig` (window, clear color, target FPS, chaos mode, asset base path, input settings path)
+  - `input_settings_io.rs` - JSON load/save for player input bindings (defaults written when missing; never panics on bad files)
   - `game_loop_manager.rs` - Game loop timing and frame delta management (the only frame timer)
   - `ui_manager.rs` / `render_manager.rs` / `window_manager.rs` / `scene_manager.rs` - Focused managers (UI lifecycle, renderer lifecycle, window creation, scene stack)
   - `contexts.rs` - `GameContext` / `RenderContext` passed to Game methods
@@ -47,11 +48,12 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `event.rs` - `EventBus` (typed per-frame event queue)
   - `audio_components.rs` - AudioSource/AudioListener (editor-inspectable data only)
 
-- **crates/input/** - Event-based input with a generic action-mapping layer
+- **crates/input/** - Event-based input with action-mapping + player-aware settings layers
   - `input_handler.rs` - Device state (keyboard/mouse/gamepads) + event queue
-  - `input_mapping.rs` - Generic `InputMapping<A>` action bindings (games define action enums)
+  - `input_mapping.rs` - Generic `InputMapping<A>` action bindings (games define action enums); `InputSource` incl. `GamepadAxis` (axis-as-button, threshold 0.5)
+  - `player.rs` - `InputSettings`/`PlayerBindings`/`PlayerId`: per-player device routing (device-relative `PlayerSource`, one `pad` id per player), `move_x/move_y` merged digital+analog — the layer games consume via `ctx.players`
   - `button_tracker.rs` - Shared `ButtonTracker<T>` (pressed/just_pressed/just_released)
-  - `keyboard.rs` / `mouse.rs` / `gamepad.rs` - Per-device state
+  - `keyboard.rs` / `mouse.rs` / `gamepad.rs` - Per-device state (gamepad axes keep a prev-frame snapshot for edges; stick +Y = up)
 
 - **crates/ui/** - Immediate-mode UI framework
   - `context/` - UIContext: lifecycle + primitives (`mod.rs`), labels (`text.rs`), widgets (`widgets.rs`)
@@ -407,6 +409,45 @@ actions, gamepad 0 equivalents) used by scene-defined behaviors like
 `PlayerControlled`; rebind via `BehaviorRunner::actions_mut()`.
 
 **Files:** `input/input_mapping.rs`, `input/input_handler.rs`
+
+### Player-Aware Input Pattern (the universal layer — use this in games)
+`GameContext.players` carries an engine-owned `InputSettings`: per-player
+bindings over the fixed `GameAction` vocabulary with device routing
+(default: P1 = WASD + Space + mouse + gamepad 0; P2 = arrows + Enter +
+gamepad 1). Bindings persist to JSON via `GameConfig::with_input_settings_path`
+(file is hand-editable; defaults written on first run).
+
+```rust
+use engine_core::prelude::*;
+
+fn update(&mut self, ctx: &mut GameContext) {
+    // Digital queries, per player (Action1 = primary: fire/serve/confirm)
+    if ctx.players.just_activated(PlayerId::P2, GameAction::Action1, ctx.input) {
+        // player 2 fired
+    }
+    // Shared actions: either player can pause/restart
+    if ctx.players.just_activated_any(GameAction::Menu, ctx.input) { /* pause */ }
+
+    // Merged movement in -1.0..=1.0 (+y = up): digital keys/dpad merged
+    // with the analog stick, clamped — analog paddle/ship control for free
+    let dx = ctx.players.move_x(PlayerId::P1, ctx.input);
+
+    // Single-player convention: the lone player listens to BOTH slots so
+    // WASD, arrows, and either pad all work
+    let axis = (ctx.players.move_y(PlayerId::P1, ctx.input)
+        + ctx.players.move_y(PlayerId::P2, ctx.input)).clamp(-1.0, 1.0);
+
+    // Runtime pad re-assignment (press-A-to-join screens)
+    ctx.players.assign_pad(PlayerId::P2, Some(3));
+}
+```
+
+Rules of thumb: gameplay never reads raw `KeyCode`s (debug keys like F1 are
+the exception); menus keep using `MenuInput::read(ctx.input)` (it already
+scans every connected pad); the mouse belongs to P1 (raw `ctx.input` reads
+for pointer takeover are P1-only).
+
+**Files:** `input/player.rs`, `engine_core/input_settings_io.rs`, `engine_core/contexts.rs`
 
 ### Chaos Mode Pattern (Cross-Game Theme)
 Every game built on the engine is expected to support a four-tier intensity

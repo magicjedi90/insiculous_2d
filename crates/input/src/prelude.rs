@@ -5,10 +5,11 @@
 
 pub use crate::{
     button_tracker::ButtonTracker,
-    gamepad::{GamepadAxis, GamepadButton, GamepadManager, GamepadState},
-    input_mapping::{GameAction, InputMapping, InputSource},
+    gamepad::{AxisDirection, GamepadAxis, GamepadButton, GamepadManager, GamepadState},
+    input_mapping::{GameAction, InputMapping, InputSource, AXIS_ACTIVATION_THRESHOLD},
     keyboard::KeyboardState,
     mouse::{MousePosition, MouseState},
+    player::{InputSettings, PlayerBindings, PlayerId, PlayerSource},
     InputEvent, InputHandler,
 };
 pub use winit::event::MouseButton;

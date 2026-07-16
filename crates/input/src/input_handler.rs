@@ -32,7 +32,7 @@
 //! For simple use cases, `update()` combines steps 2 and 4 into one call.
 
 use crate::gamepad::GamepadManager;
-use crate::input_mapping::InputSource;
+use crate::input_mapping::{InputSource, AXIS_ACTIVATION_THRESHOLD};
 use crate::keyboard::{convert_physical_key, KeyboardState};
 use crate::mouse::MouseState;
 use std::collections::VecDeque;
@@ -57,7 +57,7 @@ const SCROLL_PIXELS_PER_LINE: f32 = 16.0;
 /// If abstraction becomes necessary (e.g., for non-winit platforms), the conversion can
 /// be added at the boundary in [`InputHandler::handle_window_event`] without changing
 /// the public API.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum InputEvent {
     /// Keyboard key pressed
     KeyPressed(winit::keyboard::KeyCode),
@@ -77,6 +77,12 @@ pub enum InputEvent {
     GamepadButtonReleased(u32, crate::gamepad::GamepadButton),
     /// Gamepad axis updated
     GamepadAxisUpdated(u32, crate::gamepad::GamepadAxis, f32),
+    /// Gamepad connected (backends emit this; pads also auto-register on
+    /// their first button/axis event)
+    GamepadConnected(u32),
+    /// Gamepad disconnected. Drops the pad's state, so all of its sources
+    /// read released afterwards — no just-released edge is emitted.
+    GamepadDisconnected(u32),
 }
 
 /// A unified handler for all input device state
@@ -109,6 +115,10 @@ impl InputHandler {
                 .gamepads
                 .get_gamepad(*id)
                 .is_some_and(|g| g.is_button_pressed(*button)),
+            InputSource::GamepadAxis(id, axis, direction) => self
+                .gamepads
+                .get_gamepad(*id)
+                .is_some_and(|g| g.axis_active(*axis, *direction, AXIS_ACTIVATION_THRESHOLD)),
         }
     }
 
@@ -121,6 +131,11 @@ impl InputHandler {
                 .gamepads
                 .get_gamepad(*id)
                 .is_some_and(|g| g.is_button_just_pressed(*button)),
+            InputSource::GamepadAxis(id, axis, direction) => {
+                self.gamepads.get_gamepad(*id).is_some_and(|g| {
+                    g.axis_just_activated(*axis, *direction, AXIS_ACTIVATION_THRESHOLD)
+                })
+            }
         }
     }
 
@@ -133,6 +148,11 @@ impl InputHandler {
                 .gamepads
                 .get_gamepad(*id)
                 .is_some_and(|g| g.is_button_just_released(*button)),
+            InputSource::GamepadAxis(id, axis, direction) => {
+                self.gamepads.get_gamepad(*id).is_some_and(|g| {
+                    g.axis_just_deactivated(*axis, *direction, AXIS_ACTIVATION_THRESHOLD)
+                })
+            }
         }
     }
 
@@ -189,6 +209,12 @@ impl InputHandler {
             }
             InputEvent::GamepadAxisUpdated(id, axis, value) => {
                 self.gamepads.get_or_register(id).update_axis(axis, value);
+            }
+            InputEvent::GamepadConnected(id) => {
+                self.gamepads.register_gamepad(id);
+            }
+            InputEvent::GamepadDisconnected(id) => {
+                self.gamepads.unregister_gamepad(id);
             }
         }
     }

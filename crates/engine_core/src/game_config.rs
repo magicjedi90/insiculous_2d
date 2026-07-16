@@ -44,6 +44,12 @@ pub struct GameConfig {
     /// default is `assets` relative to the current working directory.
     #[serde(default)]
     pub asset_base_path: Option<String>,
+    /// Optional path to persist player input bindings (JSON). When set, the
+    /// engine loads bindings from this file at startup (writing the defaults
+    /// if it doesn't exist — the file is hand-editable) and saves on exit.
+    /// When `None`, the default two-player bindings are used in memory only.
+    #[serde(default)]
+    pub input_settings_path: Option<String>,
 }
 
 impl Default for GameConfig {
@@ -59,6 +65,7 @@ impl Default for GameConfig {
             chaos_mode: ChaosMode::Normal,
             achievement_save_path: None,
             asset_base_path: None,
+            input_settings_path: None,
         }
     }
 }
@@ -116,6 +123,14 @@ impl GameConfig {
     /// so the game runs correctly regardless of where it's launched from.
     pub fn with_asset_base_path(mut self, path: impl Into<String>) -> Self {
         self.asset_base_path = Some(path.into());
+        self
+    }
+
+    /// Persist player input bindings to this JSON path (loaded at startup,
+    /// defaults written if missing, saved on exit). Parent directories are
+    /// created on first save.
+    pub fn with_input_settings_path(mut self, path: impl Into<String>) -> Self {
+        self.input_settings_path = Some(path.into());
         self
     }
 }
