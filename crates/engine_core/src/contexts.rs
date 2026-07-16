@@ -68,6 +68,17 @@ pub struct GameContext<'a> {
     /// and the engine persists the change, so `ctx.chaos_mode` is always the
     /// current selection on later frames (no stale startup value).
     pub chaos_mode: ChaosMode,
+    /// Engine time multiplier, **read-write** like `chaos_mode` (the engine
+    /// persists writes across frames). Currently scales engine-side particle
+    /// stepping only — set it to `0.0` while paused so bursts freeze with the
+    /// game (`PauseMenu::time_scale()` provides the right value each frame).
+    /// It does NOT scale `ctx.delta_time`; games gate their own logic.
+    pub time_scale: f32,
+    /// Set to `true` to quit the game (title-screen Exit items, the pause
+    /// menu's Exit Game). The engine performs the same clean shutdown as
+    /// closing the window: `Game::on_exit`, input-settings save, scene
+    /// teardown, then the event loop exits at the end of the frame.
+    pub exit_requested: bool,
     /// Achievement / trophy manager. Register achievements in `init()`, then
     /// call `ctx.achievements.unlock("id")` from gameplay code.
     pub achievements: &'a mut AchievementManager,

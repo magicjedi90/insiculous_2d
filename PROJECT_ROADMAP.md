@@ -6,7 +6,7 @@
 
 The 20 games challenge is a structured progression: each game teaches new patterns, exposes engine gaps, and builds confidence. By game 20, we'll have shipped original work.
 
-**Engine Status (July 2026):** Core systems complete. 1098 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
+**Engine Status (July 2026):** Core systems complete. 1109 tests passing (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones are `no_run`). Full DRY/SRP/KISS audit + remediation passes completed for all crates, plus a Game Programming Patterns audit (closed Jul 2026; history in `log_archive.md`) — see `TECH_DEBT.md` for the live workspace rollup and `log_archive.md` for resolved history.
 
 ---
 
@@ -21,6 +21,7 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | Audio | ✅ Complete | Rodio backend, SFX/music/master buses (spatial audio components are editor-only data — no runtime system yet) |
 | Input | ✅ Complete | Keyboard/mouse/gamepads (gilrs backend), `InputMapping<A>`, player-aware `InputSettings` (`ctx.players`: P1/P2 routing, analog axes, JSON-persisted bindings, gamepad menus) |
 | Local 2-Player | ✅ Complete | All 5 games (Jul 2026): Pong 2P, Breakout co-op (top/bottom paddles + `*_2p` levels), Invaders/Asteroids co-op, Snake versus |
+| Pause + Menu Chrome | ✅ Complete | Engine `PauseMenu` (world freeze, Resume/Restart/Quit, `ctx.time_scale`) + `MenuPanel` window chrome — all 5 games (Jul 2026) |
 | UI | ✅ Complete | Immediate-mode, buttons, sliders, panels |
 | Scene Serialization | ✅ Complete | RON format, prefabs, scene graph hierarchy |
 | Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible`, `CameraFollow` |

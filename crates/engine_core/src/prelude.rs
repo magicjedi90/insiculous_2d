@@ -24,6 +24,8 @@ pub use crate::{
     grid::{default_playfield_grid, step_and_emit_grid, GridImpulse, GridMesh},
     // Shared arcade scaffolding
     menu_input::MenuInput,
+    menu_panel::{MenuPanel, MenuStyle},
+    pause::{PauseAction, PauseMenu},
     spawn_helpers::spawn_background,
     RENDER_UNIT,
     // Debug-draw helpers (collider outlines, etc.)

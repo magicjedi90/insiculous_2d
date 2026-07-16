@@ -8,7 +8,8 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `run_game(game, config)` — entry point, creates window + event loop
 - `GameContext` — passed to Game methods: world, input, **players** (per-player
   `InputSettings`: `ctx.players.is_active(PlayerId::P1, GameAction::Action1, ctx.input)`,
-  `move_x/move_y`), assets, ui, physics, delta_time, **chaos_mode**
+  `move_x/move_y`), assets, ui, physics, delta_time, **chaos_mode**, **time_scale**
+  (read-write; scales engine-side particle stepping only — set 0.0 while paused)
 - `ChaosMode` — cross-game Normal/Insane/Ridiculous/Insiculous theme (engine carries the selection, games define the meaning)
 - Managers: `GameLoopManager`, `UIManager`, `RenderManager`, `WindowManager`, `SceneManager`
 
@@ -47,6 +48,15 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `contexts.rs` — GameContext, RenderContext
 - `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
 - `chaos_theme.rs` — `ChaosTheme` per-mode presentation tokens (bg/structure/accent/grid colors, banner, particle mult); engine owns structure + default palette, games override via struct-update syntax
+- `pause.rs` — `PauseMenu`/`PauseAction`: shared pause mechanism (Menu/Esc/Start
+  toggles, Resume/Restart/Quit-to-Title items; games map actions onto their own
+  start_game/reset_to_title and skip their whole gameplay update while active;
+  `time_scale()` feeds `ctx.time_scale` so engine particles freeze too). Takes
+  `&InputSettings + &InputHandler` (NOT GameContext) so it's headless-testable
+- `menu_panel.rs` — `MenuPanel`/`MenuStyle`: shared menu window chrome (opaque
+  themed panel, border, accent separator + corner ticks, ▶-cursor highlight
+  rows, hint footer, input-blocking overlay variant). Flair is rect-based;
+  the ▶ cursor is verified in the games' shared font.ttf
 - `menu_input.rs` — `MenuInput` shared menu-screen input (W/S+arrows up/down, Space/Enter
   confirm, Esc back — plus EVERY connected gamepad: dpad/left-stick edge up/down, A/Start
   confirm, B back) + wraparound `navigate`; used by every game's title/select screens

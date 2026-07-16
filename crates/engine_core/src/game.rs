@@ -190,6 +190,9 @@ struct GameRunner<G: Game> {
     game_loop_manager: GameLoopManager,
     /// Cached glyph textures for text rendering
     glyph_textures: GlyphTextureCache,
+    /// Engine time multiplier mirrored onto `GameContext.time_scale`
+    /// (read-write, persisted like chaos_mode). Scales particle stepping.
+    time_scale: f32,
     /// Main game scene containing ECS world
     scene: Scene,
     /// Achievement / trophy manager
@@ -246,6 +249,7 @@ impl<G: Game> GameRunner<G> {
             ui_manager: UIManager::new(),
             game_loop_manager,
             glyph_textures: GlyphTextureCache::new(),
+            time_scale: 1.0,
             scene: Scene::new("main"),
             achievements,
             particles: crate::particles::ParticleManager::default(),
@@ -363,6 +367,7 @@ impl<G: Game> GameRunner<G> {
             delta_time,
             window_size,
             chaos_mode: self.config.chaos_mode,
+            time_scale: self.time_scale,
             achievements: &mut self.achievements,
             particles: &mut self.particles,
             lines: &mut self.lines,
@@ -375,17 +380,19 @@ impl<G: Game> GameRunner<G> {
 
         self.game.update(&mut ctx);
 
-        // Persist any chaos-mode change the game wrote to the context, so
-        // ctx.chaos_mode reflects the current runtime selection next frame.
+        // Persist any chaos-mode or time-scale change the game wrote to the
+        // context, so both reflect the current runtime selection next frame.
         self.config.chaos_mode = ctx.chaos_mode;
+        self.time_scale = ctx.time_scale;
 
         // Step the particle system after the game's update — emitter
         // accumulators see the latest transforms, and pool stepping
-        // happens once per frame.
+        // happens once per frame. Scaled by time_scale so a paused game
+        // (time_scale 0.0) freezes its particles with the rest of the world.
         crate::particles::ParticleSystem::update(
             &mut self.scene.world,
             &mut self.particles,
-            delta_time,
+            delta_time * self.time_scale,
         );
 
         // Forward the line vertices the game pushed during update to the
@@ -499,6 +506,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             delta_time: 0.0,
                             window_size,
                             chaos_mode: self.config.chaos_mode,
+                            time_scale: self.time_scale,
                             achievements: &mut self.achievements,
                             particles: &mut self.particles,
                             lines: &mut self.lines,
@@ -513,8 +521,10 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             }
                         }
 
-                        // Persist chaos-mode changes made in key handlers too.
+                        // Persist chaos-mode/time-scale changes made in key
+                        // handlers too.
                         self.config.chaos_mode = ctx.chaos_mode;
+                        self.time_scale = ctx.time_scale;
                     }
                 }
             }

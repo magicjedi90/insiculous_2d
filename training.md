@@ -15,7 +15,9 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `scene.rs` / `scene_loader.rs` / `scene_data.rs` / `scene_serializer.rs` - Scene lifecycle, RON load, schema, World→RON save (the ONLY save pipeline)
   - `behavior_runner.rs` / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
   - `chaos_mode.rs` - `ChaosMode` enum (cross-game intensity theme)
-  - `menu_input.rs` - `MenuInput` shared menu navigation (read keys once, wraparound `navigate`)
+  - `menu_input.rs` - `MenuInput` shared menu navigation (read keys once, wraparound `navigate`; scans every connected gamepad)
+  - `pause.rs` - `PauseMenu`/`PauseAction` shared pause mechanism (see Pause Pattern)
+  - `menu_panel.rs` - `MenuPanel`/`MenuStyle` shared menu window chrome (see Menu Chrome Pattern)
   - `spawn_helpers.rs` - Shared entity recipes (`spawn_background`); crate root exports `RENDER_UNIT = 80.0` (pixels per world unit)
   - `pickups.rs` - Generic pickup tracking (`Pickups<K>`, `EffectTimer`)
   - `achievements.rs` - Achievement registry, JSON persistence, toasts
@@ -448,6 +450,60 @@ scans every connected pad); the mouse belongs to P1 (raw `ctx.input` reads
 for pointer takeover are P1-only).
 
 **Files:** `input/player.rs`, `engine_core/input_settings_io.rs`, `engine_core/contexts.rs`
+
+### Pause Pattern (universal — every game ships it)
+The engine owns the mechanism (`PauseMenu`: Menu/Esc/Start toggles, MenuInput
+navigation, Resume/Restart/Quit-to-Title); games own the meaning. Gate your
+entire gameplay update on it, in pausable states only (GameOver keeps its
+direct Menu→title exit):
+
+```rust
+// Top of the gameplay update, BEFORE physics/timers (pausable states only):
+if matches!(self.state, GameState::Playing) {
+    let action = self.pause.update(ctx.players, ctx.input);
+    ctx.time_scale = self.pause.time_scale();   // freezes engine particles
+    match action {
+        PauseAction::Restart => { self.start_game(ctx); return; }
+        PauseAction::QuitToTitle => { self.reset_to_title(ctx.world); return; }
+        PauseAction::Resumed => return, // resume takes effect NEXT frame —
+                                        // the keypress can't leak into gameplay
+        PauseAction::Idle => {}
+    }
+    if self.pause.is_active() { return; } // frozen: no physics/input/logic
+}
+
+// End of the gameplay UI pass (frozen world stays visible underneath):
+if self.pause.is_active() {
+    self.pause.draw(ctx.ui, ctx.window_size, &self.menu_style());
+}
+```
+
+**Files:** `engine_core/pause.rs` (mechanism + tests), any game's `gameplay/mod.rs` + `drawing.rs`/`ui.rs` (integration)
+
+### Menu Chrome Pattern (windows, not floating text)
+Menu screens draw inside a `MenuPanel`: opaque theme-tinted window with a
+border, accent separator, corner ticks, ▶-cursor highlight rows, and a hint
+footer. Style derives from the game's chaos theme so each game keeps its
+identity:
+
+```rust
+fn menu_style(&self) -> MenuStyle { MenuStyle::from_theme(&self.current_theme()) }
+
+fn draw_title(&self, ctx: &mut GameContext, selection: u8) {
+    let style = self.menu_style();
+    let panel = MenuPanel::new("MY GAME", ctx.window_size / 2.0, 360.0, 3);
+    let mut y = panel.begin(ctx.ui, &style);
+    for (i, item) in ["1 Player", "2 Player", "Achievements"].iter().enumerate() {
+        y = panel.item(ctx.ui, y, item, i as u8 == selection, &style);
+    }
+    panel.hint(ctx.ui, "W/S or D-Pad navigate - SPACE or (A) confirm", &style);
+}
+```
+`item_colored` keeps caller-chosen row colors (breakout's level roster);
+`line` adds non-selectable rows (game-over panels); `draw_as_overlay` wraps
+the window in an input-blocking dimmed overlay (how the pause menu renders).
+
+**Files:** `engine_core/menu_panel.rs`, examples in every game's `drawing.rs`/`ui.rs`
 
 ### Chaos Mode Pattern (Cross-Game Theme)
 Every game built on the engine is expected to support a four-tier intensity

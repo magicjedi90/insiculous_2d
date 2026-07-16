@@ -49,6 +49,8 @@ pub mod ui_integration;
 pub mod chaos_mode;
 pub mod achievements;
 pub mod menu_input;
+pub mod menu_panel;
+pub mod pause;
 pub mod spawn_helpers;
 #[cfg(feature = "physics")]
 pub mod pickups;
@@ -91,6 +93,8 @@ pub use window_manager::{WindowConfig, WindowManager};
 pub use game_loop_manager::{GameLoopManager, MAX_DELTA_TIME};
 pub use ui_manager::UIManager;
 pub use game_config::GameConfig;
+pub use menu_panel::{MenuPanel, MenuStyle};
+pub use pause::{PauseAction, PauseMenu};
 pub use input_settings_io::{load_or_create as load_input_settings, save as save_input_settings, InputSettingsError};
 pub use chaos_mode::ChaosMode;
 pub use achievements::{
