@@ -35,6 +35,9 @@ struct BehaviorCommands {
     to_despawn: Vec<EntityId>,
     /// Velocity commands (applied via physics or direct transform)
     velocities: Vec<(EntityId, Vec2)>,
+    /// Absolute position sets (direct transform write, bypasses physics —
+    /// used by CameraFollow, whose entities carry no RigidBody)
+    positions: Vec<(EntityId, Vec2)>,
     /// Impulse commands, applied AFTER velocity commands
     impulses: Vec<(EntityId, Vec2)>,
     /// Tag assignments
@@ -181,6 +184,13 @@ impl BehaviorRunner {
                 Behavior::Collectible { score_value, despawn_on_collect, collector_tag } => {
                     Self::update_collectible(
                         world, entity, *score_value, *despawn_on_collect, collector_tag, &mut commands,
+                    );
+                }
+
+                Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
+                    Self::update_camera_follow(
+                        world, entity, delta_time, target_tag,
+                        *lerp_speed, *offset, *dead_zone, &mut commands,
                     );
                 }
             }
@@ -402,6 +412,51 @@ impl BehaviorRunner {
         commands.velocities.push((entity, vel));
     }
 
+    /// `lerp_speed` is calibrated as fraction-per-frame at this frame rate;
+    /// `update_camera_follow` dt-corrects so other frame rates converge at
+    /// the same wall-clock speed.
+    const CAMERA_LERP_REFERENCE_FPS: f32 = 60.0;
+
+    /// `Behavior::CameraFollow` — exponentially lerp this entity toward the
+    /// nearest tagged entity (plus `offset`), optionally ignoring movement
+    /// while the focus point stays inside a dead-zone box centered on the
+    /// entity (the camera then moves just far enough to keep the focus on
+    /// the box edge).
+    #[allow(clippy::too_many_arguments)]
+    fn update_camera_follow(
+        world: &World,
+        entity: EntityId,
+        delta_time: f32,
+        target_tag: &str,
+        lerp_speed: f32,
+        offset: (f32, f32),
+        dead_zone: Option<(f32, f32)>,
+        commands: &mut BehaviorCommands,
+    ) {
+        let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) else { return };
+        let Some(pos) = Self::get_position(world, entity) else { return };
+
+        let focus = target_pos + Vec2::new(offset.0, offset.1);
+        let desired = match dead_zone {
+            Some((w, h)) => {
+                let delta = focus - pos;
+                let excess = Vec2::new(
+                    delta.x - delta.x.clamp(-w * 0.5, w * 0.5),
+                    delta.y - delta.y.clamp(-h * 0.5, h * 0.5),
+                );
+                pos + excess
+            }
+            None => focus,
+        };
+
+        let lerp = lerp_speed.clamp(0.0, 1.0);
+        let alpha = 1.0 - (1.0 - lerp).powf(delta_time * Self::CAMERA_LERP_REFERENCE_FPS);
+        let new_pos = pos + (desired - pos) * alpha;
+        if new_pos != pos {
+            commands.positions.push((entity, new_pos));
+        }
+    }
+
     /// `Behavior::Collectible` — emit a collection event (and optionally
     /// despawn) when an entity with the collector tag overlaps.
     fn update_collectible(
@@ -464,6 +519,14 @@ impl BehaviorRunner {
                 if let Some(transform) = world.get_mut::<Transform2D>(entity) {
                     transform.position += vel * delta_time;
                 }
+            }
+        }
+
+        // Apply absolute position sets (CameraFollow) — direct transform
+        // writes, independent of physics.
+        for (entity, pos) in commands.positions {
+            if let Some(transform) = world.get_mut::<Transform2D>(entity) {
+                transform.position = pos;
             }
         }
 

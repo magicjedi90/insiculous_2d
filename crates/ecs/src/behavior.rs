@@ -107,6 +107,28 @@ pub enum Behavior {
         #[serde(default = "default_lose_range")]
         lose_interest_range: f32,
     },
+
+    /// Smoothly move this entity toward the nearest entity with a tag.
+    ///
+    /// Intended for camera entities (pair with a main `Camera` component so
+    /// the render camera tracks it), but works on any entity. The entity
+    /// should not carry a `RigidBody` — position is written directly.
+    CameraFollow {
+        /// Tag of the entity to follow
+        #[serde(default = "default_player_tag")]
+        target_tag: String,
+        /// Fraction of the remaining distance covered per frame at 60 FPS,
+        /// 0.0–1.0; 1.0 snaps instantly (dt-corrected at other frame rates)
+        #[serde(default = "default_lerp_speed")]
+        lerp_speed: f32,
+        /// Fixed offset from the target position (x, y)
+        #[serde(default)]
+        offset: (f32, f32),
+        /// Optional dead zone (full width, full height) centered on this
+        /// entity: no movement while the target stays inside the box
+        #[serde(default)]
+        dead_zone: Option<(f32, f32)>,
+    },
 }
 
 // Default value functions for serde
@@ -123,6 +145,7 @@ fn default_chase_speed() -> f32 { 80.0 }
 fn default_lose_range() -> f32 { 300.0 }
 fn default_true() -> bool { true }
 fn default_player_tag() -> String { "player".to_string() }
+fn default_lerp_speed() -> f32 { 0.1 }
 
 impl Default for Behavior {
     fn default() -> Self {
@@ -145,6 +168,7 @@ impl Behavior {
         "Patrol",
         "Collectible",
         "ChaseTagged",
+        "CameraFollow",
     ];
 
     /// Display name of this behavior's variant
@@ -162,6 +186,7 @@ impl Behavior {
             Behavior::Patrol { .. } => 4,
             Behavior::Collectible { .. } => 5,
             Behavior::ChaseTagged { .. } => 6,
+            Behavior::CameraFollow { .. } => 7,
         }
     }
 
@@ -197,11 +222,17 @@ impl Behavior {
                 despawn_on_collect: default_true(),
                 collector_tag: default_player_tag(),
             },
-            _ => Behavior::ChaseTagged {
+            6 => Behavior::ChaseTagged {
                 target_tag: default_player_tag(),
                 detection_range: default_detection_range(),
                 chase_speed: default_chase_speed(),
                 lose_interest_range: default_lose_range(),
+            },
+            _ => Behavior::CameraFollow {
+                target_tag: default_player_tag(),
+                lerp_speed: default_lerp_speed(),
+                offset: (0.0, 0.0),
+                dead_zone: None,
             },
         }
     }
@@ -408,12 +439,60 @@ mod tests {
     #[test]
     fn test_default_for_variant_wraps_out_of_range_indices() {
         let count = Behavior::VARIANT_NAMES.len();
-        assert_eq!(count, 7);
+        assert_eq!(count, 8);
         assert_eq!(Behavior::default_for_variant(count).variant_index(), 0);
         assert_eq!(
             Behavior::default_for_variant(count + 2).variant_index(),
             2
         );
+    }
+
+    #[test]
+    fn test_camera_follow_serialization_round_trips_dead_zone() {
+        let behavior = Behavior::CameraFollow {
+            target_tag: "player".to_string(),
+            lerp_speed: 0.5,
+            offset: (0.0, 50.0),
+            dead_zone: Some((200.0, 120.0)),
+        };
+
+        let serialized = ron::to_string(&behavior).expect("Failed to serialize");
+        let deserialized: Behavior = ron::from_str(&serialized).expect("Failed to deserialize");
+
+        match deserialized {
+            Behavior::CameraFollow {
+                target_tag,
+                lerp_speed,
+                offset,
+                dead_zone,
+            } => {
+                assert_eq!(target_tag, "player");
+                assert_eq!(lerp_speed, 0.5);
+                assert_eq!(offset, (0.0, 50.0));
+                assert_eq!(dead_zone, Some((200.0, 120.0)));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_camera_follow_defaults() {
+        let behavior: Behavior = ron::from_str("CameraFollow()").expect("Failed to parse");
+
+        match behavior {
+            Behavior::CameraFollow {
+                target_tag,
+                lerp_speed,
+                offset,
+                dead_zone,
+            } => {
+                assert_eq!(target_tag, "player");
+                assert_eq!(lerp_speed, 0.1);
+                assert_eq!(offset, (0.0, 0.0));
+                assert_eq!(dead_zone, None);
+            }
+            _ => panic!("Wrong variant"),
+        }
     }
 
     #[test]

@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ecs::sprite_components::Transform2D;
+use ecs::World;
 use glam::Vec2;
 use winit::window::Window;
 
@@ -211,6 +213,18 @@ impl RenderManager {
         &mut self.camera
     }
 
+    /// Copy the main camera entity's position onto the render camera.
+    ///
+    /// Only `position` is synced — zoom, rotation, and viewport_size stay
+    /// render-managed (viewport_size tracks window resizes). Worlds without
+    /// a main-camera entity are untouched, and games can still override
+    /// `ctx.camera` in `render()` afterwards.
+    pub fn sync_main_camera(&mut self, world: &World) {
+        if let Some(position) = main_camera_position(world) {
+            self.camera.position = position;
+        }
+    }
+
     /// Set the camera viewport size.
     pub fn set_viewport_size(&mut self, width: f32, height: f32) {
         self.camera.viewport_size = Vec2::new(width, height);
@@ -251,6 +265,22 @@ impl RenderManager {
     }
 }
 
+/// Position of the first entity with `Camera { is_main_camera: true }` and a
+/// `Transform2D` — the world entity that drives the render camera, if any.
+pub(crate) fn main_camera_position(world: &World) -> Option<Vec2> {
+    world
+        .entities()
+        .into_iter()
+        .find(|e| {
+            world
+                .get::<Camera>(*e)
+                .map(|c| c.is_main_camera)
+                .unwrap_or(false)
+                && world.get::<Transform2D>(*e).is_some()
+        })
+        .and_then(|e| world.get::<Transform2D>(e).map(|t| t.position))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,6 +313,44 @@ mod tests {
         // Test mutable access
         manager.camera_mut().position = Vec2::new(100.0, 50.0);
         assert_eq!(manager.camera().position, Vec2::new(100.0, 50.0));
+    }
+
+    #[test]
+    fn test_sync_main_camera_copies_main_camera_entity_position() {
+        let mut manager = RenderManager::new();
+        let mut world = World::new();
+
+        let cam = world.create_entity();
+        world
+            .add_component(&cam, Transform2D::new(Vec2::new(320.0, -40.0)))
+            .unwrap();
+        world
+            .add_component(&cam, Camera::default().as_main_camera())
+            .unwrap();
+
+        let viewport_before = manager.camera().viewport_size;
+        manager.sync_main_camera(&world);
+
+        assert_eq!(manager.camera().position, Vec2::new(320.0, -40.0));
+        // Only position syncs — viewport stays render-managed.
+        assert_eq!(manager.camera().viewport_size, viewport_before);
+    }
+
+    #[test]
+    fn test_sync_main_camera_is_noop_without_main_camera_entity() {
+        let mut manager = RenderManager::new();
+        manager.camera_mut().position = Vec2::new(7.0, 9.0);
+
+        let mut world = World::new();
+        // Non-main camera entities must not drive the render camera.
+        let cam = world.create_entity();
+        world
+            .add_component(&cam, Transform2D::new(Vec2::new(1.0, 2.0)))
+            .unwrap();
+        world.add_component(&cam, Camera::default()).unwrap();
+
+        manager.sync_main_camera(&world);
+        assert_eq!(manager.camera().position, Vec2::new(7.0, 9.0));
     }
 
     #[test]

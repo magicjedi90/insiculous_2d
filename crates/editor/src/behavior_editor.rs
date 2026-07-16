@@ -27,6 +27,8 @@ mod ranges {
     pub const DISTANCE: RangeInclusive<f32> = 0.0..=5000.0;
     /// Patrol points cover most game worlds (matches Transform2D position).
     pub const POSITION: RangeInclusive<f32> = -1000.0..=1000.0;
+    /// Unit fractions (CameraFollow lerp speed: 1.0 snaps instantly).
+    pub const FRACTION: RangeInclusive<f32> = 0.0..=1.0;
 }
 
 /// Edit a Behavior component.
@@ -149,6 +151,28 @@ pub fn edit_behavior(
                 hint = Some("lose_interest_range");
             }
         }
+        Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
+            inspector.string("Target Tag", target_tag);
+            if let EditResult::Changed(v) = inspector.f32("Lerp Speed", *lerp_speed, ranges::FRACTION) {
+                *lerp_speed = v;
+                hint = Some("lerp_speed");
+            }
+            if let EditResult::Changed(v) = inspector.vec2(
+                "Offset",
+                glam::Vec2::new(offset.0, offset.1),
+                ranges::POSITION,
+            ) {
+                *offset = (v.x, v.y);
+                hint = Some("offset");
+            }
+            // Read-only until the ui crate grows an Option/toggle widget
+            // (same precedent as the string fields above).
+            let dead_zone_label = match dead_zone {
+                Some((w, h)) => format!("{w:.0} x {h:.0}"),
+                None => "None".to_string(),
+            };
+            inspector.string("Dead Zone", &dead_zone_label);
+        }
     }
 
     hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
@@ -195,6 +219,11 @@ mod tests {
                     assert!(ranges::DISTANCE.contains(&detection_range));
                     assert!(ranges::SPEED.contains(&chase_speed));
                     assert!(ranges::DISTANCE.contains(&lose_interest_range));
+                }
+                Behavior::CameraFollow { lerp_speed, offset, .. } => {
+                    assert!(ranges::FRACTION.contains(&lerp_speed));
+                    assert!(ranges::POSITION.contains(&offset.0));
+                    assert!(ranges::POSITION.contains(&offset.1));
                 }
             }
         }

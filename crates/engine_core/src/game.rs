@@ -426,6 +426,9 @@ impl<G: Game> GameRunner<G> {
         // are persistent fields: clear() retains capacity, so a steady-state
         // frame allocates nothing here (GPP-15).
         self.game_batcher.clear();
+        // A main-camera entity (Camera { is_main_camera } + Transform2D)
+        // drives the render camera; games can still override ctx.camera below.
+        self.render_manager.sync_main_camera(&self.scene.world);
         {
             let empty_commands: &[DrawCommand] = &[];
             let mut ctx = RenderContext {

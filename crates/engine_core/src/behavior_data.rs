@@ -96,6 +96,22 @@ pub enum BehaviorData {
         #[serde(default = "default_lose_range")]
         lose_interest_range: f32,
     },
+    /// Smoothly move this entity toward the nearest entity with a tag
+    /// (intended for camera entities)
+    CameraFollow {
+        /// Tag of the entity to follow
+        #[serde(default = "default_player_tag")]
+        target_tag: String,
+        /// Fraction of the remaining distance covered per frame at 60 FPS (0.0–1.0)
+        #[serde(default = "default_lerp_speed")]
+        lerp_speed: f32,
+        /// Fixed offset from the target position (x, y)
+        #[serde(default)]
+        offset: (f32, f32),
+        /// Optional dead zone (full width, full height) centered on this entity
+        #[serde(default)]
+        dead_zone: Option<(f32, f32)>,
+    },
 }
 
 /// Convert scene serialization data to the ECS component (load direction).
@@ -128,6 +144,9 @@ impl From<&BehaviorData> for ecs::behavior::Behavior {
             BehaviorData::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
                 Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
             }
+            BehaviorData::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
+                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone }
+            }
         }
     }
 }
@@ -157,6 +176,9 @@ impl From<&ecs::behavior::Behavior> for BehaviorData {
             }
             Behavior::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
                 Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
+            }
+            Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
+                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone }
             }
         }
     }
@@ -198,6 +220,9 @@ fn default_lose_range() -> f32 {
 }
 fn default_player_tag() -> String {
     "player".to_string()
+}
+fn default_lerp_speed() -> f32 {
+    0.1
 }
 fn default_true() -> bool {
     true
