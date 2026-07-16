@@ -10,6 +10,7 @@ use ecs::audio_components::{AudioListener, AudioSource};
 use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::hierarchy::GlobalTransform2D;
 use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
+use ecs::tilemap::Tilemap;
 use ecs::{EntityId, World};
 use physics::components::{Collider, RigidBody};
 use ui::UIContext;
@@ -308,6 +309,7 @@ editor_component_registry! {
         Camera          => common::Camera : Core { readonly },
         Sprite          => Sprite : Rendering { edit edit_sprite => SetSpriteCommand },
         SpriteAnimation => SpriteAnimation : Rendering { readonly },
+        Tilemap         => Tilemap : Rendering { readonly },
         RigidBody       => RigidBody : Physics { edit edit_rigid_body => SetRigidBodyCommand },
         Collider        => Collider : Physics { edit edit_collider => SetColliderCommand },
         AudioSource     => AudioSource : Audio { edit edit_audio_source => SetAudioSourceCommand },

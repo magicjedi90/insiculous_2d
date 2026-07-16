@@ -209,6 +209,26 @@ pub enum ComponentData {
         #[serde(default)]
         restitution: f32,
     },
+    /// Tilemap component - grid of tile indices drawn from a tileset
+    Tilemap {
+        /// Tileset texture reference: "#white", "#solid:RRGGBB", or file path
+        #[serde(default = "default_texture")]
+        tileset: String,
+        #[serde(default)]
+        width: u32,
+        #[serde(default)]
+        height: u32,
+        #[serde(default = "default_tile_size")]
+        tile_size: f32,
+        /// Row-major tile values, 0 = empty
+        #[serde(default)]
+        tiles: Vec<u32>,
+        /// Fraction of the tileset per tile, e.g. (0.25, 0.25) for 4x4
+        #[serde(default = "default_scale")]
+        tile_uv_size: (f32, f32),
+        #[serde(default = "default_tilemap_depth")]
+        depth: f32,
+    },
     /// Behavior component - defines how an entity responds to input/events
     Behavior(BehaviorData),
     /// Tag component for entity identification (targeted by behaviors)
@@ -256,6 +276,14 @@ fn default_viewport() -> (f32, f32) {
 
 fn default_fps() -> f32 {
     10.0
+}
+
+fn default_tile_size() -> f32 {
+    32.0
+}
+
+fn default_tilemap_depth() -> f32 {
+    -1.0
 }
 
 fn default_true() -> bool {

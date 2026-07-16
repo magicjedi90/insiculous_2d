@@ -36,6 +36,7 @@ pub mod scene_data;
 pub mod scene_loader;
 pub mod scene_serializer;
 mod texture_ref;
+mod tilemap_render;
 pub mod render_manager;
 pub mod window_manager;
 pub mod game_loop_manager;

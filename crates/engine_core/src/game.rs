@@ -71,6 +71,9 @@ pub trait Game: Sized + 'static {
     /// Default implementation extracts sprites from ECS entities with Transform2D and Sprite components,
     /// then renders UI draw commands on top.
     fn render(&mut self, ctx: &mut RenderContext) {
+        // Tilemaps first, so equal-depth entity sprites draw over tiles
+        crate::tilemap_render::append_tilemap_sprites(ctx.world, ctx.sprites);
+
         // Default: extract sprites from ECS
         for entity_id in ctx.world.entities() {
             let sprite = ctx.world.get::<EcsSprite>(entity_id);

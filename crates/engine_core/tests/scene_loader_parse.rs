@@ -122,3 +122,53 @@ fn test_parse_entity_tag_component() {
         other => panic!("Expected EntityTag, got {:?}", other),
     }
 }
+
+#[test]
+fn test_tilemap_parses_and_instantiates_with_resolved_tileset() {
+    use ecs::{Tilemap, World};
+    use engine_core::scene_data::SceneLoadError;
+    use engine_core::TextureResolver;
+    use renderer::texture::TextureHandle;
+
+    struct StubResolver;
+    impl TextureResolver for StubResolver {
+        fn resolve_texture(&mut self, _texture_ref: &str) -> Result<TextureHandle, SceneLoadError> {
+            Ok(TextureHandle::WHITE)
+        }
+    }
+
+    let scene_ron = r##"
+        SceneData(
+            name: "Tilemap Test",
+            entities: [
+                EntityData(
+                    name: Some("level"),
+                    components: [
+                        Transform2D(position: (-160.0, 120.0)),
+                        Tilemap(
+                            tileset: "#white",
+                            width: 3,
+                            height: 2,
+                            tile_size: 40.0,
+                            tiles: [1, 0, 2, 0, 3, 0],
+                            tile_uv_size: (0.25, 0.25),
+                        ),
+                    ],
+                ),
+            ],
+        )
+    "##;
+
+    let scene = SceneLoader::parse(scene_ron).unwrap();
+    let mut world = World::new();
+    SceneLoader::instantiate(&scene, &mut world, &mut StubResolver).unwrap();
+
+    let entity = world.entities()[0];
+    let tilemap = world.get::<Tilemap>(entity).expect("Tilemap missing after load");
+    assert_eq!(tilemap.width, 3);
+    assert_eq!(tilemap.height, 2);
+    assert_eq!(tilemap.tileset, TextureHandle::WHITE.id);
+    assert_eq!(tilemap.tiles, vec![1, 0, 2, 0, 3, 0]);
+    assert_eq!(tilemap.depth, -1.0); // serde default
+    assert_eq!(tilemap.sprite_instances().count(), 3);
+}

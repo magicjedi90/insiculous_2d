@@ -310,6 +310,7 @@ impl SceneLoader {
             ComponentData::Transform2D { .. } => "Transform2D",
             ComponentData::Sprite { .. } => "Sprite",
             ComponentData::Camera2D { .. } => "Camera2D",
+            ComponentData::Tilemap { .. } => "Tilemap",
             ComponentData::SpriteAnimation { .. } => "SpriteAnimation",
             ComponentData::RigidBody { .. } => "RigidBody",
             ComponentData::Collider { .. } => "Collider",
@@ -381,6 +382,28 @@ impl SceneLoader {
                     far: 1000.0,
                 };
                 Self::add_component_logged(world, entity_id, camera);
+            }
+
+            ComponentData::Tilemap {
+                tileset,
+                width,
+                height,
+                tile_size,
+                tiles,
+                tile_uv_size,
+                depth,
+            } => {
+                let texture_handle = assets.resolve_texture(tileset)?;
+                let tilemap = ecs::Tilemap {
+                    width: *width,
+                    height: *height,
+                    tile_size: *tile_size,
+                    tileset: texture_handle.id,
+                    tiles: tiles.clone(),
+                    tile_uv_size: Vec2::new(tile_uv_size.0, tile_uv_size.1),
+                    depth: *depth,
+                };
+                Self::add_component_logged(world, entity_id, tilemap);
             }
 
             ComponentData::SpriteAnimation {

@@ -96,11 +96,13 @@ pub fn global_registry() -> &'static ComponentRegistry {
         // Register built-in ECS components
         use crate::audio_components::{AudioListener, AudioSource, PlaySoundEffect};
         use crate::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
+        use crate::tilemap::Tilemap;
         registry.register::<Transform2D>();
         registry.register::<Sprite>();
         registry.register::<SpriteAnimation>();
         registry.register::<Camera>();
         registry.register::<Name>();
+        registry.register::<Tilemap>();
         registry.register::<AudioSource>();
         registry.register::<AudioListener>();
         registry.register::<PlaySoundEffect>();
@@ -264,6 +266,7 @@ mod tests {
         assert!(registry.is_registered("Name"));
         assert!(registry.is_registered("AudioSource"));
         assert!(registry.is_registered("AudioListener"));
+        assert!(registry.is_registered("Tilemap"));
         assert!(registry.is_registered("PlaySoundEffect"));
     }
 

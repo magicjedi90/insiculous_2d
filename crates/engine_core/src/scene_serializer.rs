@@ -109,6 +109,19 @@ fn extract_components(
         });
     }
 
+    // Tilemap
+    if let Some(tm) = world.get::<ecs::Tilemap>(entity) {
+        components.push(ComponentData::Tilemap {
+            tileset: texture_path_fn(tm.tileset),
+            width: tm.width,
+            height: tm.height,
+            tile_size: tm.tile_size,
+            tiles: tm.tiles.clone(),
+            tile_uv_size: (tm.tile_uv_size.x, tm.tile_uv_size.y),
+            depth: tm.depth,
+        });
+    }
+
     // SpriteAnimation
     if let Some(a) = world.get::<SpriteAnimation>(entity) {
         let frames: Vec<(f32, f32, f32, f32)> = a
@@ -317,6 +330,41 @@ mod tests {
                 assert_eq!(*emissive, 0.9);
             }
             other => panic!("Expected Sprite, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_entity_with_tilemap() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        let mut tilemap = ecs::Tilemap::new(3, 2, 40.0);
+        tilemap.tileset = 5;
+        tilemap.tile_uv_size = Vec2::new(0.25, 0.25);
+        tilemap.set_tile(1, 0, 2);
+        world.add_component(&entity, tilemap).ok();
+
+        let scene = world_to_scene_data(&world, "TilemapTest", None, &test_texture_path);
+
+        assert_eq!(scene.entities.len(), 1);
+        match &scene.entities[0].components[0] {
+            ComponentData::Tilemap {
+                tileset,
+                width,
+                height,
+                tile_size,
+                tiles,
+                tile_uv_size,
+                depth,
+            } => {
+                assert_eq!(tileset, "#texture_5");
+                assert_eq!(*width, 3);
+                assert_eq!(*height, 2);
+                assert_eq!(*tile_size, 40.0);
+                assert_eq!(tiles, &vec![0, 2, 0, 0, 0, 0]);
+                assert_eq!(*tile_uv_size, (0.25, 0.25));
+                assert_eq!(*depth, -1.0);
+            }
+            other => panic!("Expected Tilemap, got {:?}", other),
         }
     }
 
