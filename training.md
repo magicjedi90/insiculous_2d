@@ -453,7 +453,9 @@ for pointer takeover are P1-only).
 
 ### Pause Pattern (universal — every game ships it)
 The engine owns the mechanism (`PauseMenu`: Menu/Esc/Start toggles, MenuInput
-navigation, Resume/Restart/Quit-to-Title); games own the meaning. Gate your
+navigation, Resume/Restart/Quit-to-Title/Exit-Game); games own the meaning.
+Title-screen Exit items work the same way: set `ctx.exit_requested = true`
+and the engine performs the same clean shutdown as closing the window. Gate your
 entire gameplay update on it, in pausable states only (GameOver keeps its
 direct Menu→title exit):
 
@@ -465,6 +467,7 @@ if matches!(self.state, GameState::Playing) {
     match action {
         PauseAction::Restart => { self.start_game(ctx); return; }
         PauseAction::QuitToTitle => { self.reset_to_title(ctx.world); return; }
+        PauseAction::ExitGame => { ctx.exit_requested = true; return; }
         PauseAction::Resumed => return, // resume takes effect NEXT frame —
                                         // the keypress can't leak into gameplay
         PauseAction::Idle => {}

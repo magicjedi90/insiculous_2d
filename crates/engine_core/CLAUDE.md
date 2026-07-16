@@ -9,7 +9,8 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `GameContext` — passed to Game methods: world, input, **players** (per-player
   `InputSettings`: `ctx.players.is_active(PlayerId::P1, GameAction::Action1, ctx.input)`,
   `move_x/move_y`), assets, ui, physics, delta_time, **chaos_mode**, **time_scale**
-  (read-write; scales engine-side particle stepping only — set 0.0 while paused)
+  (read-write; scales engine-side particle stepping only — set 0.0 while paused),
+  **exit_requested** (write true → clean engine shutdown, same path as window close)
 - `ChaosMode` — cross-game Normal/Insane/Ridiculous/Insiculous theme (engine carries the selection, games define the meaning)
 - Managers: `GameLoopManager`, `UIManager`, `RenderManager`, `WindowManager`, `SceneManager`
 
@@ -49,8 +50,9 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
 - `chaos_theme.rs` — `ChaosTheme` per-mode presentation tokens (bg/structure/accent/grid colors, banner, particle mult); engine owns structure + default palette, games override via struct-update syntax
 - `pause.rs` — `PauseMenu`/`PauseAction`: shared pause mechanism (Menu/Esc/Start
-  toggles, Resume/Restart/Quit-to-Title items; games map actions onto their own
-  start_game/reset_to_title and skip their whole gameplay update while active;
+  toggles, Resume/Restart/Quit-to-Title/Exit-Game items; games map actions onto their
+  own start_game/reset_to_title/`ctx.exit_requested` and skip their whole gameplay
+  update while active;
   `time_scale()` feeds `ctx.time_scale` so engine particles freeze too). Takes
   `&InputSettings + &InputHandler` (NOT GameContext) so it's headless-testable
 - `menu_panel.rs` — `MenuPanel`/`MenuStyle`: shared menu window chrome (opaque

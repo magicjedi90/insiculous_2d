@@ -193,6 +193,9 @@ struct GameRunner<G: Game> {
     /// Engine time multiplier mirrored onto `GameContext.time_scale`
     /// (read-write, persisted like chaos_mode). Scales particle stepping.
     time_scale: f32,
+    /// Set when the game writes `GameContext.exit_requested` — triggers the
+    /// clean shutdown path at the end of the frame.
+    exit_requested: bool,
     /// Main game scene containing ECS world
     scene: Scene,
     /// Achievement / trophy manager
@@ -250,6 +253,7 @@ impl<G: Game> GameRunner<G> {
             game_loop_manager,
             glyph_textures: GlyphTextureCache::new(),
             time_scale: 1.0,
+            exit_requested: false,
             scene: Scene::new("main"),
             achievements,
             particles: crate::particles::ParticleManager::default(),
@@ -368,6 +372,7 @@ impl<G: Game> GameRunner<G> {
             window_size,
             chaos_mode: self.config.chaos_mode,
             time_scale: self.time_scale,
+            exit_requested: false,
             achievements: &mut self.achievements,
             particles: &mut self.particles,
             lines: &mut self.lines,
@@ -384,6 +389,7 @@ impl<G: Game> GameRunner<G> {
         // context, so both reflect the current runtime selection next frame.
         self.config.chaos_mode = ctx.chaos_mode;
         self.time_scale = ctx.time_scale;
+        self.exit_requested |= ctx.exit_requested;
 
         // Step the particle system after the game's update — emitter
         // accumulators see the latest transforms, and pool stepping
@@ -415,6 +421,27 @@ impl<G: Game> GameRunner<G> {
         self.input.end_frame();
     }
 
+}
+
+impl<G: Game> GameRunner<G> {
+    /// Clean shutdown: notify the game, persist input bindings, tear the
+    /// scene down, and exit the event loop. Shared by the window close
+    /// button and game-requested exits (`GameContext::exit_requested`).
+    fn shutdown(&mut self, event_loop: &ActiveEventLoop) {
+        self.game.on_exit();
+        // Persist input bindings (incl. runtime pad re-assignments)
+        if let Some(path) = &self.config.input_settings_path {
+            if let Err(e) = crate::input_settings_io::save(
+                std::path::Path::new(path),
+                &self.player_input,
+            ) {
+                log::warn!("Could not save input settings to {}: {}", path, e);
+            }
+        }
+        let _ = self.scene.stop();
+        let _ = self.scene.shutdown();
+        event_loop.exit();
+    }
 }
 
 impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
@@ -465,19 +492,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
 
         match event {
             WindowEvent::CloseRequested => {
-                self.game.on_exit();
-                // Persist input bindings (incl. runtime pad re-assignments)
-                if let Some(path) = &self.config.input_settings_path {
-                    if let Err(e) = crate::input_settings_io::save(
-                        std::path::Path::new(path),
-                        &self.player_input,
-                    ) {
-                        log::warn!("Could not save input settings to {}: {}", path, e);
-                    }
-                }
-                let _ = self.scene.stop();
-                let _ = self.scene.shutdown();
-                event_loop.exit();
+                self.shutdown(event_loop);
             }
             WindowEvent::Resized(size) => {
                 // Update window manager's tracked size
@@ -507,6 +522,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             window_size,
                             chaos_mode: self.config.chaos_mode,
                             time_scale: self.time_scale,
+                            exit_requested: false,
                             achievements: &mut self.achievements,
                             particles: &mut self.particles,
                             lines: &mut self.lines,
@@ -521,10 +537,11 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             }
                         }
 
-                        // Persist chaos-mode/time-scale changes made in key
-                        // handlers too.
+                        // Persist chaos-mode/time-scale/exit changes made in
+                        // key handlers too.
                         self.config.chaos_mode = ctx.chaos_mode;
                         self.time_scale = ctx.time_scale;
+                        self.exit_requested |= ctx.exit_requested;
                     }
                 }
             }
@@ -535,8 +552,12 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.update_and_render();
+        if self.exit_requested {
+            self.shutdown(event_loop);
+            return;
+        }
         // Enforce GameConfig::target_fps by sleeping out the frame budget.
         self.game_loop_manager.throttle();
         self.window_manager.request_redraw();

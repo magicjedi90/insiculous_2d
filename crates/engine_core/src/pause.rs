@@ -2,7 +2,7 @@
 //!
 //! The engine owns the mechanism — Menu (Escape / any pad's Start) toggles,
 //! [`MenuInput`] navigates, and the menu offers Resume / Restart / Quit to
-//! Title. Games own the meaning: they decide which states are pausable,
+//! Title / Exit Game. Games own the meaning: they decide which states are pausable,
 //! call [`PauseMenu::update`] there, skip their entire gameplay update while
 //! paused (no physics step, no timers), and map [`PauseAction::Restart`] /
 //! [`PauseAction::QuitToTitle`] onto their own `start_game` / `reset_to_title`.
@@ -19,6 +19,7 @@
 //! match pause.update(&settings, &input) {
 //!     PauseAction::Restart => { /* self.start_game(...) */ }
 //!     PauseAction::QuitToTitle => { /* self.reset_to_title(...) */ }
+//!     PauseAction::ExitGame => { /* ctx.exit_requested = true */ }
 //!     PauseAction::Resumed => { /* skip this frame; unfreeze next */ }
 //!     PauseAction::Idle => {}
 //! }
@@ -46,10 +47,13 @@ pub enum PauseAction {
     Restart,
     /// The player picked Quit to Title. Unpauses.
     QuitToTitle,
+    /// The player picked Exit Game — set `ctx.exit_requested = true` for a
+    /// clean engine shutdown. Unpauses (moot once the loop exits).
+    ExitGame,
 }
 
 /// The pause menu's item labels, in selection order.
-const ITEMS: [&str; 3] = ["Resume", "Restart", "Quit to Title"];
+const ITEMS: [&str; 4] = ["Resume", "Restart", "Quit to Title", "Exit Game"];
 
 /// Pause state + menu. Embed one per game and drive it from the game's
 /// pausable states (see the module docs for the frame pattern).
@@ -106,7 +110,8 @@ impl PauseMenu {
             return match self.selection {
                 0 => PauseAction::Resumed,
                 1 => PauseAction::Restart,
-                _ => PauseAction::QuitToTitle,
+                2 => PauseAction::QuitToTitle,
+                _ => PauseAction::ExitGame,
             };
         }
         PauseAction::Idle
@@ -205,6 +210,7 @@ mod tests {
             (0, PauseAction::Resumed),
             (1, PauseAction::Restart),
             (2, PauseAction::QuitToTitle),
+            (3, PauseAction::ExitGame),
         ] {
             let (mut pause, settings, mut input) = setup();
             frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
@@ -233,14 +239,14 @@ mod tests {
         frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
         pause.update(&settings, &input);
 
-        // Up from the top wraps to the last item (Quit) — confirm proves it
+        // Up from the top wraps to the last item (Exit Game) — confirm proves it
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::KeyW)]);
         pause.update(&settings, &input);
         frame(&mut input, &[
             InputEvent::KeyReleased(KeyCode::KeyW),
             InputEvent::KeyPressed(KeyCode::Space),
         ]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::QuitToTitle);
+        assert_eq!(pause.update(&settings, &input), PauseAction::ExitGame);
 
         // Reopening starts back at Resume
         frame(&mut input, &[
