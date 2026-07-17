@@ -21,6 +21,10 @@ use crate::particles::ParticleManager;
 /// grayscale alpha masks. The color is applied at render time by multiplying
 /// the sprite color with the texture, allowing the same glyph texture to be
 /// reused for any color.
+///
+/// The font id IS included: different fonts rasterize the same character at
+/// the same bitmap size to different shapes, so a key without it would serve
+/// stale glyphs after a locale font switch.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GlyphCacheKey {
     /// Character being rendered
@@ -29,14 +33,17 @@ pub struct GlyphCacheKey {
     width: u32,
     /// Height of the glyph bitmap
     height: u32,
+    /// Id of the font the glyph was rasterized from (`FontHandle.id`)
+    font_id: u32,
 }
 
 impl GlyphCacheKey {
-    pub(crate) fn new(character: char, width: u32, height: u32) -> Self {
+    pub(crate) fn new(character: char, width: u32, height: u32, font_id: u32) -> Self {
         Self {
             character,
             width,
             height,
+            font_id,
         }
     }
 }
@@ -92,6 +99,11 @@ pub struct GameContext<'a> {
     /// Typical use: step a [`GridMesh`](crate::grid::GridMesh) and append
     /// its `build_line_vertices()` output here, or push debug-draw segments.
     pub lines: &'a mut Vec<LineVertex>,
+    /// Localization tables. `ctx.strings.tr("menu.play")` translates a key
+    /// in the current locale (fallback: `en` → the key itself); mutable so
+    /// games can switch locales at runtime (`set_locale`/`cycle_locale` —
+    /// the engine applies any per-locale font after `update()`).
+    pub strings: &'a mut crate::localization::Strings,
 }
 
 /// Render context passed to the render method.

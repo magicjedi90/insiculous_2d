@@ -55,6 +55,34 @@ pub enum PauseAction {
 /// The pause menu's item labels, in selection order.
 const ITEMS: [&str; 4] = ["Resume", "Restart", "Quit to Title", "Exit Game"];
 
+/// Default hint footer shown under the pause items.
+const HINT: &str = "ESC resumes - SPACE confirms";
+
+/// Localizable label set for the pause menu. The defaults are the built-in
+/// English labels, so `PauseMenu::draw` keeps working unchanged; localized
+/// games build one per frame from `ctx.strings.tr(...)` and call
+/// [`PauseMenu::draw_labeled`]. Item order matches the selection order:
+/// Resume, Restart, Quit to Title, Exit Game.
+#[derive(Debug, Clone, Copy)]
+pub struct PauseMenuLabels<'a> {
+    /// Panel title (default "PAUSED")
+    pub title: &'a str,
+    /// The four menu items in selection order
+    pub items: [&'a str; 4],
+    /// Hint footer under the items
+    pub hint: &'a str,
+}
+
+impl Default for PauseMenuLabels<'_> {
+    fn default() -> Self {
+        Self {
+            title: "PAUSED",
+            items: ITEMS,
+            hint: HINT,
+        }
+    }
+}
+
 /// Pause state + menu. Embed one per game and drive it from the game's
 /// pausable states (see the module docs for the frame pattern).
 #[derive(Debug, Default)]
@@ -122,12 +150,24 @@ impl PauseMenu {
     /// [`is_active`](Self::is_active); the frozen world stays visible
     /// beneath it.
     pub fn draw(&self, ui: &mut UIContext, window_size: Vec2, style: &MenuStyle) {
-        let panel = MenuPanel::new("PAUSED", window_size / 2.0, 300.0, ITEMS.len());
+        self.draw_labeled(ui, window_size, style, &PauseMenuLabels::default());
+    }
+
+    /// [`draw`](Self::draw) with caller-supplied (typically localized)
+    /// labels. Item order is fixed: Resume, Restart, Quit to Title, Exit.
+    pub fn draw_labeled(
+        &self,
+        ui: &mut UIContext,
+        window_size: Vec2,
+        style: &MenuStyle,
+        labels: &PauseMenuLabels<'_>,
+    ) {
+        let panel = MenuPanel::new(labels.title, window_size / 2.0, 300.0, labels.items.len());
         panel.draw_as_overlay(ui, window_size, style, |panel, ui, mut y| {
-            for (i, item) in ITEMS.iter().enumerate() {
+            for (i, item) in labels.items.iter().enumerate() {
                 y = panel.item(ui, y, item, i as u8 == self.selection, style);
             }
-            panel.hint(ui, "ESC resumes - SPACE confirms", style);
+            panel.hint(ui, labels.hint, style);
         });
     }
 }
@@ -148,6 +188,14 @@ mod tests {
 
     fn setup() -> (PauseMenu, InputSettings, InputHandler) {
         (PauseMenu::new(), InputSettings::default_two_player(), InputHandler::new())
+    }
+
+    #[test]
+    fn default_labels_match_builtin_english() {
+        let labels = PauseMenuLabels::default();
+        assert_eq!(labels.title, "PAUSED");
+        assert_eq!(labels.items, ITEMS);
+        assert_eq!(labels.hint, HINT);
     }
 
     #[test]

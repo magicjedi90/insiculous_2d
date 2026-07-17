@@ -38,6 +38,7 @@ use audio::AudioManager;
 use input::InputHandler;
 use renderer::{sprite::SpriteBatcher, texture::TextureHandle};
 
+mod locale_font;
 mod render;
 
 use crate::{GameLoopManager, UIManager};
@@ -211,6 +212,14 @@ struct GameRunner<G: Game> {
     /// separately so UI never shares a batch with (and paints over) sprites.
     game_batcher: SpriteBatcher,
     ui_batcher: SpriteBatcher,
+    /// Localization tables (loaded from `GameConfig::locales_dir` at startup).
+    strings: crate::localization::Strings,
+    /// The game's own default font, captured after `init()` so locale font
+    /// switches can restore it (`None` = game never loaded a font).
+    base_font: Option<ui::FontHandle>,
+    /// Locale font path → loaded handle, so cycling locales doesn't reload
+    /// font files.
+    locale_fonts: std::collections::HashMap<String, ui::FontHandle>,
     /// Whether the game's init() has been called
     initialized: bool,
 }
@@ -239,6 +248,12 @@ impl<G: Game> GameRunner<G> {
             None => input::InputSettings::default_two_player(),
         };
 
+        // Locale tables live under the asset base (default `assets/locales`).
+        let asset_base = config.asset_base_path.clone().unwrap_or_else(|| "assets".to_string());
+        let locales_dir = std::path::Path::new(&asset_base).join(&config.locales_dir);
+        let mut strings = crate::localization::Strings::load_dir(&locales_dir);
+        strings.set_locale(config.locale.clone());
+
         Self {
             game,
             config,
@@ -260,6 +275,9 @@ impl<G: Game> GameRunner<G> {
             lines: Vec::new(),
             game_batcher: SpriteBatcher::new(),
             ui_batcher: SpriteBatcher::new(),
+            strings,
+            base_font: None,
+            locale_fonts: std::collections::HashMap::new(),
             initialized: false,
         }
     }
@@ -376,9 +394,11 @@ impl<G: Game> GameRunner<G> {
             achievements: &mut self.achievements,
             particles: &mut self.particles,
             lines: &mut self.lines,
+            strings: &mut self.strings,
         };
 
-        if !self.initialized {
+        let first_frame = !self.initialized;
+        if first_frame {
             self.game.init(&mut ctx);
             self.initialized = true;
         }
@@ -409,6 +429,14 @@ impl<G: Game> GameRunner<G> {
         self.achievements
             .draw_toasts(self.ui_manager.ui_context(), window_size);
         self.achievements.tick(delta_time);
+
+        // The font the game set up in init() is the one locale switches
+        // restore to — capture it once, before any locale font applies.
+        if first_frame {
+            self.base_font = self.ui_manager.ui_context().default_font();
+        }
+        // Apply a pending locale font change (from init/update set_locale).
+        self.apply_locale_font();
     }
 
     /// End UI frame and return draw commands
@@ -526,6 +554,7 @@ impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
                             achievements: &mut self.achievements,
                             particles: &mut self.particles,
                             lines: &mut self.lines,
+                            strings: &mut self.strings,
                         };
 
                         match event.state {

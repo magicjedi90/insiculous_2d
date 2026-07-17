@@ -78,14 +78,16 @@ impl GlyphTextureCache {
         commands
             .iter()
             .filter_map(|cmd| match cmd {
-                DrawCommand::Text { data, .. } => Some(data.glyphs.iter()),
+                DrawCommand::Text { data, .. } => {
+                    Some(data.glyphs.iter().map(|g| (data.font_id, g)))
+                }
                 _ => None,
             })
             .flatten()
-            .filter(|glyph| glyph.width > 0 && glyph.height > 0 && !glyph.bitmap.is_empty())
-            .map(|glyph| {
+            .filter(|(_, glyph)| glyph.width > 0 && glyph.height > 0 && !glyph.bitmap.is_empty())
+            .map(|(font_id, glyph)| {
                 (
-                    GlyphCacheKey::new(glyph.character, glyph.width, glyph.height),
+                    GlyphCacheKey::new(glyph.character, glyph.width, glyph.height, font_id),
                     glyph,
                 )
             })
@@ -112,12 +114,17 @@ mod tests {
     }
 
     fn text_command(glyphs: Vec<GlyphDrawData>) -> DrawCommand {
+        text_command_with_font(glyphs, 1)
+    }
+
+    fn text_command_with_font(glyphs: Vec<GlyphDrawData>, font_id: u32) -> DrawCommand {
         DrawCommand::Text {
             data: TextDrawData {
                 text: String::new(),
                 position: Vec2::ZERO,
                 color: Color::new(1.0, 1.0, 1.0, 1.0),
                 font_size: 14.0,
+                font_id,
                 width: 0.0,
                 height: 0.0,
                 glyphs,
@@ -165,12 +172,25 @@ mod tests {
         // Simulate a previously created texture for 'a'.
         cache
             .textures
-            .insert(GlyphCacheKey::new('a', 4, 4), TextureHandle { id: 7 });
+            .insert(GlyphCacheKey::new('a', 4, 4, 1), TextureHandle { id: 7 });
 
         let missing = cache.uncached_glyphs(&commands);
         assert_eq!(missing.len(), 1, "only the uncached glyph should be missing");
         assert_eq!(missing[0].1.character, 'b');
         assert_eq!(cache.textures().len(), 1);
+    }
+
+    #[test]
+    fn same_glyph_same_size_different_fonts_needs_separate_textures() {
+        let cache = GlyphTextureCache::new();
+        // Same character, same bitmap size — but two different fonts.
+        let commands = vec![
+            text_command_with_font(vec![glyph('a', 4, 4, &[255; 16])], 1),
+            text_command_with_font(vec![glyph('a', 4, 4, &[128; 16])], 2),
+        ];
+
+        let missing = cache.uncached_glyphs(&commands);
+        assert_eq!(missing.len(), 2, "each font is a distinct cache entry");
     }
 
     #[test]

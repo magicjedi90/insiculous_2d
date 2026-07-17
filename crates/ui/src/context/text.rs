@@ -77,7 +77,7 @@ impl UIContext {
         if let Some(font) = font {
             match self.font_manager.layout_text(font, text, font_size) {
                 Ok(layout) => {
-                    let text_data = Self::layout_to_draw_data(&layout, text, position, color, font_size);
+                    let text_data = Self::layout_to_draw_data(&layout, text, position, color, font_size, font);
                     self.draw_list.text(text_data);
                     return;
                 }
@@ -103,6 +103,7 @@ impl UIContext {
         position: Vec2,
         color: Color,
         font_size: f32,
+        font: FontHandle,
     ) -> TextDrawData {
         let glyphs: Vec<GlyphDrawData> = layout.glyphs.iter().map(|g| {
             GlyphDrawData {
@@ -120,6 +121,7 @@ impl UIContext {
             position,
             color,
             font_size,
+            font_id: font.id,
             width: layout.width,
             height: layout.height,
             glyphs,

@@ -51,6 +51,12 @@ struct EditorGame<G: Game> {
     physics_settings: Option<PhysicsSettings>,
     /// Editing pan/zoom saved while a play session runs (restored on Stop).
     editing_camera: Option<(Vec2, f32)>,
+    /// The editor chrome's font, pinned at init and re-asserted every frame
+    /// so locale font switches never restyle panels/menus.
+    editor_font: Option<ui::FontHandle>,
+    /// The default font right after the inner game's init — what the game
+    /// view uses when no locale font is active.
+    game_base_font: Option<ui::FontHandle>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -67,6 +73,8 @@ impl<G: Game> EditorGame<G> {
             gizmo_drag_start_collider: None,
             physics_settings: None,
             editing_camera: None,
+            editor_font: None,
+            game_base_font: None,
         }
     }
 
@@ -131,7 +139,7 @@ impl<G: Game> EditorGame<G> {
     }
 
     /// Delegate the frame to the inner game — only while Playing, clipped to
-    /// the scene view.
+    /// the scene view and rendered in the game's (or active locale's) font.
     fn update_inner_game(&mut self, ctx: &mut GameContext) {
         if !self.editor.is_playing() {
             return;
@@ -141,7 +149,17 @@ impl<G: Game> EditorGame<G> {
                 scene_bounds.x, scene_bounds.y, scene_bounds.width, scene_bounds.height,
             ));
         }
+
+        // Scope the default font to the game's frame: the locale font when
+        // one is active, otherwise the game's own — never the editor's.
+        if let Some(game_font) = ctx.strings.active_font().or(self.game_base_font) {
+            ctx.ui.set_default_font(game_font);
+        }
         self.inner.update(ctx);
+        if let Some(editor_font) = self.editor_font {
+            ctx.ui.set_default_font(editor_font);
+        }
+
         if self.editor.scene_view_bounds().is_some() {
             ctx.ui.pop_clip_rect();
         }
@@ -207,8 +225,9 @@ impl<G: Game> Game for EditorGame<G> {
         ];
 
         for path in font_paths {
-            if ctx.ui.load_font_file(path).is_ok() {
+            if let Ok(handle) = ctx.ui.load_font_file(path) {
                 self.font_loaded = true;
+                self.editor_font = Some(handle);
                 log::info!("Editor font loaded from: {}", path);
                 break;
             }
@@ -224,10 +243,20 @@ impl<G: Game> Game for EditorGame<G> {
 
         // Delegate to inner game
         self.inner.init(ctx);
+
+        // Whatever font the game set up is the game view's baseline; locale
+        // fonts layer on top of it during play (see update_inner_game).
+        self.game_base_font = ctx.ui.default_font();
     }
 
     fn update(&mut self, ctx: &mut GameContext) {
         let window_size = ctx.window_size;
+
+        // 0. Editor chrome always renders in the editor font — re-asserted
+        // every frame because the engine applies locale fonts after update.
+        if let Some(editor_font) = self.editor_font {
+            ctx.ui.set_default_font(editor_font);
+        }
 
         // 1. Run transform hierarchy system
         self.transform_system.update(ctx.world, ctx.delta_time);

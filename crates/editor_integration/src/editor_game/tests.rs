@@ -32,6 +32,15 @@ fn test_editor_game_creation() {
 }
 
 #[test]
+fn test_editor_game_font_pins_start_unset() {
+    // Both pins fill in during init(): the editor font from the chrome font
+    // load, the game base font after the inner game's init.
+    let editor = EditorGame::new(DummyGame);
+    assert!(editor.editor_font.is_none());
+    assert!(editor.game_base_font.is_none());
+}
+
+#[test]
 fn test_command_history_initialized() {
     let editor = EditorGame::new(DummyGame);
     assert!(!editor.command_history.can_undo());

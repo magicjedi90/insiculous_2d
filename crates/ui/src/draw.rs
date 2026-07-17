@@ -38,6 +38,11 @@ pub struct TextDrawData {
     pub color: Color,
     /// Font size used
     pub font_size: f32,
+    /// Id of the font the glyphs were rasterized from (`FontHandle.id`).
+    /// Downstream glyph-texture caches must include this in their keys —
+    /// different fonts rasterize the same character at the same size to
+    /// different bitmaps.
+    pub font_id: u32,
     /// Total width of the laid out text
     pub width: f32,
     /// Total height of the laid out text
@@ -392,6 +397,7 @@ mod tests {
             position: Vec2::new(100.0, 200.0),
             color: Color::GREEN,
             font_size: 32.0,
+            font_id: 1,
             width: 80.0,
             height: 32.0,
             glyphs: vec![

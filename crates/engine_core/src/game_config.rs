@@ -10,6 +10,14 @@ fn default_vsync() -> bool {
     true
 }
 
+fn default_locale() -> String {
+    "en".to_string()
+}
+
+fn default_locales_dir() -> String {
+    "locales".to_string()
+}
+
 /// Configuration for the game window and engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
@@ -50,6 +58,14 @@ pub struct GameConfig {
     /// When `None`, the default two-player bindings are used in memory only.
     #[serde(default)]
     pub input_settings_path: Option<String>,
+    /// Starting locale id (default `"en"`). Lookup falls back to `"en"`,
+    /// then to the key itself, so an unknown id is harmless.
+    #[serde(default = "default_locale")]
+    pub locale: String,
+    /// Directory containing `*.ron` locale files, relative to the asset
+    /// base path (default `"locales"` → `assets/locales/`).
+    #[serde(default = "default_locales_dir")]
+    pub locales_dir: String,
 }
 
 impl Default for GameConfig {
@@ -66,6 +82,8 @@ impl Default for GameConfig {
             achievement_save_path: None,
             asset_base_path: None,
             input_settings_path: None,
+            locale: default_locale(),
+            locales_dir: default_locales_dir(),
         }
     }
 }
@@ -133,6 +151,19 @@ impl GameConfig {
         self.input_settings_path = Some(path.into());
         self
     }
+
+    /// Set the starting locale id (default `"en"`).
+    pub fn with_locale(mut self, locale: impl Into<String>) -> Self {
+        self.locale = locale.into();
+        self
+    }
+
+    /// Set the locales directory, relative to the asset base path
+    /// (default `"locales"`).
+    pub fn with_locales_dir(mut self, dir: impl Into<String>) -> Self {
+        self.locales_dir = dir.into();
+        self
+    }
 }
 
 #[cfg(test)]
@@ -161,6 +192,35 @@ mod tests {
     fn test_game_config_with_chaos_mode() {
         let config = GameConfig::new("Test").with_chaos_mode(ChaosMode::Insiculous);
         assert_eq!(config.chaos_mode, ChaosMode::Insiculous);
+    }
+
+    #[test]
+    fn test_game_config_locale_defaults_and_builders() {
+        let config = GameConfig::default();
+        assert_eq!(config.locale, "en");
+        assert_eq!(config.locales_dir, "locales");
+
+        let config = GameConfig::new("Test")
+            .with_locale("pirate")
+            .with_locales_dir("i18n");
+        assert_eq!(config.locale, "pirate");
+        assert_eq!(config.locales_dir, "i18n");
+    }
+
+    #[test]
+    fn test_game_config_locale_serde_defaults() {
+        // A config JSON from before localization must still deserialize.
+        let legacy = r#"{
+            "title": "Old",
+            "width": 800,
+            "height": 600,
+            "target_fps": 60,
+            "clear_color": [0.0, 0.0, 0.0, 1.0],
+            "resizable": true
+        }"#;
+        let config: GameConfig = serde_json::from_str(legacy).expect("legacy config parses");
+        assert_eq!(config.locale, "en");
+        assert_eq!(config.locales_dir, "locales");
     }
 
     #[test]

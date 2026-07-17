@@ -22,10 +22,12 @@ pub use crate::{
     particles::{Particle, ParticleConfig, ParticleEmitter, ParticleManager, ParticleSystem},
     // Spring-mass grid (Geometry-Wars style deforming background)
     grid::{default_playfield_grid, step_and_emit_grid, GridImpulse, GridMesh},
+    // Localization
+    localization::{LocaleFile, Strings},
     // Shared arcade scaffolding
     menu_input::MenuInput,
     menu_panel::{MenuPanel, MenuStyle},
-    pause::{PauseAction, PauseMenu},
+    pause::{PauseAction, PauseMenu, PauseMenuLabels},
     spawn_helpers::spawn_background,
     RENDER_UNIT,
     // Debug-draw helpers (collider outlines, etc.)

@@ -197,6 +197,7 @@ pub fn render_ui_commands(
                             glyph.character,
                             glyph.width,
                             glyph.height,
+                            data.font_id,
                         );
 
                         let texture = match glyph_textures.get(&glyph_key) {

@@ -111,6 +111,13 @@ impl<G: Game> EditorGame<G> {
                 self.editor.reset_layout();
                 self.editor.status_bar.show_message("Layout reset to defaults");
             }
+            "Cycle Game Locale" => {
+                ctx.strings.cycle_locale();
+                self.editor.status_bar.show_message(format!(
+                    "Game locale: {}",
+                    ctx.strings.current_display_name()
+                ));
+            }
             _ => log::info!("Unhandled action: {}", action),
         }
     }
