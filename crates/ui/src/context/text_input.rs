@@ -1,13 +1,41 @@
-//! Numeric text-input widget with a real editing model: click-to-focus
+//! Text-input widgets (numeric [`UIContext::float_input`] and free-form
+//! [`UIContext::text_input`]) with a real editing model: click-to-focus
 //! selects the whole value, a visible cursor, arrow/Home/End navigation,
 //! shift-selection, and editing at the cursor position.
 //!
 //! The editing rules live in [`crate::TextEditState`]; this file translates
 //! input-state flags into edit calls and draws the box/selection/caret.
 
+use crate::input_state::InputState;
 use crate::{Rect, TextEditState, WidgetId, WidgetState};
 
 use super::{TextAlign, UIContext};
+
+/// Apply one frame's navigation/deletion/typing to an edit state.
+/// Shared by every text-input widget.
+fn apply_edit_keys(state: &mut TextEditState, input: &InputState) {
+    if input.left_pressed {
+        state.move_left(input.shift_down);
+    }
+    if input.right_pressed {
+        state.move_right(input.shift_down);
+    }
+    if input.home_pressed {
+        state.home(input.shift_down);
+    }
+    if input.end_pressed {
+        state.end(input.shift_down);
+    }
+    if input.backspace_pressed {
+        state.backspace();
+    }
+    if input.delete_pressed {
+        state.delete();
+    }
+    for ch in &input.typed_chars {
+        state.insert_char(*ch);
+    }
+}
 
 /// Caret width in pixels.
 const CARET_WIDTH: f32 = 1.0;
@@ -67,37 +95,85 @@ impl UIContext {
             }
 
             // Navigation, deletion, then typed characters — all cursor-aware
-            let state = &mut self.interaction.get_state(id).edit;
-            if input.left_pressed {
-                state.move_left(input.shift_down);
-            }
-            if input.right_pressed {
-                state.move_right(input.shift_down);
-            }
-            if input.home_pressed {
-                state.home(input.shift_down);
-            }
-            if input.end_pressed {
-                state.end(input.shift_down);
-            }
-            if input.backspace_pressed {
-                state.backspace();
-            }
-            if input.delete_pressed {
-                state.delete();
-            }
-            for ch in &input.typed_chars {
-                state.insert_char(*ch);
-            }
+            apply_edit_keys(&mut self.interaction.get_state(id).edit, &input);
 
             let edit = self.interaction.get_state(id).edit.clone();
-            self.draw_float_input_editing(bounds, &edit);
+            self.draw_text_input_editing(bounds, &edit);
             return value; // Return original while editing
         }
 
         // Not focused — draw display value
         let hovered = result.state == WidgetState::Hovered;
         self.draw_float_value(bounds, value, hovered)
+    }
+
+    /// Create a free-form text input field.
+    ///
+    /// Same editing model as [`float_input`](Self::float_input): click to
+    /// focus with the whole value selected, click again to place the cursor,
+    /// arrows/Home/End navigate (shift extends the selection), held keys
+    /// repeat. Enter/Tab or clicking outside commits; Escape cancels.
+    ///
+    /// Returns `Some(new_text)` only on commit; `None` while displaying,
+    /// editing, or on cancel.
+    pub fn text_input(
+        &mut self,
+        id: impl Into<WidgetId>,
+        value: &str,
+        bounds: Rect,
+    ) -> Option<String> {
+        let id = id.into();
+        let result = self.interaction.interact(id, bounds, true);
+        let was_focused = self.interaction.is_focused(id);
+
+        // Snapshot keyboard/mouse state before mutating persistent state
+        let input = self.interaction.input().clone();
+        let mouse_in_bounds = bounds.contains(input.mouse_pos);
+        let padding = self.theme.text_input.padding;
+        let font_size = self.theme.text_input.font_size;
+
+        if result.clicked && !was_focused {
+            // Enter edit mode with the whole value selected — typing replaces it
+            self.interaction.set_focus(id);
+            self.interaction.get_state(id).edit.set_text_select_all(value);
+        } else if result.clicked && was_focused {
+            // Click inside while editing: place the cursor at the click
+            let text = self.interaction.get_state(id).edit.text.clone();
+            let widths = self.prefix_widths(&text, font_size);
+            let local_x = input.mouse_pos.x - (bounds.x + padding);
+            self.interaction.get_state(id).edit.cursor_from_click(&widths, local_x);
+        }
+
+        if self.interaction.is_focused(id) {
+            // Cancel on Escape
+            if input.escape_pressed {
+                self.interaction.clear_focus();
+                self.draw_text_input_box(bounds, value, false);
+                return None;
+            }
+
+            // Commit on Enter, Tab, or click outside
+            if input.enter_pressed
+                || input.tab_pressed
+                || (input.mouse_just_pressed && !mouse_in_bounds)
+            {
+                let new_text = self.interaction.get_state(id).edit.text.clone();
+                self.interaction.clear_focus();
+                self.draw_text_input_box(bounds, &new_text, false);
+                return Some(new_text);
+            }
+
+            apply_edit_keys(&mut self.interaction.get_state(id).edit, &input);
+
+            let edit = self.interaction.get_state(id).edit.clone();
+            self.draw_text_input_editing(bounds, &edit);
+            return None;
+        }
+
+        // Not focused — draw display value
+        let hovered = result.state == WidgetState::Hovered;
+        self.draw_text_input_box(bounds, value, hovered);
+        None
     }
 
     /// Commit the edit buffer of a float input: parse (falling back to the
@@ -114,7 +190,7 @@ impl UIContext {
     /// Draw a float input showing a numeric value; returns the value for
     /// tail-call convenience.
     fn draw_float_value(&mut self, bounds: Rect, value: f32, highlighted: bool) -> f32 {
-        self.draw_float_input_box(bounds, &format!("{:.2}", value), highlighted);
+        self.draw_text_input_box(bounds, &format!("{:.2}", value), highlighted);
         value
     }
 
@@ -132,9 +208,9 @@ impl UIContext {
         widths
     }
 
-    /// Draw a focused float input: box, selection band, text, and caret,
+    /// Draw a focused text input: box, selection band, text, and caret,
     /// clipped to the bounds so long edits don't overflow.
-    fn draw_float_input_editing(&mut self, bounds: Rect, edit: &TextEditState) {
+    fn draw_text_input_editing(&mut self, bounds: Rect, edit: &TextEditState) {
         let style = self.theme.text_input.clone();
 
         self.draw_list.rect_rounded(bounds, style.background_focused, style.corner_radius);
@@ -173,8 +249,8 @@ impl UIContext {
         self.pop_clip_rect();
     }
 
-    /// Draw a float input text box (shared by unfocused and committed states).
-    fn draw_float_input_box(&mut self, bounds: Rect, text: &str, highlighted: bool) {
+    /// Draw a text input box (shared by unfocused and committed states).
+    fn draw_text_input_box(&mut self, bounds: Rect, text: &str, highlighted: bool) {
         let style = self.theme.text_input.clone();
         let bg = if highlighted { style.background_focused } else { style.background };
         let border = if highlighted { style.border_focused } else { style.border };

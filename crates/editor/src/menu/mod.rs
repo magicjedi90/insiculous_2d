@@ -234,6 +234,10 @@ impl MenuBar {
                 MenuItem::action("Create Static Body"),
                 MenuItem::action("Create Dynamic Body"),
                 MenuItem::action("Create Kinematic Body"),
+                MenuItem::separator(),
+                MenuItem::action("Create UI Label"),
+                MenuItem::action("Create UI Panel"),
+                MenuItem::action("Create UI Button"),
             ]),
         );
 

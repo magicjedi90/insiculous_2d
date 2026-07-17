@@ -5,6 +5,7 @@
 
 use ecs::sprite_components::{Name, Sprite};
 use ecs::hierarchy::GlobalTransform2D;
+use ecs::ui_components::{UiButton, UiLabel, UiPanel};
 use ecs::{EntityId, World, WorldHierarchyExt};
 use editor::{capture_all_components, restore_components, Selection};
 use glam::Vec2;
@@ -87,6 +88,53 @@ pub fn create_physics_body(
     entity
 }
 
+/// Create a UI entity: Name only — screen-space elements place themselves
+/// via anchor + offset, so no Transform2D (a transform would suggest the
+/// gizmo/world position matters, and it doesn't).
+fn create_ui_entity<T: ecs::Component>(
+    world: &mut World,
+    selection: &mut Selection,
+    label: &str,
+    component: T,
+    counter: &mut u32,
+) -> EntityId {
+    *counter += 1;
+    let entity = world.create_entity();
+    world.add_component(&entity, Name::new(format!("{} {}", label, counter))).ok();
+    world.add_component(&entity, component).ok();
+    selection.select(entity);
+    entity
+}
+
+/// Create a UI label entity (Name + UiLabel, no Transform2D).
+pub fn create_ui_label(
+    world: &mut World,
+    selection: &mut Selection,
+    counter: &mut u32,
+) -> EntityId {
+    let label = UiLabel { text: "New Label".to_string(), ..Default::default() };
+    create_ui_entity(world, selection, "UiLabel", label, counter)
+}
+
+/// Create a UI panel entity (Name + UiPanel, no Transform2D).
+pub fn create_ui_panel(
+    world: &mut World,
+    selection: &mut Selection,
+    counter: &mut u32,
+) -> EntityId {
+    create_ui_entity(world, selection, "UiPanel", UiPanel::default(), counter)
+}
+
+/// Create a UI button entity (Name + UiButton, no Transform2D).
+pub fn create_ui_button(
+    world: &mut World,
+    selection: &mut Selection,
+    counter: &mut u32,
+) -> EntityId {
+    let button = UiButton { text: "Button".to_string(), id: "button".to_string(), ..Default::default() };
+    create_ui_entity(world, selection, "UiButton", button, counter)
+}
+
 /// Dispatch a menu action string to the appropriate create function.
 ///
 /// Returns `Some(entity_id)` if an entity was created, `None` if the action
@@ -105,6 +153,9 @@ pub fn handle_create_action(
         "Create Static Body" => Some(create_physics_body(world, selection, position, RigidBodyType::Static, counter)),
         "Create Dynamic Body" => Some(create_physics_body(world, selection, position, RigidBodyType::Dynamic, counter)),
         "Create Kinematic Body" => Some(create_physics_body(world, selection, position, RigidBodyType::Kinematic, counter)),
+        "Create UI Label" => Some(create_ui_label(world, selection, counter)),
+        "Create UI Panel" => Some(create_ui_panel(world, selection, counter)),
+        "Create UI Button" => Some(create_ui_button(world, selection, counter)),
         _ => None,
     }
 }

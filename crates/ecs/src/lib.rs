@@ -40,6 +40,7 @@ pub mod sprite_system;
 pub mod state_machine;
 pub mod system;
 pub mod tilemap;
+pub mod ui_components;
 
 pub mod prelude;
 
@@ -64,6 +65,7 @@ pub use sprite_system::*;
 pub use state_machine::{HierarchicalStateMachine, StateMachine};
 pub use system::*;
 pub use tilemap::{TileInstance, Tilemap};
+pub use ui_components::{resolve_anchored_pos, UiAnchor, UiButton, UiLabel, UiPanel};
 pub use world::*;
 
 /// Initialize the ECS

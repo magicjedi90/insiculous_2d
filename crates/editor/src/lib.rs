@@ -52,7 +52,9 @@ mod play_state;
 mod selection;
 pub mod status_bar;
 pub mod stored_component;
+mod text_field;
 mod texture_field;
+mod ui_component_editors;
 pub mod theme;
 pub mod typography;
 mod toolbar;
@@ -79,9 +81,11 @@ pub use context::EditorContext;
 pub use editor_preferences::{EditorPreferences, PanelPrefs};
 pub use dock::{panel_id_for_menu_label, DockArea, DockPanel, DockPosition, PanelId};
 pub use editable_inspector::{
-    component_header, cycle_step, display_string, display_u32, edit_bool, edit_color, edit_f32,
+    component_header, cycle_step, edit_bool, edit_color, edit_f32,
     edit_normalized_f32, edit_vec2, EditableFieldStyle, EditableInspector, EditResult, FieldId,
 };
+pub use text_field::{display_string, display_u32, edit_string};
+pub use ui_component_editors::{edit_ui_button, edit_ui_label, edit_ui_panel};
 pub use editor_input::{EditorAction, EditorInputMapping, EditorInputState};
 pub use gizmo::{Gizmo, GizmoMode, GizmoPalette};
 pub use hierarchy::HierarchyPanel;

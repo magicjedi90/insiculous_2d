@@ -56,6 +56,9 @@ impl<G: Game> EditorGame<G> {
                     self.editor.viewport.set_camera_zoom(1.0);
                     self.editor.set_play_state(EditorPlayState::Playing);
                     self.editor.close_add_component_popup();
+                    // Scene-authored UI (UiLabel/UiPanel/UiButton) draws only
+                    // while the game actually runs.
+                    world.remove_resource::<engine_core::UiElementsHidden>();
                     log::info!("Play: snapshot captured, entering play mode");
                 } else if self.editor.is_paused() {
                     // Resuming from pause
@@ -88,6 +91,9 @@ impl<G: Game> EditorGame<G> {
                         self.editor.viewport.set_camera_position(position);
                         self.editor.viewport.set_camera_zoom(zoom);
                     }
+                    // Re-hide scene-authored UI (the marker was removed when
+                    // Play started; resources survive the snapshot restore).
+                    world.insert_resource(engine_core::UiElementsHidden);
                     self.editor.set_play_state(EditorPlayState::Editing);
                     true
                 } else {

@@ -97,6 +97,7 @@ pub fn global_registry() -> &'static ComponentRegistry {
         use crate::audio_components::{AudioListener, AudioSource, PlaySoundEffect};
         use crate::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
         use crate::tilemap::Tilemap;
+        use crate::ui_components::{UiButton, UiLabel, UiPanel};
         registry.register::<Transform2D>();
         registry.register::<Sprite>();
         registry.register::<SpriteAnimation>();
@@ -106,6 +107,9 @@ pub fn global_registry() -> &'static ComponentRegistry {
         registry.register::<AudioSource>();
         registry.register::<AudioListener>();
         registry.register::<PlaySoundEffect>();
+        registry.register::<UiLabel>();
+        registry.register::<UiPanel>();
+        registry.register::<UiButton>();
 
         registry
     })

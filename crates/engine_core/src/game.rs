@@ -38,6 +38,7 @@ use audio::AudioManager;
 use input::InputHandler;
 use renderer::{sprite::SpriteBatcher, texture::TextureHandle};
 
+mod frame_tail;
 mod locale_font;
 mod render;
 
@@ -220,6 +221,10 @@ struct GameRunner<G: Game> {
     /// Locale font path → loaded handle, so cycling locales doesn't reload
     /// font files.
     locale_fonts: std::collections::HashMap<String, ui::FontHandle>,
+    /// Button presses from this frame's UI-element pass. The event bus
+    /// flushes BEFORE `update()`, so presses are held here and emitted onto
+    /// the bus right after the next frame's flush (one-frame latency).
+    pending_ui_events: Vec<crate::ui_element_system::UiButtonPressed>,
     /// Whether the game's init() has been called
     initialized: bool,
 }
@@ -278,6 +283,7 @@ impl<G: Game> GameRunner<G> {
             strings,
             base_font: None,
             locale_fonts: std::collections::HashMap::new(),
+            pending_ui_events: Vec::new(),
             initialized: false,
         }
     }
@@ -338,6 +344,12 @@ impl<G: Game> GameRunner<G> {
 
         // Flush events from previous frame before processing new input
         self.scene.world.flush_events();
+
+        // Emit last frame's UI-element button presses now that the bus is
+        // fresh — games read them in update() one frame after the click.
+        for event in self.pending_ui_events.drain(..) {
+            self.scene.world.emit_event(event);
+        }
 
         // Drain gamepad hardware events into the same queue as window events,
         // then process everything FIRST so UI and game logic see fresh state
@@ -411,32 +423,9 @@ impl<G: Game> GameRunner<G> {
         self.time_scale = ctx.time_scale;
         self.exit_requested |= ctx.exit_requested;
 
-        // Step the particle system after the game's update — emitter
-        // accumulators see the latest transforms, and pool stepping
-        // happens once per frame. Scaled by time_scale so a paused game
-        // (time_scale 0.0) freezes its particles with the rest of the world.
-        crate::particles::ParticleSystem::update(
-            &mut self.scene.world,
-            &mut self.particles,
-            delta_time * self.time_scale,
-        );
-
-        // Forward the line vertices the game pushed during update to the
-        // renderer. Empty buffer == no lines drawn this frame.
-        self.render_manager.set_lines(&self.lines);
-
-        // Draw achievement toasts on top of whatever the game drew.
-        self.achievements
-            .draw_toasts(self.ui_manager.ui_context(), window_size);
-        self.achievements.tick(delta_time);
-
-        // The font the game set up in init() is the one locale switches
-        // restore to — capture it once, before any locale font applies.
-        if first_frame {
-            self.base_font = self.ui_manager.ui_context().default_font();
-        }
-        // Apply a pending locale font change (from init/update set_locale).
-        self.apply_locale_font();
+        // Engine-side frame tail: particles, lines, scene-defined UI,
+        // toasts, locale fonts (game/frame_tail.rs).
+        self.post_update(delta_time, window_size, first_frame);
     }
 
     /// End UI frame and return draw commands

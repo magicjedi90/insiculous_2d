@@ -73,9 +73,13 @@ impl Default for InputState {
 }
 
 /// Map a physical KeyCode to a character for text input.
-/// Returns None for non-character keys. Only maps keys useful for numeric input.
+/// Returns None for non-character keys. Covers digits, letters (shift =
+/// uppercase), space, and the punctuation text/number fields need.
 pub(crate) fn keycode_to_char(key: KeyCode, shift: bool) -> Option<char> {
     use KeyCode::*;
+    if let Some(letter) = letter_keycode_to_char(key) {
+        return Some(if shift { letter.to_ascii_uppercase() } else { letter });
+    }
     match key {
         // Numpad always maps to digits regardless of shift
         Numpad0 => Some('0'),
@@ -90,6 +94,7 @@ pub(crate) fn keycode_to_char(key: KeyCode, shift: bool) -> Option<char> {
         Numpad9 => Some('9'),
         NumpadDecimal => Some('.'),
         NumpadSubtract => Some('-'),
+        Space => Some(' '),
         // Top-row digits only when shift is not held
         Digit0 if !shift => Some('0'),
         Digit1 if !shift => Some('1'),
@@ -102,9 +107,24 @@ pub(crate) fn keycode_to_char(key: KeyCode, shift: bool) -> Option<char> {
         Digit8 if !shift => Some('8'),
         Digit9 if !shift => Some('9'),
         Period if !shift => Some('.'),
-        Minus if !shift => Some('-'),
+        Minus if shift => Some('_'),
+        Minus => Some('-'),
         _ => None,
     }
+}
+
+/// Lowercase char for a letter keycode, `None` for everything else.
+fn letter_keycode_to_char(key: KeyCode) -> Option<char> {
+    use KeyCode::*;
+    Some(match key {
+        KeyA => 'a', KeyB => 'b', KeyC => 'c', KeyD => 'd', KeyE => 'e',
+        KeyF => 'f', KeyG => 'g', KeyH => 'h', KeyI => 'i', KeyJ => 'j',
+        KeyK => 'k', KeyL => 'l', KeyM => 'm', KeyN => 'n', KeyO => 'o',
+        KeyP => 'p', KeyQ => 'q', KeyR => 'r', KeyS => 's', KeyT => 't',
+        KeyU => 'u', KeyV => 'v', KeyW => 'w', KeyX => 'x', KeyY => 'y',
+        KeyZ => 'z',
+        _ => return None,
+    })
 }
 
 impl InputState {
@@ -138,6 +158,14 @@ impl InputState {
             KeyCode::Numpad8, KeyCode::Numpad9,
             KeyCode::Period, KeyCode::NumpadDecimal,
             KeyCode::Minus, KeyCode::NumpadSubtract,
+            KeyCode::Space,
+            KeyCode::KeyA, KeyCode::KeyB, KeyCode::KeyC, KeyCode::KeyD,
+            KeyCode::KeyE, KeyCode::KeyF, KeyCode::KeyG, KeyCode::KeyH,
+            KeyCode::KeyI, KeyCode::KeyJ, KeyCode::KeyK, KeyCode::KeyL,
+            KeyCode::KeyM, KeyCode::KeyN, KeyCode::KeyO, KeyCode::KeyP,
+            KeyCode::KeyQ, KeyCode::KeyR, KeyCode::KeyS, KeyCode::KeyT,
+            KeyCode::KeyU, KeyCode::KeyV, KeyCode::KeyW, KeyCode::KeyX,
+            KeyCode::KeyY, KeyCode::KeyZ,
         ];
 
         let mut typed_chars = Vec::new();
@@ -286,14 +314,24 @@ mod tests {
     fn test_keycode_to_char_shift_blocks_top_row() {
         assert_eq!(keycode_to_char(KeyCode::Digit0, true), None); // Shift+0 = ')'
         assert_eq!(keycode_to_char(KeyCode::Period, true), None); // Shift+. = '>'
-        assert_eq!(keycode_to_char(KeyCode::Minus, true), None); // Shift+- = '_'
+        assert_eq!(keycode_to_char(KeyCode::Minus, true), Some('_')); // Shift+- = '_'
     }
 
     #[test]
-    fn test_keycode_to_char_non_numeric() {
-        assert_eq!(keycode_to_char(KeyCode::KeyA, false), None);
-        assert_eq!(keycode_to_char(KeyCode::Space, false), None);
+    fn test_keycode_to_char_letters_and_space() {
+        assert_eq!(keycode_to_char(KeyCode::KeyA, false), Some('a'));
+        assert_eq!(keycode_to_char(KeyCode::KeyA, true), Some('A'));
+        assert_eq!(keycode_to_char(KeyCode::KeyZ, false), Some('z'));
+        assert_eq!(keycode_to_char(KeyCode::KeyZ, true), Some('Z'));
+        assert_eq!(keycode_to_char(KeyCode::Space, false), Some(' '));
+        assert_eq!(keycode_to_char(KeyCode::Space, true), Some(' '));
+    }
+
+    #[test]
+    fn test_keycode_to_char_non_character_keys() {
         assert_eq!(keycode_to_char(KeyCode::Enter, false), None);
+        assert_eq!(keycode_to_char(KeyCode::Backspace, false), None);
+        assert_eq!(keycode_to_char(KeyCode::F1, false), None);
     }
 
     #[test]

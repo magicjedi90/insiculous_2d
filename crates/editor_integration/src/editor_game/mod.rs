@@ -241,6 +241,11 @@ impl<G: Game> Game for EditorGame<G> {
         // Restore camera/grid/panel layout from the previous session
         self.load_preferences();
 
+        // Scene-authored UI elements stay hidden while Editing/Paused —
+        // removed on Play, re-inserted on Stop. Standalone games never
+        // insert this, so their UI always draws.
+        ctx.world.insert_resource(engine_core::UiElementsHidden);
+
         // Delegate to inner game
         self.inner.init(ctx);
 

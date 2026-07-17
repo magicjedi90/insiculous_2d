@@ -6,15 +6,11 @@ use super::*;
 mod tests {
     use super::*;
 
-    fn new_world_and_selection() -> (World, Selection) {
-        (World::new(), Selection::new())
-    }
-
     // ==================== Create Tests ====================
 
     #[test]
     fn test_create_empty_has_transform_and_name() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -25,7 +21,7 @@ mod tests {
 
     #[test]
     fn test_create_empty_at_correct_position() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let pos = Vec2::new(100.0, -50.0);
         let entity = create_empty_entity(&mut world, &mut sel, pos, &mut counter);
@@ -36,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_create_empty_auto_selects() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -45,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_create_sprite_has_sprite_component() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_sprite_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -55,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_create_camera_has_camera_component() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_camera_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -65,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_create_static_body_has_physics() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_physics_body(
             &mut world, &mut sel, Vec2::ZERO, RigidBodyType::Static, &mut counter,
@@ -79,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_create_dynamic_body_has_physics() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_physics_body(
             &mut world, &mut sel, Vec2::ZERO, RigidBodyType::Dynamic, &mut counter,
@@ -91,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_create_increments_counter() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         assert_eq!(counter, 1);
@@ -103,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_create_names_are_unique() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let e1 = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let e2 = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
@@ -117,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_delete_removes_entity() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let entity = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -129,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_delete_clears_selection() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -140,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_delete_reparents_children_to_grandparent() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let grandparent = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let parent = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
@@ -160,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_delete_orphans_children_when_root() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let parent = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let child = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
@@ -178,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_delete_empty_selection_is_noop() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         sel.clear();
@@ -190,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_delete_multiple_selected() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let e1 = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let e2 = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
@@ -208,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_copies_components() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let original = create_sprite_entity(&mut world, &mut sel, Vec2::new(10.0, 20.0), &mut counter);
 
@@ -224,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_offsets_position() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let original = create_empty_entity(&mut world, &mut sel, Vec2::new(100.0, 200.0), &mut counter);
 
@@ -238,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_selects_new_entity() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let original = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -251,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_preserves_original() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let original = create_empty_entity(&mut world, &mut sel, Vec2::new(50.0, 50.0), &mut counter);
 
@@ -265,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_recursive_copies_children() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let parent = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let child = create_empty_entity(&mut world, &mut sel, Vec2::new(10.0, 10.0), &mut counter);
@@ -281,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_children_have_correct_parent() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let parent = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         let _child = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
@@ -302,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_name_appends_copy() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         let original = create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
 
@@ -316,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_empty_selection_is_noop() {
-        let (mut world, mut sel) = new_world_and_selection();
+        let (mut world, mut sel) = (World::new(), Selection::new());
         let mut counter = 0;
         create_empty_entity(&mut world, &mut sel, Vec2::ZERO, &mut counter);
         sel.clear();
@@ -386,5 +382,42 @@ mod asset_assignment_tests {
 
         assert!(history.undo(&mut world));
         assert!(world.get::<Sprite>(entity).is_none(), "undo deletes the spawned entity");
+    }
+
+    // ==================== UI element creation ====================
+
+    #[test]
+    fn test_create_ui_entities_have_name_but_no_transform() {
+        let (mut world, mut sel) = (World::new(), Selection::new());
+        let mut counter = 0;
+
+        let label = create_ui_label(&mut world, &mut sel, &mut counter);
+        let panel = create_ui_panel(&mut world, &mut sel, &mut counter);
+        let button = create_ui_button(&mut world, &mut sel, &mut counter);
+
+        for &e in &[label, panel, button] {
+            assert!(world.get::<Name>(e).is_some(), "UI entities are named");
+            assert!(
+                world.get::<common::Transform2D>(e).is_none(),
+                "UI entities are screen-space: anchor+offset is their placement model"
+            );
+            assert!(world.get::<GlobalTransform2D>(e).is_none());
+        }
+        assert!(world.get::<UiLabel>(label).is_some());
+        assert!(world.get::<UiPanel>(panel).is_some());
+        assert!(world.get::<UiButton>(button).is_some());
+        assert_eq!(sel.primary(), Some(button), "last created is selected");
+    }
+
+    #[test]
+    fn test_handle_create_action_dispatches_ui_labels() {
+        let (mut world, mut sel) = (World::new(), Selection::new());
+        let mut counter = 0;
+
+        for action in ["Create UI Label", "Create UI Panel", "Create UI Button"] {
+            let created = handle_create_action(action, &mut world, &mut sel, Vec2::ZERO, &mut counter);
+            assert!(created.is_some(), "{action} must create an entity");
+        }
+        assert_eq!(counter, 3);
     }
 }

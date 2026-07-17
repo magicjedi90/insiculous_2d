@@ -11,6 +11,7 @@ use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::hierarchy::GlobalTransform2D;
 use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
 use ecs::tilemap::Tilemap;
+use ecs::ui_components::{UiButton, UiLabel, UiPanel};
 use ecs::{EntityId, World};
 use physics::components::{Collider, RigidBody};
 use ui::UIContext;
@@ -19,10 +20,12 @@ use crate::behavior_editor::edit_behavior;
 use crate::commands::{
     CommandHistory, RemoveComponentCommand, SetAudioSourceCommand, SetBehaviorCommand,
     SetColliderCommand, SetRigidBodyCommand, SetSpriteCommand, SetTransformCommand,
+    SetUiButtonCommand, SetUiLabelCommand, SetUiPanelCommand,
 };
 use crate::component_editors::{
     edit_audio_source, edit_collider, edit_rigid_body, edit_sprite, edit_transform2d,
 };
+use crate::ui_component_editors::{edit_ui_button, edit_ui_label, edit_ui_panel};
 use crate::inspector::{inspect_component, InspectorStyle};
 use crate::{EditableFieldStyle, EditableInspector};
 
@@ -103,16 +106,18 @@ pub enum ComponentCategory {
     Physics,
     Audio,
     Gameplay,
+    Ui,
 }
 
 impl ComponentCategory {
     /// All categories in display order.
-    pub const ALL: [ComponentCategory; 5] = [
+    pub const ALL: [ComponentCategory; 6] = [
         ComponentCategory::Core,
         ComponentCategory::Rendering,
         ComponentCategory::Physics,
         ComponentCategory::Audio,
         ComponentCategory::Gameplay,
+        ComponentCategory::Ui,
     ];
 
     /// Display name for the category header.
@@ -123,6 +128,7 @@ impl ComponentCategory {
             ComponentCategory::Physics => "Physics",
             ComponentCategory::Audio => "Audio",
             ComponentCategory::Gameplay => "Gameplay",
+            ComponentCategory::Ui => "UI",
         }
     }
 }
@@ -320,6 +326,9 @@ editor_component_registry! {
         AudioListener   => AudioListener : Audio { readonly },
         Behavior        => Behavior : Gameplay { edit edit_behavior => SetBehaviorCommand },
         EntityTag       => EntityTag : Gameplay { readonly },
+        UiLabel         => UiLabel : Ui { edit edit_ui_label => SetUiLabelCommand },
+        UiPanel         => UiPanel : Ui { edit edit_ui_panel => SetUiPanelCommand },
+        UiButton        => UiButton : Ui { edit edit_ui_button => SetUiButtonCommand },
     ],
 }
 
@@ -452,9 +461,12 @@ mod tests {
         world.add_component(&entity, Behavior::default()).ok();
         world.add_component(&entity, BehaviorState::default()).ok();
         world.add_component(&entity, EntityTag::default()).ok();
+        world.add_component(&entity, UiLabel::default()).ok();
+        world.add_component(&entity, UiPanel::default()).ok();
+        world.add_component(&entity, UiButton::default()).ok();
 
         let captured = capture_all_components(&world, entity);
-        assert_eq!(captured.len(), 13);
+        assert_eq!(captured.len(), 16);
     }
 
     #[test]

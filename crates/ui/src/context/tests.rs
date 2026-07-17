@@ -447,3 +447,138 @@ fn test_float_input_commit_clamps_to_range() {
     ui.end_frame();
     assert_eq!(committed, 10.0, "99 must clamp to the max of 10");
 }
+
+// === free-form text input ===
+
+/// Click a text input (press frame + release frame) so it gains focus.
+fn focus_text_input(ui: &mut UIContext, input: &mut input::InputHandler, id: &str, bounds: Rect, value: &str) {
+    use input::prelude::MouseButton;
+    let center = Vec2::new(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    input.mouse_mut().update_position(center.x, center.y);
+    input.mouse_mut().handle_button_press(MouseButton::Left);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    ui.text_input(id, value, bounds);
+    ui.end_frame();
+
+    input.update();
+    input.mouse_mut().handle_button_release(MouseButton::Left);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    ui.text_input(id, value, bounds);
+    ui.end_frame();
+    assert!(ui.wants_keyboard(), "text field must be focused after a click");
+}
+
+/// Run one frame of the focused text input with a single key pressed.
+fn type_key_text(
+    ui: &mut UIContext,
+    input: &mut input::InputHandler,
+    id: &str,
+    bounds: Rect,
+    value: &str,
+    key: input::prelude::KeyCode,
+) -> Option<String> {
+    input.update();
+    input.keyboard_mut().handle_key_press(key);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    let out = ui.text_input(id, value, bounds);
+    ui.end_frame();
+    input.keyboard_mut().handle_key_release(key);
+    out
+}
+
+#[test]
+fn test_text_input_returns_none_without_interaction() {
+    let mut ui = UIContext::new();
+    ui.begin_frame(&input::InputHandler::new(), Vec2::new(800.0, 600.0));
+    let out = ui.text_input("plain_text", "hello", Rect::new(10.0, 10.0, 120.0, 20.0));
+    ui.end_frame();
+    assert_eq!(out, None);
+}
+
+#[test]
+fn test_text_input_focus_selects_all_and_typing_overwrites() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 120.0, 20.0);
+
+    focus_text_input(&mut ui, &mut input, "txt_sel", bounds, "old name");
+    assert_eq!(type_key_text(&mut ui, &mut input, "txt_sel", bounds, "old name", KeyCode::KeyH), None);
+    assert_eq!(type_key_text(&mut ui, &mut input, "txt_sel", bounds, "old name", KeyCode::KeyI), None);
+    let committed = type_key_text(&mut ui, &mut input, "txt_sel", bounds, "old name", KeyCode::Enter);
+    assert_eq!(committed, Some("hi".to_string()));
+    assert!(!ui.wants_keyboard());
+}
+
+#[test]
+fn test_text_input_shift_types_uppercase_and_underscore() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 120.0, 20.0);
+
+    focus_text_input(&mut ui, &mut input, "txt_upper", bounds, "");
+
+    // Hold shift while typing 'a' then '-'
+    for key in [KeyCode::KeyA, KeyCode::Minus] {
+        input.update();
+        input.keyboard_mut().handle_key_press(KeyCode::ShiftLeft);
+        input.keyboard_mut().handle_key_press(key);
+        ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+        ui.text_input("txt_upper", "", bounds);
+        ui.end_frame();
+        input.keyboard_mut().handle_key_release(key);
+        input.keyboard_mut().handle_key_release(KeyCode::ShiftLeft);
+    }
+    let committed = type_key_text(&mut ui, &mut input, "txt_upper", bounds, "", KeyCode::Enter);
+    assert_eq!(committed, Some("A_".to_string()));
+}
+
+#[test]
+fn test_text_input_escape_cancels() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 120.0, 20.0);
+
+    focus_text_input(&mut ui, &mut input, "txt_esc", bounds, "keep me");
+    type_key_text(&mut ui, &mut input, "txt_esc", bounds, "keep me", KeyCode::KeyX);
+    let after_escape = type_key_text(&mut ui, &mut input, "txt_esc", bounds, "keep me", KeyCode::Escape);
+    assert_eq!(after_escape, None, "escape must not commit");
+    assert!(!ui.wants_keyboard());
+}
+
+#[test]
+fn test_text_input_click_away_commits() {
+    use input::prelude::{KeyCode, MouseButton};
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 120.0, 20.0);
+
+    focus_text_input(&mut ui, &mut input, "txt_away", bounds, "abc");
+    type_key_text(&mut ui, &mut input, "txt_away", bounds, "abc", KeyCode::KeyZ);
+
+    // Press the mouse far outside the field
+    input.update();
+    input.mouse_mut().update_position(500.0, 400.0);
+    input.mouse_mut().handle_button_press(MouseButton::Left);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    let committed = ui.text_input("txt_away", "abc", bounds);
+    ui.end_frame();
+    assert_eq!(committed, Some("z".to_string()), "click-away must commit the buffer");
+}
+
+#[test]
+fn test_text_input_space_types_space() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 120.0, 20.0);
+
+    focus_text_input(&mut ui, &mut input, "txt_space", bounds, "");
+    type_key_text(&mut ui, &mut input, "txt_space", bounds, "", KeyCode::KeyA);
+    type_key_text(&mut ui, &mut input, "txt_space", bounds, "", KeyCode::Space);
+    type_key_text(&mut ui, &mut input, "txt_space", bounds, "", KeyCode::KeyB);
+    let committed = type_key_text(&mut ui, &mut input, "txt_space", bounds, "", KeyCode::Enter);
+    assert_eq!(committed, Some("a b".to_string()));
+}

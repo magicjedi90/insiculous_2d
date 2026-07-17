@@ -42,6 +42,7 @@ impl<G: Game> EditorGame<G> {
         match action.as_str() {
             "Create Empty" | "Create Sprite" | "Create Camera"
             | "Create Static Body" | "Create Dynamic Body" | "Create Kinematic Body"
+            | "Create UI Label" | "Create UI Panel" | "Create UI Button"
                 if !self.editor.is_playing() =>
             {
                 if let Some(entity) = entity_ops::handle_create_action(

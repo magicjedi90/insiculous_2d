@@ -148,41 +148,9 @@ pub fn edit_vec2(
     }
 }
 
-/// Render a read-only u32 value (for asset handles, etc.).
-pub fn display_u32(
-    ui: &mut UIContext,
-    label: &str,
-    value: u32,
-    pos: Vec2,
-    style: &EditableFieldStyle,
-) {
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
-
-    let value_text = format!("{}", value);
-    ui.label_styled(
-        &value_text,
-        glam::Vec2::new(pos.x + style.label_width, pos.y + 4.0),
-        style.value_color,
-        style.label_font,
-    );
-}
-
-/// Render a read-only string value (for tags, target names, etc.).
-pub fn display_string(
-    ui: &mut UIContext,
-    label: &str,
-    value: &str,
-    pos: Vec2,
-    style: &EditableFieldStyle,
-) {
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
-    ui.label_styled(
-        value,
-        glam::Vec2::new(pos.x + style.label_width, pos.y + 4.0),
-        style.value_color,
-        style.label_font,
-    );
-}
+// Read-only string/u32 displays live in `text_field.rs` (moved for file
+// size), re-exported from the crate root as before.
+use crate::text_field::{display_string, display_u32};
 
 /// Step an index forward or backward through `count` values, wrapping at
 /// the ends. Pure helper behind [`EditableInspector::cycle`].
@@ -465,6 +433,17 @@ impl<'a> EditableInspector<'a> {
         display_string(self.ui, label, value, pos, &self.style);
         self.field_index += 1;
         self.current_y += self.style.row_height;
+    }
+
+    /// Add an editable string field (free-form text input; commits on
+    /// Enter/Tab/click-away, cancels on Escape).
+    pub fn string_edit(&mut self, label: &str, value: &str) -> EditResult<String> {
+        let id = FieldId::new(self.component_index, self.field_index, 0);
+        let pos = self.field_pos();
+        let result = crate::text_field::edit_string(self.ui, id, label, value, pos, &self.style);
+        self.field_index += 1;
+        self.current_y += self.style.row_height;
+        result
     }
 
     /// Add a cycle selector row: `label  [<] value [>]` for choosing among

@@ -24,6 +24,8 @@ pub use crate::{
     grid::{default_playfield_grid, step_and_emit_grid, GridImpulse, GridMesh},
     // Localization
     localization::{LocaleFile, Strings},
+    // Data-driven UI elements
+    ui_element_system::{UiButtonPressed, UiElementsHidden},
     // Shared arcade scaffolding
     menu_input::MenuInput,
     menu_panel::{MenuPanel, MenuStyle},

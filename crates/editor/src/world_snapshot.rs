@@ -12,6 +12,7 @@ use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::hierarchy::{Children, GlobalTransform2D, Parent};
 use ecs::sprite_components::{Name, Sprite, SpriteAnimation};
 use ecs::audio_components::{AudioListener, AudioSource};
+use ecs::ui_components::{UiButton, UiLabel, UiPanel};
 use physics::components::{Collider, RigidBody};
 
 /// Snapshot of a single entity's components.
@@ -35,6 +36,10 @@ struct EntitySnapshot {
     behavior: Option<Behavior>,
     behavior_state: Option<BehaviorState>,
     entity_tag: Option<EntityTag>,
+    // UI elements
+    ui_label: Option<UiLabel>,
+    ui_panel: Option<UiPanel>,
+    ui_button: Option<UiButton>,
     // Hierarchy
     parent: Option<Parent>,
     children: Option<Children>,
@@ -58,6 +63,9 @@ impl EntitySnapshot {
             behavior: world.get::<Behavior>(id).cloned(),
             behavior_state: world.get::<BehaviorState>(id).cloned(),
             entity_tag: world.get::<EntityTag>(id).cloned(),
+            ui_label: world.get::<UiLabel>(id).cloned(),
+            ui_panel: world.get::<UiPanel>(id).cloned(),
+            ui_button: world.get::<UiButton>(id).cloned(),
             parent: world.get::<Parent>(id).cloned(),
             children: world.get::<Children>(id).cloned(),
         }
@@ -79,6 +87,9 @@ impl EntitySnapshot {
         if let Some(c) = self.behavior { world.add_component(&id, c).ok(); }
         if let Some(c) = self.behavior_state { world.add_component(&id, c).ok(); }
         if let Some(c) = self.entity_tag { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.ui_label { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.ui_panel { world.add_component(&id, c).ok(); }
+        if let Some(c) = self.ui_button { world.add_component(&id, c).ok(); }
         if let Some(c) = self.parent { world.add_component(&id, c).ok(); }
         if let Some(c) = self.children { world.add_component(&id, c).ok(); }
     }
@@ -235,6 +246,27 @@ mod tests {
         let col = world.get::<Collider>(entity).unwrap();
         assert_eq!(col.friction, 0.9);
         assert!(col.is_sensor);
+    }
+
+    #[test]
+    fn test_snapshot_preserves_ui_element_components() {
+        let mut world = World::new();
+        let entity = world.create_entity();
+        world
+            .add_component(&entity, UiLabel { text: "@hud.score".into(), ..Default::default() })
+            .ok();
+        world.add_component(&entity, UiPanel { border_width: 3.0, ..Default::default() }).ok();
+        world
+            .add_component(&entity, UiButton { id: "play".into(), ..Default::default() })
+            .ok();
+
+        let snapshot = WorldSnapshot::capture(&world);
+        world.clear();
+        snapshot.restore(&mut world);
+
+        assert_eq!(world.get::<UiLabel>(entity).unwrap().text, "@hud.score");
+        assert_eq!(world.get::<UiPanel>(entity).unwrap().border_width, 3.0);
+        assert_eq!(world.get::<UiButton>(entity).unwrap().id, "play");
     }
 
     #[test]
