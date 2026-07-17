@@ -348,7 +348,9 @@ fn main() {
     let config = GameConfig::new("Insiculous 2D - Editor Demo")
         .with_size(1280, 720)
         .with_clear_color(0.1, 0.1, 0.15, 1.0)
-        .with_asset_base_path(EXAMPLES_DIR);
+        .with_asset_base_path(EXAMPLES_DIR)
+        // en + pirate locale tables; cycle from View → "Cycle Game Locale"
+        .with_locales_dir("assets/locales");
 
     if let Err(e) = run_game_with_editor(PlatformerGame::new(), config) {
         log::error!("Editor error: {}", e);

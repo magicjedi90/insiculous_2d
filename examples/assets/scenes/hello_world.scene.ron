@@ -283,5 +283,33 @@ SceneData(
             prefab: Some("Coin"),
             overrides: [ Transform2D(position: (1080.0, 90.0), scale: (0.3, 0.3), rotation: 0.785) ],
         ),
+
+        // Scene-defined UI elements: screen-space (anchor + offset, no
+        // Transform2D). "@key" text resolves through the locale tables, so
+        // these labels localize with the L key / editor locale picker.
+        EntityData(
+            name: Some("ui_title"),
+            components: [
+                UiLabel(
+                    text: "@scene.title",
+                    anchor: TopCenter,
+                    offset: (0.0, 10.0),
+                    font_size: 24.0,
+                    color: (1.0, 0.85, 0.3, 1.0),
+                ),
+            ],
+        ),
+        EntityData(
+            name: Some("ui_locale_hint"),
+            components: [
+                UiLabel(
+                    text: "@scene.hint",
+                    anchor: BottomRight,
+                    offset: (-12.0, -12.0),
+                    font_size: 14.0,
+                    color: (0.7, 0.7, 0.8, 1.0),
+                ),
+            ],
+        ),
     ],
 )

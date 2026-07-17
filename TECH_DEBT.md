@@ -24,7 +24,7 @@ items worth scheduling. High + Medium items are mirrored in `PROJECT_ROADMAP.md`
 | `input` | Jul 2026 | 0 / 1 / 3 | GAP-001 gamepad backend |
 | `physics` | Jul 2026 | 0 / 0 / 6 | Clean of Mediums; Lows incl. EDIT-001 (RigidBody config edits need rebuild) |
 | `renderer` | Jul 2026 | 0 / 0 / 2 | Clean of Mediums (DRY-006, ARCH-006 remain) |
-| `ui` | Jul 2026 | 0 / 1 / 4 | JUN-T1 general text input |
+| `ui` | Jul 2026 | 0 / 0 / 5 | — |
 | `../games` | Jul 2026 | 0 / 2 / 2 | GPP-11 shadow bricks, GPP-12 brick-tag Type Object (GPP-03 closed with game 3) |
 
 Workspace-wide invariants (verified by the June 2026 audits): no files over
@@ -50,7 +50,6 @@ None. (GPP-01 resolved Jul 13 2026 — see `log_archive.md`.)
 - **[GPP-12]** Stringly-typed brick tags → typed `BrickSpec` component
 
 ### ui (1)
-- **[JUN-T1]** Text input is numeric-only and keyboard-layout-blind — blocks editor rename/search widgets
 
 ### input (1)
 - **[GAP-001]** No gamepad backend — gilrs poll in the engine event loop

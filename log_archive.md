@@ -335,6 +335,9 @@ Clean rapier2d integration; excellent presets; good ECS sync; fixed timestep wit
 
 ## ui — Resolved Debt
 
+### [JUN-T1] Text input is numeric-only — RESOLVED (July 16, 2026)
+General text input shipped with the panels/UI/localization plan: `keycode_to_char` + `typed_keys` grew A–Z (shift = uppercase), Space, and Shift+Minus = `_`, and a free-form `text_input` widget joined `float_input` (same editing model: select-all-on-focus, cursor/selection/repeat, Enter/Tab/click-away commits, Escape cancels). Editor string fields (`UiLabel.text`, `UiButton.id`, …) edit through it. The keyboard-layout-blindness half was re-scoped as Low JUN-T1b (physical-keycode mapping is US-layout-only; fix = winit character events through `InputHandler`).
+
 ### January–June 2026
 - **DRY-001**: `layout_to_draw_data()` helper — both `label_styled()` and `label_with_font()` use it (Jan 2026).
 - **DRY-002**: `widget_background_color(state)` helper for button/checkbox (Jan 2026).

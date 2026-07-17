@@ -28,9 +28,9 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
   - `scene_io.rs` — save/load/new scene (load failures surface on status bar)
   - `shortcuts.rs` — keyboard shortcuts + play state transitions
   - `viewport_interaction.rs` — picking, rectangle selection, gizmo drag
-- `entity_ops.rs` — Pure entity CRUD (`&mut World` + `&mut Selection`, no UI). Component dispatch lives in `editor::ComponentKind` (registry macro)
+- `entity_ops.rs` — Pure entity CRUD (`&mut World` + `&mut Selection`, no UI). Component dispatch lives in `editor::ComponentKind` (registry macro). UI entities (`create_ui_label/panel/button`) get Name only — NO Transform2D (anchor+offset is their placement model)
 - `panel_renderer/` — Panel contents: `mod.rs` (dispatch, scene view, hierarchy), `inspector.rs` (thin shell: registry-generated `editor::edit_all_components()` for editing, `inspect_all_components` read-only during play, add-component popup)
-- `constants.rs` — `DEFAULT_SCENE_PATH`, min window size, `MIN_ENTITY_SCALE`, `DUPLICATE_OFFSET`
+- `constants.rs` — `DEFAULT_SCENE_PATH`, `EDITOR_PREFS_PATH`, min window size, `MIN_ENTITY_SCALE`, `DUPLICATE_OFFSET`
 - `lib.rs` — Public re-exports
 
 ## Key Patterns
@@ -44,6 +44,9 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
 - Save/Load: Ctrl+S / Ctrl+Shift+S / Ctrl+O / Ctrl+N — uses `scene_serializer::world_to_scene_data` for save, `SceneLoader` for load. Hardcoded paths (no file picker yet)
 - Status messages: `editor.status_bar.show_message("Saved")` after successful operations
 - Minimum window size: 1024x720 enforced for editor usability
+- **Editor prefs**: camera/grid/panel layout loaded in `init`, saved in `on_exit` (`editor_prefs.json`); menu Exit sets `ctx.exit_requested` (clean shutdown), never `process::exit`
+- **Font scoping**: editor font pinned at init and re-asserted every frame; `update_inner_game` swaps to `strings.active_font().or(game_base_font)` around `inner.update` so the game view localizes while chrome doesn't. View → "Cycle Game Locale" cycles `ctx.strings`
+- **Scene-authored UI**: `UiElementsHidden` inserted on init and Stop (after snapshot restore), removed on Play — UiLabel/UiPanel/UiButton only draw while the game runs
 
 ## Phase 1 Status
 Phase 1A–1H **complete**: entity CRUD, component add/remove, undo/redo, play/pause/stop, scene save/load, theme, status bar.
@@ -53,7 +56,7 @@ Currently in Phase 2 (Ideal Editor UI). See `PROJECT_ROADMAP.md`.
 See `TECH_DEBT.md` (all files < 600 lines since June 2026; remaining: no file picker, menu-label string matching)
 
 ## Testing
-- 76 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
+- 79 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
 - `entity_ops` is fully headless-testable (no UI dependency)
 
 ## Godot Oracle — When Stuck

@@ -26,6 +26,7 @@ Query types: Single<T>, Pair<T, U>, Triple<T, U, V>
 - `AudioSource`, `AudioListener` — audio components
 - `SpriteAnimation` — frame-based animation
 - `Tilemap` — row-major tile grid drawn from a tileset (`sprite_instances()` yields plain data; engine_core expands to the sprite batch)
+- `UiLabel` / `UiPanel` / `UiButton` — data-driven screen-space UI (`ui_components.rs`): `UiAnchor` 9-point anchor + pixel offset (NO Transform2D), serde defaults on every field; `@key` text localizes; drawn by engine_core's `ui_element_system`
 
 Note: `RigidBody` and `Collider` are NOT defined in this crate — they live in
 `crates/physics/src/components.rs`. They are stored in the ecs `World` as
@@ -41,6 +42,7 @@ components like any other type, but the physics crate owns their definitions.
 - `tilemap.rs` — `Tilemap` component + `TileInstance` (top-left-tile anchor, row 0 on top, tile 0 = empty, depth default -1.0)
 - `component_registry.rs` — Global component type registry
 - `sprite_components.rs` — Built-in component definitions
+- `ui_components.rs` — UiAnchor + resolve_anchored_pos + UiLabel/UiPanel/UiButton
 
 ## Critical Patterns
 - **Adding components**: `world.add_component(&entity, Transform2D::new(pos)).ok()`
@@ -67,7 +69,7 @@ components like any other type, but the physics crate owns their definitions.
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 201 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
+- 207 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 

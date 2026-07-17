@@ -20,7 +20,8 @@
 //! - **Scene Graph Hierarchy** - parent-child entity relationships with transform propagation
 //!
 //! Controls: WASD to move player, SPACE (or pad A) to jump, R to reset,
-//!           M to toggle music, +/- to adjust volume, H to toggle UI, ESC to exit
+//!           M to toggle music, +/- to adjust volume, H to toggle UI,
+//!           L to cycle language (English/Pirate), ESC to exit
 //!           Walk right past the gap — the camera follows! Collect the coins!
 //!
 //! Scene file: examples/assets/scenes/hello_world.scene.ron
@@ -52,6 +53,7 @@ enum DemoAction {
     ResetPlayer,
     VolumeUp,
     VolumeDown,
+    CycleLocale,
 }
 
 fn demo_actions() -> InputMapping<DemoAction> {
@@ -61,6 +63,7 @@ fn demo_actions() -> InputMapping<DemoAction> {
     actions.bind(DemoAction::ResetPlayer, InputSource::Keyboard(KeyCode::KeyR));
     actions.bind(DemoAction::VolumeUp, InputSource::Keyboard(KeyCode::Equal));
     actions.bind(DemoAction::VolumeDown, InputSource::Keyboard(KeyCode::Minus));
+    actions.bind(DemoAction::CycleLocale, InputSource::Keyboard(KeyCode::KeyL));
     actions
 }
 
@@ -347,6 +350,13 @@ impl Game for HelloWorld {
             self.toggle_music(ctx);
         }
 
+        // Cycle the UI language (en → pirate → en; pirate also swaps the
+        // default font to BlackSamsGold via the locale file's `font` field)
+        if self.actions.just_activated(DemoAction::CycleLocale, ctx.input) {
+            ctx.strings.cycle_locale();
+            println!("Locale: {}", ctx.strings.current_display_name());
+        }
+
         // Adjust master volume
         if self.actions.just_activated(DemoAction::VolumeUp, ctx.input) {
             let new_volume = (ctx.audio.master_volume() + 0.1).min(1.0);
@@ -428,33 +438,41 @@ impl Game for HelloWorld {
         // Create UI elements (immediate-mode - describe UI every frame)
         // Labels render with actual fonts if loaded, otherwise as placeholder rectangles
         if self.show_ui {
-            // Draw a semi-transparent control panel in the top-left
+            // Draw a semi-transparent control panel in the top-left.
+            // Every literal goes through ctx.strings.tr(...) so the L key
+            // (and the editor's View menu) can swap languages live.
             let panel_rect = UIRect::new(10.0, 10.0, 220.0, 250.0);
             ctx.ui.panel(panel_rect);
 
             // Title label (renders with font glyphs if font loaded)
-            ctx.ui.label("Controls", Vec2::new(20.0, 25.0));
+            let title = ctx.strings.tr("panel.title").to_string();
+            ctx.ui.label(&title, Vec2::new(20.0, 25.0));
 
             // --- Score display (from Resource) ---
             let score = ctx.world.resource::<GameState>().map(|s| s.score).unwrap_or(0);
             let coins = ctx.world.resource::<GameState>().map(|s| s.coins_collected).unwrap_or(0);
-            let score_text = format!("Score: {} ({} coins)", score, coins);
+            let score_text = format!(
+                "{}: {} ({} {})",
+                ctx.strings.tr("panel.score"), score, coins, ctx.strings.tr("panel.coins"),
+            );
             ctx.ui.label(&score_text, Vec2::new(20.0, 50.0));
 
             // --- Player state display (from StateMachine) ---
+            let state_label = ctx.strings.tr("panel.state").to_string();
             let state_text = if let Some(player) = self.player_entity() {
                 if let Some(sm) = ctx.world.get::<HierarchicalStateMachine<PlayerState, PlayerGroup>>(player) {
-                    format!("State: {:?} ({:?})", sm.current(), sm.parent())
+                    format!("{}: {:?} ({:?})", state_label, sm.current(), sm.parent())
                 } else {
-                    "State: N/A".to_string()
+                    format!("{}: N/A", state_label)
                 }
             } else {
-                "State: No player".to_string()
+                format!("{}: No player", state_label)
             };
             ctx.ui.label(&state_text, Vec2::new(20.0, 70.0));
 
             // Volume slider
-            ctx.ui.label("Volume:", Vec2::new(20.0, 95.0));
+            let volume_label = ctx.strings.tr("panel.volume").to_string();
+            ctx.ui.label(&volume_label, Vec2::new(20.0, 95.0));
             let slider_rect = UIRect::new(20.0, 110.0, 190.0, 20.0);
             let new_volume = ctx.ui.slider("volume_slider", self.volume, slider_rect);
             if new_volume != self.volume {
@@ -464,28 +482,35 @@ impl Game for HelloWorld {
 
             // Music toggle button
             let music_btn_rect = UIRect::new(20.0, 140.0, 90.0, 30.0);
-            let music_label = if self.music_playing { "Pause" } else { "Play" };
-            if ctx.ui.button("music_btn", music_label, music_btn_rect) {
+            let music_label = ctx.strings
+                .tr(if self.music_playing { "panel.music_pause" } else { "panel.music_play" })
+                .to_string();
+            if ctx.ui.button("music_btn", &music_label, music_btn_rect) {
                 self.toggle_music(ctx);
             }
 
             // Reset button
             let reset_btn_rect = UIRect::new(120.0, 140.0, 90.0, 30.0);
-            if ctx.ui.button("reset_btn", "Reset", reset_btn_rect) {
+            let reset_label = ctx.strings.tr("panel.reset").to_string();
+            if ctx.ui.button("reset_btn", &reset_label, reset_btn_rect) {
                 self.reset_player(ctx);
             }
 
             // Progress bar showing current volume level
-            ctx.ui.label("Volume Bar:", Vec2::new(20.0, 185.0));
+            let bar_label = ctx.strings.tr("panel.volume_bar").to_string();
+            ctx.ui.label(&bar_label, Vec2::new(20.0, 185.0));
             let progress_rect = UIRect::new(20.0, 200.0, 190.0, 15.0);
             ctx.ui.progress_bar(self.volume, progress_rect);
 
             // Help text and status at bottom
-            ctx.ui.label("H: Toggle UI", Vec2::new(20.0, 225.0));
+            let help = ctx.strings.tr("panel.toggle_ui").to_string();
+            ctx.ui.label(&help, Vec2::new(20.0, 225.0));
 
             // Show font status
-            let font_status = if self.font_loaded { "Font: ON" } else { "Font: OFF" };
-            ctx.ui.label(font_status, Vec2::new(140.0, 225.0));
+            let font_status = ctx.strings
+                .tr(if self.font_loaded { "panel.font_on" } else { "panel.font_off" })
+                .to_string();
+            ctx.ui.label(&font_status, Vec2::new(140.0, 225.0));
         }
     }
 
@@ -498,7 +523,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let game_config = GameConfig::new("Hello World - Insiculous 2D Physics Demo")
         .with_size(800, 600)
         .with_clear_color(0.1, 0.1, 0.15, 1.0)
-        .with_asset_base_path(EXAMPLES_DIR);
+        .with_asset_base_path(EXAMPLES_DIR)
+        .with_locales_dir("assets/locales");
 
     // Create and run the game
     let game = HelloWorld::new();

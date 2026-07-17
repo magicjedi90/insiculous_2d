@@ -8,11 +8,11 @@ Resolved history: root `log_archive.md` § ui.
 
 ## Open Items
 
-### [JUN-T1] Text input is numeric-only and keyboard-layout-blind — Medium
-- **File:** `interaction.rs` (`keycode_to_char`, `InputState::from_input_handler`)
-- **Issue:** typed characters synthesized from a hardcoded digit/period/minus keycode list. General text input (entity names, search boxes) is impossible; physical-key→char mapping ignores keyboard layouts.
+### [JUN-T1b] Physical-key→char mapping is US-layout-only — Low
+- **File:** `input_state.rs` (`keycode_to_char`)
+- **Issue:** general text input shipped Jul 2026 (`text_input` widget; digits, A–Z with shift-uppercase, space, `_`), but chars are still synthesized from physical keycodes — non-US layouts type as if US-QWERTY, and punctuation beyond `. - _` is untypeable.
 - **Fix:** plumb winit character events through `InputHandler` (input crate change).
-- **Priority:** Medium (blocks editor rename/search widgets) | **Effort:** Medium
+- **Priority:** Low (editor string fields work; layout correctness is polish) | **Effort:** Medium
 
 ### [ARCH-003] TextDrawData duplicates GlyphDrawData info — Low
 - **File:** `draw.rs:26-43` — `text: String` + per-glyph `character` duplicate character info.
@@ -29,8 +29,8 @@ Resolved history: root `log_archive.md` § ui.
 
 | Metric | Value (June 2026) |
 |--------|-------------------|
-| Test coverage | 80 tests (100% pass rate) |
+| Test coverage | 109 tests (100% pass rate) |
 | `#[allow(...)]` | 2 (documented clippy exceptions) |
 | High priority open | 0 |
-| Medium priority open | 1 (JUN-T1) |
-| Low priority open | 4 (ARCH-003, JUN-T2, JUN-T3, GPP-L8) |
+| Medium priority open | 0 |
+| Low priority open | 5 (JUN-T1b, ARCH-003, JUN-T2, JUN-T3, GPP-L8) |

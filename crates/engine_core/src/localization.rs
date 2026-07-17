@@ -203,6 +203,16 @@ impl Strings {
             .collect()
     }
 
+    /// Sorted key set of a loaded locale — for diagnostics and locale-file
+    /// parity tests (every locale should define the same keys).
+    pub fn locale_keys(&self, id: &str) -> Option<Vec<&str>> {
+        self.locales.get(id).map(|l| {
+            let mut keys: Vec<&str> = l.strings.keys().map(String::as_str).collect();
+            keys.sort_unstable();
+            keys
+        })
+    }
+
     /// Display name of the current locale (falls back to its id).
     pub fn current_display_name(&self) -> &str {
         self.locales
@@ -328,6 +338,14 @@ mod tests {
         assert_eq!(ids, vec!["en", "pirate"]);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn locale_keys_sorted_and_none_for_unknown() {
+        let s = loaded();
+        assert_eq!(s.locale_keys("en"), Some(vec!["menu.play", "menu.quit"]));
+        assert_eq!(s.locale_keys("pirate"), Some(vec!["menu.play"]));
+        assert_eq!(s.locale_keys("klingon"), None);
     }
 
     #[test]

@@ -20,6 +20,18 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
   module like `tilemap_render.rs`)
 - `game/render.rs` — GameRunner's frame-render tail (`render_frame`, batch-ref sorting,
   particle append); child module of `game` so no field visibility changes were needed
+- `game/frame_tail.rs` — GameRunner's post-update tail (particles, lines, UI-element pass,
+  toasts, base-font capture); `game/locale_font.rs` — locale-font application
+- `localization.rs` — `Strings`: RON locale tables (`assets/locales/*.ron`, `LocaleFile` v1
+  with display_name/optional font/strings map), `tr()` with current→en→key fallback
+  (log-once), `resolve()` for `@key` text, `cycle_locale`/`available_locales`/`locale_keys`,
+  per-locale font tracking (`font_dirty`/`active_font`). Exposed as `ctx.strings`;
+  `GameConfig.locale` + `locales_dir` configure it
+- `ui_element_system.rs` — draws ecs `UiLabel`/`UiPanel`/`UiButton` each frame (panels →
+  buttons → labels, anchor-placed, `@key` localized); returns `UiButtonPressed` presses that
+  the runner buffers and emits on the event bus after the NEXT frame's flush (one-frame
+  latency — the bus flushes before update). `UiElementsHidden` world resource suppresses
+  the pass (editor inserts it while Editing)
 - `gamepad_backend.rs` — gilrs hardware poll (`GamepadBackend::new_or_disabled()`,
   `pump()` drained right before `process_queued_events()`); pure translation fns
   (button/axis tables, 0.15 dead-zone rescale, hat-switch dpad synthesis on ±0.5
@@ -37,8 +49,8 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `window_manager.rs` — Window creation
 - `scene.rs` — Scene lifecycle / world coordination
 - `scene_manager.rs` — Scene loading and entity instantiation
-- `scene_loader.rs` — RON → World deserialization; `SceneInstance` retains the prefab table and offers runtime `spawn_prefab(world, assets, name, overrides)` (Prototype pattern, override semantics; failed spawns leave no debris)
-- `scene_serializer.rs` — World → SceneData (inverse of scene_loader, used by editor save)
+- `scene_loader.rs` — RON → World deserialization (`ComponentData` construction lives in `scene_loader_components.rs`); `SceneInstance` retains the prefab table and offers runtime `spawn_prefab(world, assets, name, overrides)` (Prototype pattern, override semantics; failed spawns leave no debris)
+- `scene_serializer.rs` — World → SceneData (inverse of scene_loader, used by editor save; tests in `scene_serializer_tests.rs`). NEW COMPONENT TYPES need arms in BOTH scene_loader_components.rs and scene_serializer.rs
 - `scene_data.rs` — SceneData / PrefabData / EntityData structs (schema incl. `ComponentData::EntityTag`, Sprite `emissive`)
 - `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
 - `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths); `TextureResolver` trait is the GPU seam (AssetManager = production impl, tests stub it)
@@ -49,8 +61,9 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `contexts.rs` — GameContext, RenderContext
 - `chaos_mode.rs` — `ChaosMode` enum + helpers (`ALL`, `is_insane`, `is_ridiculous`, `label`)
 - `chaos_theme.rs` — `ChaosTheme` per-mode presentation tokens (bg/structure/accent/grid colors, banner, particle mult); engine owns structure + default palette, games override via struct-update syntax
-- `pause.rs` — `PauseMenu`/`PauseAction`: shared pause mechanism (Menu/Esc/Start
-  toggles, Resume/Restart/Quit-to-Title/Exit-Game items; games map actions onto their
+- `pause.rs` — `PauseMenu`/`PauseAction`/`PauseMenuLabels`: shared pause mechanism (Menu/Esc/Start
+  toggles, Resume/Restart/Quit-to-Title/Exit-Game items — localizable via `draw_labeled`;
+  games map actions onto their
   own start_game/reset_to_title/`ctx.exit_requested` and skip their whole gameplay
   update while active;
   `time_scale()` feeds `ctx.time_scale` so engine particles freeze too). Takes
@@ -74,7 +87,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 245 passing (incl. 10 doc tests, 4 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 273 passing (incl. doc tests; GPU/window-bound ones compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

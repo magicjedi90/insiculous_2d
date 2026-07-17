@@ -28,18 +28,20 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - `asset_browser.rs` — pure asset scan (`scan_assets`), `AssetBrowserState`, `fit_rect`
 - `texture_field.rs` — inspector texture slot (drop target) + `InspectorExtras`
 - `gizmo_math.rs` — pure rotate-drag math (Y-flip + shortest-arc wrap)
-- `dock.rs` — Multi-panel docking
+- `dock/` — Multi-panel docking: `mod.rs` (state + layout, collapse/visibility toggles, `panel_id_for_menu_label`), `render.rs` (chrome, collapse chevrons, resize grabbers + clamped `resized_size`), `tests.rs`
 - `layout.rs` — Layout helpers
-- `menu.rs` — Top menu bar
+- `menu/` — Top menu bar (`mod.rs` + `tests.rs`); action items carry a `checked` flag (`MenuBar::set_checked`) rendered as an accent square
 - `toolbar.rs` — Tool selection toolbar
 - `status_bar.rs` — Bottom status bar (22px); `show_message`/`show_error`/`clear_message`
 - `play_controls.rs`, `play_state.rs` — Play/Pause/Stop widget + state enum
 - `editor_input.rs` — Editor-only input (hotkeys, etc.)
-- `editor_preferences.rs` — Persisted editor prefs (camera, zoom, last scene)
+- `editor_preferences.rs` — Persisted editor prefs (camera, zoom, last scene, `PanelPrefs` panel layout via `capture_panels`/`apply_panels`)
 
 ### Inspector / components
 - `inspector.rs` — Generic `inspect_component()` (read-only, serde-based)
-- `editable_inspector.rs` — Editable field widgets (sliders, Vec2, checkboxes, color, read-only string, `cycle()` variant selector)
+- `editable_inspector.rs` — Editable field widgets (sliders, Vec2, checkboxes, color, `string_edit` text input, `cycle()` variant selector)
+- `text_field.rs` — `edit_string` free fn + read-only `display_string`/`display_u32`
+- `ui_component_editors.rs` — `edit_ui_label/panel/button` (UiLabel/UiPanel/UiButton field editors; anchor via cycle selector)
 - `field_style.rs` — `FieldId` (widget-ID mapping), `EditableFieldStyle` (layout dims + colors), `EditResult<T>`
 - `component_editors.rs` — Per-component editors: `edit_transform2d()`, `edit_sprite()`, etc. Return `Option<ComponentEdit<T>>`; field ranges in `mod ranges`
 - `behavior_editor.rs` — `edit_behavior()`: variant cycle selector + per-variant fields (String fields read-only until the ui crate grows text input)
@@ -68,7 +70,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()`, `collider_overlay_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
 
 ## Testing
-- 277 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
+- 299 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`
