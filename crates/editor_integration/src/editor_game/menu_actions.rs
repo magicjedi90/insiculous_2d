@@ -13,8 +13,27 @@ use crate::entity_ops;
 use super::EditorGame;
 
 impl<G: Game> EditorGame<G> {
+    /// Sync View-menu check indicators with the current editor state.
+    fn sync_view_menu_checks(&mut self) {
+        for label in ["Inspector", "Hierarchy", "Asset Browser"] {
+            if let Some(id) = editor::panel_id_for_menu_label(label) {
+                let visible = self
+                    .editor
+                    .dock_area
+                    .get_panel(id)
+                    .is_some_and(|p| p.visible);
+                self.editor.menu_bar.set_checked("View", label, visible);
+            }
+        }
+        let grid = self.editor.is_grid_visible();
+        self.editor.menu_bar.set_checked("View", "Toggle Grid", grid);
+        let colliders = self.editor.is_colliders_visible();
+        self.editor.menu_bar.set_checked("View", "Toggle Colliders", colliders);
+    }
+
     /// Render the menu bar and dispatch any selected action.
     pub(super) fn handle_menu_bar(&mut self, ctx: &mut GameContext, window_size: Vec2) {
+        self.sync_view_menu_checks();
         let Some(action) = self.editor.menu_bar.render(ctx.ui, window_size.x, &self.editor.theme) else {
             return;
         };
@@ -79,11 +98,18 @@ impl<G: Game> EditorGame<G> {
                     log::error!("Failed to save: {}", e);
                 }
             }
-            "Exit" => std::process::exit(0),
+            // Clean shutdown (runs GameRunner::shutdown → on_exit → prefs save)
+            "Exit" => ctx.exit_requested = true,
             "Toggle Grid" => self.editor.toggle_grid(),
             "Toggle Colliders" => self.editor.toggle_colliders(),
-            "Scene View" | "Inspector" | "Hierarchy" | "Asset Browser" | "Console" => {
-                log::info!("Toggle panel: {}", action);
+            "Inspector" | "Hierarchy" | "Asset Browser" => {
+                if let Some(id) = editor::panel_id_for_menu_label(&action) {
+                    self.editor.dock_area.toggle_panel_visible(id);
+                }
+            }
+            "Reset Layout" => {
+                self.editor.reset_layout();
+                self.editor.status_bar.show_message("Layout reset to defaults");
             }
             _ => log::info!("Unhandled action: {}", action),
         }

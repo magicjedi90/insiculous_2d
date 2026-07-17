@@ -8,6 +8,9 @@ use glam::Vec2;
 /// Default scene file path used until a file picker exists (Phase 2+).
 pub(crate) const DEFAULT_SCENE_PATH: &str = "scenes/scene.ron";
 
+/// Editor preferences file (camera, grid, panel layout), saved on exit.
+pub(crate) const EDITOR_PREFS_PATH: &str = "editor_prefs.json";
+
 /// Minimum window width for the editor to be usable.
 pub(crate) const MIN_EDITOR_WINDOW_WIDTH: u32 = 1024;
 

@@ -76,8 +76,8 @@ pub use component_editors::{
     edit_transform2d, ComponentEdit,
 };
 pub use context::EditorContext;
-pub use editor_preferences::EditorPreferences;
-pub use dock::{DockArea, DockPanel, DockPosition, PanelId};
+pub use editor_preferences::{EditorPreferences, PanelPrefs};
+pub use dock::{panel_id_for_menu_label, DockArea, DockPanel, DockPosition, PanelId};
 pub use editable_inspector::{
     component_header, cycle_step, display_string, display_u32, edit_bool, edit_color, edit_f32,
     edit_normalized_f32, edit_vec2, EditableFieldStyle, EditableInspector, EditResult, FieldId,
@@ -99,7 +99,7 @@ pub use stored_component::{
     ComponentCategory, ComponentKind, StoredComponent,
 };
 pub use theme::EditorTheme;
-pub use toolbar::{EditorTool, Toolbar};
+pub use toolbar::{toolbar_position_for, EditorTool, Toolbar};
 pub use viewport::SceneViewport;
 pub use viewport_input::{ViewportInputConfig, ViewportInputHandler, ViewportInputResult};
 
@@ -112,7 +112,7 @@ pub mod prelude {
         ComponentEdit, ComponentKind, EditorCommand, StoredComponent,
         component_header, display_u32, edit_audio_source, edit_bool, edit_collider, edit_color,
         edit_f32, edit_normalized_f32, edit_rigid_body, edit_sprite, edit_transform2d, edit_vec2,
-        inspect_component, DockArea, DockPanel,
+        inspect_component, panel_id_for_menu_label, toolbar_position_for, DockArea, DockPanel,
         DockPosition, EditorAction, EditorContext, EditorInputMapping, EditorInputState,
         EditorPlayState, EditorPreferences, EditorTool, EditableFieldStyle, EditableInspector,
         EditorTheme, EditResult, EntityPicker, FieldId, Gizmo, GizmoMode, GridRenderer,

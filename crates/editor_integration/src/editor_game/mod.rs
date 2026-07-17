@@ -22,7 +22,7 @@ use engine_core::scene_data::PhysicsSettings;
 use engine_core::Game;
 use engine_core::GameConfig;
 
-use crate::constants::{MIN_EDITOR_WINDOW_HEIGHT, MIN_EDITOR_WINDOW_WIDTH};
+use crate::constants::{EDITOR_PREFS_PATH, MIN_EDITOR_WINDOW_HEIGHT, MIN_EDITOR_WINDOW_WIDTH};
 use crate::panel_renderer;
 
 mod menu_actions;
@@ -85,6 +85,12 @@ impl<G: Game> EditorGame<G> {
 
     /// Render the toolbar and the play controls next to it.
     fn render_toolbar_and_play_controls(&mut self, ctx: &mut GameContext) {
+        // The toolbar floats inside the scene view — follow it as panels
+        // hide/collapse/resize.
+        if let Some(scene_bounds) = self.editor.scene_view_bounds() {
+            self.editor.toolbar.set_position(editor::toolbar_position_for(scene_bounds));
+        }
+
         if let Some(tool) = self.editor.toolbar.render(ctx.ui, &self.editor.theme) {
             // set_tool keeps the gizmo mode in sync with the clicked tool.
             self.editor.set_tool(tool);
@@ -109,7 +115,6 @@ impl<G: Game> EditorGame<G> {
     fn render_panels(&mut self, ctx: &mut GameContext) -> Vec<(editor::PanelId, common::Rect)> {
         let theme = &self.editor.theme;
         let content_areas = self.editor.dock_area.render(ctx.ui, theme);
-        self.editor.dock_area.handle_resize(ctx.ui);
 
         for (panel_id, bounds) in content_areas.clone() {
             ctx.ui.push_clip_rect(ui::Rect::new(bounds.x, bounds.y, bounds.width, bounds.height));
@@ -118,6 +123,9 @@ impl<G: Game> EditorGame<G> {
             );
             ctx.ui.pop_clip_rect();
         }
+
+        // After the content loop so the hover/drag grabber draws on top.
+        self.editor.dock_area.handle_resize(ctx.ui, &self.editor.theme);
 
         content_areas
     }
@@ -136,6 +144,36 @@ impl<G: Game> EditorGame<G> {
         self.inner.update(ctx);
         if self.editor.scene_view_bounds().is_some() {
             ctx.ui.pop_clip_rect();
+        }
+    }
+
+    /// Load persisted editor preferences (camera, grid, panel layout).
+    fn load_preferences(&mut self) {
+        let prefs = editor::EditorPreferences::load(std::path::Path::new(EDITOR_PREFS_PATH));
+        self.editor.set_camera_offset(Vec2::new(prefs.camera_position.0, prefs.camera_position.1));
+        self.editor.set_camera_zoom(prefs.camera_zoom);
+        self.editor.set_snap_to_grid(prefs.snap_to_grid);
+        self.editor.set_grid_size(prefs.grid_size);
+        prefs.apply_panels(&mut self.editor.dock_area);
+    }
+
+    /// Capture and save editor preferences. Failures are logged, not fatal.
+    fn save_preferences(&self) {
+        let mut prefs = editor::EditorPreferences {
+            camera_position: (self.editor.camera_offset().x, self.editor.camera_offset().y),
+            camera_zoom: self.editor.camera_zoom(),
+            last_scene_path: self
+                .editor
+                .scene_path()
+                .and_then(|p| p.to_str())
+                .map(|s| s.to_string()),
+            snap_to_grid: self.editor.is_snap_to_grid(),
+            grid_size: self.editor.grid_size(),
+            panels: Vec::new(),
+        };
+        prefs.capture_panels(&self.editor.dock_area);
+        if let Err(e) = prefs.save(std::path::Path::new(EDITOR_PREFS_PATH)) {
+            log::warn!("Failed to save editor preferences: {}", e);
         }
     }
 
@@ -180,6 +218,9 @@ impl<G: Game> Game for EditorGame<G> {
             log::warn!("No font loaded. Text will render as placeholders.");
             log::warn!("To enable font rendering, add a .ttf file to examples/assets/fonts/font.ttf");
         }
+
+        // Restore camera/grid/panel layout from the previous session
+        self.load_preferences();
 
         // Delegate to inner game
         self.inner.init(ctx);
@@ -258,6 +299,7 @@ impl<G: Game> Game for EditorGame<G> {
     }
 
     fn on_exit(&mut self) {
+        self.save_preferences();
         self.inner.on_exit();
     }
 }

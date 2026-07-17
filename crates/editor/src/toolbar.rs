@@ -92,6 +92,11 @@ impl Toolbar {
         self
     }
 
+    /// Set the toolbar position in place (used to follow the scene view).
+    pub fn set_position(&mut self, position: Vec2) {
+        self.position = position;
+    }
+
     /// Set the button size.
     pub fn with_button_size(mut self, size: f32) -> Self {
         self.button_size = size;
@@ -166,9 +171,33 @@ impl Toolbar {
     }
 }
 
+/// Where the toolbar should sit for a given scene-view content area:
+/// tucked into the top-left corner, below the panel header.
+pub fn toolbar_position_for(scene_content: Rect) -> Vec2 {
+    Vec2::new(scene_content.x + 16.0, scene_content.y + 8.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_toolbar_position_follows_scene_content() {
+        let pos = toolbar_position_for(Rect::new(200.0, 48.0, 550.0, 600.0));
+        assert_eq!(pos, Vec2::new(216.0, 56.0));
+
+        // Left panel hidden: scene content starts at x = 0
+        let pos = toolbar_position_for(Rect::new(0.0, 48.0, 750.0, 600.0));
+        assert_eq!(pos, Vec2::new(16.0, 56.0));
+    }
+
+    #[test]
+    fn test_toolbar_set_position() {
+        let mut toolbar = Toolbar::new();
+        toolbar.set_position(Vec2::new(300.0, 60.0));
+        assert_eq!(toolbar.bounds().x, 300.0);
+        assert_eq!(toolbar.bounds().y, 60.0);
+    }
 
     #[test]
     fn test_editor_tool_default() {

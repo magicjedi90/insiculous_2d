@@ -75,33 +75,36 @@ impl Default for EditorContext {
     }
 }
 
+/// The editor's default panel layout: Hierarchy left, Inspector right,
+/// Scene center, Asset browser bottom.
+fn default_dock_area() -> DockArea {
+    let mut dock_area = DockArea::new();
+    dock_area.add_panel(
+        DockPanel::new(PanelId::HIERARCHY, "Hierarchy", DockPosition::Left)
+            .with_size(200.0)
+            .with_min_size(150.0),
+    );
+    dock_area.add_panel(
+        DockPanel::new(PanelId::INSPECTOR, "Inspector", DockPosition::Right)
+            .with_size(280.0)
+            .with_min_size(200.0),
+    );
+    dock_area.add_panel(DockPanel::new(
+        PanelId::SCENE_VIEW,
+        "Scene",
+        DockPosition::Center,
+    ));
+    dock_area.add_panel(
+        DockPanel::new(PanelId::ASSET_BROWSER, "Assets", DockPosition::Bottom)
+            .with_size(180.0)
+            .with_min_size(100.0),
+    );
+    dock_area
+}
+
 impl EditorContext {
     /// Create a new editor context with default settings.
     pub fn new() -> Self {
-        let mut dock_area = DockArea::new();
-
-        // Add default panels
-        dock_area.add_panel(
-            DockPanel::new(PanelId::HIERARCHY, "Hierarchy", DockPosition::Left)
-                .with_size(200.0)
-                .with_min_size(150.0),
-        );
-        dock_area.add_panel(
-            DockPanel::new(PanelId::INSPECTOR, "Inspector", DockPosition::Right)
-                .with_size(280.0)
-                .with_min_size(200.0),
-        );
-        dock_area.add_panel(DockPanel::new(
-            PanelId::SCENE_VIEW,
-            "Scene",
-            DockPosition::Center,
-        ));
-        dock_area.add_panel(
-            DockPanel::new(PanelId::ASSET_BROWSER, "Assets", DockPosition::Bottom)
-                .with_size(180.0)
-                .with_min_size(100.0),
-        );
-
         let theme = EditorTheme::default();
         let mut gizmo = Gizmo::new();
         gizmo.apply_theme(&theme);
@@ -109,9 +112,11 @@ impl EditorContext {
         let mut editor = Self {
             selection: Selection::new(),
             gizmo,
-            toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)), // Inside scene view, below panel header
+            // Position is set every frame from the scene view bounds
+            // (toolbar_position_for) — the default only covers frame 0.
+            toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)),
             menu_bar: MenuBar::editor_default(),
-            dock_area,
+            dock_area: default_dock_area(),
             viewport: SceneViewport::new(),
             grid: GridRenderer::new(),
             picker: EntityPicker::new(),
@@ -430,24 +435,34 @@ impl EditorContext {
         self.viewport.update(delta_time);
     }
 
+    /// Reset the dock layout (panel sizes, visibility, collapse state) to
+    /// the editor defaults.
+    pub fn reset_layout(&mut self) {
+        self.dock_area = default_dock_area();
+    }
+
     /// Get the scene view content bounds (where the game world is rendered).
+    ///
+    /// Returns `None` when the panel is hidden or collapsed (no content area).
     pub fn scene_view_bounds(&self) -> Option<common::Rect> {
-        self.dock_area
-            .get_panel(PanelId::SCENE_VIEW)
-            .map(|p| p.content_bounds())
+        self.panel_content_bounds(PanelId::SCENE_VIEW)
     }
 
-    /// Get the inspector panel bounds.
+    /// Get the inspector panel bounds (`None` when hidden or collapsed).
     pub fn inspector_bounds(&self) -> Option<common::Rect> {
-        self.dock_area
-            .get_panel(PanelId::INSPECTOR)
-            .map(|p| p.content_bounds())
+        self.panel_content_bounds(PanelId::INSPECTOR)
     }
 
-    /// Get the hierarchy panel bounds.
+    /// Get the hierarchy panel bounds (`None` when hidden or collapsed).
     pub fn hierarchy_bounds(&self) -> Option<common::Rect> {
+        self.panel_content_bounds(PanelId::HIERARCHY)
+    }
+
+    /// Content bounds of a panel, or `None` when it is hidden or collapsed.
+    fn panel_content_bounds(&self, id: PanelId) -> Option<common::Rect> {
         self.dock_area
-            .get_panel(PanelId::HIERARCHY)
+            .get_panel(id)
+            .filter(|p| p.visible && !(p.collapsed && p.is_collapsible()))
             .map(|p| p.content_bounds())
     }
 
