@@ -222,10 +222,22 @@ impl SceneViewport {
         )
     }
 
-    /// Create a Camera struct for use with the renderer.
-    pub fn to_render_camera(&self) -> Camera {
-        Camera::new(self.camera_position, self.viewport_size())
-            .with_zoom(self.camera_zoom)
+    /// Render camera that reproduces this viewport's world→screen mapping
+    /// when the GPU renders to a full-window surface of `window_size`.
+    ///
+    /// The GPU projection centers the world on the window; this viewport
+    /// centers it on the scene panel. Offsetting the camera position by the
+    /// panel-center-to-window-center delta (Y flipped for the Y-up world,
+    /// zoom-scaled) makes both transforms produce identical screen
+    /// coordinates, so sprites land exactly where the editor overlay
+    /// (gizmo, picking, grid) expects them.
+    pub fn to_window_render_camera(&self, window_size: Vec2) -> Camera {
+        let pc = self.viewport_center();
+        let offset = Vec2::new(
+            (window_size.x * 0.5 - pc.x) / self.camera_zoom,
+            (pc.y - window_size.y * 0.5) / self.camera_zoom,
+        );
+        Camera::new(self.camera_position + offset, window_size).with_zoom(self.camera_zoom)
     }
 
     // ================== Entity Rendering ==================
@@ -426,17 +438,67 @@ mod tests {
         assert!(!viewport.contains_screen_point(Vec2::new(200.0, 400.0)));
     }
 
-    #[test]
-    fn test_viewport_to_render_camera() {
-        let mut viewport = SceneViewport::new();
-        viewport.set_viewport_bounds(Rect::new(0.0, 0.0, 1920.0, 1080.0));
-        viewport.set_camera_position(Vec2::new(100.0, -50.0));
-        viewport.set_camera_zoom(1.5);
+    /// Assert the viewport overlay mapping and the GPU render-camera mapping
+    /// agree for a set of world points. This equivalence is the contract that
+    /// keeps gizmo/picking/grid aligned with the rendered sprites.
+    fn assert_overlay_matches_render_camera(viewport: &SceneViewport, window_size: Vec2) {
+        let camera = viewport.to_window_render_camera(window_size);
+        for world in [
+            Vec2::ZERO,
+            Vec2::new(100.0, 50.0),
+            Vec2::new(-3.5, 77.25),
+            Vec2::new(-250.0, -125.0),
+        ] {
+            let overlay = viewport.world_to_screen(world);
+            let gpu = camera.world_to_screen(world);
+            assert!(
+                (overlay - gpu).length() < 0.01,
+                "mismatch at {world}: overlay {overlay} vs gpu {gpu}"
+            );
+        }
+    }
 
-        let camera = viewport.to_render_camera();
-        assert_eq!(camera.position, Vec2::new(100.0, -50.0));
-        assert_eq!(camera.zoom, 1.5);
-        assert_eq!(camera.viewport_size, Vec2::new(1920.0, 1080.0));
+    #[test]
+    fn test_window_render_camera_matches_overlay_default_view() {
+        // Regression: with a NONZERO panel origin (dock chrome on all sides),
+        // the old to_render_camera produced a panel_center-to-window_center
+        // offset between sprites and the editor overlay.
+        let mut viewport = SceneViewport::new();
+        viewport.set_viewport_bounds(Rect::new(300.0, 100.0, 800.0, 600.0));
+        assert_overlay_matches_render_camera(&viewport, Vec2::new(1600.0, 900.0));
+    }
+
+    #[test]
+    fn test_window_render_camera_matches_overlay_pan_zoom() {
+        let mut viewport = SceneViewport::new();
+        viewport.set_viewport_bounds(Rect::new(300.0, 100.0, 800.0, 600.0));
+        viewport.set_camera_position(Vec2::new(120.0, -40.0));
+        viewport.set_camera_zoom(2.0);
+        assert_overlay_matches_render_camera(&viewport, Vec2::new(1600.0, 900.0));
+    }
+
+    #[test]
+    fn test_window_render_camera_screen_roundtrip() {
+        // viewport.screen_to_world must be the inverse of the GPU camera's
+        // world_to_screen, so clicks land on the sprite under the cursor.
+        let mut viewport = SceneViewport::new();
+        viewport.set_viewport_bounds(Rect::new(300.0, 100.0, 800.0, 600.0));
+        viewport.set_camera_position(Vec2::new(-60.0, 25.0));
+        viewport.set_camera_zoom(1.5);
+        let camera = viewport.to_window_render_camera(Vec2::new(1600.0, 900.0));
+
+        for screen in [
+            Vec2::new(700.0, 400.0),
+            Vec2::new(310.0, 110.0),
+            Vec2::new(1050.0, 650.0),
+        ] {
+            let world = viewport.screen_to_world(screen);
+            let back = camera.world_to_screen(world);
+            assert!(
+                (back - screen).length() < 0.01,
+                "roundtrip mismatch at {screen}: got {back}"
+            );
+        }
     }
 
     #[test]

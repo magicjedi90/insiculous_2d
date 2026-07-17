@@ -77,6 +77,10 @@ pub struct SpriteInstance {
     pub depth: f32,
     /// Emissive intensity — 0.0 = no glow, >0.0 amplifies RGB above 1.0 so bloom picks it up
     pub emissive: f32,
+    /// SDF shape parameters: `[kind, corner_radius, border_width, reserved]`.
+    /// kind 0 = plain textured quad (default, zeroed == legacy behavior),
+    /// 1 = rounded rect, 2 = circle. Radius/border are in local pixels.
+    pub shape: [f32; 4],
 }
 
 impl SpriteInstance {
@@ -110,7 +114,14 @@ impl SpriteInstance {
             color: color.to_array(),
             depth,
             emissive,
+            shape: [0.0; 4],
         }
+    }
+
+    /// Set the SDF shape parameters (builder-style).
+    pub fn with_shape(mut self, shape: [f32; 4]) -> Self {
+        self.shape = shape;
+        self
     }
 
     /// Get the instance buffer layout
@@ -160,6 +171,12 @@ impl SpriteInstance {
                     offset: std::mem::size_of::<[f32; 14]>() as wgpu::BufferAddress,
                     shader_location: 9,
                     format: wgpu::VertexFormat::Float32,
+                },
+                // SDF shape params [kind, corner_radius, border_width, reserved]
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 15]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32x4,
                 },
             ],
         }
@@ -346,16 +363,32 @@ mod tests {
             0.0,
         );
         let _bytes: &[u8] = bytemuck::bytes_of(&instance);
-        // 2*4 + 1*4 + 2*4 + 4*4 + 4*4 + 1*4 + 1*4 = 60 bytes
-        assert_eq!(std::mem::size_of::<SpriteInstance>(), 60);
+        // 2*4 + 1*4 + 2*4 + 4*4 + 4*4 + 1*4 + 1*4 + 4*4 = 76 bytes
+        assert_eq!(std::mem::size_of::<SpriteInstance>(), 76);
     }
 
     #[test]
     fn test_sprite_instance_desc_attributes() {
         let desc = SpriteInstance::desc();
         assert_eq!(desc.step_mode, wgpu::VertexStepMode::Instance);
-        assert_eq!(desc.attributes.len(), 7); // + emissive
-        assert_eq!(desc.array_stride, 60);
+        assert_eq!(desc.attributes.len(), 8); // + emissive + shape
+        assert_eq!(desc.array_stride, 76);
+    }
+
+    #[test]
+    fn test_sprite_instance_default_shape_is_plain_quad() {
+        let instance = SpriteInstance::new(
+            Vec2::ZERO,
+            0.0,
+            Vec2::ONE,
+            [0.0, 0.0, 1.0, 1.0],
+            Vec4::ONE,
+            0.0,
+        );
+        assert_eq!(instance.shape, [0.0; 4], "zeroed shape == legacy textured quad");
+
+        let shaped = instance.with_shape([2.0, 8.0, 1.5, 0.0]);
+        assert_eq!(shaped.shape, [2.0, 8.0, 1.5, 0.0]);
     }
 
     // ==================== Camera2D Tests ====================

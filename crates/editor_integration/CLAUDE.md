@@ -34,6 +34,9 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
 - `lib.rs` — Public re-exports
 
 ## Key Patterns
+- **Camera sync (Jul 2026)**: the editor viewport is the single source of truth for the view. `EditorGame::render` overrides `ctx.camera` with `viewport.to_window_render_camera(window_size)` every frame; while Playing, `sync_viewport_from_main_camera` mirrors the game's main-camera entity onto the viewport (editing pan/zoom saved on Play, restored on Stop). Never sync the other direction.
+- **Scale tool scales colliders**: physics ignores Transform2D.scale, so the gizmo scale branch also calls `scale_collider` and records one `MacroCommand` (transform+collider) per drag.
+- **Asset browser** (`panel_renderer/asset_browser.rs`): scan-on-open + Rescan, lazy thumbnails (≤4 loads/frame), click-to-assign, drag-drop (ghost via ui overlay; viewport drop assigns on sprite hit, spawns on empty space — both undoable).
 - `EditorGame::update()` — main orchestration. Editor input → conditional game update (only if Playing) → render panels
 - Input routing: Editing/Paused → editor gets input. Playing → game gets input, editor hotkeys still work.
 - Inspector writeback: generated per-component by `editor_component_registry!` (editor crate) — `edit_*()` returns `Option<ComponentEdit<T>>` → `editor::apply_component_edit()` writes to world and records undo via `try_merge_or_push` (continuous edits merge by `field_hint`)
@@ -50,7 +53,7 @@ Currently in Phase 2 (Ideal Editor UI). See `PROJECT_ROADMAP.md`.
 See `TECH_DEBT.md` (all files < 600 lines since June 2026; remaining: no file picker, menu-label string matching)
 
 ## Testing
-- 66 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
+- 76 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
 - `entity_ops` is fully headless-testable (no UI dependency)
 
 ## Godot Oracle — When Stuck

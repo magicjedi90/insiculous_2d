@@ -38,6 +38,7 @@ mod ranges {
 pub fn edit_behavior(
     inspector: &mut EditableInspector<'_>,
     behavior: &Behavior,
+    _extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<Behavior>> {
     inspector.header("Behavior");
 

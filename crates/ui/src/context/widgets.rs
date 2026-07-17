@@ -1,5 +1,6 @@
 //! Interactive widgets for [`UIContext`]: buttons, sliders, checkboxes,
-//! float inputs, plus panel and progress-bar containers.
+//! plus panel and progress-bar containers. The float/text input lives in
+//! `text_input.rs`.
 
 use glam::Vec2;
 
@@ -162,108 +163,6 @@ impl UIContext {
         } else {
             value
         }
-    }
-
-    /// Create a float text input field.
-    ///
-    /// Displays the value as text in a box. Click to focus and type a new value.
-    /// Accepts digits, period, and minus sign. Enter/Tab commits, Escape cancels.
-    /// The committed value is clamped to the min/max range.
-    ///
-    /// Returns the current value (unchanged while editing, new value on commit).
-    pub fn float_input(
-        &mut self,
-        id: impl Into<WidgetId>,
-        value: f32,
-        min: f32,
-        max: f32,
-        bounds: Rect,
-    ) -> f32 {
-        let id = id.into();
-        let result = self.interaction.interact(id, bounds, true);
-        let is_focused = self.interaction.is_focused(id);
-
-        // Snapshot keyboard state before mutating persistent state
-        let typed_chars = self.interaction.input().typed_chars.clone();
-        let enter = self.interaction.input().enter_pressed;
-        let escape = self.interaction.input().escape_pressed;
-        let backspace = self.interaction.input().backspace_pressed;
-        let tab = self.interaction.input().tab_pressed;
-        let mouse_just_pressed = self.interaction.input().mouse_just_pressed;
-        let mouse_in_bounds = bounds.contains(self.interaction.input().mouse_pos);
-
-        if result.clicked && !is_focused {
-            // Enter edit mode
-            self.interaction.set_focus(id);
-            let state = self.interaction.get_state(id);
-            state.string_value = format!("{:.2}", value);
-        }
-
-        if self.interaction.is_focused(id) {
-            // Process keyboard input
-            let state = self.interaction.get_state(id);
-
-            for ch in &typed_chars {
-                state.string_value.push(*ch);
-            }
-
-            if backspace {
-                state.string_value.pop();
-            }
-
-            // Commit on Enter, Tab, or click outside
-            if enter || tab || (mouse_just_pressed && !mouse_in_bounds) {
-                return self.commit_float_input(id, value, min, max, bounds);
-            }
-
-            // Cancel on Escape
-            if escape {
-                self.interaction.clear_focus();
-                return self.draw_float_value(bounds, value, false);
-            }
-
-            // Draw focused state with editing text
-            let edit_text = self.interaction.get_state(id).string_value.clone();
-            self.draw_float_input_box(bounds, &edit_text, true);
-            return value; // Return original while editing
-        }
-
-        // Not focused — draw display value
-        let hovered = result.state == WidgetState::Hovered;
-        self.draw_float_value(bounds, value, hovered)
-    }
-
-    /// Commit the edit buffer of a float input: parse (falling back to the
-    /// pre-edit value), clamp, unfocus, and draw the committed value.
-    fn commit_float_input(&mut self, id: WidgetId, fallback: f32, min: f32, max: f32, bounds: Rect) -> f32 {
-        let new_value = self.interaction.get_state(id).string_value
-            .parse::<f32>()
-            .unwrap_or(fallback)
-            .clamp(min, max);
-        self.interaction.clear_focus();
-        self.draw_float_value(bounds, new_value, false)
-    }
-
-    /// Draw a float input showing a numeric value; returns the value for
-    /// tail-call convenience.
-    fn draw_float_value(&mut self, bounds: Rect, value: f32, highlighted: bool) -> f32 {
-        self.draw_float_input_box(bounds, &format!("{:.2}", value), highlighted);
-        value
-    }
-
-    /// Draw a float input text box (shared by focused and unfocused states).
-    fn draw_float_input_box(&mut self, bounds: Rect, text: &str, highlighted: bool) {
-        let style = self.theme.text_input.clone();
-        let bg = if highlighted { style.background_focused } else { style.background };
-        let border = if highlighted { style.border_focused } else { style.border };
-
-        self.draw_list.rect_rounded(bounds, bg, style.corner_radius);
-        self.draw_list
-            .rect_border_rounded(bounds, border, style.border_width, style.corner_radius);
-
-        let text_pos =
-            self.text_pos_in_bounds(text, bounds, TextAlign::Left, style.font_size, style.padding);
-        self.draw_text_at_baseline(text, text_pos, style.text_color, style.font_size);
     }
 
     /// Create a checkbox.

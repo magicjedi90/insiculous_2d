@@ -31,12 +31,10 @@ const PLAYER_SPAWN: Vec2 = Vec2::new(-200.0, 100.0);
 
 // --- Actions: game-defined enum evaluated through the engine's InputMapping ---
 
-/// In-game actions for the wrapped platformer (movement/jump come from the
-/// scene's `PlayerPlatformer` behavior).
+/// Debug actions for the wrapped platformer (movement/jump come from the
+/// scene's `PlayerPlatformer` behavior; the jump SOUND reads `ctx.players`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum DemoAction {
-    /// Plays the jump sound (the jump itself is driven by the behavior system)
-    Jump,
     ToggleMusic,
     ToggleUi,
     ResetPlayer,
@@ -44,7 +42,6 @@ enum DemoAction {
 
 fn demo_actions() -> InputMapping<DemoAction> {
     let mut actions = InputMapping::new();
-    actions.bind(DemoAction::Jump, InputSource::Keyboard(KeyCode::Space));
     actions.bind(DemoAction::ToggleMusic, InputSource::Keyboard(KeyCode::KeyM));
     actions.bind(DemoAction::ToggleUi, InputSource::Keyboard(KeyCode::KeyH));
     actions.bind(DemoAction::ResetPlayer, InputSource::Keyboard(KeyCode::KeyR));
@@ -231,7 +228,10 @@ impl Game for PlatformerGame {
 
     fn update(&mut self, ctx: &mut GameContext) {
         // Jump sound (the jump itself is driven by the behavior system)
-        if self.actions.just_activated(DemoAction::Jump, ctx.input) {
+        // Player-aware input: Space/Enter/either-pad-A all trigger the sound
+        if ctx.players.just_activated(PlayerId::P1, GameAction::Action1, ctx.input)
+            || ctx.players.just_activated(PlayerId::P2, GameAction::Action1, ctx.input)
+        {
             if let Some(jump_sound) = &self.jump_sound {
                 let settings = SoundSettings::new().with_volume(0.8).with_speed(1.0);
                 ctx.audio.play_with_settings(jump_sound, settings).ok();

@@ -87,6 +87,18 @@ pub struct EditableFieldStyle {
     pub axis_y_label: Color,
     /// "R", "G", "B", "A" channel label colors in color fields
     pub channel_labels: [Color; 4],
+    /// Background of asset slot fields (texture references)
+    pub slot_bg: Color,
+    /// Border highlight while a compatible drag hovers a drop target
+    pub drop_highlight: Color,
+    /// Font size for field name labels and values
+    pub label_font: f32,
+    /// Font size for component headers/section titles
+    pub header_font: f32,
+    /// Font size for "X"/"Y" axis labels in Vec2 fields
+    pub axis_font: f32,
+    /// Font size for "R"/"G"/"B"/"A" channel labels in color fields
+    pub channel_font: f32,
 }
 
 impl Default for EditableFieldStyle {
@@ -104,7 +116,7 @@ impl Default for EditableFieldStyle {
             axis_label_gap: 14.0,
             input_gap: 8.0,
             color_input_width: 48.0,
-            color_input_height: 14.0,
+            color_input_height: 16.0,
             channel_label_gap: 12.0,
             color_input_gap: 4.0,
             label_color: Color::new(0.7, 0.7, 0.7, 1.0),
@@ -118,6 +130,12 @@ impl Default for EditableFieldStyle {
                 Color::new(0.4, 0.4, 0.9, 1.0), // B
                 Color::new(0.7, 0.7, 0.7, 1.0), // A
             ],
+            slot_bg: Color::new(0.18, 0.18, 0.18, 1.0),
+            drop_highlight: Color::new(0.0, 0.47, 0.83, 1.0),
+            label_font: 14.0,
+            header_font: 16.0,
+            axis_font: 12.0,
+            channel_font: 12.0,
         }
     }
 }

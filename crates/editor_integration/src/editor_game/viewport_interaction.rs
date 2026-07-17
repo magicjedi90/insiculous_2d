@@ -8,6 +8,7 @@ use engine_core::contexts::GameContext;
 use engine_core::Game;
 
 use crate::constants::MIN_ENTITY_SCALE;
+use crate::entity_ops;
 
 use super::EditorGame;
 
@@ -15,6 +16,22 @@ impl<G: Game> EditorGame<G> {
     /// Handle viewport input: pan/zoom plus click and rectangle selection.
     pub(super) fn handle_viewport_picking(&mut self, ctx: &mut GameContext) {
         if self.editor.is_playing() {
+            return;
+        }
+
+        // Asset drops land before the input-blocked check (there is no ghost
+        // overlay on the release frame) and before click handling.
+        if let Some(scene_bounds) = self.editor.scene_view_bounds() {
+            if let Some((editor::DragPayload::Texture { handle, path }, drop_pos)) =
+                self.editor.drag_drop.take_drop_in(scene_bounds)
+            {
+                self.handle_viewport_texture_drop(ctx, handle, &path, drop_pos);
+                return;
+            }
+        }
+        // While a drag is in flight (or on its release frame) the viewport
+        // must not treat the mouse as a pick/selection click.
+        if self.editor.drag_drop.suppresses_click() {
             return;
         }
 
@@ -78,6 +95,53 @@ impl<G: Game> EditorGame<G> {
         }
     }
 
+    /// Handle a texture dropped from the asset browser onto the scene view:
+    /// dropping onto an existing sprite reskins it (assign); dropping onto
+    /// empty space spawns a new sprite entity at that world position. Both
+    /// are single undo entries.
+    fn handle_viewport_texture_drop(
+        &mut self,
+        ctx: &mut GameContext,
+        handle: u32,
+        path: &str,
+        drop_pos: Vec2,
+    ) {
+        let pickables = build_pickable_entities(ctx.world);
+        let hit = self
+            .editor
+            .picker
+            .pick_at_screen_pos(&self.editor.viewport, drop_pos, &pickables)
+            .topmost();
+
+        match hit {
+            Some(entity) => {
+                if entity_ops::assign_sprite_texture(ctx.world, entity, handle, &mut self.command_history) {
+                    self.editor.selection.select(entity);
+                    self.editor.mark_dirty();
+                    self.editor.status_bar.show_message(format!("Assigned {path}"));
+                }
+            }
+            None => {
+                let world_pos = self.editor.screen_to_world(drop_pos);
+                let stem = std::path::Path::new(path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Sprite");
+                entity_ops::create_sprite_entity_with_texture(
+                    ctx.world,
+                    &mut self.editor.selection,
+                    world_pos,
+                    handle,
+                    stem,
+                    &mut self.entity_counter,
+                    &mut self.command_history,
+                );
+                self.editor.mark_dirty();
+                self.editor.status_bar.show_message(format!("Created sprite from {path}"));
+            }
+        }
+    }
+
     /// Render the gizmo for the primary selection and apply drag deltas,
     /// recording a single undo entry per drag.
     pub(super) fn handle_gizmo(&mut self, ctx: &mut GameContext, content_areas: &[(PanelId, common::Rect)]) {
@@ -101,10 +165,13 @@ impl<G: Game> EditorGame<G> {
         let screen_pos = self.editor.world_to_screen(entity_pos);
         let interaction = self.editor.gizmo.render(ctx.ui, screen_pos);
 
-        // Capture initial transform when gizmo drag starts
+        // Capture initial transform (and collider, for the scale tool)
+        // when gizmo drag starts
         if interaction.handle.is_some() && self.gizmo_drag_start.is_none() {
             if let Some(t) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
                 self.gizmo_drag_start = Some(*t);
+                self.gizmo_drag_start_collider =
+                    ctx.world.get::<physics::components::Collider>(entity_id).cloned();
             }
         }
 
@@ -129,24 +196,78 @@ impl<G: Game> EditorGame<G> {
                 }
             }
 
-            // Scale
+            // Scale — the tool scales the whole object: physics colliders
+            // are absolute-pixel sized (they ignore Transform2D.scale), so
+            // the collider must be resized by the same factor or it drifts
+            // from the visuals.
             if interaction.scale_delta != Vec2::ZERO {
-                if let Some(transform) = ctx.world.get_mut::<ecs::sprite_components::Transform2D>(entity_id) {
-                    transform.scale += interaction.scale_delta;
-                    transform.scale = transform.scale.max(Vec2::splat(MIN_ENTITY_SCALE));
+                let factor = ctx.world
+                    .get_mut::<ecs::sprite_components::Transform2D>(entity_id)
+                    .map(|transform| {
+                        let old_scale = transform.scale;
+                        transform.scale += interaction.scale_delta;
+                        transform.scale = transform.scale.max(Vec2::splat(MIN_ENTITY_SCALE));
+                        transform.scale / old_scale.max(Vec2::splat(f32::EPSILON))
+                    });
+                if let (Some(factor), Some(collider)) =
+                    (factor, ctx.world.get_mut::<physics::components::Collider>(entity_id))
+                {
+                    scale_collider(collider, factor);
                 }
             }
         }
 
-        // Gizmo released — create undo command for the drag
+        // Gizmo released — record ONE undo entry for the whole drag
+        // (transform, plus the collider when the scale tool resized it)
         if interaction.handle.is_none() && self.gizmo_drag_start.is_some() {
             if let Some(initial) = self.gizmo_drag_start.take() {
+                let initial_collider = self.gizmo_drag_start_collider.take();
                 if let Some(final_val) = ctx.world.get::<ecs::sprite_components::Transform2D>(entity_id) {
-                    let cmd = editor::commands::TransformGizmoCommand::new(entity_id, initial, *final_val);
-                    self.command_history.push_already_executed(Box::new(cmd));
+                    let transform_cmd =
+                        editor::commands::TransformGizmoCommand::new(entity_id, initial, *final_val);
+
+                    let collider_cmd = initial_collider.and_then(|old| {
+                        let new = ctx.world.get::<physics::components::Collider>(entity_id)?;
+                        (*new != old).then(|| {
+                            editor::commands::SetColliderCommand::new(entity_id, old, new.clone(), "gizmo_scale")
+                        })
+                    });
+
+                    match collider_cmd {
+                        Some(collider_cmd) => {
+                            let cmd = editor::commands::MacroCommand::new(
+                                "Scale Entity",
+                                vec![Box::new(transform_cmd), Box::new(collider_cmd)],
+                            );
+                            self.command_history.push_already_executed(Box::new(cmd));
+                        }
+                        None => {
+                            self.command_history.push_already_executed(Box::new(transform_cmd));
+                        }
+                    }
                     self.editor.mark_dirty();
                 }
             }
+        }
+    }
+}
+
+/// Scale a collider's shape (and body-local offset) by a per-axis factor —
+/// how the editor's scale tool keeps absolute-pixel physics shapes in step
+/// with the sprite. Radii use the dominant axis factor (circles stay circles).
+pub(super) fn scale_collider(collider: &mut physics::components::Collider, factor: Vec2) {
+    use physics::components::ColliderShape;
+    collider.offset *= factor;
+    match &mut collider.shape {
+        ColliderShape::Box { half_extents } => *half_extents *= factor,
+        ColliderShape::Circle { radius } => *radius *= factor.x.max(factor.y),
+        ColliderShape::CapsuleY { half_height, radius } => {
+            *half_height *= factor.y;
+            *radius *= factor.x;
+        }
+        ColliderShape::CapsuleX { half_height, radius } => {
+            *half_height *= factor.x;
+            *radius *= factor.y;
         }
     }
 }
@@ -162,8 +283,9 @@ pub(super) fn build_pickable_entities(world: &World) -> Vec<PickableEntity> {
         .filter_map(|entity_id| {
             let global_t = world.get::<GlobalTransform2D>(entity_id)?;
             let sprite = world.get::<ecs::sprite_components::Sprite>(entity_id)?;
-            // Visual size = sprite scale * global transform scale
-            let size = sprite.scale * global_t.scale;
+            // Visual size must match the render path (engine_core game.rs):
+            // sprites draw at scale * sprite.scale * RENDER_UNIT pixels.
+            let size = sprite.scale * global_t.scale * engine_core::RENDER_UNIT;
             Some(PickableEntity::new(
                 entity_id,
                 global_t.position,

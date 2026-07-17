@@ -264,9 +264,11 @@ impl DockArea {
                 header_bounds,
                 ui::TextAlign::Left,
                 theme.accent_cyan,
-                14.0,
+                theme.fonts.body,
                 8.0,
             );
+
+            draw_panel_chrome(ui, &header_bounds, theme);
 
             // Track content area (caller will push/pop clip rect around each panel's content)
             let content = panel.content_bounds();
@@ -354,6 +356,35 @@ impl DockArea {
             _ => Rect::default(),
         }
     }
+}
+
+/// Panel-header flair: a thin accent separator along the header's bottom
+/// edge plus small corner ticks in the top corners (technique borrowed from
+/// the in-game MenuPanel chrome, rebuilt here from ui primitives so the
+/// editor keeps its no-engine_core dependency rule).
+fn draw_panel_chrome(ui: &mut UIContext, header_bounds: &Rect, theme: &EditorTheme) {
+    // Accent separator under the header
+    ui.rect(
+        Rect::new(
+            header_bounds.x,
+            header_bounds.y + header_bounds.height - 2.0,
+            header_bounds.width,
+            2.0,
+        ),
+        theme.accent_cyan.with_alpha(0.6),
+    );
+
+    // Corner ticks (two small accent dashes per top corner)
+    let tick_len = 10.0;
+    let tick_w = 2.0;
+    let c = theme.accent_cyan;
+    // Top-left: horizontal + vertical tick
+    ui.rect(Rect::new(header_bounds.x, header_bounds.y, tick_len, tick_w), c);
+    ui.rect(Rect::new(header_bounds.x, header_bounds.y, tick_w, tick_len), c);
+    // Top-right
+    let right = header_bounds.x + header_bounds.width;
+    ui.rect(Rect::new(right - tick_len, header_bounds.y, tick_len, tick_w), c);
+    ui.rect(Rect::new(right - tick_w, header_bounds.y, tick_w, tick_len), c);
 }
 
 #[cfg(test)]

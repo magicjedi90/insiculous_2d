@@ -118,11 +118,11 @@ impl StatusBar {
         // Background
         ui.rect(bar, theme.status_bar_bg);
 
-        // Top border line
+        // Top separator in the panel-border blue so the bar reads as chrome
         ui.line(
             Vec2::new(bar.x, bar.y),
             Vec2::new(bar.x + bar.width, bar.y),
-            theme.border_subtle,
+            theme.border_panel,
             1.0,
         );
 
@@ -135,7 +135,7 @@ impl StatusBar {
         } else {
             theme.text_secondary
         };
-        ui.label_in_bounds_styled(status_text, bar, ui::TextAlign::Left, status_color, 11.0, padding);
+        ui.label_in_bounds_styled(status_text, bar, ui::TextAlign::Left, status_color, theme.fonts.small, padding);
 
         // Center section: runtime stats
         let stats_text = format!(
@@ -143,10 +143,10 @@ impl StatusBar {
             self.stats.entity_count,
             self.stats.fps,
         );
-        ui.label_in_bounds_styled(&stats_text, bar, ui::TextAlign::Center, theme.text_muted, 11.0, padding);
+        ui.label_in_bounds_styled(&stats_text, bar, ui::TextAlign::Center, theme.text_muted, theme.fonts.small, padding);
 
         // Right section: version
-        ui.label_in_bounds_styled(&self.version, bar, ui::TextAlign::Right, theme.accent_cyan, 11.0, padding);
+        ui.label_in_bounds_styled(&self.version, bar, ui::TextAlign::Right, theme.accent_cyan, theme.fonts.small, padding);
 
         bar
     }

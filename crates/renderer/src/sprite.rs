@@ -34,8 +34,33 @@ pub struct Sprite {
     pub depth: f32,
     /// Emissive intensity — 0.0 disables glow, values above 0.0 produce HDR output that bloom picks up
     pub emissive: f32,
+    /// SDF shape params `[kind, corner_radius, border_width, reserved]`.
+    /// kind 0 = plain quad, 1 = rounded rect, 2 = circle (see [`SpriteShape`]).
+    pub shape: [f32; 4],
     /// Texture handle
     pub texture_handle: TextureHandle,
+}
+
+/// SDF shape kinds a sprite can render as (fragment-shader masked).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpriteShape {
+    /// Plain textured quad (the default)
+    Quad,
+    /// Rectangle with rounded corners (radius in local pixels)
+    RoundedRect,
+    /// Circle/ellipse inscribed in the sprite bounds
+    Circle,
+}
+
+impl SpriteShape {
+    /// Shape kind as the f32 the instance data carries.
+    pub fn to_f32(self) -> f32 {
+        match self {
+            SpriteShape::Quad => 0.0,
+            SpriteShape::RoundedRect => 1.0,
+            SpriteShape::Circle => 2.0,
+        }
+    }
 }
 
 impl Default for Sprite {
@@ -48,6 +73,7 @@ impl Default for Sprite {
             color: Vec4::ONE, // White
             depth: 0.0,
             emissive: 0.0,
+            shape: [0.0; 4],
             texture_handle: TextureHandle::default(),
         }
     }
@@ -104,6 +130,31 @@ impl Sprite {
         self
     }
 
+    /// Render as a rounded rect with the given corner radius (local pixels).
+    /// Radius 0 keeps sharp corners but still applies border/AA masking.
+    pub fn with_corner_radius(mut self, radius: f32) -> Self {
+        self.shape[0] = SpriteShape::RoundedRect.to_f32();
+        self.shape[1] = radius.max(0.0);
+        self
+    }
+
+    /// Render as a circle inscribed in the sprite bounds.
+    pub fn as_circle(mut self) -> Self {
+        self.shape[0] = SpriteShape::Circle.to_f32();
+        self
+    }
+
+    /// Render only a border ring of the given width (local pixels) instead
+    /// of a filled shape. Applies to rounded rects and circles; a plain quad
+    /// is promoted to a rounded rect with radius 0 (a square outline).
+    pub fn with_border(mut self, width: f32) -> Self {
+        if self.shape[0] == SpriteShape::Quad.to_f32() {
+            self.shape[0] = SpriteShape::RoundedRect.to_f32();
+        }
+        self.shape[2] = width.max(0.0);
+        self
+    }
+
     /// Convert to sprite instance for batching
     pub fn to_instance(&self) -> SpriteInstance {
         SpriteInstance::with_emissive(
@@ -115,6 +166,7 @@ impl Sprite {
             self.depth,
             self.emissive,
         )
+        .with_shape(self.shape)
     }
 }
 

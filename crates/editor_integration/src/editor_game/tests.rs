@@ -167,7 +167,7 @@ fn test_build_pickable_entities_with_both_components() {
         ..Default::default()
     }).ok();
     let mut sprite = ecs::sprite_components::Sprite::new(0);
-    sprite.scale = Vec2::new(32.0, 32.0);
+    sprite.scale = Vec2::new(0.5, 0.5);
     sprite.depth = 5.0;
     world.add_component(&entity, sprite).ok();
 
@@ -175,9 +175,42 @@ fn test_build_pickable_entities_with_both_components() {
     assert_eq!(pickables.len(), 1);
     assert_eq!(pickables[0].entity_id, entity);
     assert_eq!(pickables[0].position, Vec2::new(100.0, 200.0));
-    // Size = sprite.scale * global_transform.scale = (32, 32) * (2, 2) = (64, 64)
-    assert_eq!(pickables[0].size, Vec2::new(64.0, 64.0));
+    // Size matches the render path: sprite.scale * transform.scale *
+    // RENDER_UNIT = (0.5, 0.5) * (2, 2) * 80 = (80, 80) pixels
+    assert_eq!(pickables[0].size, Vec2::new(80.0, 80.0));
     assert_eq!(pickables[0].depth, 5.0);
+}
+
+#[test]
+fn test_pick_hits_sprite_at_rendered_size_with_offset_panel() {
+    // Regression for two shipped bugs at once:
+    // 1. pick size ignored RENDER_UNIT (AABBs 80x smaller than sprites)
+    // 2. picking must work with a NONZERO panel origin (dock chrome)
+    let mut world = ecs::World::new();
+    let entity = world.create_entity();
+    world.add_component(&entity, GlobalTransform2D {
+        position: Vec2::new(100.0, 50.0),
+        ..Default::default()
+    }).ok();
+    // Unit transform + unit sprite scale renders as an 80x80px sprite.
+    world.add_component(&entity, ecs::sprite_components::Sprite::new(0)).ok();
+
+    let mut viewport = editor::SceneViewport::new();
+    viewport.set_viewport_bounds(common::Rect::new(300.0, 100.0, 800.0, 600.0));
+
+    let pickables = build_pickable_entities(&world);
+    let mut picker = editor::EntityPicker::new();
+
+    // Click 30px off-center — inside the rendered 80x80 sprite, but a miss
+    // with the old 1x1 pick AABB.
+    let click = viewport.world_to_screen(Vec2::new(100.0, 50.0)) + Vec2::new(30.0, 30.0);
+    let result = picker.pick_at_screen_pos(&viewport, click, &pickables);
+    assert_eq!(result.topmost(), Some(entity));
+
+    // A click well outside the sprite still misses.
+    let miss = viewport.world_to_screen(Vec2::new(100.0, 50.0)) + Vec2::new(90.0, 0.0);
+    let result = picker.pick_at_screen_pos(&viewport, miss, &pickables);
+    assert_eq!(result.topmost(), None);
 }
 
 #[test]
@@ -451,4 +484,144 @@ fn test_undo_redo_on_empty_history_do_not_mark_dirty() {
     assert!(!editor.command_history.undo(&mut world));
     assert!(!editor.command_history.redo(&mut world));
     assert!(!editor.editor.is_dirty());
+}
+
+#[test]
+fn test_render_overrides_camera_from_viewport() {
+    // The GPU camera must be derived from the editor viewport every frame so
+    // sprites land where the overlay (gizmo/picking/grid) expects them.
+    let mut editor_game = EditorGame::new(DummyGame);
+    editor_game.editor.viewport.set_viewport_bounds(common::Rect::new(300.0, 100.0, 800.0, 600.0));
+    editor_game.editor.viewport.set_camera_position(Vec2::new(120.0, -40.0));
+    editor_game.editor.viewport.set_camera_zoom(2.0);
+
+    let world = World::new();
+    let mut sprites = renderer::sprite::SpriteBatcher::new();
+    let mut camera = common::Camera::default();
+    let glyph_textures = std::collections::HashMap::new();
+    let window_size = Vec2::new(1600.0, 900.0);
+    let mut ctx = engine_core::contexts::RenderContext {
+        world: &world,
+        sprites: &mut sprites,
+        camera: &mut camera,
+        window_size,
+        ui_commands: &[],
+        glyph_textures: &glyph_textures,
+    };
+
+    engine_core::Game::render(&mut editor_game, &mut ctx);
+
+    let expected = editor_game.editor.viewport.to_window_render_camera(window_size);
+    assert_eq!(camera, expected);
+    assert_eq!(camera.zoom, 2.0);
+    assert_eq!(camera.viewport_size, window_size);
+}
+
+#[test]
+fn test_sync_viewport_from_main_camera_only_while_playing() {
+    let mut editor_game = EditorGame::new(DummyGame);
+    let mut world = World::new();
+    let entity = world.create_entity();
+    world.add_component(&entity, common::Camera::default().as_main_camera()).ok();
+    world.add_component(&entity, common::Transform2D::new(Vec2::new(320.0, -40.0))).ok();
+
+    // Editing: the game camera must NOT move the editing view.
+    editor_game.sync_viewport_from_main_camera(&world);
+    assert_eq!(editor_game.editor.viewport.camera_position(), Vec2::ZERO);
+
+    // Playing: viewport mirrors the main-camera entity.
+    editor_game.handle_play_action(PlayControlAction::Play, &mut world);
+    editor_game.sync_viewport_from_main_camera(&world);
+    assert_eq!(
+        editor_game.editor.viewport.camera_position(),
+        Vec2::new(320.0, -40.0)
+    );
+
+    // A world without a main camera leaves the viewport untouched.
+    let empty = World::new();
+    editor_game.sync_viewport_from_main_camera(&empty);
+    assert_eq!(
+        editor_game.editor.viewport.camera_position(),
+        Vec2::new(320.0, -40.0)
+    );
+}
+
+#[test]
+fn test_stop_restores_editing_camera() {
+    let mut editor_game = EditorGame::new(DummyGame);
+    let mut world = World::new();
+
+    editor_game.editor.viewport.set_camera_position(Vec2::new(77.0, -33.0));
+    editor_game.editor.viewport.set_camera_zoom(2.5);
+
+    // Play: zoom snaps to 1.0 (game-camera parity), pan/zoom saved.
+    editor_game.handle_play_action(PlayControlAction::Play, &mut world);
+    assert_eq!(editor_game.editor.viewport.camera_zoom(), 1.0);
+
+    // Simulate the game camera dragging the viewport around during play.
+    editor_game.editor.viewport.set_camera_position(Vec2::new(999.0, 999.0));
+
+    // Stop: the editing view comes back.
+    editor_game.handle_play_action(PlayControlAction::Stop, &mut world);
+    assert_eq!(editor_game.editor.viewport.camera_position(), Vec2::new(77.0, -33.0));
+    assert_eq!(editor_game.editor.viewport.camera_zoom(), 2.5);
+}
+
+#[test]
+fn test_scale_collider_scales_shapes_and_offset() {
+    use physics::components::{Collider, ColliderShape};
+    use super::viewport_interaction::scale_collider;
+
+    let mut boxed = Collider::box_collider(80.0, 40.0); // half extents 40, 20
+    boxed.offset = Vec2::new(10.0, -5.0);
+    scale_collider(&mut boxed, Vec2::new(2.0, 3.0));
+    match boxed.shape {
+        ColliderShape::Box { half_extents } => assert_eq!(half_extents, Vec2::new(80.0, 60.0)),
+        other => panic!("unexpected shape {other:?}"),
+    }
+    assert_eq!(boxed.offset, Vec2::new(20.0, -15.0), "body-local offset scales too");
+
+    let mut circle = Collider::circle_collider(10.0);
+    scale_collider(&mut circle, Vec2::new(1.5, 2.0));
+    match circle.shape {
+        ColliderShape::Circle { radius } => assert_eq!(radius, 20.0, "dominant axis factor"),
+        other => panic!("unexpected shape {other:?}"),
+    }
+}
+
+#[test]
+fn test_gizmo_scale_undo_restores_transform_and_collider_together() {
+    use editor::commands::{MacroCommand, SetColliderCommand, TransformGizmoCommand};
+    use physics::components::{Collider, ColliderShape};
+
+    let mut world = ecs::World::new();
+    let entity = world.create_entity();
+    let old_t = common::Transform2D::from_parts(Vec2::ZERO, 0.0, Vec2::ONE);
+    let old_c = Collider::box_collider(80.0, 80.0);
+    let mut new_t = old_t;
+    new_t.scale = Vec2::new(2.0, 2.0);
+    let mut new_c = old_c.clone();
+    super::viewport_interaction::scale_collider(&mut new_c, Vec2::new(2.0, 2.0));
+    world.add_component(&entity, new_t).ok();
+    world.add_component(&entity, new_c.clone()).ok();
+
+    // The single undo entry the release path pushes
+    let mut history = editor::CommandHistory::new();
+    let cmd = MacroCommand::new(
+        "Scale Entity",
+        vec![
+            Box::new(TransformGizmoCommand::new(entity, old_t, new_t)),
+            Box::new(SetColliderCommand::new(entity, old_c.clone(), new_c, "gizmo_scale")),
+        ],
+    );
+    history.push_already_executed(Box::new(cmd));
+
+    assert!(history.undo(&mut world), "one Ctrl+Z reverts the whole drag");
+    let t = world.get::<common::Transform2D>(entity).unwrap();
+    assert_eq!(t.scale, Vec2::ONE);
+    let c = world.get::<Collider>(entity).unwrap();
+    match &c.shape {
+        ColliderShape::Box { half_extents } => assert_eq!(*half_extents, Vec2::new(40.0, 40.0)),
+        other => panic!("unexpected shape {other:?}"),
+    }
 }

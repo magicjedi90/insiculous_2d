@@ -315,3 +315,135 @@ fn test_wants_keyboard_follows_float_input_focus() {
     ui.end_frame();
     assert!(ui.wants_keyboard(), "focused float input must claim the keyboard");
 }
+
+// === text-input editing behavior (cursor/selection model) ===
+
+/// Click a float input (press frame + release frame) so it gains focus.
+fn focus_float_input(ui: &mut UIContext, input: &mut input::InputHandler, id: &str, bounds: Rect, value: f32) {
+    use input::prelude::MouseButton;
+    let center = Vec2::new(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    input.mouse_mut().update_position(center.x, center.y);
+    input.mouse_mut().handle_button_press(MouseButton::Left);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    ui.float_input(id, value, -100000.0, 100000.0, bounds);
+    ui.end_frame();
+
+    input.update();
+    input.mouse_mut().handle_button_release(MouseButton::Left);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    ui.float_input(id, value, -100000.0, 100000.0, bounds);
+    ui.end_frame();
+    assert!(ui.wants_keyboard(), "field must be focused after a click");
+}
+
+/// Run one frame of the focused input with a single key pressed.
+fn type_key(ui: &mut UIContext, input: &mut input::InputHandler, id: &str, bounds: Rect, value: f32, key: input::prelude::KeyCode) -> f32 {
+    input.update();
+    input.keyboard_mut().handle_key_press(key);
+    ui.begin_frame(&*input, Vec2::new(800.0, 600.0));
+    let out = ui.float_input(id, value, -100000.0, 100000.0, bounds);
+    ui.end_frame();
+    input.keyboard_mut().handle_key_release(key);
+    out
+}
+
+#[test]
+fn test_float_input_focus_selects_all_and_typing_overwrites() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+
+    focus_float_input(&mut ui, &mut input, "sel_all", bounds, 168.4);
+
+    // Typing '5' replaces the fully-selected "168.40", then Enter commits.
+    type_key(&mut ui, &mut input, "sel_all", bounds, 168.4, KeyCode::Digit5);
+    let committed = type_key(&mut ui, &mut input, "sel_all", bounds, 168.4, KeyCode::Enter);
+    assert_eq!(committed, 5.0, "click + type must overwrite the whole value");
+    assert!(!ui.wants_keyboard());
+}
+
+#[test]
+fn test_float_input_arrow_then_insert_edits_at_cursor() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+
+    focus_float_input(&mut ui, &mut input, "cursor_edit", bounds, 12.0);
+    // Buffer is "12.00" fully selected. Home collapses to the start,
+    // then typing '9' inserts before the '1'.
+    type_key(&mut ui, &mut input, "cursor_edit", bounds, 12.0, KeyCode::Home);
+    type_key(&mut ui, &mut input, "cursor_edit", bounds, 12.0, KeyCode::Digit9);
+    let committed = type_key(&mut ui, &mut input, "cursor_edit", bounds, 12.0, KeyCode::Enter);
+    assert_eq!(committed, 912.0, "insert must happen at the cursor, not the end");
+}
+
+#[test]
+fn test_float_input_backspace_deletes_before_cursor() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+
+    focus_float_input(&mut ui, &mut input, "bs_mid", bounds, 12.0);
+    // "12.00" selected; End collapses to the end, ArrowLeft x2 puts the
+    // cursor between '.'|'0', Backspace removes the '.'.
+    type_key(&mut ui, &mut input, "bs_mid", bounds, 12.0, KeyCode::End);
+    type_key(&mut ui, &mut input, "bs_mid", bounds, 12.0, KeyCode::ArrowLeft);
+    type_key(&mut ui, &mut input, "bs_mid", bounds, 12.0, KeyCode::ArrowLeft);
+    type_key(&mut ui, &mut input, "bs_mid", bounds, 12.0, KeyCode::Backspace);
+    let committed = type_key(&mut ui, &mut input, "bs_mid", bounds, 12.0, KeyCode::Enter);
+    assert_eq!(committed, 1200.0, "\"12.00\" minus its '.' is \"1200\"");
+}
+
+#[test]
+fn test_float_input_escape_cancels_edit() {
+    use input::prelude::KeyCode;
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+
+    focus_float_input(&mut ui, &mut input, "esc_cancel", bounds, 7.5);
+    type_key(&mut ui, &mut input, "esc_cancel", bounds, 7.5, KeyCode::Digit3);
+    let after_escape = type_key(&mut ui, &mut input, "esc_cancel", bounds, 7.5, KeyCode::Escape);
+    assert_eq!(after_escape, 7.5, "escape must discard the edit");
+    assert!(!ui.wants_keyboard());
+}
+
+#[test]
+fn test_float_input_commit_clamps_to_range() {
+    use input::prelude::{KeyCode, MouseButton};
+    let mut ui = UIContext::new();
+    let mut input = input::InputHandler::new();
+    let bounds = Rect::new(10.0, 10.0, 80.0, 20.0);
+
+    // Focus (range 0..=10 this time, so use the raw two-frame click)
+    let center = Vec2::new(50.0, 20.0);
+    input.mouse_mut().update_position(center.x, center.y);
+    input.mouse_mut().handle_button_press(MouseButton::Left);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    ui.float_input("clamp", 5.0, 0.0, 10.0, bounds);
+    ui.end_frame();
+    input.update();
+    input.mouse_mut().handle_button_release(MouseButton::Left);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    ui.float_input("clamp", 5.0, 0.0, 10.0, bounds);
+    ui.end_frame();
+
+    // Type "99" (selection replaced by first digit), commit
+    for key in [KeyCode::Digit9, KeyCode::Digit9] {
+        input.update();
+        input.keyboard_mut().handle_key_press(key);
+        ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+        ui.float_input("clamp", 5.0, 0.0, 10.0, bounds);
+        ui.end_frame();
+        input.keyboard_mut().handle_key_release(key);
+    }
+    input.update();
+    input.keyboard_mut().handle_key_press(KeyCode::Enter);
+    ui.begin_frame(&input, Vec2::new(800.0, 600.0));
+    let committed = ui.float_input("clamp", 5.0, 0.0, 10.0, bounds);
+    ui.end_frame();
+    assert_eq!(committed, 10.0, "99 must clamp to the max of 10");
+}

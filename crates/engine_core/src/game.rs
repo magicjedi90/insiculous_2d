@@ -104,7 +104,7 @@ pub trait Game: Sized + 'static {
         }
 
         // Render UI draw commands on top
-        render_ui_commands(ctx.sprites, ctx.ui_commands, ctx.window_size, ctx.glyph_textures);
+        render_ui_commands(ctx.sprites, ctx.ui_commands, &*ctx.camera, ctx.glyph_textures);
     }
 
     /// Called by the editor when play mode is stopped and the world has been
@@ -329,7 +329,7 @@ impl<G: Game> GameRunner<G> {
 
         // Update all subsystems
         self.update_audio();
-        self.update_ui_begin(window_size);
+        self.update_ui_begin(window_size, delta_time);
         self.initialize_and_update(delta_time, window_size);
         let ui_commands = self.update_ui_end();
         self.update_input_end();
@@ -346,8 +346,8 @@ impl<G: Game> GameRunner<G> {
     }
 
     /// Begin UI frame and process input
-    fn update_ui_begin(&mut self, window_size: Vec2) {
-        self.ui_manager.begin_frame(&self.input, window_size);
+    fn update_ui_begin(&mut self, window_size: Vec2, delta_time: f32) {
+        self.ui_manager.begin_frame(&self.input, window_size, delta_time);
     }
 
     /// Initialize game on first frame, then update game logic.

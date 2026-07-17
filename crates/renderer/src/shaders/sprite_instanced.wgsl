@@ -34,6 +34,7 @@ struct InstanceInput {
     @location(7) color: vec4<f32>,           // Color tint
     @location(8) depth: f32,                 // Depth (0 = near, 1 = far in NDC after camera)
     @location(9) emissive: f32,              // Emissive intensity
+    @location(10) shape: vec4<f32>,          // SDF shape [kind, corner_radius, border_width, reserved]
 }
 
 // Output to fragment shader
@@ -42,6 +43,9 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) emissive: f32,
+    @location(3) local_px: vec2<f32>,   // fragment position in local pixels (pre-rotation)
+    @location(4) half_size: vec2<f32>,  // sprite half extents in local pixels
+    @location(5) shape: vec4<f32>,      // SDF shape params (constant per instance)
 }
 
 @vertex
@@ -54,9 +58,12 @@ fn vs_main(
     let cos_r = cos(instance.rotation);
     let sin_r = sin(instance.rotation);
 
+    // Counter-clockwise rotation for positive angles (world convention —
+    // matches rapier bodies, glam, and the editor's collider overlay).
+    // WGSL mat3x3 takes COLUMNS: x' = cos*x - sin*y, y' = sin*x + cos*y.
     let rot_matrix = mat3x3<f32>(
-        vec3<f32>(cos_r, -sin_r, 0.0),
-        vec3<f32>(sin_r,  cos_r, 0.0),
+        vec3<f32>(cos_r,  sin_r, 0.0),
+        vec3<f32>(-sin_r, cos_r, 0.0),
         vec3<f32>(0.0,    0.0,   1.0)
     );
 
@@ -82,7 +89,20 @@ fn vs_main(
     out.color = vertex.color * instance.color;
     out.emissive = instance.emissive;
 
+    // Quad vertices span ±0.5, so local pixels = vertex * scale, half
+    // extents = scale/2. Rotation is irrelevant for the SDF — it operates
+    // in the sprite's own (pre-rotation) space.
+    out.local_px = vertex.position.xy * instance.scale;
+    out.half_size = abs(instance.scale) * 0.5;
+    out.shape = instance.shape;
+
     return out;
+}
+
+// Signed distance from `p` to a rounded box of half extents `b`, radius `r`.
+fn sd_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+    let q = abs(p) - (b - vec2<f32>(r, r));
+    return length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
 @fragment
@@ -93,5 +113,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 1.0 + 4.0*intensity scales linearly without a hard threshold.
     let glow_factor = 1.0 + in.emissive * 4.0;
     let out_rgb = base_rgb * glow_factor;
-    return vec4<f32>(out_rgb, tex_color.a * in.color.a);
+    var alpha = tex_color.a * in.color.a;
+
+    // SDF shape mask: kind 0 = plain quad (no mask), 1 = rounded rect,
+    // 2 = circle. Distances are in local pixels, so the ~1.5px smoothstep
+    // anti-aliasing band is zoom-independent on screen-space UI.
+    let kind = in.shape.x;
+    if (kind > 0.5) {
+        let min_half = min(in.half_size.x, in.half_size.y);
+        var radius = clamp(in.shape.y, 0.0, min_half);
+        if (kind > 1.5) {
+            radius = min_half; // circle: fully rounded
+        }
+        var d = sd_rounded_box(in.local_px, in.half_size, radius);
+        let border = in.shape.z;
+        if (border > 0.0) {
+            // Keep only a ring of `border` thickness inside the outer edge
+            d = abs(d + border * 0.5) - border * 0.5;
+        }
+        alpha = alpha * (1.0 - smoothstep(-0.75, 0.75, d));
+    }
+
+    return vec4<f32>(out_rgb, alpha);
 }

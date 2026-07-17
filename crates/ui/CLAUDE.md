@@ -13,17 +13,19 @@ ui.end_frame(); // collects draw commands
 ```
 
 ## File Map
-- `context/` — UIContext: `mod.rs` (struct, lifecycle, fonts, primitives), `text.rs` (label/measure), `widgets.rs` (button, slider, checkbox, float_input), `tests.rs`
+- `context/` — UIContext: `mod.rs` (struct, lifecycle incl. `begin_frame_dt`, fonts, primitives incl. `image`/`rect_border`), `text.rs` (label/measure), `widgets.rs` (button, slider, checkbox), `text_input.rs` (float_input: select-all-on-focus, cursor, selection, arrows/Home/End, key repeat), `tests.rs`
 - `font/` — `mod.rs` (FontManager facade: loading/storage), `glyph_cache.rs` (GlyphCache; bitmaps shared via `Arc<[u8]>`), `layout.rs` (text layout/measurement)
 - `draw.rs` — Draw command generation (`Rect` re-exported from `common`)
-- `interaction.rs` — Widget state, mouse hit detection, focus, per-widget persistent state
+- `interaction.rs` — Widget state, mouse hit detection, focus, per-widget persistent state (`edit: TextEditState`)
+- `input_state.rs` — per-frame `InputState` snapshot + `KeyRepeat` (dt-driven hold repeat)
+- `text_edit.rs` — pure `TextEditState` (buffer/cursor/selection editing model)
 - `style.rs` — Theme definitions (`Color` re-exported from `common`), private palette consts
 
 ## Known Tech Debt
-- See `TECH_DEBT.md` — open: numeric-only text input (JUN-T1, Medium); Low: TextDrawData redundancy (ARCH-003), unused scroll_delta (JUN-T2), no layout helpers (JUN-T3)
+- See `TECH_DEBT.md` — open: JUN-T1 narrowed (cursor/selection/repeat DONE Jul 2026; still numeric-only by design); Low: TextDrawData redundancy (ARCH-003), unused scroll_delta (JUN-T2), no layout helpers (JUN-T3)
 
 ## Testing
-- 80 tests (incl. 2 doc), run with `cargo test -p ui`
+- 102 tests (incl. 2 doc), run with `cargo test -p ui`
 
 ## Godot Oracle
 - Immediate-mode patterns: Godot doesn't use immediate-mode, but see `scene/gui/control.cpp` for widget lifecycle

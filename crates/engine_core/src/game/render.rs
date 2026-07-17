@@ -74,9 +74,16 @@ impl<G: Game> GameRunner<G> {
         // but below UI.
         append_particle_sprites(&mut self.game_batcher, &self.particles);
 
-        // Phase 2: UI sprites — separate batcher
+        // Phase 2: UI sprites — separate batcher. Conversion is
+        // camera-relative so UI stays at fixed screen pixels even when the
+        // game (or editor) moves/zooms the camera during Phase 1.
         self.ui_batcher.clear();
-        render_ui_commands(&mut self.ui_batcher, ui_commands, window_size, self.glyph_textures.textures());
+        render_ui_commands(
+            &mut self.ui_batcher,
+            ui_commands,
+            self.render_manager.camera(),
+            self.glyph_textures.textures(),
+        );
 
         // Sort within each batch, then order the batch refs (game first, then
         // UI on top; by min depth then texture handle for determinism). Refs

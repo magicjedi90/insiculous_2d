@@ -79,8 +79,10 @@ impl Toolbar {
         Self {
             current_tool: EditorTool::Select,
             position: Vec2::new(10.0, 10.0),
-            button_size: 40.0,
-            spacing: 4.0,
+            // Wide enough for the longest label ("Rotate"/"Select") at the
+            // body font size — 40px caused the labels to overflow each other
+            button_size: 56.0,
+            spacing: 6.0,
         }
     }
 
@@ -132,10 +134,11 @@ impl Toolbar {
 
             let is_selected = tool == self.current_tool;
 
-            // Use different styling for selected vs unselected
+            // Selection ring: an accent halo slightly larger than the button
+            // (the button's own background is opaque, so anything drawn
+            // directly underneath it would be invisible)
             if is_selected {
-                // Draw selected indicator
-                ui.rect_rounded(button_bounds, theme.toolbar_active, 4.0);
+                ui.rect_rounded(button_bounds.expand(2.0), theme.toolbar_active, 5.0);
             }
 
             // Draw button (will use default styling with hover effect)
@@ -145,13 +148,18 @@ impl Toolbar {
                 new_tool = Some(tool);
             }
 
+            // Accent border on the active tool, over the button chrome
+            if is_selected {
+                ui.rect_border(button_bounds, theme.accent_cyan, 1.0, 4.0);
+            }
+
             // Draw shortcut hint below button (baseline sits a line below the
             // button's bottom edge so the glyphs don't rise into the button)
             let hint_pos = Vec2::new(
                 button_bounds.center().x,
                 button_bounds.y + button_bounds.height + 12.0,
             );
-            ui.label_centered_styled(tool.shortcut(), hint_pos, theme.shortcut_hint, 10.0);
+            ui.label_centered_styled(tool.shortcut(), hint_pos, theme.shortcut_hint, theme.fonts.small);
         }
 
         new_tool
@@ -218,8 +226,8 @@ mod tests {
         let toolbar = Toolbar::new();
         let bounds = toolbar.bounds();
 
-        // 4 tools * (40 + 4) - 4 = 172
-        assert_eq!(bounds.width, 172.0);
-        assert_eq!(bounds.height, 40.0);
+        // 4 tools * (56 + 6) - 6 = 242
+        assert_eq!(bounds.width, 242.0);
+        assert_eq!(bounds.height, 56.0);
     }
 }

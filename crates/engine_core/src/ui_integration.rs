@@ -4,30 +4,66 @@
 //! converting UI draw commands (rectangles, text, circles, lines) into sprites that
 //! can be rendered by the sprite batching system.
 
+use common::Camera;
 use glam::Vec2;
 use renderer::{
     sprite::{SpriteBatcher, Sprite},
     texture::TextureHandle,
 };
-use ui::{Color as UIColor, DrawCommand, Rect};
+use ui::{DrawCommand, Rect};
 use std::collections::HashMap;
 use crate::contexts::GlyphCacheKey;
 
-/// Convert a screen-space rect center to world coordinates.
-/// Screen: (0,0) = top-left. World: (0,0) = center.
-fn screen_rect_center_to_world(bounds: &Rect, window_size: Vec2) -> Vec2 {
-    Vec2::new(
-        bounds.x + bounds.width / 2.0 - window_size.x / 2.0,
-        window_size.y / 2.0 - (bounds.y + bounds.height / 2.0),
-    )
+/// Where UI sprites land in world space so they render at fixed SCREEN
+/// pixels through `camera`. UI must not move when the game camera moves
+/// (camera-follow gameplay, the editor's panel-derived camera), so the
+/// conversion is camera-relative: position offsets and sizes are divided by
+/// zoom and anchored at the camera position.
+#[derive(Debug, Clone, Copy)]
+struct UiCameraSpace {
+    camera_position: Vec2,
+    viewport_size: Vec2,
+    inv_zoom: f32,
 }
 
-/// Convert a screen-space point to world coordinates.
-fn screen_point_to_world(x: f32, y: f32, window_size: Vec2) -> Vec2 {
-    Vec2::new(
-        x - window_size.x / 2.0,
-        window_size.y / 2.0 - y,
-    )
+impl UiCameraSpace {
+    fn new(camera: &Camera) -> Self {
+        Self {
+            camera_position: camera.position,
+            viewport_size: camera.viewport_size,
+            // Camera zoom is clamped elsewhere but guard anyway
+            inv_zoom: if camera.zoom.abs() > f32::EPSILON { 1.0 / camera.zoom } else { 1.0 },
+        }
+    }
+
+    /// World position for a screen-space rect center.
+    /// Screen: (0,0) = top-left. Y flips into the Y-up world.
+    fn rect_center(&self, bounds: &Rect) -> Vec2 {
+        self.point(
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        )
+    }
+
+    /// World position for a screen-space point.
+    fn point(&self, x: f32, y: f32) -> Vec2 {
+        self.camera_position
+            + Vec2::new(
+                (x - self.viewport_size.x / 2.0) * self.inv_zoom,
+                (self.viewport_size.y / 2.0 - y) * self.inv_zoom,
+            )
+    }
+
+    /// World size for a screen-pixel size.
+    fn size(&self, size: Vec2) -> Vec2 {
+        size * self.inv_zoom
+    }
+
+    /// World length for a screen-pixel length (corner radii, stroke widths —
+    /// SDF params live in the sprite's local units, so they scale with size).
+    fn len(&self, len: f32) -> f32 {
+        len * self.inv_zoom
+    }
 }
 
 /// Renders UI draw commands as sprites in the sprite batcher.
@@ -45,9 +81,10 @@ fn screen_point_to_world(x: f32, y: f32, window_size: Vec2) -> Vec2 {
 pub fn render_ui_commands(
     sprites: &mut SpriteBatcher,
     commands: &[DrawCommand],
-    window_size: Vec2,
+    camera: &Camera,
     glyph_textures: &HashMap<GlyphCacheKey, TextureHandle>,
 ) {
+    let cam = UiCameraSpace::new(camera);
     let white_texture = TextureHandle { id: 0 };
     let mut clip_stack: Vec<Rect> = Vec::new();
 
@@ -55,9 +92,9 @@ pub fn render_ui_commands(
         // Software clip filtering: skip draw commands fully outside the active clip rect
         if !clip_stack.is_empty() {
             let cmd_bounds = match cmd {
-                DrawCommand::Rect { bounds, .. } | DrawCommand::RectBorder { bounds, .. } => {
-                    Some(*bounds)
-                }
+                DrawCommand::Rect { bounds, .. }
+                | DrawCommand::RectBorder { bounds, .. }
+                | DrawCommand::Image { bounds, .. } => Some(*bounds),
                 DrawCommand::Text { data, .. } => {
                     Some(Rect::new(data.position.x, data.position.y, data.width, data.height))
                 }
@@ -83,48 +120,52 @@ pub fn render_ui_commands(
         }
 
         match cmd {
-            DrawCommand::Rect { bounds, color, depth, .. } => {
+            DrawCommand::Rect { bounds, color, corner_radius, depth } => {
                 // Convert screen coordinates (0,0 = top-left) to world coordinates (0,0 = center)
-                let center = screen_rect_center_to_world(bounds, window_size);
+                let center = cam.rect_center(bounds);
 
-                let sprite = Sprite::new(white_texture)
+                let mut sprite = Sprite::new(white_texture)
                     .with_position(center)
-                    .with_scale(Vec2::new(bounds.width, bounds.height))
+                    .with_scale(cam.size(Vec2::new(bounds.width, bounds.height)))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
                     .with_depth(*depth);
+                if *corner_radius > 0.0 {
+                    sprite = sprite.with_corner_radius(cam.len(*corner_radius));
+                }
 
                 sprites.add_sprite(&sprite);
             }
-            DrawCommand::RectBorder { bounds, color, width, depth, .. } => {
-                // Render border as 4 thin rectangles
-                let half_width = *width / 2.0;
+            DrawCommand::RectBorder { bounds, color, width, corner_radius, depth } => {
+                // A single SDF-bordered sprite (grown by the stroke width so
+                // the border straddles the bounds like the old 4-rect version)
+                let grown = Rect::new(
+                    bounds.x - width / 2.0,
+                    bounds.y - width / 2.0,
+                    bounds.width + width,
+                    bounds.height + width,
+                );
+                let center = cam.rect_center(&grown);
 
-                // Top edge
-                let top = Rect::new(bounds.x - half_width, bounds.y - half_width, bounds.width + *width, *width);
-                render_ui_rect(sprites, &top, color, *depth, window_size);
+                let sprite = Sprite::new(white_texture)
+                    .with_position(center)
+                    .with_scale(cam.size(Vec2::new(grown.width, grown.height)))
+                    .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
+                    .with_depth(*depth)
+                    .with_corner_radius(cam.len(corner_radius.max(0.0)))
+                    .with_border(cam.len(width.max(1.0)));
 
-                // Bottom edge
-                let bottom = Rect::new(bounds.x - half_width, bounds.y + bounds.height - half_width, bounds.width + *width, *width);
-                render_ui_rect(sprites, &bottom, color, *depth, window_size);
-
-                // Left edge
-                let left = Rect::new(bounds.x - half_width, bounds.y + half_width, *width, bounds.height - *width);
-                render_ui_rect(sprites, &left, color, *depth, window_size);
-
-                // Right edge
-                let right = Rect::new(bounds.x + bounds.width - half_width, bounds.y + half_width, *width, bounds.height - *width);
-                render_ui_rect(sprites, &right, color, *depth, window_size);
+                sprites.add_sprite(&sprite);
             }
             DrawCommand::Text { data, depth } => {
                 // Render text with rasterized glyph data
                 if data.glyphs.is_empty() {
                     // No glyphs - render as placeholder rectangle
                     let text_bounds = Rect::new(data.position.x, data.position.y, data.width, data.height);
-                    let center = screen_rect_center_to_world(&text_bounds, window_size);
+                    let center = cam.rect_center(&text_bounds);
 
                     let sprite = Sprite::new(white_texture)
                         .with_position(center)
-                        .with_scale(Vec2::new(data.width.max(data.font_size * 4.0), data.height.max(data.font_size)))
+                        .with_scale(cam.size(Vec2::new(data.width.max(data.font_size * 4.0), data.height.max(data.font_size))))
                         .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a * 0.3))
                         .with_depth(*depth);
 
@@ -149,7 +190,7 @@ pub fn render_ui_commands(
                             glyph.width as f32,
                             glyph.height as f32,
                         );
-                        let glyph_center = screen_rect_center_to_world(&glyph_bounds, window_size);
+                        let glyph_center = cam.rect_center(&glyph_bounds);
 
                         // Look up glyph texture in cache (color-agnostic)
                         let glyph_key = GlyphCacheKey::new(
@@ -176,7 +217,7 @@ pub fn render_ui_commands(
 
                         let sprite = Sprite::new(texture)
                             .with_position(glyph_center)
-                            .with_scale(Vec2::new(render_width, render_height))
+                            .with_scale(cam.size(Vec2::new(render_width, render_height)))
                             .with_color(glam::Vec4::new(data.color.r, data.color.g, data.color.b, data.color.a))
                             .with_depth(*depth);
 
@@ -190,25 +231,26 @@ pub fn render_ui_commands(
                 // Placeholder: render a small rectangle where text would be
                 let estimated_width = text.len() as f32 * *font_size * 0.6;
                 let placeholder_bounds = Rect::new(position.x, position.y, estimated_width, *font_size);
-                let center = screen_rect_center_to_world(&placeholder_bounds, window_size);
+                let center = cam.rect_center(&placeholder_bounds);
 
                 let sprite = Sprite::new(white_texture)
                     .with_position(center)
-                    .with_scale(Vec2::new(estimated_width, *font_size))
+                    .with_scale(cam.size(Vec2::new(estimated_width, *font_size)))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a * 0.3))
                     .with_depth(*depth);
 
                 sprites.add_sprite(&sprite);
             }
             DrawCommand::Circle { center, radius, color, depth } => {
-                // Render circle as a square (approximation until we have circle shader)
-                let world_center = screen_point_to_world(center.x, center.y, window_size);
+                // Real circle via the sprite pipeline's SDF mask
+                let world_center = cam.point(center.x, center.y);
 
                 let sprite = Sprite::new(white_texture)
                     .with_position(world_center)
-                    .with_scale(Vec2::new(*radius * 2.0, *radius * 2.0))
+                    .with_scale(cam.size(Vec2::new(*radius * 2.0, *radius * 2.0)))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
-                    .with_depth(*depth);
+                    .with_depth(*depth)
+                    .as_circle();
 
                 sprites.add_sprite(&sprite);
             }
@@ -219,18 +261,33 @@ pub fn render_ui_commands(
                 let length = (dx * dx + dy * dy).sqrt();
                 let angle = dy.atan2(dx);
 
-                let midpoint = screen_point_to_world(
+                let midpoint = cam.point(
                     (start.x + end.x) / 2.0,
                     (start.y + end.y) / 2.0,
-                    window_size,
                 );
 
                 let sprite = Sprite::new(white_texture)
                     .with_position(midpoint)
                     .with_rotation(-angle) // Negate for coordinate system
-                    .with_scale(Vec2::new(length, *width))
+                    .with_scale(cam.size(Vec2::new(length, *width)))
                     .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
                     .with_depth(*depth);
+
+                sprites.add_sprite(&sprite);
+            }
+            DrawCommand::Image { bounds, texture_id, tint, corner_radius, depth } => {
+                // Same path as Rect, but sampling a real texture (the glyph
+                // pipeline established this pattern)
+                let center = cam.rect_center(bounds);
+
+                let mut sprite = Sprite::new(TextureHandle { id: *texture_id })
+                    .with_position(center)
+                    .with_scale(cam.size(Vec2::new(bounds.width, bounds.height)))
+                    .with_color(glam::Vec4::new(tint.r, tint.g, tint.b, tint.a))
+                    .with_depth(*depth);
+                if *corner_radius > 0.0 {
+                    sprite = sprite.with_corner_radius(cam.len(*corner_radius));
+                }
 
                 sprites.add_sprite(&sprite);
             }
@@ -247,24 +304,6 @@ pub fn render_ui_commands(
             }
         }
     }
-}
-
-/// Helper to render a single UI rect as a sprite.
-///
-/// Converts UI rectangle bounds to sprite position and scale, handling the
-/// coordinate transformation from UI coordinates (top-left origin) to renderer
-/// coordinates (center origin).
-fn render_ui_rect(sprites: &mut SpriteBatcher, bounds: &Rect, color: &UIColor, depth: f32, window_size: Vec2) {
-    let white_texture = TextureHandle { id: 0 };
-    let center = screen_rect_center_to_world(bounds, window_size);
-
-    let sprite = Sprite::new(white_texture)
-        .with_position(center)
-        .with_scale(Vec2::new(bounds.width, bounds.height))
-        .with_color(glam::Vec4::new(color.r, color.g, color.b, color.a))
-        .with_depth(depth);
-
-    sprites.add_sprite(&sprite);
 }
 
 /// Convert logical rect to physical pixels for scissor rect.
@@ -295,4 +334,126 @@ pub fn intersect_rects(a: &Rect, b: &Rect) -> Rect {
         (right - x).max(0.0),
         (bottom - y).max(0.0),
     )
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use renderer::texture::TextureHandle;
+    use ui::Color;
+
+    fn test_camera() -> Camera {
+        Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0))
+    }
+
+    fn white_instances(batcher: &SpriteBatcher) -> &[renderer::sprite_data::SpriteInstance] {
+        &batcher.batches()[&TextureHandle { id: 0 }].instances
+    }
+
+    #[test]
+    fn test_ui_stays_at_screen_position_under_moved_zoomed_camera() {
+        // THE camera-follow/editor invariant: UI sprites must land at the
+        // same SCREEN pixels no matter where the camera is or how far it
+        // zooms. (Regression: the editor's panel-derived camera used to
+        // shift the entire editor UI off screen.)
+        let screen_bounds = Rect::new(10.0, 10.0, 100.0, 40.0);
+        let screen_center = Vec2::new(60.0, 30.0);
+
+        for camera in [
+            Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0)),
+            Camera::new(Vec2::new(320.0, -150.0), Vec2::new(800.0, 600.0)),
+            Camera::new(Vec2::new(-75.5, 12.25), Vec2::new(800.0, 600.0)).with_zoom(2.0),
+        ] {
+            let mut batcher = SpriteBatcher::new();
+            let cmd = DrawCommand::Rect {
+                bounds: screen_bounds,
+                color: Color::WHITE,
+                corner_radius: 0.0,
+                depth: 1.0,
+            };
+            render_ui_commands(&mut batcher, &[cmd], &camera, &HashMap::new());
+
+            let instance = &white_instances(&batcher)[0];
+            let world_pos = Vec2::new(instance.position[0], instance.position[1]);
+            let back_on_screen = camera.world_to_screen(world_pos);
+            assert!(
+                (back_on_screen - screen_center).length() < 0.01,
+                "camera {:?} zoom {}: expected screen {screen_center}, got {back_on_screen}",
+                camera.position,
+                camera.zoom
+            );
+            // On-screen size = world scale * zoom = the original pixel size
+            assert!((instance.scale[0] * camera.zoom - 100.0).abs() < 0.01);
+            assert!((instance.scale[1] * camera.zoom - 40.0).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn test_rounded_rect_emits_shape_params() {
+        let mut batcher = SpriteBatcher::new();
+        let cmd = DrawCommand::Rect {
+            bounds: Rect::new(10.0, 10.0, 100.0, 40.0),
+            color: Color::WHITE,
+            corner_radius: 6.0,
+            depth: 1.0,
+        };
+        render_ui_commands(&mut batcher, &[cmd], &test_camera(), &HashMap::new());
+
+        let instances = white_instances(&batcher);
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].shape[0], 1.0, "kind = rounded rect");
+        assert_eq!(instances[0].shape[1], 6.0, "corner radius carried through");
+        assert_eq!(instances[0].shape[2], 0.0, "filled, not bordered");
+    }
+
+    #[test]
+    fn test_square_rect_stays_plain_quad() {
+        let mut batcher = SpriteBatcher::new();
+        let cmd = DrawCommand::Rect {
+            bounds: Rect::new(0.0, 0.0, 50.0, 50.0),
+            color: Color::WHITE,
+            corner_radius: 0.0,
+            depth: 0.0,
+        };
+        render_ui_commands(&mut batcher, &[cmd], &test_camera(), &HashMap::new());
+        assert_eq!(white_instances(&batcher)[0].shape, [0.0; 4], "radius 0 keeps the legacy quad path");
+    }
+
+    #[test]
+    fn test_rect_border_is_one_bordered_sprite() {
+        let mut batcher = SpriteBatcher::new();
+        let cmd = DrawCommand::RectBorder {
+            bounds: Rect::new(10.0, 10.0, 100.0, 40.0),
+            color: Color::WHITE,
+            width: 2.0,
+            corner_radius: 4.0,
+            depth: 1.0,
+        };
+        render_ui_commands(&mut batcher, &[cmd], &test_camera(), &HashMap::new());
+
+        let instances = white_instances(&batcher);
+        assert_eq!(instances.len(), 1, "border must be ONE SDF sprite, not 4 thin rects");
+        assert_eq!(instances[0].shape[0], 1.0);
+        assert_eq!(instances[0].shape[2], 2.0, "border width carried through");
+        // Grown by width so the stroke straddles the bounds
+        assert_eq!(instances[0].scale, [102.0, 42.0]);
+    }
+
+    #[test]
+    fn test_circle_emits_circle_kind_at_diameter() {
+        let mut batcher = SpriteBatcher::new();
+        let cmd = DrawCommand::Circle {
+            center: Vec2::new(400.0, 300.0),
+            radius: 8.0,
+            color: Color::WHITE,
+            depth: 0.5,
+        };
+        render_ui_commands(&mut batcher, &[cmd], &test_camera(), &HashMap::new());
+
+        let instances = white_instances(&batcher);
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].shape[0], 2.0, "kind = circle");
+        assert_eq!(instances[0].scale, [16.0, 16.0], "sprite spans the diameter");
+        // Screen center of an 800x600 window = world origin
+        assert_eq!(instances[0].position, [0.0, 0.0]);
+    }
 }

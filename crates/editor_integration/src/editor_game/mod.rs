@@ -44,8 +44,13 @@ struct EditorGame<G: Game> {
     command_history: editor::CommandHistory,
     /// Initial transform captured when gizmo drag starts.
     gizmo_drag_start: Option<common::Transform2D>,
+    /// Initial collider captured when gizmo drag starts (scale tool resizes
+    /// colliders alongside the transform — physics ignores Transform2D.scale).
+    gizmo_drag_start_collider: Option<physics::components::Collider>,
     /// Physics settings for scene serialization.
     physics_settings: Option<PhysicsSettings>,
+    /// Editing pan/zoom saved while a play session runs (restored on Stop).
+    editing_camera: Option<(Vec2, f32)>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -59,14 +64,30 @@ impl<G: Game> EditorGame<G> {
             entity_counter: 0,
             command_history: editor::CommandHistory::new(),
             gizmo_drag_start: None,
+            gizmo_drag_start_collider: None,
             physics_settings: None,
+            editing_camera: None,
+        }
+    }
+
+    /// While Playing, mirror the game's main-camera entity onto the editor
+    /// viewport so the rendered view (derived from the viewport in `render`)
+    /// follows the game camera. Paused keeps the frozen view — the user may
+    /// pan/zoom while paused and picking stays truthful.
+    pub(super) fn sync_viewport_from_main_camera(&mut self, world: &ecs::World) {
+        if !self.editor.is_playing() {
+            return;
+        }
+        if let Some(pos) = engine_core::main_camera_position(world) {
+            self.editor.viewport.set_camera_position(pos);
         }
     }
 
     /// Render the toolbar and the play controls next to it.
     fn render_toolbar_and_play_controls(&mut self, ctx: &mut GameContext) {
         if let Some(tool) = self.editor.toolbar.render(ctx.ui, &self.editor.theme) {
-            log::info!("Tool changed: {:?}", tool);
+            // set_tool keeps the gizmo mode in sync with the clicked tool.
+            self.editor.set_tool(tool);
         }
 
         let toolbar_bounds = self.editor.toolbar.bounds();
@@ -132,6 +153,10 @@ impl<G: Game> EditorGame<G> {
 
 impl<G: Game> Game for EditorGame<G> {
     fn init(&mut self, ctx: &mut GameContext) {
+        // Editor look for generic ui widgets (buttons, sliders, inputs):
+        // derive the ui theme from the editor palette once at startup.
+        ctx.ui.set_theme(self.editor.theme.ui_theme());
+
         // Load font from common search paths
         let font_paths = [
             "assets/fonts/font.ttf",
@@ -166,8 +191,21 @@ impl<G: Game> Game for EditorGame<G> {
         // 1. Run transform hierarchy system
         self.transform_system.update(ctx.world, ctx.delta_time);
 
+        // 1b. While Playing, the game's main camera drives the viewport
+        self.sync_viewport_from_main_camera(ctx.world);
+
         // 2. Editor layout
         self.editor.update_layout(window_size);
+
+        // 2b. Drag-and-drop state machine + ghost. Runs before panels so the
+        // ghost's overlay blocking rect makes widgets under the cursor inert
+        // for the whole frame (the overlay depth band keeps it on top).
+        self.editor.drag_drop.begin_frame(
+            ctx.ui.mouse_pos(),
+            ctx.ui.mouse_down(),
+            ctx.ui.mouse_just_released(),
+        );
+        panel_renderer::render_drag_ghost(&mut self.editor, ctx);
 
         // 3. Menu bar + action dispatch
         self.handle_menu_bar(ctx, window_size);
@@ -198,6 +236,13 @@ impl<G: Game> Game for EditorGame<G> {
 
     fn render(&mut self, ctx: &mut RenderContext) {
         self.inner.render(ctx);
+        // The editor viewport is the single source of truth for the view:
+        // derive the GPU camera from it so sprites land inside the scene
+        // panel exactly where the overlay (gizmo, picking, grid) expects
+        // them. Games that hand-write `ctx.camera` in a custom `render()`
+        // are overridden here — the supported path inside the editor is a
+        // main-camera entity (mirrored onto the viewport while Playing).
+        *ctx.camera = self.editor.viewport.to_window_render_camera(ctx.window_size);
     }
 
     fn on_key_pressed(&mut self, key: KeyCode, ctx: &mut GameContext) {

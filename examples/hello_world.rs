@@ -8,6 +8,10 @@
 //! - RON scene file loading for entity/component definition
 //! - ECS for entity/component management
 //! - Asset Manager with a config-level base path (cwd-independent asset loading)
+//! - **Camera Follow** - a scene-defined main-camera entity with the
+//!   `CameraFollow` behavior trails the player across a wide level
+//! - **Player-aware input** - gameplay reads `ctx.players` (keyboard AND
+//!   gamepad bindings for free); raw keys are reserved for debug toggles
 //! - **Audio System** - sound effects and music playback
 //! - **UI System** - immediate-mode UI with buttons, sliders, and panels
 //! - **Font Rendering** - load TTF/OTF fonts for text display via fontdue
@@ -15,9 +19,9 @@
 //! - 2D Physics with rapier2d integration
 //! - **Scene Graph Hierarchy** - parent-child entity relationships with transform propagation
 //!
-//! Controls: WASD to move player, SPACE to jump, R to reset, M to toggle music,
-//!           +/- to adjust volume, H to toggle UI, ESC to exit
-//!           Click UI buttons for interactive controls!
+//! Controls: WASD to move player, SPACE (or pad A) to jump, R to reset,
+//!           M to toggle music, +/- to adjust volume, H to toggle UI, ESC to exit
+//!           Walk right past the gap — the camera follows! Collect the coins!
 //!
 //! Scene file: examples/assets/scenes/hello_world.scene.ron
 //! Font file: examples/assets/fonts/font.ttf (optional - download any TTF font)
@@ -36,14 +40,13 @@ const PLAYER_SPAWN: Vec2 = Vec2::new(-200.0, 100.0);
 
 // --- Actions: game-defined enum evaluated through the engine's InputMapping ---
 
-/// Demo-level actions. Movement and jumping are handled by the scene's
-/// `PlayerPlatformer` behavior; these cover the manual controls. Rebinding a
-/// key means changing one line in `demo_actions()` instead of hunting through
-/// game logic for raw key checks.
+/// Demo-level DEBUG actions (music/UI/volume toggles, reset). Gameplay input
+/// goes through the engine's player-aware layer (`ctx.players` — see the
+/// jump-sound check in `update`); movement and jumping themselves are driven
+/// by the scene's `PlayerPlatformer` behavior. Raw keys are the convention
+/// for debug toggles only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum DemoAction {
-    /// Plays the jump sound (the jump itself is driven by the behavior system)
-    Jump,
     ToggleMusic,
     ToggleUi,
     ResetPlayer,
@@ -53,7 +56,6 @@ enum DemoAction {
 
 fn demo_actions() -> InputMapping<DemoAction> {
     let mut actions = InputMapping::new();
-    actions.bind(DemoAction::Jump, InputSource::Keyboard(KeyCode::Space));
     actions.bind(DemoAction::ToggleMusic, InputSource::Keyboard(KeyCode::KeyM));
     actions.bind(DemoAction::ToggleUi, InputSource::Keyboard(KeyCode::KeyH));
     actions.bind(DemoAction::ResetPlayer, InputSource::Keyboard(KeyCode::KeyR));
@@ -325,7 +327,11 @@ impl Game for HelloWorld {
     fn update(&mut self, ctx: &mut GameContext) {
         // Play jump sound on the strict press edge (if sound is loaded).
         // The jump itself is handled by the PlayerPlatformer behavior.
-        if self.actions.just_activated(DemoAction::Jump, ctx.input) {
+        // Single-player convention: listen to BOTH player slots so Space,
+        // Enter, and either gamepad's A button all work.
+        if ctx.players.just_activated(PlayerId::P1, GameAction::Action1, ctx.input)
+            || ctx.players.just_activated(PlayerId::P2, GameAction::Action1, ctx.input)
+        {
             if let Some(jump_sound) = &self.jump_sound {
                 let settings = SoundSettings::new()
                     .with_volume(0.8)

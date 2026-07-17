@@ -18,9 +18,10 @@ impl UIManager {
         }
     }
 
-    /// Begin a new UI frame
-    pub fn begin_frame(&mut self, input: &InputHandler, window_size: glam::Vec2) {
-        self.ui_context.begin_frame(input, window_size);
+    /// Begin a new UI frame. `dt` (seconds since the last frame) paces
+    /// held-key repeat in text inputs.
+    pub fn begin_frame(&mut self, input: &InputHandler, window_size: glam::Vec2, dt: f32) {
+        self.ui_context.begin_frame_dt(input, window_size, dt);
     }
 
     /// Get mutable access to the UI context
@@ -57,7 +58,7 @@ mod tests {
         let mut manager = UIManager::new();
         let window_size = glam::Vec2::new(800.0, 600.0);
 
-        manager.begin_frame(&input, window_size);
+        manager.begin_frame(&input, window_size, 1.0 / 60.0);
         let ctx = manager.ui_context();
         ctx.label("Test", glam::Vec2::new(10.0, 10.0));
         let commands = manager.end_frame();

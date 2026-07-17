@@ -6,10 +6,12 @@
 //! Split by responsibility:
 //! - `mod.rs` — UIContext struct, construction, frame lifecycle, fonts, core state
 //! - `text.rs` — label/measure family and shared text-drawing helpers
-//! - `widgets.rs` — interactive widgets (button, slider, checkbox, float_input)
+//! - `widgets.rs` — interactive widgets (button, slider, checkbox)
 //!   and container/shape drawing
+//! - `text_input.rs` — the float/text input widget (cursor, selection, caret)
 
 mod text;
+mod text_input;
 mod widgets;
 
 #[cfg(test)]
@@ -140,8 +142,19 @@ impl UIContext {
     // ================== Frame Lifecycle ==================
 
     /// Begin a new frame. Call this at the start of each frame.
+    ///
+    /// Key repeat paces off an assumed 60 FPS frame delta; prefer
+    /// [`Self::begin_frame_dt`] when a real delta time is available.
     pub fn begin_frame(&mut self, input: &InputHandler, window_size: Vec2) {
         self.interaction.begin_frame(input);
+        self.draw_list.clear();
+        self.window_size = window_size;
+    }
+
+    /// Begin a new frame with an explicit frame delta (seconds). The delta
+    /// paces held-key repeat in text inputs.
+    pub fn begin_frame_dt(&mut self, input: &InputHandler, window_size: Vec2, dt: f32) {
+        self.interaction.begin_frame_dt(input, dt);
         self.draw_list.clear();
         self.window_size = window_size;
     }
@@ -179,6 +192,21 @@ impl UIContext {
     /// Whether the left mouse button was pressed this frame.
     pub fn mouse_just_pressed(&self) -> bool {
         self.interaction.input().mouse_just_pressed
+    }
+
+    /// Whether the left mouse button is currently held down.
+    pub fn mouse_down(&self) -> bool {
+        self.interaction.input().mouse_down
+    }
+
+    /// Whether the left mouse button was released this frame.
+    pub fn mouse_just_released(&self) -> bool {
+        self.interaction.input().mouse_just_released
+    }
+
+    /// Mouse wheel scroll delta for this frame.
+    pub fn scroll_delta(&self) -> f32 {
+        self.interaction.input().scroll_delta
     }
 
     /// Whether a widget (e.g. a text input being edited) currently has
@@ -228,6 +256,16 @@ impl UIContext {
     /// Draw a colored rectangle with rounded corners.
     pub fn rect_rounded(&mut self, bounds: Rect, color: Color, corner_radius: f32) {
         self.draw_list.rect_rounded(bounds, color, corner_radius);
+    }
+
+    /// Draw a rectangle outline with the given stroke width and corner radius.
+    pub fn rect_border(&mut self, bounds: Rect, color: Color, width: f32, corner_radius: f32) {
+        self.draw_list.rect_border_rounded(bounds, color, width, corner_radius);
+    }
+
+    /// Draw a textured image by renderer texture id (thumbnails, previews).
+    pub fn image(&mut self, bounds: Rect, texture_id: u32, tint: Color) {
+        self.draw_list.image(bounds, texture_id, tint);
     }
 
     /// Draw a circle.

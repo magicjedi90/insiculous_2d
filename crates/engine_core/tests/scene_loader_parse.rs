@@ -172,3 +172,49 @@ fn test_tilemap_parses_and_instantiates_with_resolved_tileset() {
     assert_eq!(tilemap.depth, -1.0); // serde default
     assert_eq!(tilemap.sprite_instances().count(), 3);
 }
+
+#[test]
+fn test_bundled_example_scenes_parse() {
+    // The example scene files checked into the repo must always parse —
+    // hello_world.scene.ron doubles as the editor demo's level.
+    for name in ["hello_world.scene.ron", "behavior_demo.scene.ron"] {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/assets/scenes/");
+        let text = std::fs::read_to_string(format!("{path}{name}"))
+            .unwrap_or_else(|e| panic!("read {name}: {e}"));
+        let scene = SceneLoader::parse(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"));
+        assert!(!scene.entities.is_empty(), "{name} has entities");
+    }
+}
+
+#[test]
+fn test_hello_world_scene_has_camera_follow_setup() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/assets/scenes/hello_world.scene.ron"
+    );
+    let text = std::fs::read_to_string(path).unwrap();
+    let scene = SceneLoader::parse(&text).unwrap();
+
+    // A main-camera entity with the CameraFollow behavior
+    let camera = scene
+        .entities
+        .iter()
+        .find(|e| e.name.as_deref() == Some("camera"))
+        .expect("camera entity present");
+    assert!(camera.components.iter().any(|c| matches!(
+        c,
+        ComponentData::Camera2D { is_main_camera: true, .. }
+    )));
+    assert!(camera.components.iter().any(|c| matches!(
+        c,
+        ComponentData::Behavior(engine_core::scene_data::BehaviorData::CameraFollow { target_tag, .. })
+            if target_tag == "player"
+    )));
+
+    // The player prefab carries the tag the camera follows
+    let player_prefab = &scene.prefabs["Player"];
+    assert!(player_prefab.components.iter().any(|c| matches!(
+        c,
+        ComponentData::EntityTag { tag } if tag == "player"
+    )));
+}

@@ -3,9 +3,15 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
-use input::prelude::{InputHandler, KeyCode, MouseButton};
+use input::prelude::InputHandler;
 
+use crate::input_state::{InputState, KeyRepeat};
+use crate::text_edit::TextEditState;
 use crate::Rect;
+
+/// Fallback frame delta for [`InteractionManager::begin_frame`] callers that
+/// don't thread a real dt (key repeat paces off this).
+const DEFAULT_FRAME_DT: f32 = 1.0 / 60.0;
 
 /// Unique identifier for a widget.
 /// Can be created from strings, integers, or tuples for hierarchical IDs.
@@ -100,132 +106,8 @@ impl Default for InteractionResult {
 pub struct WidgetPersistentState {
     /// Whether the widget was seen this frame (for garbage collection)
     pub seen_this_frame: bool,
-    /// Custom string value (e.g., text input content)
-    pub string_value: String,
-}
-
-/// Input state snapshot for UI interaction.
-#[derive(Debug, Clone)]
-pub struct InputState {
-    /// Current mouse position in screen coordinates
-    pub mouse_pos: Vec2,
-    /// Whether left mouse button is pressed
-    pub mouse_down: bool,
-    /// Whether left mouse button was just pressed this frame
-    pub mouse_just_pressed: bool,
-    /// Whether left mouse button was just released this frame
-    pub mouse_just_released: bool,
-    /// Mouse scroll delta
-    pub scroll_delta: f32,
-    /// Characters typed this frame (for text input widgets)
-    pub typed_chars: Vec<char>,
-    /// Whether Enter/Return was just pressed
-    pub enter_pressed: bool,
-    /// Whether Escape was just pressed
-    pub escape_pressed: bool,
-    /// Whether Backspace was just pressed
-    pub backspace_pressed: bool,
-    /// Whether Tab was just pressed
-    pub tab_pressed: bool,
-}
-
-impl Default for InputState {
-    fn default() -> Self {
-        Self {
-            mouse_pos: Vec2::ZERO,
-            mouse_down: false,
-            mouse_just_pressed: false,
-            mouse_just_released: false,
-            scroll_delta: 0.0,
-            typed_chars: Vec::new(),
-            enter_pressed: false,
-            escape_pressed: false,
-            backspace_pressed: false,
-            tab_pressed: false,
-        }
-    }
-}
-
-/// Map a physical KeyCode to a character for text input.
-/// Returns None for non-character keys. Only maps keys useful for numeric input.
-fn keycode_to_char(key: KeyCode, shift: bool) -> Option<char> {
-    use KeyCode::*;
-    match key {
-        // Numpad always maps to digits regardless of shift
-        Numpad0 => Some('0'),
-        Numpad1 => Some('1'),
-        Numpad2 => Some('2'),
-        Numpad3 => Some('3'),
-        Numpad4 => Some('4'),
-        Numpad5 => Some('5'),
-        Numpad6 => Some('6'),
-        Numpad7 => Some('7'),
-        Numpad8 => Some('8'),
-        Numpad9 => Some('9'),
-        NumpadDecimal => Some('.'),
-        NumpadSubtract => Some('-'),
-        // Top-row digits only when shift is not held
-        Digit0 if !shift => Some('0'),
-        Digit1 if !shift => Some('1'),
-        Digit2 if !shift => Some('2'),
-        Digit3 if !shift => Some('3'),
-        Digit4 if !shift => Some('4'),
-        Digit5 if !shift => Some('5'),
-        Digit6 if !shift => Some('6'),
-        Digit7 if !shift => Some('7'),
-        Digit8 if !shift => Some('8'),
-        Digit9 if !shift => Some('9'),
-        Period if !shift => Some('.'),
-        Minus if !shift => Some('-'),
-        _ => None,
-    }
-}
-
-impl InputState {
-    /// Create input state from an InputHandler.
-    pub fn from_input_handler(input: &InputHandler) -> Self {
-        let mouse = input.mouse();
-        let pos = mouse.position();
-        let kb = input.keyboard();
-
-        let shift = kb.is_key_pressed(KeyCode::ShiftLeft)
-            || kb.is_key_pressed(KeyCode::ShiftRight);
-
-        // Collect typed characters from just-pressed keys
-        let typed_keys = [
-            KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3,
-            KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7,
-            KeyCode::Digit8, KeyCode::Digit9,
-            KeyCode::Numpad0, KeyCode::Numpad1, KeyCode::Numpad2, KeyCode::Numpad3,
-            KeyCode::Numpad4, KeyCode::Numpad5, KeyCode::Numpad6, KeyCode::Numpad7,
-            KeyCode::Numpad8, KeyCode::Numpad9,
-            KeyCode::Period, KeyCode::NumpadDecimal,
-            KeyCode::Minus, KeyCode::NumpadSubtract,
-        ];
-
-        let mut typed_chars = Vec::new();
-        for &key in &typed_keys {
-            if kb.is_key_just_pressed(key) {
-                if let Some(ch) = keycode_to_char(key, shift) {
-                    typed_chars.push(ch);
-                }
-            }
-        }
-
-        Self {
-            mouse_pos: Vec2::new(pos.x, pos.y),
-            mouse_down: mouse.is_button_pressed(MouseButton::Left),
-            mouse_just_pressed: mouse.is_button_just_pressed(MouseButton::Left),
-            mouse_just_released: mouse.is_button_just_released(MouseButton::Left),
-            scroll_delta: mouse.wheel_delta(),
-            typed_chars,
-            enter_pressed: kb.is_key_just_pressed(KeyCode::Enter)
-                || kb.is_key_just_pressed(KeyCode::NumpadEnter),
-            escape_pressed: kb.is_key_just_pressed(KeyCode::Escape),
-            backspace_pressed: kb.is_key_just_pressed(KeyCode::Backspace),
-            tab_pressed: kb.is_key_just_pressed(KeyCode::Tab),
-        }
-    }
+    /// Text-editing state (buffer, cursor, selection) for input widgets
+    pub edit: TextEditState,
 }
 
 /// Tracks interaction state for all widgets in the UI.
@@ -246,6 +128,8 @@ pub struct InteractionManager {
     /// Whether interact() calls are currently inside an overlay (exempt
     /// from blocking rects). Cleared each frame.
     overlay_scope: bool,
+    /// Hold timers for key repeat (arrows, Backspace, Delete)
+    key_repeat: KeyRepeat,
 }
 
 impl Default for InteractionManager {
@@ -265,12 +149,20 @@ impl InteractionManager {
             focus_widget: None,
             blocking_rects: Vec::new(),
             overlay_scope: false,
+            key_repeat: KeyRepeat::default(),
         }
     }
 
-    /// Begin a new frame, updating input state.
+    /// Begin a new frame with a default frame delta for key repeat.
+    /// Prefer [`Self::begin_frame_dt`] when a real delta time is available.
     pub fn begin_frame(&mut self, input: &InputHandler) {
-        self.input = InputState::from_input_handler(input);
+        self.begin_frame_dt(input, DEFAULT_FRAME_DT);
+    }
+
+    /// Begin a new frame, updating input state. `dt` (seconds since the last
+    /// frame) paces held-key repeat for text inputs.
+    pub fn begin_frame_dt(&mut self, input: &InputHandler, dt: f32) {
+        self.input = InputState::from_input_handler_with_repeat(input, &mut self.key_repeat, dt);
 
         // Clear hot widget at start of frame (will be set by widgets that are hovered)
         self.hot_widget = None;
@@ -471,6 +363,7 @@ mod tests {
 
     /// Build an InputHandler with the mouse at `pos`, optionally pressed.
     fn input_with_mouse(pos: Vec2, pressed: bool) -> InputHandler {
+        use input::prelude::MouseButton;
         let mut input = InputHandler::new();
         input.mouse_mut().update_position(pos.x, pos.y);
         if pressed {
@@ -531,7 +424,7 @@ mod tests {
     fn test_blocked_widget_persistent_state_survives_frame() {
         let mut manager = InteractionManager::new();
         let id = WidgetId::from_str("blocked_text_input");
-        manager.get_state(id).string_value = "edit buffer".to_string();
+        manager.get_state(id).edit.text = "edit buffer".to_string();
 
         let input = input_with_mouse(Vec2::new(50.0, 50.0), false);
         manager.begin_frame(&input);
@@ -540,7 +433,7 @@ mod tests {
         manager.end_frame();
 
         let state = manager.get_state_if_exists(id).expect("blocked widget state retained");
-        assert_eq!(state.string_value, "edit buffer");
+        assert_eq!(state.edit.text, "edit buffer");
     }
 
     #[test]
@@ -581,11 +474,11 @@ mod tests {
         let id = WidgetId::from_str("test_widget");
 
         let state = manager.get_state(id);
-        state.string_value = "hello".to_string();
+        state.edit.text = "hello".to_string();
 
         let state = manager.get_state_if_exists(id).unwrap();
         assert!(state.seen_this_frame);
-        assert_eq!(state.string_value, "hello");
+        assert_eq!(state.edit.text, "hello");
     }
 
     #[test]
@@ -593,7 +486,7 @@ mod tests {
         let mut manager = InteractionManager::new();
         let id = WidgetId::from_str("transient");
 
-        manager.get_state(id).string_value = "data".to_string();
+        manager.get_state(id).edit.text = "data".to_string();
         manager.end_frame();
         assert!(manager.get_state_if_exists(id).is_some(), "seen state survives the frame");
 
@@ -608,7 +501,7 @@ mod tests {
         let mut manager = InteractionManager::new();
         let id = WidgetId::from_str("text_input");
 
-        manager.get_state(id).string_value = "editing".to_string();
+        manager.get_state(id).edit.text = "editing".to_string();
         manager.set_focus(id);
         manager.end_frame();
 
@@ -618,7 +511,7 @@ mod tests {
         manager.end_frame();
 
         let state = manager.get_state_if_exists(id).expect("focused state retained");
-        assert_eq!(state.string_value, "editing");
+        assert_eq!(state.edit.text, "editing");
     }
 
     #[test]
@@ -627,50 +520,6 @@ mod tests {
         assert_eq!(result.state, WidgetState::Normal);
         assert!(!result.clicked);
         assert!(!result.dragging);
-    }
-
-    #[test]
-    fn test_input_state_default() {
-        let input = InputState::default();
-        assert_eq!(input.mouse_pos, Vec2::ZERO);
-        assert!(!input.mouse_down);
-        assert!(!input.mouse_just_pressed);
-        assert!(!input.mouse_just_released);
-        assert!(input.typed_chars.is_empty());
-        assert!(!input.enter_pressed);
-        assert!(!input.escape_pressed);
-        assert!(!input.backspace_pressed);
-        assert!(!input.tab_pressed);
-    }
-
-    #[test]
-    fn test_keycode_to_char_digits() {
-        assert_eq!(keycode_to_char(KeyCode::Digit0, false), Some('0'));
-        assert_eq!(keycode_to_char(KeyCode::Digit9, false), Some('9'));
-        assert_eq!(keycode_to_char(KeyCode::Numpad5, false), Some('5'));
-        assert_eq!(keycode_to_char(KeyCode::Numpad5, true), Some('5')); // numpad ignores shift
-    }
-
-    #[test]
-    fn test_keycode_to_char_special() {
-        assert_eq!(keycode_to_char(KeyCode::Period, false), Some('.'));
-        assert_eq!(keycode_to_char(KeyCode::Minus, false), Some('-'));
-        assert_eq!(keycode_to_char(KeyCode::NumpadDecimal, false), Some('.'));
-        assert_eq!(keycode_to_char(KeyCode::NumpadSubtract, true), Some('-'));
-    }
-
-    #[test]
-    fn test_keycode_to_char_shift_blocks_top_row() {
-        assert_eq!(keycode_to_char(KeyCode::Digit0, true), None); // Shift+0 = ')'
-        assert_eq!(keycode_to_char(KeyCode::Period, true), None); // Shift+. = '>'
-        assert_eq!(keycode_to_char(KeyCode::Minus, true), None); // Shift+- = '_'
-    }
-
-    #[test]
-    fn test_keycode_to_char_non_numeric() {
-        assert_eq!(keycode_to_char(KeyCode::KeyA, false), None);
-        assert_eq!(keycode_to_char(KeyCode::Space, false), None);
-        assert_eq!(keycode_to_char(KeyCode::Enter, false), None);
     }
 
     #[test]

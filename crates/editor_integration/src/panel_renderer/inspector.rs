@@ -71,6 +71,18 @@ fn render_inspector_editable(
     let inspect_style = editor.theme.inspector_style();
     let field_style = editor.theme.editable_field_style();
 
+    // Resolve the sprite texture's display path up front (the editor crate
+    // cannot see AssetManager) and hand the drag-drop coordinator to the
+    // registry-generated inspector so the Texture slot can accept drops.
+    let texture_display = ctx
+        .world
+        .get::<ecs::sprite_components::Sprite>(entity_id)
+        .and_then(|s| ctx.assets.texture_path(s.texture_handle).map(str::to_string));
+    let mut extras = editor::InspectorExtras {
+        drag_drop: &mut editor.drag_drop,
+        texture_display,
+    };
+
     // Every per-component block (field editors, undo-recorded writeback,
     // remove buttons, read-only fallbacks) is generated from the editor's
     // component registry — adding a component to the registry is all it
@@ -85,6 +97,7 @@ fn render_inspector_editable(
         &inspect_style,
         &field_style,
         line_height * 0.5,
+        &mut extras,
     );
     y = next_y;
 
@@ -123,7 +136,7 @@ fn render_inspector_editable(
                     category.label(),
                     Vec2::new(content_x + 8.0, popup_y),
                     editor.theme.text_muted,
-                    12.0,
+                    editor.theme.fonts.small,
                 );
                 popup_y += 18.0;
 

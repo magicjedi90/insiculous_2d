@@ -92,6 +92,15 @@ pub enum DrawCommand {
         width: f32,
         depth: f32,
     },
+    /// Draw a textured image (thumbnails, previews). `texture_id` is the
+    /// renderer texture handle id — the ui crate stays renderer-agnostic.
+    Image {
+        bounds: Rect,
+        texture_id: u32,
+        tint: Color,
+        corner_radius: f32,
+        depth: f32,
+    },
     /// Begin clipping to a rectangular region.
     /// All subsequent draws are clipped to this bounds until PopClipRect.
     PushClipRect {
@@ -116,6 +125,7 @@ impl DrawCommand {
             DrawCommand::TextPlaceholder { depth, .. } => *depth,
             DrawCommand::Circle { depth, .. } => *depth,
             DrawCommand::Line { depth, .. } => *depth,
+            DrawCommand::Image { depth, .. } => *depth,
             DrawCommand::PushClipRect { .. } => 0.0, // Clip commands don't have depth
             DrawCommand::PopClipRect => 0.0,
         }
@@ -220,6 +230,22 @@ impl DrawList {
             bounds,
             color,
             width,
+            corner_radius,
+            depth: self.next_depth(),
+        });
+    }
+
+    /// Add a textured image by renderer texture id.
+    pub fn image(&mut self, bounds: Rect, texture_id: u32, tint: Color) {
+        self.image_rounded(bounds, texture_id, tint, 0.0);
+    }
+
+    /// Add a textured image with rounded corners.
+    pub fn image_rounded(&mut self, bounds: Rect, texture_id: u32, tint: Color, corner_radius: f32) {
+        self.commands.push(DrawCommand::Image {
+            bounds,
+            texture_id,
+            tint,
             corner_radius,
             depth: self.next_depth(),
         });

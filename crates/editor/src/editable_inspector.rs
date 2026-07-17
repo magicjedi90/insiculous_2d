@@ -23,7 +23,7 @@ pub fn edit_f32(
     style: &EditableFieldStyle,
 ) -> EditResult<f32> {
     // Draw label
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
 
     // Text input bounds
     let input_x = pos.x + style.label_width;
@@ -68,7 +68,7 @@ pub fn edit_bool(
     style: &EditableFieldStyle,
 ) -> EditResult<bool> {
     // Draw label
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
 
     // Checkbox bounds
     let checkbox_x = pos.x + style.label_width;
@@ -102,7 +102,7 @@ pub fn edit_vec2(
     let (min, max) = (*range.start(), *range.end());
 
     // Draw label
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
 
     let mut new_value = value;
     let input_width = style.vec2_input_width;
@@ -115,7 +115,7 @@ pub fn edit_vec2(
         "X",
         glam::Vec2::new(input_x, pos.y + 4.0),
         style.axis_x_label,
-        12.0,
+        style.axis_font,
     );
 
     // X input
@@ -131,7 +131,7 @@ pub fn edit_vec2(
         "Y",
         glam::Vec2::new(y_label_x, pos.y + 4.0),
         style.axis_y_label,
-        12.0,
+        style.axis_font,
     );
 
     // Y input
@@ -156,14 +156,14 @@ pub fn display_u32(
     pos: Vec2,
     style: &EditableFieldStyle,
 ) {
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
 
     let value_text = format!("{}", value);
     ui.label_styled(
         &value_text,
         glam::Vec2::new(pos.x + style.label_width, pos.y + 4.0),
         style.value_color,
-        14.0,
+        style.label_font,
     );
 }
 
@@ -175,12 +175,12 @@ pub fn display_string(
     pos: Vec2,
     style: &EditableFieldStyle,
 ) {
-    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), style.label_color, style.label_font);
     ui.label_styled(
         value,
         glam::Vec2::new(pos.x + style.label_width, pos.y + 4.0),
         style.value_color,
-        14.0,
+        style.label_font,
     );
 }
 
@@ -212,7 +212,7 @@ pub fn edit_color(
     let (x, y) = (pos.x, pos.y);
 
     // Draw label
-    ui.label_styled(label, glam::Vec2::new(x, y + 4.0), style.label_color, 14.0);
+    ui.label_styled(label, glam::Vec2::new(x, y + 4.0), style.label_color, style.label_font);
 
     // Color preview
     let preview_x = x + style.label_width;
@@ -232,7 +232,7 @@ pub fn edit_color(
     let gap = style.color_input_gap;
 
     // Red
-    ui.label_styled("R", glam::Vec2::new(input_x, y + 2.0), style.channel_labels[0], 10.0);
+    ui.label_styled("R", glam::Vec2::new(input_x, y + 2.0), style.channel_labels[0], style.channel_font);
     let r_bounds = Rect::new(input_x + style.channel_label_gap, y + 2.0, input_width, input_height);
     let new_r = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 0),
@@ -245,7 +245,7 @@ pub fn edit_color(
 
     // Green
     let g_x = input_x + style.channel_label_gap + input_width + gap;
-    ui.label_styled("G", glam::Vec2::new(g_x, y + 2.0), style.channel_labels[1], 10.0);
+    ui.label_styled("G", glam::Vec2::new(g_x, y + 2.0), style.channel_labels[1], style.channel_font);
     let g_bounds = Rect::new(g_x + style.channel_label_gap, y + 2.0, input_width, input_height);
     let new_g = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 1),
@@ -257,8 +257,8 @@ pub fn edit_color(
     }
 
     // Blue
-    ui.label_styled("B", glam::Vec2::new(input_x, y + row_height / 2.0 + 2.0), style.channel_labels[2], 10.0);
-    let b_bounds = Rect::new(input_x + style.channel_label_gap, y + row_height / 2.0 + 2.0, input_width, input_height);
+    ui.label_styled("B", glam::Vec2::new(input_x, y + 2.0 + input_height + 4.0), style.channel_labels[2], style.channel_font);
+    let b_bounds = Rect::new(input_x + style.channel_label_gap, y + 2.0 + input_height + 4.0, input_width, input_height);
     let new_b = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 2),
         value.z, 0.0, 1.0, b_bounds,
@@ -270,8 +270,8 @@ pub fn edit_color(
 
     // Alpha
     let a_x = input_x + style.channel_label_gap + input_width + gap;
-    ui.label_styled("A", glam::Vec2::new(a_x, y + row_height / 2.0 + 2.0), style.channel_labels[3], 10.0);
-    let a_bounds = Rect::new(a_x + style.channel_label_gap, y + row_height / 2.0 + 2.0, input_width, input_height);
+    ui.label_styled("A", glam::Vec2::new(a_x, y + 2.0 + input_height + 4.0), style.channel_labels[3], style.channel_font);
+    let a_bounds = Rect::new(a_x + style.channel_label_gap, y + 2.0 + input_height + 4.0, input_width, input_height);
     let new_a = ui.float_input(
         FieldId::new(id.component_index, id.field_index, 3),
         value.w, 0.0, 1.0, a_bounds,
@@ -296,7 +296,7 @@ pub fn component_header(
     y: f32,
     style: &EditableFieldStyle,
 ) -> f32 {
-    ui.label_styled(type_name, glam::Vec2::new(x, y), style.header_color, 16.0);
+    ui.label_styled(type_name, glam::Vec2::new(x, y), style.header_color, style.header_font);
     y + style.row_height + 4.0
 }
 
@@ -358,7 +358,7 @@ impl<'a> EditableInspector<'a> {
             type_name,
             glam::Vec2::new(self.x, self.current_y),
             self.style.header_color,
-            16.0,
+            self.style.header_font,
         );
 
         let mut clicked = false;
@@ -383,6 +383,32 @@ impl<'a> EditableInspector<'a> {
     /// Position of the next field, indented from the inspector origin.
     fn field_pos(&self) -> Vec2 {
         Vec2::new(self.x + self.style.indent, self.current_y)
+    }
+
+    /// Add a texture slot field: shows the texture's display name and acts
+    /// as a drag-and-drop target for asset-browser textures.
+    pub fn texture(
+        &mut self,
+        label: &str,
+        handle: u32,
+        extras: &mut crate::InspectorExtras<'_>,
+    ) -> EditResult<u32> {
+        let id = FieldId::new(self.component_index, self.field_index, 0);
+        let pos = self.field_pos();
+        let display = extras.texture_display.clone();
+        let result = crate::edit_texture_field(
+            self.ui,
+            id,
+            label,
+            handle,
+            extras.drag_drop,
+            display.as_deref(),
+            pos,
+            &self.style,
+        );
+        self.field_index += 1;
+        self.current_y += self.style.row_height;
+        result
     }
 
     /// Add an editable f32 field.
@@ -457,8 +483,9 @@ impl<'a> EditableInspector<'a> {
         let pos = self.field_pos();
         let (label_color, value_color) = (self.style.label_color, self.style.value_color);
         let (row_height, label_width) = (self.style.row_height, self.style.label_width);
+        let label_font = self.style.label_font;
         self.ui
-            .label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), label_color, 14.0);
+            .label_styled(label, glam::Vec2::new(pos.x, pos.y + 4.0), label_color, label_font);
 
         let btn_size = row_height - 6.0;
         let btn_y = pos.y + (row_height - btn_size) / 2.0;
@@ -476,7 +503,7 @@ impl<'a> EditableInspector<'a> {
             value_name,
             glam::Vec2::new(prev_x + btn_size + 6.0, pos.y + 4.0),
             value_color,
-            14.0,
+            label_font,
         );
 
         let next_bounds = Rect::new(prev_x + btn_size + value_width, btn_y, btn_size, btn_size);
@@ -502,7 +529,8 @@ impl<'a> EditableInspector<'a> {
         let pos = self.field_pos();
         let result = edit_color(self.ui, id, label, value, pos, &self.style);
         self.field_index += 1;
-        self.current_y += self.style.row_height * 1.5; // Color takes more space
+        // Color spans two input rows (RG / BA) of color_input_height plus gaps
+        self.current_y += self.style.row_height * 1.8;
         result
     }
 }

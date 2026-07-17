@@ -210,49 +210,12 @@ fn test_gizmo_has_priority() {
 }
 
 #[test]
-fn test_update_gizmo_from_selection_empty() {
-    let mut ctx = EditorContext::new();
-    ctx.set_tool(EditorTool::Move); // Set to Move so gizmo shows
-
-    // Empty selection should hide gizmo
-    let entities: Vec<(ecs::EntityId, Vec2)> = vec![];
-    ctx.update_gizmo_from_selection(&entities);
-
+fn test_new_context_tool_and_gizmo_consistent() {
+    // Startup regression: the toolbar defaults to Select but the gizmo used
+    // to default to Translate — a gizmo rendered with no tool selected.
+    let ctx = EditorContext::new();
+    assert_eq!(ctx.current_tool(), EditorTool::Select);
     assert_eq!(ctx.gizmo.mode(), GizmoMode::None);
-}
-
-#[test]
-fn test_update_gizmo_from_selection_single() {
-    let mut ctx = EditorContext::new();
-    ctx.set_tool(EditorTool::Move);
-
-    let entity_id = ecs::EntityId::with_generation(1, 1);
-    ctx.selection.select(entity_id);
-
-    let entities = vec![(entity_id, Vec2::new(100.0, 200.0))];
-    ctx.update_gizmo_from_selection(&entities);
-
-    assert_eq!(ctx.gizmo.position(), Vec2::new(100.0, 200.0));
-}
-
-#[test]
-fn test_update_gizmo_from_selection_multiple() {
-    let mut ctx = EditorContext::new();
-    ctx.set_tool(EditorTool::Move);
-
-    let id1 = ecs::EntityId::with_generation(1, 1);
-    let id2 = ecs::EntityId::with_generation(2, 1);
-    ctx.selection.select(id1);
-    ctx.selection.add(id2);
-
-    let entities = vec![
-        (id1, Vec2::new(0.0, 0.0)),
-        (id2, Vec2::new(100.0, 100.0)),
-    ];
-    ctx.update_gizmo_from_selection(&entities);
-
-    // Gizmo should be at center of selection
-    assert_eq!(ctx.gizmo.position(), Vec2::new(50.0, 50.0));
 }
 
 #[test]

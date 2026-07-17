@@ -190,6 +190,16 @@ impl Gizmo {
         self.position = position;
     }
 
+    /// Set the length of the gizmo axis arms in screen pixels (minimum 10).
+    pub fn set_axis_length(&mut self, length: f32) {
+        self.axis_length = length.max(10.0);
+    }
+
+    /// Get the length of the gizmo axis arms in screen pixels.
+    pub fn axis_length(&self) -> f32 {
+        self.axis_length
+    }
+
     /// Get the gizmo position.
     pub fn position(&self) -> Vec2 {
         self.position
@@ -353,10 +363,11 @@ impl Gizmo {
             ui.line(p1, p2, self.palette.ring, 2.0);
         }
 
-        // Draw current rotation indicator
+        // Draw current rotation indicator (negated sin: world rotation is
+        // CCW-positive but screen Y grows downward)
         let indicator_end = screen_pos + Vec2::new(
             self.rotation.cos() * ring_radius,
-            self.rotation.sin() * ring_radius,
+            -self.rotation.sin() * ring_radius,
         );
         ui.line(screen_pos, indicator_end, self.palette.rotation_indicator, 3.0);
 
@@ -373,13 +384,9 @@ impl Gizmo {
         if result.dragging {
             self.begin_drag_if(true, GizmoHandle::Ring, mouse_pos);
 
-            // Calculate rotation delta based on angle change
-            let last_angle = (self.last_mouse_pos - screen_pos).y.atan2((self.last_mouse_pos - screen_pos).x);
-            let current_angle = (mouse_pos - screen_pos).y.atan2((mouse_pos - screen_pos).x);
-            let delta_angle = current_angle - last_angle;
-
             interaction.handle = Some(GizmoHandle::Ring);
-            interaction.rotation_delta = delta_angle;
+            interaction.rotation_delta =
+                crate::gizmo_math::world_rotation_delta(screen_pos, self.last_mouse_pos, mouse_pos);
             self.last_mouse_pos = mouse_pos;
         } else {
             self.active_handle = None;

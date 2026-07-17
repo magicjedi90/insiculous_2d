@@ -22,7 +22,12 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 ### State + chrome
 - `context/` — EditorContext struct (selection, tools, state, theme, command_history); tests in `context/tests.rs`
 - `lib.rs` — Public re-exports
-- `theme.rs` — EditorTheme (color tokens, gizmo/grid/inspector style converters)
+- `theme.rs` — EditorTheme (color tokens, `fonts: FontSizes` typography tokens, gizmo/grid/inspector style converters, `ui_theme()` → derives the ui crate Theme)
+- `typography.rs` — `FontSizes` {small 12/body 14/heading 16} + `MIN_READABLE_FONT` guard
+- `drag_drop.rs` — `DragDropState`/`DragPayload` cross-panel drag state machine (Idle→Armed→Dragging→Dropped-1-frame)
+- `asset_browser.rs` — pure asset scan (`scan_assets`), `AssetBrowserState`, `fit_rect`
+- `texture_field.rs` — inspector texture slot (drop target) + `InspectorExtras`
+- `gizmo_math.rs` — pure rotate-drag math (Y-flip + shortest-arc wrap)
 - `dock.rs` — Multi-panel docking
 - `layout.rs` — Layout helpers
 - `menu.rs` — Top menu bar
@@ -63,7 +68,7 @@ EditorContext (selection, tool state, play state, camera, theme, status_bar, com
 - Theme is on `EditorContext.theme` (public field); call `theme.gizmo_palette()`, `inspector_style()`, `editable_field_style()`, `grid_colors()`, `collider_overlay_colors()` instead of hardcoding colors. Menu/Toolbar/Hierarchy `render()` take `&EditorTheme`
 
 ## Testing
-- 255 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
+- 277 passing (incl. 3 doc tests), 0 ignored — `cargo test -p editor`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

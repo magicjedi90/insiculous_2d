@@ -63,6 +63,10 @@ pub struct EditorContext {
     pub theme: EditorTheme,
     /// Status bar at the bottom of the editor
     pub status_bar: StatusBar,
+    /// Cross-panel drag-and-drop coordinator
+    pub drag_drop: crate::DragDropState,
+    /// Asset browser panel state (scan results, scroll)
+    pub asset_browser: crate::AssetBrowserState,
 }
 
 impl Default for EditorContext {
@@ -102,7 +106,7 @@ impl EditorContext {
         let mut gizmo = Gizmo::new();
         gizmo.apply_theme(&theme);
 
-        Self {
+        let mut editor = Self {
             selection: Selection::new(),
             gizmo,
             toolbar: Toolbar::new().with_position(Vec2::new(220.0, 54.0)), // Inside scene view, below panel header
@@ -123,7 +127,14 @@ impl EditorContext {
             scene_path: None,
             theme,
             status_bar: StatusBar::new(),
-        }
+            drag_drop: crate::DragDropState::new(),
+            asset_browser: crate::AssetBrowserState::default(),
+        };
+        // The toolbar's default tool and the gizmo's default mode disagree
+        // (Select vs Translate) — run the tool→gizmo mapping once so startup
+        // state is consistent.
+        editor.set_tool(editor.current_tool());
+        editor
     }
 
     // ================== Tool Methods ==================
@@ -441,36 +452,6 @@ impl EditorContext {
     }
 
     // ================== Gizmo Integration ==================
-
-    /// Update gizmo position based on selected entity positions.
-    ///
-    /// Call this after selection changes to position the gizmo at the
-    /// selection center.
-    pub fn update_gizmo_from_selection(&mut self, entity_positions: &[(ecs::EntityId, Vec2)]) {
-        // Find positions of selected entities
-        let selected_positions: Vec<Vec2> = entity_positions
-            .iter()
-            .filter(|(id, _)| self.selection.contains(*id))
-            .map(|(_, pos)| *pos)
-            .collect();
-
-        if selected_positions.is_empty() {
-            // No selection - hide gizmo
-            self.gizmo.set_mode(crate::GizmoMode::None);
-            return;
-        }
-
-        // Calculate center of selection
-        let center = if selected_positions.len() == 1 {
-            selected_positions[0]
-        } else {
-            let sum: Vec2 = selected_positions.iter().copied().sum();
-            sum / selected_positions.len() as f32
-        };
-
-        // Update gizmo position (world coords)
-        self.gizmo.set_position(center);
-    }
 
     /// Get the screen position for the gizmo based on its world position.
     ///

@@ -64,7 +64,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
   confirm, B back) + wraparound `navigate`; used by every game's title/select screens
 - `spawn_helpers.rs` — shared entity recipes (`spawn_background` full-window backdrop); `RENDER_UNIT = 80.0` (pixels per world unit) lives at the crate root and is used by the render path in `game.rs`
 - `pickups.rs` — generic pickup/collectible tracking (`Pickups<K>` keyed by a game-defined kind, `EffectTimer` for timed effects); collection = started-collision events vs a collector set, once per pickup. Used by BOTH Pong (floating power-ups, balls collect) and Breakout (falling drops, paddle collects) — engine owns the mechanism, games own the meaning
-- `ui_integration.rs` — UI-to-renderer bridge
+- `ui_integration.rs` — UI-to-renderer bridge. **Camera-relative**: UI sprites are positioned/scaled against the render camera so UI stays at fixed screen pixels when the camera moves/zooms (camera-follow games, editor). Emits SDF shapes: rounded rects, single-sprite borders, true circles, and `DrawCommand::Image` textured quads
 - `prelude.rs` — Re-exports for `use engine_core::prelude::*`
 
 ## Save/Load Pipeline
@@ -74,7 +74,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 227 passing (incl. 10 doc tests, 4 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 245 passing (incl. 10 doc tests, 4 of them compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

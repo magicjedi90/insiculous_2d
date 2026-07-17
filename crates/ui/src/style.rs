@@ -152,10 +152,15 @@ pub struct TextInputStyle {
     pub font_size: f32,
     /// Horizontal padding between the border and the text
     pub padding: f32,
+    /// Selected-text highlight color (drawn behind the text)
+    pub selection_color: Color,
+    /// Caret (text cursor) color
+    pub cursor_color: Color,
 }
 
 impl Default for TextInputStyle {
     fn default() -> Self {
+        use palette::dark;
         Self {
             background: Color::new(0.15, 0.15, 0.18, 1.0),
             background_focused: Color::new(0.2, 0.2, 0.25, 1.0),
@@ -166,6 +171,8 @@ impl Default for TextInputStyle {
             text_color: Color::WHITE,
             font_size: 13.0,
             padding: 4.0,
+            selection_color: Color::from_hex(dark::ACCENT).with_alpha(0.35),
+            cursor_color: Color::WHITE,
         }
     }
 }
@@ -261,6 +268,8 @@ impl Theme {
                 text_color: Color::BLACK,
                 font_size: 13.0,
                 padding: 4.0,
+                selection_color: Color::from_hex(light::ACCENT).with_alpha(0.35),
+                cursor_color: Color::BLACK,
             },
         }
     }

@@ -169,11 +169,18 @@ pub struct EditorTheme {
     pub collider_sensor: Color,
     /// Collider outline on selected entities
     pub collider_selected: Color,
+
+    // ── Typography ──────────────────────────────────────────────
+    /// Font-size tokens — all editor text sizes come from here
+    pub fonts: crate::typography::FontSizes,
 }
 
 impl Default for EditorTheme {
     fn default() -> Self {
         Self {
+            // Typography
+            fonts: crate::typography::FontSizes::default(),
+
             // Backgrounds
             bg_primary: Color::from_hex(0x1e1e1e),
             bg_viewport: Color::BLACK,
@@ -309,8 +316,51 @@ impl EditorTheme {
             axis_x_label: self.axis_x_label,
             axis_y_label: self.axis_y_label,
             channel_labels: self.channel_labels,
+            slot_bg: self.bg_input,
+            drop_highlight: self.accent_blue,
+            label_font: self.fonts.body,
+            header_font: self.fonts.heading,
+            axis_font: self.fonts.small,
+            channel_font: self.fonts.small,
             ..Default::default()
         }
+    }
+
+    /// Derive a `ui::Theme` from this editor theme so generic widgets
+    /// (buttons, sliders, inputs) match the editor's palette instead of the
+    /// ui crate's stock blue. Injected once at editor startup via
+    /// `UIContext::set_theme`.
+    pub fn ui_theme(&self) -> ui::Theme {
+        let mut theme = ui::Theme::dark();
+
+        theme.button.background = self.bg_input;
+        theme.button.background_hovered = self.bg_input.lighten(0.12);
+        theme.button.background_pressed = self.bg_input.darken(0.25);
+        theme.button.background_disabled = self.bg_input.darken(0.25);
+        theme.button.border = self.border_subtle;
+        theme.button.text_color = self.text_primary;
+        theme.button.text_color_disabled = self.text_muted;
+
+        theme.panel.background = self.bg_primary;
+        theme.panel.border = self.border_subtle;
+
+        theme.slider.track_background = self.bg_input;
+        theme.slider.track_fill = self.accent_blue;
+        theme.slider.thumb_pressed = self.accent_cyan;
+
+        theme.text.color = self.text_primary;
+        theme.text.font_size = self.fonts.body;
+
+        theme.text_input.background = self.bg_input;
+        theme.text_input.background_focused = self.bg_input.lighten(0.08);
+        theme.text_input.border = self.border_subtle;
+        theme.text_input.border_focused = self.accent_blue;
+        theme.text_input.text_color = self.text_primary;
+        theme.text_input.font_size = self.fonts.body;
+        theme.text_input.selection_color = self.accent_blue.with_alpha(0.35);
+        theme.text_input.cursor_color = self.text_primary;
+
+        theme
     }
 
     /// Create a `GizmoPalette` from this theme.
@@ -412,6 +462,21 @@ mod tests {
         assert_eq!(style.label_color, theme.inspector_label);
         assert_eq!(style.value_color, theme.inspector_value);
         assert_eq!(style.header_color, theme.inspector_header);
+    }
+
+    #[test]
+    fn test_ui_theme_derived_from_editor_palette() {
+        let theme = EditorTheme::default();
+        let ui_theme = theme.ui_theme();
+        assert_eq!(ui_theme.button.background, theme.bg_input);
+        assert_eq!(ui_theme.slider.track_fill, theme.accent_blue);
+        assert_eq!(ui_theme.text_input.border_focused, theme.accent_blue);
+        assert_eq!(ui_theme.text_input.font_size, theme.fonts.body);
+        assert!(ui_theme.text_input.font_size >= crate::typography::MIN_READABLE_FONT);
+        assert_ne!(
+            ui_theme.button.background_hovered, ui_theme.button.background,
+            "hover state must be visually distinct"
+        );
     }
 
     #[test]

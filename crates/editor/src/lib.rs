@@ -29,8 +29,10 @@
 //! assert!(editor.is_editing()); // starts in Editing play state
 //! ```
 
+mod asset_browser;
 mod behavior_editor;
 mod collider_overlay;
+mod drag_drop;
 pub mod commands;
 mod component_editors;
 mod context;
@@ -39,6 +41,7 @@ mod editable_inspector;
 mod field_style;
 mod editor_input;
 mod gizmo;
+mod gizmo_math;
 mod grid;
 mod hierarchy;
 mod inspector;
@@ -49,7 +52,9 @@ mod play_state;
 mod selection;
 pub mod status_bar;
 pub mod stored_component;
+mod texture_field;
 pub mod theme;
+pub mod typography;
 mod toolbar;
 mod viewport;
 mod viewport_input;
@@ -58,7 +63,10 @@ pub mod layout;
 pub mod world_snapshot;
 
 // Re-export main types
+pub use asset_browser::{fit_rect, scan_assets, AssetBrowserState, AssetEntry, AssetKind};
 pub use behavior_editor::edit_behavior;
+pub use drag_drop::{DragDropState, DragPayload, DRAG_THRESHOLD};
+pub use texture_field::{edit_texture_field, InspectorExtras};
 pub use collider_overlay::{
     collider_outline_segments, render_collider_overlay, ColliderOverlayColors,
 };

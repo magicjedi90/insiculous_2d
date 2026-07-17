@@ -24,10 +24,14 @@ pub fn render_panel_content(
         PanelId::SCENE_VIEW => render_scene_view(editor, ctx, bounds),
         PanelId::HIERARCHY => render_hierarchy(editor, ctx, bounds),
         PanelId::INSPECTOR => render_inspector(editor, ctx, content_x, y, command_history),
-        PanelId::ASSET_BROWSER => render_asset_browser(ctx, content_x, y),
+        PanelId::ASSET_BROWSER => {
+            asset_browser::render_asset_browser(editor, ctx, bounds, command_history)
+        }
         _ => render_default(ctx, content_x, y),
     }
 }
+
+pub(crate) use asset_browser::render_drag_ghost;
 
 /// Scene view — grid info, viewport origin crosshair, and play-state border.
 fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: common::Rect) {
@@ -41,12 +45,13 @@ fn render_scene_view(editor: &EditorContext, ctx: &mut GameContext, bounds: comm
             &format!("Grid: {}px", editor.grid_size()),
             Vec2::new(content_x, y),
             theme.text_muted,
-            12.0,
+            theme.fonts.small,
         );
     }
 
-    // Draw viewport origin crosshair
-    let center = bounds.center();
+    // Draw the world-origin crosshair where (0,0) actually is under the
+    // current pan/zoom (the panel clip rect trims any overshoot).
+    let center = editor.world_to_screen(Vec2::ZERO);
     ctx.ui.circle(center, 5.0, theme.border_subtle);
     ctx.ui.line(
         Vec2::new(center.x - 20.0, center.y),
@@ -132,16 +137,12 @@ fn render_hierarchy(editor: &mut EditorContext, ctx: &mut GameContext, bounds: c
 }
 
 
-/// Asset browser — placeholder.
-fn render_asset_browser(ctx: &mut GameContext, content_x: f32, y: f32) {
-    ctx.ui.label("(Asset browser not yet implemented)", Vec2::new(content_x, y));
-}
-
 /// Fallback for unknown panels.
 fn render_default(ctx: &mut GameContext, content_x: f32, y: f32) {
     ctx.ui.label("Panel", Vec2::new(content_x, y));
 }
 
+mod asset_browser;
 mod inspector;
 use inspector::render_inspector;
 

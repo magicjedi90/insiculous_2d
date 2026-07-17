@@ -267,7 +267,10 @@ impl RenderManager {
 
 /// Position of the first entity with `Camera { is_main_camera: true }` and a
 /// `Transform2D` — the world entity that drives the render camera, if any.
-pub(crate) fn main_camera_position(world: &World) -> Option<Vec2> {
+///
+/// Public so the editor integration can mirror the game's camera onto the
+/// editor viewport while a play session runs.
+pub fn main_camera_position(world: &World) -> Option<Vec2> {
     world
         .entities()
         .into_iter()

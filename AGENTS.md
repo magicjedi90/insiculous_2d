@@ -9,17 +9,17 @@
 
 ### Core Systems Complete
 - **ECS**: HashMap-based per-type storage, 201 tests, type-safe queries
-- **Renderer**: WGPU 28.0.0, instanced sprites, 74 tests
+- **Renderer**: WGPU 28.0.0, instanced sprites, SDF shapes (rounded rects/circles/borders in the sprite shader), 75 tests
 - **Physics**: Rapier2d integration, 64 tests, presets
-- **UI**: Immediate-mode, 80 tests, fontdue integration
+- **UI**: Immediate-mode, 102 tests, fontdue integration, real text editing (cursor/selection/key-repeat in float_input), Image draw command
 - **Input**: Event-based, 77 tests, generic action mapping (`InputMapping<A>`) + player-aware `InputSettings` layer (P1/P2 device routing, axis-as-button, serde bindings) + gilrs hardware backend in engine_core (GAP-001 closed Jul 2026)
 - **Audio**: Rodio backend, 21 tests (spatial audio components exist in ecs but have no runtime system yet)
 - **Engine Core**: Game API, managers, scene serializer, generic pickups, shared arcade scaffolding (`MenuInput`, `spawn_background`, `default_playfield_grid`, `RENDER_UNIT`), tilemap render pass, main-camera sync, input-settings JSON persistence, gilrs gamepad backend, PauseMenu + MenuPanel chrome, 238 tests
-- **Editor**: Dockable panels, viewport, inspector, hierarchy, 255 tests
-- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load, 66 tests
+- **Editor**: Dockable panels, viewport, inspector, hierarchy, asset browser + drag-drop state, typography/theme tokens, 277 tests
+- **Editor Integration**: `run_game_with_editor()` wrapper + inspector writeback + play/pause/stop + scene save/load + viewport↔render camera sync + asset browser panel, 76 tests
 
 ### Key Metrics
-- **Total Tests**: 1109/1109 passing (100% success rate), 0 ignored
+- **Total Tests**: 1171/1171 passing (100% success rate), 0 ignored
 - **Code Quality**: every doc example compiles and runs (window/GPU-bound ones are compile-only `no_run`); 1 tracked TODO in production code (`scene_loader.rs` — the ARCH-006/GPP-06 dynamic-component gap, deliberate)
 - Games (in `../games/`): breakout 47 tests, pong 8, space_invaders 36, snake 38, asteroids 42 — all clippy-clean, all 2-player (Jul 2026)
 
@@ -134,7 +134,7 @@ cargo run --bin editor --features editor -- ../games/pong  # Standalone editor o
 **Test Status:**
 ```
 $ cargo test --workspace
-passed: 1109/1109 (100%)
+passed: 1171/1171 (100%)
 ignored: 0
 failed: 0
 ```

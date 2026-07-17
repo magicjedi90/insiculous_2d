@@ -41,16 +41,20 @@
 mod context;
 mod draw;
 mod font;
+mod input_state;
 mod interaction;
 mod style;
+mod text_edit;
 
 // Re-export main types
 pub use context::{TextAlign, UIContext};
 pub use draw::{DrawCommand, DrawList, TextDrawData, GlyphDrawData};
 pub use font::{FontError, FontHandle, FontManager, FontMetrics, GlyphInfo, LayoutGlyph, RasterizedGlyph, TextLayout};
+pub use input_state::{InputState, KeyRepeat, REPEAT_DELAY, REPEAT_INTERVAL};
 pub use interaction::{
-    InputState, InteractionManager, InteractionResult, WidgetId, WidgetPersistentState, WidgetState,
+    InteractionManager, InteractionResult, WidgetId, WidgetPersistentState, WidgetState,
 };
+pub use text_edit::TextEditState;
 pub use common::Rect;
 pub use style::{ButtonStyle, Color, PanelStyle, SliderStyle, TextInputStyle, TextStyle, Theme};
 

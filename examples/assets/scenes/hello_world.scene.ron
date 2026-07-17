@@ -7,6 +7,9 @@
 // - Prefabs for reusable entity templates
 // - Parent-child entity relationships (player has an indicator child)
 // - Texture loading (wood texture on obstacle boxes)
+// - CameraFollow: a main-camera entity trails the tagged player across a
+//   level wider than the window (dead zone keeps small hops from panning)
+// - Collectible coins scored through the world event bus
 //
 SceneData(
     name: "Hello World",
@@ -44,6 +47,8 @@ SceneData(
                     jump_impulse: 420.0,
                     jump_cooldown: 0.3,
                 )),
+                // The camera follows this tag (also used by coin collection)
+                EntityTag(tag: "player"),
             ],
         ),
 
@@ -91,6 +96,15 @@ SceneData(
                 ),
             ],
         ),
+
+        // Collectible coin - gold diamond, scored via the event bus
+        "Coin": PrefabData(
+            components: [
+                Transform2D(position: (0.0, 0.0), scale: (0.3, 0.3), rotation: 0.785),
+                Sprite(texture: "#white", color: (1.0, 0.85, 0.2, 1.0), depth: 0.3, emissive: 0.4),
+                Behavior(Collectible(score_value: 10, despawn_on_collect: true, collector_tag: "player")),
+            ],
+        ),
     },
 
     // Entity instances in the scene
@@ -118,6 +132,25 @@ SceneData(
             ],
         ),
 
+        // Camera - the main camera entity trails the player. The engine's
+        // render camera copies this entity's position every frame
+        // (RenderManager::sync_main_camera); the CameraFollow behavior does
+        // the smoothing. No RigidBody: CameraFollow writes positions directly.
+        EntityData(
+            name: Some("camera"),
+            components: [
+                Transform2D(position: (-200.0, 100.0)),
+                Camera2D(is_main_camera: true, viewport_size: (800.0, 600.0)),
+                Behavior(CameraFollow(
+                    target_tag: "player",
+                    lerp_speed: 0.12,
+                    offset: (0.0, 60.0),
+                    dead_zone: Some((160.0, 100.0)),
+                )),
+            ],
+        ),
+
+        // ── West half: the original playground ─────────────────────────
         // Main ground platform
         EntityData(
             name: Some("ground"),
@@ -149,31 +182,106 @@ SceneData(
             ],
         ),
 
-        // Obstacle box 1
+        // Obstacle boxes
         EntityData(
             name: Some("obstacle_1"),
             prefab: Some("Obstacle"),
-            overrides: [
-                Transform2D(position: (-100.0, 0.0)),
-            ],
+            overrides: [ Transform2D(position: (-100.0, 0.0)) ],
         ),
-
-        // Obstacle box 2
         EntityData(
             name: Some("obstacle_2"),
             prefab: Some("Obstacle"),
-            overrides: [
-                Transform2D(position: (20.0, 0.0)),
-            ],
+            overrides: [ Transform2D(position: (20.0, 0.0)) ],
         ),
-
-        // Obstacle box 3
         EntityData(
             name: Some("obstacle_3"),
             prefab: Some("Obstacle"),
+            overrides: [ Transform2D(position: (140.0, 0.0)) ],
+        ),
+
+        // ── East half: walk right and the camera follows ───────────────
+        // Second ground slab across a small jumpable gap
+        EntityData(
+            name: Some("ground_east"),
+            prefab: Some("Platform"),
             overrides: [
-                Transform2D(position: (140.0, 0.0)),
+                Transform2D(position: (900.0, -250.0), scale: (10.0, 0.5)),
             ],
+            components: [
+                Collider(
+                    shape: Box(half_extents: (400.0, 20.0)),
+                    friction: 0.8,
+                ),
+            ],
+        ),
+
+        // Rising steps toward the east
+        EntityData(
+            name: Some("step_1"),
+            prefab: Some("Platform"),
+            overrides: [
+                Transform2D(position: (560.0, -150.0), scale: (2.0, 0.5)),
+                Sprite(texture: "#white", color: (0.4, 0.4, 0.4, 1.0)),
+            ],
+            components: [
+                Collider(shape: Box(half_extents: (80.0, 20.0)), friction: 0.8),
+            ],
+        ),
+        EntityData(
+            name: Some("step_2"),
+            prefab: Some("Platform"),
+            overrides: [
+                Transform2D(position: (820.0, -60.0), scale: (2.0, 0.5)),
+                Sprite(texture: "#white", color: (0.4, 0.4, 0.4, 1.0)),
+            ],
+            components: [
+                Collider(shape: Box(half_extents: (80.0, 20.0)), friction: 0.8),
+            ],
+        ),
+        EntityData(
+            name: Some("step_3"),
+            prefab: Some("Platform"),
+            overrides: [
+                Transform2D(position: (1080.0, 20.0), scale: (2.0, 0.5)),
+                Sprite(texture: "#white", color: (0.45, 0.45, 0.45, 1.0)),
+            ],
+            components: [
+                Collider(shape: Box(half_extents: (80.0, 20.0)), friction: 0.8),
+            ],
+        ),
+
+        // A pushable crate waiting at the top of the steps
+        EntityData(
+            name: Some("obstacle_east"),
+            prefab: Some("Obstacle"),
+            overrides: [ Transform2D(position: (1000.0, -180.0)) ],
+        ),
+
+        // Coins along the route (collected on touch, +10 score each)
+        EntityData(
+            name: Some("coin_1"),
+            prefab: Some("Coin"),
+            overrides: [ Transform2D(position: (100.0, 20.0), scale: (0.3, 0.3), rotation: 0.785) ],
+        ),
+        EntityData(
+            name: Some("coin_2"),
+            prefab: Some("Coin"),
+            overrides: [ Transform2D(position: (450.0, -160.0), scale: (0.3, 0.3), rotation: 0.785) ],
+        ),
+        EntityData(
+            name: Some("coin_3"),
+            prefab: Some("Coin"),
+            overrides: [ Transform2D(position: (560.0, -80.0), scale: (0.3, 0.3), rotation: 0.785) ],
+        ),
+        EntityData(
+            name: Some("coin_4"),
+            prefab: Some("Coin"),
+            overrides: [ Transform2D(position: (820.0, 10.0), scale: (0.3, 0.3), rotation: 0.785) ],
+        ),
+        EntityData(
+            name: Some("coin_5"),
+            prefab: Some("Coin"),
+            overrides: [ Transform2D(position: (1080.0, 90.0), scale: (0.3, 0.3), rotation: 0.785) ],
         ),
     ],
 )

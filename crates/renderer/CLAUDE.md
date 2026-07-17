@@ -27,7 +27,7 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 - `sprite.rs` — `Sprite` data type; parent of the sprite submodules
 - `sprite/batch.rs` — `SpriteBatch`, `SpriteBatcher` (CPU-side grouping by texture)
 - `sprite/pipeline.rs` — `SpritePipeline` (GPU pipeline, bind group caches, draw)
-- `sprite_data.rs` — GPU data structures (`SpriteVertex`, `SpriteInstance`, `DynamicBuffer`)
+- `sprite_data.rs` — GPU data structures (`SpriteVertex`, `SpriteInstance` incl. `shape: [f32;4]` SDF params [kind, corner_radius, border_width, _] — kind 0=quad/1=rounded rect/2=circle, 76-byte stride, attr @10; fragment masks with sdRoundedBox + 1.5px AA), `DynamicBuffer`
 - `texture.rs` — `TextureManager`, `TextureHandle` (incl. `WHITE`), `SamplerConfig`
 - `atlas.rs` — `TextureAtlas`, `TextureAtlasBuilder`, `AtlasRegion`
 - `render_targets.rs` — HDR/depth/bloom textures, resize handling
@@ -47,7 +47,7 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 See `TECH_DEBT.md` — 2 open issues, both Low (shared camera binding, cross-batch transparency vs depth writes).
 
 ## Testing
-- 74 tests (73 unit + 1 compile-only doc), run with `cargo test -p renderer`
+- 75 tests (74 unit + 1 compile-only doc), run with `cargo test -p renderer`
 
 ## Godot Oracle — When Stuck
 Use `WebFetch` to read from `https://github.com/godotengine/godot/blob/master/`

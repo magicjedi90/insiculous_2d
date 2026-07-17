@@ -46,6 +46,14 @@ impl<G: Game> EditorGame<G> {
                     self.gizmo_drag_start = None;
                     // Starting a new play session — capture snapshot
                     self.world_snapshot = Some(WorldSnapshot::capture(world));
+                    // Save the editing pan/zoom; play renders at zoom 1.0
+                    // (parity with the game's own camera, which has no zoom
+                    // source), position driven by the main-camera entity.
+                    self.editing_camera = Some((
+                        self.editor.viewport.camera_position(),
+                        self.editor.viewport.camera_zoom(),
+                    ));
+                    self.editor.viewport.set_camera_zoom(1.0);
                     self.editor.set_play_state(EditorPlayState::Playing);
                     self.editor.close_add_component_popup();
                     log::info!("Play: snapshot captured, entering play mode");
@@ -74,6 +82,11 @@ impl<G: Game> EditorGame<G> {
                         // entry survives the restore.
                         self.transform_system.reset();
                         log::info!("Stop: world restored from snapshot");
+                    }
+                    // Restore the pan/zoom the user had while editing
+                    if let Some((position, zoom)) = self.editing_camera.take() {
+                        self.editor.viewport.set_camera_position(position);
+                        self.editor.viewport.set_camera_zoom(zoom);
                     }
                     self.editor.set_play_state(EditorPlayState::Editing);
                     true

@@ -73,6 +73,7 @@ pub struct ComponentEdit<T> {
 pub fn edit_transform2d(
     inspector: &mut EditableInspector<'_>,
     transform: &Transform2D,
+    _extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<Transform2D>> {
     let mut new = *transform;
     let mut hint = None;
@@ -99,6 +100,7 @@ pub fn edit_transform2d(
 pub fn edit_sprite(
     inspector: &mut EditableInspector<'_>,
     sprite: &Sprite,
+    extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<Sprite>> {
     let mut new = sprite.clone();
     let mut hint = None;
@@ -126,8 +128,11 @@ pub fn edit_sprite(
         hint = Some("depth");
     }
 
-    // Texture handle (read-only)
-    inspector.u32("Texture", sprite.texture_handle);
+    // Texture slot: shows the resolved path, accepts asset-browser drops
+    if let EditResult::Changed(handle) = inspector.texture("Texture", sprite.texture_handle, extras) {
+        new.texture_handle = handle;
+        hint = Some("texture_handle");
+    }
 
     hint.map(|field_hint| ComponentEdit { new_value: new, field_hint })
 }
@@ -136,6 +141,7 @@ pub fn edit_sprite(
 pub fn edit_rigid_body(
     inspector: &mut EditableInspector<'_>,
     body: &RigidBody,
+    _extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<RigidBody>> {
     let mut new = body.clone();
     let mut hint = None;
@@ -186,6 +192,7 @@ pub fn edit_rigid_body(
 pub fn edit_collider(
     inspector: &mut EditableInspector<'_>,
     collider: &Collider,
+    _extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<Collider>> {
     let mut new = collider.clone();
     let mut hint = None;
@@ -275,6 +282,7 @@ pub fn edit_collider(
 pub fn edit_audio_source(
     inspector: &mut EditableInspector<'_>,
     source: &AudioSource,
+    _extras: &mut crate::InspectorExtras<'_>,
 ) -> Option<ComponentEdit<AudioSource>> {
     let mut new = source.clone();
     let mut hint = None;

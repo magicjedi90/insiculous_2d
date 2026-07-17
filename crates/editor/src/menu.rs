@@ -378,7 +378,7 @@ impl MenuBar {
                             item_bounds.x + item_bounds.width - DROPDOWN_ITEM_PADDING - shortcut.len() as f32 * 6.0,
                             item_bounds.center().y,
                         );
-                        ui.label_styled(shortcut, shortcut_pos, theme.shortcut_hint, 12.0);
+                        ui.label_styled(shortcut, shortcut_pos, theme.shortcut_hint, theme.fonts.small);
                     }
 
                     y += DROPDOWN_ITEM_HEIGHT;
