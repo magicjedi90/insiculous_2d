@@ -19,3 +19,8 @@ target/
 
 # Git worktrees
 .worktrees/
+
+# Adversarial review scratch files (transient)
+review/*.md
+review/*.diff
+!review/.gitkeep

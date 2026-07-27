@@ -1,0 +1,30 @@
+{
+  "camera_position": [
+    750.7547,
+    -80.12721
+  ],
+  "camera_zoom": 1.0,
+  "last_scene_path": null,
+  "snap_to_grid": false,
+  "grid_size": 32.0,
+  "panels": [
+    {
+      "id": 2,
+      "visible": true,
+      "collapsed": false,
+      "size": 180.63641
+    },
+    {
+      "id": 1,
+      "visible": true,
+      "collapsed": false,
+      "size": 240.7041
+    },
+    {
+      "id": 3,
+      "visible": true,
+      "collapsed": false,
+      "size": 212.22156
+    }
+  ]
+}
