@@ -10,6 +10,12 @@
 #   plan mode: plan.md -> review-1.md -> rebuttal-1.md [+ plan-v2.md if revised]
 #   code mode: draft.diff (copy of input) -> review-1.md -> rebuttal-1.md
 #
+# This is the FULLY-HEADLESS variant (both roles run non-interactively). For
+# the human-in-the-loop variant where your interactive session (Claude Code or
+# kimi) authors and only the review step is headless, use the
+# `adversarial-review` skill (.claude/skills/adversarial-review/), which calls
+# scripts/request-review.sh for the review step — as does this driver.
+#
 # Non-interactive invocation (verified against installed CLIs, Jul 2026):
 #   claude: prompt piped on stdin to `claude -p`, response on stdout.
 #   kimi:   prompt piped on stdin to `kimi --quiet` (= --print --output-format
@@ -21,7 +27,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 REVIEW_DIR="$REPO_ROOT/review"
-PROMPTS_DIR="$REPO_ROOT/prompts"
 REVISED_MARKER='=== REVISED PLAN ==='
 
 usage() {
@@ -77,7 +82,6 @@ step() { echo "==> [$1] $2" >&2; }
 # --- run ---------------------------------------------------------------------
 
 if [[ "$MODE" == "plan" ]]; then
-    PROMPT_FILE="$PROMPTS_DIR/adversarial-plan-review.md"
     DRAFT="$REVIEW_DIR/plan.md"
     DRAFT_LABEL="PLAN"
 
@@ -94,7 +98,6 @@ EOF
         cat "$INPUT"
     } | invoke "$AUTHOR" > "$DRAFT"
 else
-    PROMPT_FILE="$PROMPTS_DIR/adversarial-code-review.md"
     DRAFT="$REVIEW_DIR/draft.diff"
     DRAFT_LABEL="DIFF"
 
@@ -103,11 +106,8 @@ else
 fi
 
 step "2/3" "reviewer ($REVIEWER) critiquing"
-{
-    cat "$PROMPT_FILE"
-    printf '\n=== %s UNDER REVIEW ===\n' "$DRAFT_LABEL"
-    cat "$DRAFT"
-} | invoke "$REVIEWER" > "$REVIEW_DIR/review-1.md"
+"$SCRIPT_DIR/request-review.sh" "$MODE" "$DRAFT" \
+    --reviewer="$REVIEWER" --out="$REVIEW_DIR/review-1.md" >/dev/null
 
 step "3/3" "author ($AUTHOR) rebutting"
 {
