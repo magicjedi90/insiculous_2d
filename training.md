@@ -13,7 +13,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `contexts.rs` - `GameContext` / `RenderContext` passed to Game methods
   - `assets.rs` - Asset loading and caching (tracks handle→path for scene save)
   - `scene.rs` / `scene_loader.rs` / `scene_data.rs` / `scene_serializer.rs` - Scene lifecycle, RON load, schema, World→RON save (the ONLY save pipeline)
-  - `behavior_runner.rs` / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
+  - `behavior_runner/` (`mod.rs` + `handlers.rs` + `camera.rs`) / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
   - `chaos_mode.rs` - `ChaosMode` enum (cross-game intensity theme)
   - `menu_input.rs` - `MenuInput` shared menu navigation (read keys once, wraparound `navigate`; scans every connected gamepad)
   - `pause.rs` - `PauseMenu`/`PauseAction` shared pause mechanism (see Pause Pattern)

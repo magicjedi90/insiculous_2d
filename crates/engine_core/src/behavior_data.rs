@@ -111,6 +111,14 @@ pub enum BehaviorData {
         /// Optional dead zone (full width, full height) centered on this entity
         #[serde(default)]
         dead_zone: Option<(f32, f32)>,
+        /// Maximum look-ahead shift (x, y) in pixels while a direction is held;
+        /// (0, 0) disables look-ahead
+        #[serde(default)]
+        look_ahead: (f32, f32),
+        /// Fraction of the remaining look-ahead distance covered per frame at
+        /// 60 FPS (0.0–1.0)
+        #[serde(default = "default_look_ahead_lerp")]
+        look_ahead_lerp: f32,
     },
 }
 
@@ -144,8 +152,8 @@ impl From<&BehaviorData> for ecs::behavior::Behavior {
             BehaviorData::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
                 Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
             }
-            BehaviorData::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
-                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone }
+            BehaviorData::CameraFollow { target_tag, lerp_speed, offset, dead_zone, look_ahead, look_ahead_lerp } => {
+                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone, look_ahead: *look_ahead, look_ahead_lerp: *look_ahead_lerp }
             }
         }
     }
@@ -177,8 +185,8 @@ impl From<&ecs::behavior::Behavior> for BehaviorData {
             Behavior::ChaseTagged { target_tag, detection_range, chase_speed, lose_interest_range } => {
                 Self::ChaseTagged { target_tag: target_tag.clone(), detection_range: *detection_range, chase_speed: *chase_speed, lose_interest_range: *lose_interest_range }
             }
-            Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
-                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone }
+            Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone, look_ahead, look_ahead_lerp } => {
+                Self::CameraFollow { target_tag: target_tag.clone(), lerp_speed: *lerp_speed, offset: *offset, dead_zone: *dead_zone, look_ahead: *look_ahead, look_ahead_lerp: *look_ahead_lerp }
             }
         }
     }
@@ -223,6 +231,9 @@ fn default_player_tag() -> String {
 }
 fn default_lerp_speed() -> f32 {
     0.1
+}
+fn default_look_ahead_lerp() -> f32 {
+    0.08
 }
 fn default_true() -> bool {
     true

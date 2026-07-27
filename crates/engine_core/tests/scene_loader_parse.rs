@@ -207,8 +207,10 @@ fn test_hello_world_scene_has_camera_follow_setup() {
     )));
     assert!(camera.components.iter().any(|c| matches!(
         c,
-        ComponentData::Behavior(engine_core::scene_data::BehaviorData::CameraFollow { target_tag, .. })
-            if target_tag == "player"
+        ComponentData::Behavior(engine_core::scene_data::BehaviorData::CameraFollow {
+            target_tag, look_ahead, ..
+        })
+            if target_tag == "player" && *look_ahead == (220.0, 140.0)
     )));
 
     // The player prefab carries the tag the camera follows
@@ -217,4 +219,45 @@ fn test_hello_world_scene_has_camera_follow_setup() {
         c,
         ComponentData::EntityTag { tag } if tag == "player"
     )));
+}
+
+#[test]
+fn test_legacy_camera_follow_scene_without_look_ahead_still_parses() {
+    // Scenes authored before look-ahead existed must keep loading, with the
+    // feature defaulted off (serde defaults on both new fields).
+    let text = r#"SceneData(
+        name: "Legacy",
+        entities: [
+            EntityData(
+                name: Some("camera"),
+                components: [
+                    Transform2D(position: (0.0, 0.0)),
+                    Behavior(CameraFollow(
+                        target_tag: "player",
+                        lerp_speed: 0.12,
+                        offset: (0.0, 60.0),
+                        dead_zone: Some((160.0, 100.0)),
+                    )),
+                ],
+            ),
+        ],
+    )"#;
+
+    let scene = SceneLoader::parse(text).expect("legacy scene must parse");
+    let behavior = scene.entities[0]
+        .components
+        .iter()
+        .find_map(|c| match c {
+            ComponentData::Behavior(b) => Some(b),
+            _ => None,
+        })
+        .expect("camera behavior present");
+
+    match behavior {
+        engine_core::scene_data::BehaviorData::CameraFollow { look_ahead, look_ahead_lerp, .. } => {
+            assert_eq!(*look_ahead, (0.0, 0.0), "look-ahead defaults to disabled");
+            assert_eq!(*look_ahead_lerp, 0.08);
+        }
+        _ => panic!("expected CameraFollow"),
+    }
 }

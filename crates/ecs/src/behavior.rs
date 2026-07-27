@@ -4,6 +4,7 @@
 //! to input and game events. Behaviors are data-driven and can be defined
 //! in scene files.
 
+use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
 use crate::state_machine::StateMachine;
@@ -128,6 +129,21 @@ pub enum Behavior {
         /// entity: no movement while the target stays inside the box
         #[serde(default)]
         dead_zone: Option<(f32, f32)>,
+        /// Maximum look-ahead shift (x, y) in pixels while a direction is
+        /// held; (0, 0) disables look-ahead. The direction comes from the
+        /// `BehaviorRunner`'s `InputMapping<GameAction>` — the same mapping
+        /// `PlayerPlatformer` reads, so camera and player always agree.
+        ///
+        /// The lead is applied to the focus point *before* the dead-zone
+        /// clamp, so a stationary player leads by
+        /// `max(0, look_ahead - dead_zone_half_extent)` per axis.
+        #[serde(default)]
+        look_ahead: (f32, f32),
+        /// Fraction of the remaining look-ahead distance covered per frame at
+        /// 60 FPS (0.0–1.0), dt-corrected like `lerp_speed`. Deliberately
+        /// slower than `lerp_speed` so a quick tap glides instead of snapping.
+        #[serde(default = "default_look_ahead_lerp")]
+        look_ahead_lerp: f32,
     },
 }
 
@@ -146,6 +162,7 @@ fn default_lose_range() -> f32 { 300.0 }
 fn default_true() -> bool { true }
 fn default_player_tag() -> String { "player".to_string() }
 fn default_lerp_speed() -> f32 { 0.1 }
+fn default_look_ahead_lerp() -> f32 { 0.08 }
 
 impl Default for Behavior {
     fn default() -> Self {
@@ -233,6 +250,8 @@ impl Behavior {
                 lerp_speed: default_lerp_speed(),
                 offset: (0.0, 0.0),
                 dead_zone: None,
+                look_ahead: (0.0, 0.0),
+                look_ahead_lerp: default_look_ahead_lerp(),
             },
         }
     }
@@ -297,6 +316,8 @@ pub struct BehaviorState {
     pub timer: f32,
     /// Phase FSM for patrol/chase behaviors.
     pub phase: StateMachine<BehaviorPhase>,
+    /// Smoothed input look-ahead offset in pixels (`CameraFollow`).
+    pub look_offset: Vec2,
 }
 
 impl Default for BehaviorState {
@@ -304,6 +325,7 @@ impl Default for BehaviorState {
         Self {
             timer: 0.0,
             phase: StateMachine::new(BehaviorPhase::Idle),
+            look_offset: Vec2::ZERO,
         }
     }
 }
@@ -391,6 +413,7 @@ mod tests {
     fn test_behavior_state_default_is_idle() {
         let state = BehaviorState::default();
         assert_eq!(state.timer, 0.0);
+        assert_eq!(state.look_offset, Vec2::ZERO);
         assert!(state.phase.is(&BehaviorPhase::Idle));
         assert!(state.phase.just_entered());
     }
@@ -454,6 +477,8 @@ mod tests {
             lerp_speed: 0.5,
             offset: (0.0, 50.0),
             dead_zone: Some((200.0, 120.0)),
+            look_ahead: (220.0, 140.0),
+            look_ahead_lerp: 0.05,
         };
 
         let serialized = ron::to_string(&behavior).expect("Failed to serialize");
@@ -465,11 +490,15 @@ mod tests {
                 lerp_speed,
                 offset,
                 dead_zone,
+                look_ahead,
+                look_ahead_lerp,
             } => {
                 assert_eq!(target_tag, "player");
                 assert_eq!(lerp_speed, 0.5);
                 assert_eq!(offset, (0.0, 50.0));
                 assert_eq!(dead_zone, Some((200.0, 120.0)));
+                assert_eq!(look_ahead, (220.0, 140.0));
+                assert_eq!(look_ahead_lerp, 0.05);
             }
             _ => panic!("Wrong variant"),
         }
@@ -485,11 +514,38 @@ mod tests {
                 lerp_speed,
                 offset,
                 dead_zone,
+                look_ahead,
+                look_ahead_lerp,
             } => {
                 assert_eq!(target_tag, "player");
                 assert_eq!(lerp_speed, 0.1);
                 assert_eq!(offset, (0.0, 0.0));
                 assert_eq!(dead_zone, None);
+                assert_eq!(look_ahead, (0.0, 0.0));
+                assert_eq!(look_ahead_lerp, 0.08);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_camera_follow_parses_legacy_four_field_form() {
+        // Exactly the shape shipped scene files used before look-ahead
+        // existed — must still parse, with look-ahead defaulted off.
+        let ron_str = r#"CameraFollow(
+            target_tag: "player",
+            lerp_speed: 0.12,
+            offset: (0.0, 60.0),
+            dead_zone: Some((160.0, 100.0)),
+        )"#;
+        let behavior: Behavior = ron::from_str(ron_str).expect("legacy form must parse");
+
+        match behavior {
+            Behavior::CameraFollow { lerp_speed, dead_zone, look_ahead, look_ahead_lerp, .. } => {
+                assert_eq!(lerp_speed, 0.12);
+                assert_eq!(dead_zone, Some((160.0, 100.0)));
+                assert_eq!(look_ahead, (0.0, 0.0), "absent look_ahead must default to disabled");
+                assert_eq!(look_ahead_lerp, 0.08);
             }
             _ => panic!("Wrong variant"),
         }

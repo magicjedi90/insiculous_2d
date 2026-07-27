@@ -27,7 +27,7 @@ The 20 games challenge is a structured progression: each game teaches new patter
 | Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible`, `CameraFollow` |
 | Scene Editor | ✅ Complete | Entity CRUD, inspector, gizmos, play/pause/stop, undo/redo, save/load |
 | Standalone Editor | ✅ Complete | `cargo run --bin editor -- /path/to/project` |
-| Camera Follow | ✅ Complete | `Behavior::CameraFollow` + main-camera-entity → render-camera sync |
+| Camera Follow | ✅ Complete | `Behavior::CameraFollow` (dead zone + DKC-style input look-ahead) + main-camera-entity → render-camera sync |
 | Lifetime/Auto-Despawn | ✅ Complete | `Lifetime` component + `LifetimeSystem` (ecs, in prelude) |
 | Tilemap | ✅ Complete | `Tilemap` component, batched through the sprite pipeline |
 

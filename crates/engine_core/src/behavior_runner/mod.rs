@@ -3,12 +3,18 @@
 //! This module provides the `BehaviorRunner` which processes all entities
 //! that have `Behavior` components, handling input-driven movement,
 //! AI behaviors, and other game logic.
+//!
+//! The logic is split across child modules: [`handlers`] holds the
+//! player/AI behavior handlers, [`camera`] holds `CameraFollow`.
+
+mod camera;
+mod handlers;
 
 use std::collections::HashMap;
 
 use glam::Vec2;
 
-use ecs::behavior::{Behavior, BehaviorPhase, BehaviorState, EntityTag, PatrolTarget};
+use ecs::behavior::{Behavior, BehaviorState, EntityTag};
 use ecs::sprite_components::Transform2D;
 use ecs::{EntityId, World};
 use input::{GameAction, InputHandler, InputMapping};
@@ -30,7 +36,7 @@ pub struct EntityCollected {
 /// Commands collected while iterating behaviors, applied after the loop to
 /// avoid borrow conflicts with the world.
 #[derive(Default)]
-struct BehaviorCommands {
+pub(super) struct BehaviorCommands {
     /// Entities to despawn after processing
     to_despawn: Vec<EntityId>,
     /// Velocity commands (applied via physics or direct transform)
@@ -187,299 +193,28 @@ impl BehaviorRunner {
                     );
                 }
 
-                Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
-                    Self::update_camera_follow(
-                        world, entity, delta_time, target_tag,
-                        *lerp_speed, *offset, *dead_zone, &mut commands,
-                    );
+                Behavior::CameraFollow {
+                    target_tag, lerp_speed, offset, dead_zone, look_ahead, look_ahead_lerp,
+                } => {
+                    let params = camera::CameraFollowParams {
+                        target_tag,
+                        lerp_speed: *lerp_speed,
+                        offset: *offset,
+                        dead_zone: *dead_zone,
+                        look_ahead: *look_ahead,
+                        look_ahead_lerp: *look_ahead_lerp,
+                    };
+                    if let Some(new_pos) = self.update_camera_follow(
+                        world, entity, input, delta_time, &params, &mut state,
+                    ) {
+                        commands.positions.push((entity, new_pos));
+                    }
+                    Self::update_state(world, entity, state);
                 }
             }
         }
 
         Self::apply_commands(world, physics, delta_time, commands);
-    }
-
-    /// `Behavior::PlayerPlatformer` — input-driven horizontal movement plus a
-    /// cooldown-gated jump impulse; Y velocity stays with physics (gravity).
-    #[allow(clippy::too_many_arguments)]
-    fn update_player_platformer(
-        &self,
-        entity: EntityId,
-        input: &InputHandler,
-        delta_time: f32,
-        physics: Option<&PhysicsSystem>,
-        move_speed: f32,
-        jump_impulse: f32,
-        jump_cooldown: f32,
-        tag: &str,
-        state: &mut BehaviorState,
-        commands: &mut BehaviorCommands,
-    ) {
-        // Update cooldown timer
-        if state.timer > 0.0 {
-            state.timer -= delta_time;
-        }
-
-        // Calculate horizontal velocity only - let physics handle Y (gravity + jumps)
-        let mut vel_x = 0.0;
-        if self.actions.is_active(GameAction::MoveLeft, input) { vel_x = -move_speed; }
-        if self.actions.is_active(GameAction::MoveRight, input) { vel_x = move_speed; }
-
-        // For platformers, only set X velocity - preserve Y for physics
-        if let Some(physics) = physics {
-            let current_vel = physics.physics_world()
-                .get_body_velocity(entity)
-                .map(|(v, _)| v)
-                .unwrap_or(Vec2::ZERO);
-            // Set X to input, keep Y from physics (gravity/jumps)
-            let vel = Vec2::new(vel_x, current_vel.y);
-            commands.velocities.push((entity, vel));
-        }
-
-        // Jump - collect impulse to apply AFTER velocity commands.
-        // Action1 (Space / pad-0 A / mouse left in the default preset) so
-        // rebinds and gamepad jump work — never a raw key read.
-        if self.actions.just_activated(GameAction::Action1, input) && state.timer <= 0.0 {
-            commands.impulses.push((entity, Vec2::new(0.0, jump_impulse)));
-            state.timer = jump_cooldown;
-        }
-
-        commands.tags.push((entity, tag.to_string()));
-    }
-
-    /// `Behavior::PlayerTopDown` — input-driven movement on both axes with
-    /// normalized diagonals.
-    fn update_player_top_down(
-        &self,
-        entity: EntityId,
-        input: &InputHandler,
-        move_speed: f32,
-        tag: &str,
-        commands: &mut BehaviorCommands,
-    ) {
-        // Calculate movement velocity from input
-        let mut vel = Vec2::ZERO;
-        if self.actions.is_active(GameAction::MoveUp, input) { vel.y += move_speed; }
-        if self.actions.is_active(GameAction::MoveDown, input) { vel.y -= move_speed; }
-        if self.actions.is_active(GameAction::MoveLeft, input) { vel.x -= move_speed; }
-        if self.actions.is_active(GameAction::MoveRight, input) { vel.x += move_speed; }
-
-        // Normalize diagonal movement
-        if vel.length_squared() > 0.0 {
-            vel = vel.normalize() * move_speed;
-        }
-
-        commands.velocities.push((entity, vel));
-        commands.tags.push((entity, tag.to_string()));
-    }
-
-    /// `Behavior::ChaseTagged` — chase the nearest tagged entity once it is
-    /// inside detection range, give up beyond lose-interest range.
-    ///
-    /// Phase FSM: `Idle` ⇄ `Chasing` — enter on `distance < detection_range`,
-    /// leave on `distance > lose_interest_range` or when no target exists.
-    #[allow(clippy::too_many_arguments)]
-    fn update_chase_tagged(
-        world: &World,
-        entity: EntityId,
-        delta_time: f32,
-        target_tag: &str,
-        detection_range: f32,
-        chase_speed: f32,
-        lose_interest_range: f32,
-        state: &mut BehaviorState,
-        commands: &mut BehaviorCommands,
-    ) {
-        state.phase.tick(delta_time);
-
-        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
-            if let Some(entity_pos) = Self::get_position(world, entity) {
-                let distance = (target_pos - entity_pos).length();
-
-                let chasing = state.phase.is(&BehaviorPhase::Chasing);
-                if !chasing && distance < detection_range {
-                    state.phase.transition_to(BehaviorPhase::Chasing);
-                } else if chasing && distance > lose_interest_range {
-                    state.phase.transition_to(BehaviorPhase::Idle);
-                }
-
-                if state.phase.is(&BehaviorPhase::Chasing) {
-                    let vel = (target_pos - entity_pos).normalize_or_zero() * chase_speed;
-                    commands.velocities.push((entity, vel));
-                } else {
-                    commands.velocities.push((entity, Vec2::ZERO));
-                }
-            }
-        } else {
-            state.phase.transition_to(BehaviorPhase::Idle);
-            commands.velocities.push((entity, Vec2::ZERO));
-        }
-    }
-
-    /// `Behavior::Patrol` — walk back and forth between two points, pausing
-    /// at each end for `wait_time` seconds.
-    ///
-    /// Phase FSM: `Idle` → `Patrolling { toward }` → (on arrival)
-    /// `Waiting { then_toward }` → (after `wait_time`, via the machine's
-    /// `elapsed()` clock) → `Patrolling` toward the other endpoint.
-    #[allow(clippy::too_many_arguments)]
-    fn update_patrol(
-        world: &World,
-        entity: EntityId,
-        delta_time: f32,
-        point_a: Vec2,
-        point_b: Vec2,
-        speed: f32,
-        wait_time: f32,
-        state: &mut BehaviorState,
-        commands: &mut BehaviorCommands,
-    ) {
-        state.phase.tick(delta_time);
-
-        if let BehaviorPhase::Waiting { then_toward } = *state.phase.current() {
-            if state.phase.elapsed() >= wait_time {
-                state.phase.transition_to(BehaviorPhase::Patrolling { toward: then_toward });
-            }
-            commands.velocities.push((entity, Vec2::ZERO));
-        } else if let Some(entity_pos) = Self::get_position(world, entity) {
-            // Idle (first update) starts the patrol toward A, matching the
-            // pre-FSM default direction.
-            let toward = match *state.phase.current() {
-                BehaviorPhase::Patrolling { toward } => toward,
-                _ => {
-                    state.phase.transition_to(BehaviorPhase::Patrolling { toward: PatrolTarget::A });
-                    PatrolTarget::A
-                }
-            };
-            let target = match toward {
-                PatrolTarget::A => point_a,
-                PatrolTarget::B => point_b,
-            };
-
-            if (target - entity_pos).length() < 5.0 {
-                state.phase.transition_to(BehaviorPhase::Waiting { then_toward: toward.other() });
-                commands.velocities.push((entity, Vec2::ZERO));
-            } else {
-                let vel = (target - entity_pos).normalize() * speed;
-                commands.velocities.push((entity, vel));
-            }
-        }
-    }
-
-    /// `Behavior::FollowEntity` — move toward a named entity while farther
-    /// away than `follow_distance`.
-    fn update_follow_entity(
-        &self,
-        world: &World,
-        entity: EntityId,
-        target_name: &str,
-        follow_distance: f32,
-        follow_speed: f32,
-        commands: &mut BehaviorCommands,
-    ) {
-        let mut vel = Vec2::ZERO;
-        if let Some(&target_entity) = self.named_entities.get(target_name) {
-            if let (Some(target_pos), Some(entity_pos)) = (
-                Self::get_position(world, target_entity),
-                Self::get_position(world, entity),
-            ) {
-                let to_target = target_pos - entity_pos;
-                if to_target.length() > follow_distance {
-                    vel = to_target.normalize() * follow_speed;
-                }
-            }
-        }
-        commands.velocities.push((entity, vel));
-    }
-
-    /// `Behavior::FollowTagged` — move toward the nearest tagged entity while
-    /// farther away than `follow_distance`.
-    fn update_follow_tagged(
-        world: &World,
-        entity: EntityId,
-        target_tag: &str,
-        follow_distance: f32,
-        follow_speed: f32,
-        commands: &mut BehaviorCommands,
-    ) {
-        let mut vel = Vec2::ZERO;
-        if let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) {
-            if let Some(entity_pos) = Self::get_position(world, entity) {
-                let to_target = target_pos - entity_pos;
-                if to_target.length() > follow_distance {
-                    vel = to_target.normalize() * follow_speed;
-                }
-            }
-        }
-        commands.velocities.push((entity, vel));
-    }
-
-    /// `lerp_speed` is calibrated as fraction-per-frame at this frame rate;
-    /// `update_camera_follow` dt-corrects so other frame rates converge at
-    /// the same wall-clock speed.
-    const CAMERA_LERP_REFERENCE_FPS: f32 = 60.0;
-
-    /// `Behavior::CameraFollow` — exponentially lerp this entity toward the
-    /// nearest tagged entity (plus `offset`), optionally ignoring movement
-    /// while the focus point stays inside a dead-zone box centered on the
-    /// entity (the camera then moves just far enough to keep the focus on
-    /// the box edge).
-    #[allow(clippy::too_many_arguments)]
-    fn update_camera_follow(
-        world: &World,
-        entity: EntityId,
-        delta_time: f32,
-        target_tag: &str,
-        lerp_speed: f32,
-        offset: (f32, f32),
-        dead_zone: Option<(f32, f32)>,
-        commands: &mut BehaviorCommands,
-    ) {
-        let Some(target_pos) = Self::find_nearest_tagged_position(world, entity, target_tag) else { return };
-        let Some(pos) = Self::get_position(world, entity) else { return };
-
-        let focus = target_pos + Vec2::new(offset.0, offset.1);
-        let desired = match dead_zone {
-            Some((w, h)) => {
-                let delta = focus - pos;
-                let excess = Vec2::new(
-                    delta.x - delta.x.clamp(-w * 0.5, w * 0.5),
-                    delta.y - delta.y.clamp(-h * 0.5, h * 0.5),
-                );
-                pos + excess
-            }
-            None => focus,
-        };
-
-        let lerp = lerp_speed.clamp(0.0, 1.0);
-        let alpha = 1.0 - (1.0 - lerp).powf(delta_time * Self::CAMERA_LERP_REFERENCE_FPS);
-        let new_pos = pos + (desired - pos) * alpha;
-        if new_pos != pos {
-            commands.positions.push((entity, new_pos));
-        }
-    }
-
-    /// `Behavior::Collectible` — emit a collection event (and optionally
-    /// despawn) when an entity with the collector tag overlaps.
-    fn update_collectible(
-        world: &World,
-        entity: EntityId,
-        score_value: u32,
-        despawn_on_collect: bool,
-        collector_tag: &str,
-        commands: &mut BehaviorCommands,
-    ) {
-        if Self::check_tagged_overlap(world, entity, collector_tag, 40.0) {
-            log::info!("Collected! +{} points", score_value);
-            commands.collected.push(EntityCollected {
-                entity,
-                score_value,
-                collector_tag: collector_tag.to_string(),
-            });
-            if despawn_on_collect {
-                commands.to_despawn.push(entity);
-            }
-        }
     }
 
     /// Apply the commands collected during behavior iteration: tags first,
@@ -556,7 +291,7 @@ impl BehaviorRunner {
     }
 
     /// Find the position of the nearest entity with a specific tag (excluding self)
-    fn find_nearest_tagged_position(world: &World, exclude: EntityId, tag: &str) -> Option<Vec2> {
+    pub(super) fn find_nearest_tagged_position(world: &World, exclude: EntityId, tag: &str) -> Option<Vec2> {
         let exclude_pos = Self::get_position(world, exclude)?;
 
         world.entities().into_iter()
@@ -571,7 +306,7 @@ impl BehaviorRunner {
     }
 
     /// Check if any entity with a specific tag overlaps with the given entity
-    fn check_tagged_overlap(world: &World, entity: EntityId, tag: &str, radius: f32) -> bool {
+    pub(super) fn check_tagged_overlap(world: &World, entity: EntityId, tag: &str, radius: f32) -> bool {
         let Some(entity_pos) = Self::get_position(world, entity) else { return false };
 
         world.entities().into_iter()
@@ -582,7 +317,7 @@ impl BehaviorRunner {
     }
 
     /// Get entity position (common operation)
-    fn get_position(world: &World, entity: EntityId) -> Option<Vec2> {
+    pub(super) fn get_position(world: &World, entity: EntityId) -> Option<Vec2> {
         world.get::<Transform2D>(entity).map(|t| t.position)
     }
 
@@ -611,6 +346,7 @@ impl BehaviorRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ecs::behavior::{BehaviorPhase, PatrolTarget};
 
     #[test]
     fn test_behavior_runner_creation() {

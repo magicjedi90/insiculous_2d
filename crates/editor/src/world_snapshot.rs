@@ -283,6 +283,7 @@ mod tests {
 
         let state = BehaviorState {
             timer: 1.5,
+            look_offset: glam::Vec2::new(120.0, -40.0),
             ..Default::default()
         };
         world.add_component(&entity, state).ok();
@@ -305,6 +306,11 @@ mod tests {
 
         let bs = world.get::<BehaviorState>(entity).unwrap();
         assert_eq!(bs.timer, 1.5);
+        assert_eq!(
+            bs.look_offset,
+            glam::Vec2::new(120.0, -40.0),
+            "camera look-ahead offset must survive play/stop"
+        );
 
         let tag = world.get::<EntityTag>(entity).unwrap();
         assert!(tag.matches("hero"));

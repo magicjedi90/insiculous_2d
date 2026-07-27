@@ -8,7 +8,8 @@
 // - Parent-child entity relationships (player has an indicator child)
 // - Texture loading (wood texture on obstacle boxes)
 // - CameraFollow: a main-camera entity trails the tagged player across a
-//   level wider than the window (dead zone keeps small hops from panning)
+//   level wider than the window (dead zone keeps small hops from panning,
+//   look-ahead leans the view the way the player is pressing)
 // - Collectible coins scored through the world event bus
 //
 SceneData(
@@ -136,6 +137,9 @@ SceneData(
         // render camera copies this entity's position every frame
         // (RenderManager::sync_main_camera); the CameraFollow behavior does
         // the smoothing. No RigidBody: CameraFollow writes positions directly.
+        // look_ahead leans the camera the way the player presses (DKC-style);
+        // x exceeds the 80 px dead-zone half-width so a standing lean is
+        // still visible, and look_ahead_lerp glides instead of snapping.
         EntityData(
             name: Some("camera"),
             components: [
@@ -146,6 +150,8 @@ SceneData(
                     lerp_speed: 0.12,
                     offset: (0.0, 60.0),
                     dead_zone: Some((160.0, 100.0)),
+                    look_ahead: (220.0, 140.0),
+                    look_ahead_lerp: 0.08,
                 )),
             ],
         ),

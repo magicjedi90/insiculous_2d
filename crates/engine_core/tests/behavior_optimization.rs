@@ -64,7 +64,9 @@ fn test_behavior_runner_no_excessive_cloning() {
     // Verify that all entities still have their behaviors (not corrupted by references)
     for entity in &entities {
         assert!(world.get::<Behavior>(*entity).is_some(), "Entity should still have behavior component");
-        // Only stateful behaviors (PlayerPlatformer, ChaseTagged, Patrol) should have BehaviorState
+        // Only stateful behaviors (PlayerPlatformer, ChaseTagged, Patrol,
+        // CameraFollow) should have BehaviorState — CameraFollow keeps its
+        // smoothed look-ahead offset there.
         // Collectible and PlayerTopDown don't persist state
     }
 }

@@ -29,6 +29,9 @@ mod ranges {
     pub const POSITION: RangeInclusive<f32> = -1000.0..=1000.0;
     /// Unit fractions (CameraFollow lerp speed: 1.0 snaps instantly).
     pub const FRACTION: RangeInclusive<f32> = 0.0..=1.0;
+    /// Camera look-ahead magnitude in pixels (the pressed direction supplies
+    /// the sign, so only non-negative extents are meaningful).
+    pub const LOOK_AHEAD: RangeInclusive<f32> = 0.0..=1000.0;
 }
 
 /// Edit a Behavior component.
@@ -152,7 +155,9 @@ pub fn edit_behavior(
                 hint = Some("lose_interest_range");
             }
         }
-        Behavior::CameraFollow { target_tag, lerp_speed, offset, dead_zone } => {
+        Behavior::CameraFollow {
+            target_tag, lerp_speed, offset, dead_zone, look_ahead, look_ahead_lerp,
+        } => {
             inspector.string("Target Tag", target_tag);
             if let EditResult::Changed(v) = inspector.f32("Lerp Speed", *lerp_speed, ranges::FRACTION) {
                 *lerp_speed = v;
@@ -173,6 +178,20 @@ pub fn edit_behavior(
                 None => "None".to_string(),
             };
             inspector.string("Dead Zone", &dead_zone_label);
+            if let EditResult::Changed(v) = inspector.vec2(
+                "Look Ahead",
+                glam::Vec2::new(look_ahead.0, look_ahead.1),
+                ranges::LOOK_AHEAD,
+            ) {
+                *look_ahead = (v.x, v.y);
+                hint = Some("look_ahead");
+            }
+            if let EditResult::Changed(v) =
+                inspector.f32("Look Lerp", *look_ahead_lerp, ranges::FRACTION)
+            {
+                *look_ahead_lerp = v;
+                hint = Some("look_ahead_lerp");
+            }
         }
     }
 
@@ -190,6 +209,9 @@ mod tests {
         assert!(ranges::SECONDS.contains(&0.3)); // default jump cooldown
         assert!(ranges::DISTANCE.contains(&300.0)); // default lose range
         assert!(ranges::POSITION.contains(&0.0));
+        assert!(ranges::LOOK_AHEAD.start() < ranges::LOOK_AHEAD.end());
+        assert!(ranges::LOOK_AHEAD.contains(&220.0)); // demo scene look-ahead
+        assert!(ranges::FRACTION.contains(&0.08)); // default look_ahead_lerp
     }
 
     #[test]
@@ -221,10 +243,13 @@ mod tests {
                     assert!(ranges::SPEED.contains(&chase_speed));
                     assert!(ranges::DISTANCE.contains(&lose_interest_range));
                 }
-                Behavior::CameraFollow { lerp_speed, offset, .. } => {
+                Behavior::CameraFollow { lerp_speed, offset, look_ahead, look_ahead_lerp, .. } => {
                     assert!(ranges::FRACTION.contains(&lerp_speed));
                     assert!(ranges::POSITION.contains(&offset.0));
                     assert!(ranges::POSITION.contains(&offset.1));
+                    assert!(ranges::LOOK_AHEAD.contains(&look_ahead.0));
+                    assert!(ranges::LOOK_AHEAD.contains(&look_ahead.1));
+                    assert!(ranges::FRACTION.contains(&look_ahead_lerp));
                 }
             }
         }

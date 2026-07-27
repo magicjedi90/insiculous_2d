@@ -55,7 +55,9 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
 - `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths); `TextureResolver` trait is the GPU seam (AssetManager = production impl, tests stub it)
 - `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save; `game_root_from()` + the `game_root!()` macro (asset/save anchoring — macro so the game crate's manifest dir is baked in)
-- `behavior_runner.rs` — Entity behavior system
+- `behavior_runner/` — Entity behavior system: `mod.rs` (runner, dispatch loop, command
+  application), `handlers.rs` (player/AI/collectible handlers), `camera.rs` (`CameraFollow`
+  incl. input-driven look-ahead)
 - `lifecycle.rs` — FSM for scene lifecycle
 - `timing.rs` — Timer utilities
 - `contexts.rs` — GameContext, RenderContext
@@ -87,7 +89,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 273 passing (incl. doc tests; GPU/window-bound ones compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 282 passing (incl. doc tests; GPU/window-bound ones compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method
