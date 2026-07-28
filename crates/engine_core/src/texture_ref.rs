@@ -42,12 +42,31 @@ pub(crate) fn resolve_texture(
         assets
             .create_solid_color(1, 1, color)
             .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
+    } else if is_unresolvable_sentinel(texture_ref) {
+        // Placeholder paths recorded for runtime-generated textures
+        // ("#rgba", bare "#solid") carry no pixel data to rebuild from.
+        // Degrade to the white texture instead of failing the scene load.
+        log::warn!(
+            "texture ref '{texture_ref}' is a generated-texture placeholder and cannot be \
+             reloaded; substituting the white texture"
+        );
+        Ok(TextureHandle { id: 0 })
     } else {
         // Load as file path
         assets
             .load_texture(texture_ref)
             .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
     }
+}
+
+/// A `#`-prefixed reference that names a runtime-generated texture rather
+/// than a reconstructible scheme (`#white`, `#solid:RRGGBB`). Such refs can
+/// be *written* by scene save (via `AssetManager::texture_path`) but carry
+/// no data to rebuild the texture from on load.
+pub(crate) fn is_unresolvable_sentinel(texture_ref: &str) -> bool {
+    texture_ref.starts_with('#')
+        && texture_ref != "#white"
+        && !texture_ref.starts_with("#solid:")
 }
 
 /// Parse a hex color string (RRGGBB or RRGGBBAA) to [u8; 4]
@@ -103,5 +122,16 @@ mod tests {
     #[test]
     fn test_parse_hex_color_rejects_non_hex() {
         assert!(parse_hex_color("GGGGGG").is_err());
+    }
+
+    #[test]
+    fn test_generated_texture_sentinels_are_flagged() {
+        // Runtime-generated placeholders: degrade to white, never file-load.
+        assert!(is_unresolvable_sentinel("#rgba"));
+        assert!(is_unresolvable_sentinel("#solid"));
+        // Reconstructible schemes and real paths are not sentinels.
+        assert!(!is_unresolvable_sentinel("#white"));
+        assert!(!is_unresolvable_sentinel("#solid:FF00FF"));
+        assert!(!is_unresolvable_sentinel("sprites/player.png"));
     }
 }

@@ -50,6 +50,7 @@ pub use glam::{Vec2, Vec4};
 // Re-export ECS types
 pub use ecs::{EntityId, World};
 pub use ecs::sprite_components::{set_sprites_visible, Name, Sprite};
+pub use ecs::Tilemap;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;
 pub use ecs::lifetime::{Lifetime, LifetimeSystem};

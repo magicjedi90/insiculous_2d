@@ -78,7 +78,7 @@ These games require one or more of the engine gap additions above.
 
 | # | Game | Requires | Key New Patterns |
 |---|------|----------|-----------------|
-| 6 | Frogger | Tilemap | Lane scrolling, timed obstacles, death-and-reset |
+| 6 | Frogger ☑ (Jul 2026, first Tilemap consumer) | Tilemap | Lane scrolling, timed obstacles, death-and-reset |
 | 7 | Tetris | Tilemap | Grid logic, piece rotation, line clearing |
 | 8 | Galaga | Lifetime, SpriteAnimation | Enemy formation paths, multi-bullet patterns |
 | 9 | Pac-Man | Tilemap, SpriteAnimation | Pathfinding AI (BFS), power-up state, ghost modes |

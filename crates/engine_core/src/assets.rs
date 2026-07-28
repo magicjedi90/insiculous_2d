@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 use renderer::{
     TextureManager, TextureHandle, TextureResource, TextureLoadConfig, TextureError,
+    SamplerConfig,
 };
 
 // Re-export wgpu types from renderer
@@ -46,6 +47,27 @@ pub enum AssetError {
 
     #[error("Asset manager not initialized")]
     NotInitialized,
+
+    #[error("Invalid texture data: {0}")]
+    InvalidData(String),
+}
+
+/// Validate raw RGBA dimensions/length before any GPU work.
+/// Kept as a free function so the error path is headless-testable
+/// (constructing an `AssetManager` requires a live wgpu device).
+fn validate_rgba(width: u32, height: u32, len: usize) -> Result<(), AssetError> {
+    if width == 0 || height == 0 {
+        return Err(AssetError::InvalidData(format!(
+            "texture dimensions must be non-zero (got {width}x{height})"
+        )));
+    }
+    let expected = width as usize * height as usize * 4;
+    if len != expected {
+        return Err(AssetError::InvalidData(format!(
+            "expected {expected} bytes for {width}x{height} RGBA, got {len}"
+        )));
+    }
+    Ok(())
 }
 
 /// Configuration for the asset manager
@@ -235,6 +257,41 @@ impl AssetManager {
         Ok(handle)
     }
 
+    /// Create a texture from raw RGBA8 pixel data (row-major, `width * height * 4` bytes).
+    ///
+    /// Intended for pixel-data textures built in code — tileset strips,
+    /// palettes, generated art — so it samples with **nearest** filtering:
+    /// linear filtering would bleed adjacent cells across tile borders.
+    ///
+    /// Dimensions and data length are validated before any GPU work; bad
+    /// input returns [`AssetError::InvalidData`], never panics.
+    ///
+    /// The handle's recorded path is the sentinel `"#rgba"` — like
+    /// `"#solid"`, it is **non-unique** and cannot be resolved back to pixel
+    /// data, so textures created here do not survive scene save/load or any
+    /// path-based lookup.
+    pub fn create_texture_from_rgba(
+        &mut self,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> Result<TextureHandle, AssetError> {
+        validate_rgba(width, height, rgba.len())?;
+        let config = TextureLoadConfig {
+            format: None,
+            sampler_config: SamplerConfig {
+                mag_filter: renderer::wgpu::FilterMode::Nearest,
+                min_filter: renderer::wgpu::FilterMode::Nearest,
+                ..SamplerConfig::default()
+            },
+        };
+        let handle = self
+            .texture_manager
+            .load_texture_from_rgba(width, height, rgba, config)?;
+        self.handle_to_path.insert(handle.id, "#rgba".to_string());
+        Ok(handle)
+    }
+
     /// Get a texture resource by handle
     pub fn get_texture(&self, handle: TextureHandle) -> Option<&TextureResource> {
         self.texture_manager.get_texture(handle)
@@ -301,6 +358,32 @@ mod tests {
     fn test_asset_error_display() {
         let err = AssetError::NotFound("player.png".to_string());
         assert!(format!("{}", err).contains("player.png"));
+    }
+
+    #[test]
+    fn test_rgba_validation_rejects_zero_dimensions() {
+        assert!(matches!(
+            validate_rgba(0, 16, 0),
+            Err(AssetError::InvalidData(_))
+        ));
+        assert!(matches!(
+            validate_rgba(16, 0, 0),
+            Err(AssetError::InvalidData(_))
+        ));
+    }
+
+    #[test]
+    fn test_rgba_validation_rejects_length_mismatch() {
+        // 2x2 RGBA needs 16 bytes.
+        let err = validate_rgba(2, 2, 15).unwrap_err();
+        assert!(format!("{err}").contains("expected 16 bytes"));
+        assert!(validate_rgba(2, 2, 17).is_err());
+    }
+
+    #[test]
+    fn test_rgba_validation_accepts_exact_length() {
+        assert!(validate_rgba(2, 2, 16).is_ok());
+        assert!(validate_rgba(64, 16, 64 * 16 * 4).is_ok());
     }
 }
 

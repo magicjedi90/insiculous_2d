@@ -20,7 +20,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `menu_panel.rs` - `MenuPanel`/`MenuStyle` shared menu window chrome (see Menu Chrome Pattern)
   - `spawn_helpers.rs` - Shared entity recipes (`spawn_background`); crate root exports `RENDER_UNIT = 80.0` (pixels per world unit)
   - `pickups.rs` - Generic pickup tracking (`Pickups<K>`, `EffectTimer`)
-  - `achievements.rs` - Achievement registry, JSON persistence, toasts
+  - `achievements/` - Achievement registry, atomic JSON persistence (temp file + rename), toasts
   - `particles/` - Pooled particle system (ring buffer, config builder)
   - `grid/` - Deformable spring-mass grid effect (general-purpose visual)
   - `glyph_texture_cache.rs` - UI glyph bitmap → GPU texture cache
@@ -261,6 +261,9 @@ let white = ctx.assets.create_solid_color(1, 1, [255, 255, 255, 255])?;
 let checkerboard = ctx.assets.create_checkerboard(
     64, 64, [100, 100, 100, 255], [150, 150, 150, 255], 8
 )?;
+// Raw RGBA8 pixel data (nearest-filtered — built for tileset strips/pixel art;
+// path records the non-unique "#rgba" sentinel, not usable for scene save/load)
+let tileset = ctx.assets.create_texture_from_rgba(64, 16, &rgba_bytes)?;
 
 // Use assets in ECS
 world.add_component(&entity, Sprite::new(texture.id)).ok();
