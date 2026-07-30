@@ -37,7 +37,9 @@ rebutted; plan settled with Jesse). The 20 Games Challenge is PAUSED at game 7
 - **TASK-E7** — Sprite-shader alpha-cutoff (configurable threshold); closes
   renderer TECH_DEBT alpha/depth item.
 - **TASK-E8/E9** — Inspector wiring (`/add-component`) + docs.
-- **Phase F** — F1 style doc may start anytime; F2–F5 gated on schema freeze.
+- **Phase F** — F1 style doc DRAFTED Jul 28 (`docs/DEION_STYLE.md` — castings
+  + palette are proposals awaiting Jesse's sign-off; edit in place). F2–F5
+  gated on schema freeze.
 - **Phase G/H2+/I** — per PROJECT_ROADMAP.md dependency table.
 
 **Instructions for agents:** Claim a task by creating `current_tasks/TASK-XXX.lock` with your agent ID and timestamp. Work the task, push, then remove the lock and move the task to PROGRESS.md.

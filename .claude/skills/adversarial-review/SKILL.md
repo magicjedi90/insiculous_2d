@@ -22,6 +22,19 @@ The reviewer's framing lives in `prompts/adversarial-plan-review.md` and
 `prompts/adversarial-code-review.md` — these are fixed; never edit them
 mid-review to soften or steer the critique.
 
+**Starting a new subject — clear the folder first.** If `review/` holds
+artifacts from a *previous* review subject (a different plan or diff), delete
+them before writing the new draft:
+```
+rm -f review/plan.md review/plan-v*.md review/review-*.md review/rebuttal-*.md review/draft.diff
+```
+This restarts numbering at `review-1.md` and keeps the reviewer (whose tool
+access is scoped to `review/`) from reading a stale plan as context. Anything
+worth keeping from a settled review has already been folded into the real
+docs (roadmap/TODO/log_archive). Never clear between rounds of the *same*
+subject — `plan-vN.md`/`rebuttal-N.md` history is what makes later rounds
+coherent.
+
 ## Plan mode
 
 1. **Draft with the user.** Use your harness's plan mode if available. Where

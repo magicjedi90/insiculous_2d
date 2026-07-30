@@ -7,5 +7,19 @@
     "code-simplifier@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Project convention: approved plans get an adversarial review BEFORE implementation. Unless the user explicitly skipped review or the plan is trivial (typo-level), do NOT edit code or dispatch implementation agents yet. First: clear stale artifacts in review/ if they belong to a previous review subject, write the approved plan to review/plan.md, run scripts/request-review.sh plan review/plan.md --reviewer=kimi, then present and adjudicate every finding with the user. Implementation starts only after the user calls the plan settled. While the headless review runs, read-only investigation is fine; edits are not.\"}}'",
+            "statusMessage": "Reminding about adversarial review"
+          }
+        ]
+      }
+    ]
   }
 }
