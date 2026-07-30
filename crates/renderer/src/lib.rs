@@ -13,6 +13,7 @@ mod renderer;
 pub mod sprite;
 pub mod sprite_data;
 pub mod texture;
+pub mod texture_filter;
 mod window;
 
 pub mod prelude;
@@ -29,7 +30,8 @@ pub use window::*;
 // Selective re-exports to avoid conflicts
 // TextureHandle is the canonical definition in texture.rs
 pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline};
-pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureFilter, TextureHandle};
+pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle};
+pub use texture_filter::TextureFilter;
 
 // Re-export Time from common crate (moved from renderer for proper placement)
 pub use common::Time;

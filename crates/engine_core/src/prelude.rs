@@ -13,6 +13,9 @@ pub use crate::{
     achievements::{Achievement, AchievementManager, AchievementError},
     // Asset management
     assets::{AssetManager, AssetConfig, AssetError},
+    // Sprite sheets (`load_sprite_sheet` + the `.sheet.ron` schema)
+    assets::sprite_sheet::SpriteSheet,
+    sheet_file::SheetFile,
     // Scene serialization
     scene_data::{SceneData, PhysicsSettings, PrefabData, EntityData, ComponentData, BehaviorData, SceneLoadError},
     scene_loader::{SceneLoader, SceneInstance},
@@ -49,7 +52,9 @@ pub use glam::{Vec2, Vec4};
 
 // Re-export ECS types
 pub use ecs::{EntityId, World};
-pub use ecs::sprite_components::{set_sprites_visible, Name, Sprite};
+pub use ecs::sprite_components::{
+    set_sprites_visible, AnimationClip, Name, SheetGrid, Sprite, SpriteAnimation,
+};
 pub use ecs::Tilemap;
 pub use ecs::audio_components::{AudioSource, AudioListener, PlaySoundEffect};
 pub use ecs::hierarchy_system::TransformHierarchySystem;

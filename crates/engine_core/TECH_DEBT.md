@@ -33,6 +33,7 @@ Resolved history: root `log_archive.md` § engine_core.
 
 ### [SIZE-001] File sizes vs 600-line guideline
 - `scene_loader.rs`: ~583 non-test lines — extract component factory helpers from the `add_component_to_entity` match.
+- `scene_serializer_tests.rs`: 747 lines, all tests (pre-existing; E3/E4 shrank it from 777) — split by component family on the next substantive change.
 - `game.rs`: RESOLVED Jul 16 2026 — render tail extracted to child module `game/render.rs` (530 lines remain).
 - `behavior_runner.rs`: 763 lines (pre-existing) — split the per-behavior handlers into a `behavior_runner/` directory on the next substantive change.
 

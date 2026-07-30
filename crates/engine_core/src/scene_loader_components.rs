@@ -6,10 +6,12 @@
 
 use glam::Vec2;
 
-use ecs::sprite_components::{Camera, Sprite, SpriteAnimation, Transform2D};
+use ecs::sprite_components::{AnimationClip, Camera, Sprite, SpriteAnimation, Transform2D};
 use ecs::{EntityId, World};
 
-use crate::scene_data::{ColliderShapeData, ComponentData, RigidBodyTypeData, SceneLoadError};
+use crate::scene_data::{
+    ClipData, ColliderShapeData, ComponentData, GridData, RigidBodyTypeData, SceneLoadError,
+};
 use crate::texture_ref::TextureResolver;
 
 use crate::scene_loader::SceneLoader;
@@ -121,22 +123,25 @@ impl SceneLoader {
             }
 
             ComponentData::SpriteAnimation {
-                fps,
-                frames,
-                playing,
-                loop_animation,
+                sheet,
+                grid,
+                clips,
+                autoplay,
             } => {
-                let animation = SpriteAnimation {
-                    fps: *fps,
-                    frames: frames
-                        .iter()
-                        .map(|f| [f.0, f.1, f.2, f.3])
-                        .collect(),
-                    playing: *playing,
-                    loop_animation: *loop_animation,
-                    current_frame: 0,
-                    time_accumulator: 0.0,
-                };
+                let animation =
+                    Self::build_sprite_animation(sheet.as_deref(), *grid, clips, autoplay.as_deref(), assets);
+                // A component with no sheet and no clips can never animate.
+                // Old-format scene data (the pre-named-clip schema) parses
+                // "successfully" into exactly this inert shape because every
+                // new field is serde-defaulted — say so instead of silently
+                // loading a do-nothing component.
+                if animation.sheet.is_none() && animation.clips.is_empty() {
+                    log::warn!(
+                        "Scene load: SpriteAnimation on entity {entity_id:?} has no sheet and no \
+                         clips — it will never animate. Old-format scene data parses to this \
+                         inert default; re-author the component with clips or a sheet reference."
+                    );
+                }
                 Self::add_component_logged(world, entity_id, animation);
             }
 
@@ -322,4 +327,54 @@ impl SceneLoader {
         Ok(())
     }
 
+    /// Build a [`SpriteAnimation`] from its scene data, preferring the sheet's
+    /// `.sheet.ron` sidecar over the values baked into the scene.
+    ///
+    /// The sidecar is the source of truth: re-reading it on load means an
+    /// artist re-cutting a sheet or renaming a clip propagates to every scene
+    /// that references it, with no scene re-save. When the sidecar is missing
+    /// or unusable the resolver has already warned, and the baked snapshot —
+    /// which is right there and was correct when the scene was written —
+    /// carries the load.
+    pub(crate) fn build_sprite_animation(
+        sheet: Option<&str>,
+        grid: GridData,
+        clips: &[(String, ClipData)],
+        autoplay: Option<&str>,
+        assets: &mut impl TextureResolver,
+    ) -> SpriteAnimation {
+        let sidecar = sheet.and_then(|path| assets.sheet_for(path));
+        let (grid, clips) = match sidecar {
+            Some(data) => (data.grid, data.clips),
+            None => (
+                grid.into(),
+                clips
+                    .iter()
+                    .map(|(name, clip)| (name.clone(), AnimationClip::from(clip.clone())))
+                    .collect(),
+            ),
+        };
+
+        let mut animation = SpriteAnimation {
+            grid,
+            clips,
+            sheet: sheet.map(str::to_string),
+            ..SpriteAnimation::default()
+        };
+
+        if let Some(name) = autoplay {
+            if animation.has_clip(name) {
+                animation.play(name);
+            } else {
+                log::warn!(
+                    "Scene load: autoplay clip '{}' does not exist for sheet {:?} \
+                     (check its .sheet.ron sidecar); leaving the animation stopped",
+                    name,
+                    sheet.unwrap_or("<none>")
+                );
+            }
+        }
+
+        animation
+    }
 }

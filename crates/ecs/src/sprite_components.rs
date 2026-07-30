@@ -6,7 +6,7 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 
 // Re-export common types for ECS use
-pub use common::{Camera, Transform2D};
+pub use common::{Camera, SheetGrid, Transform2D};
 
 /// Name component for identifying entities in the editor hierarchy.
 ///
@@ -145,104 +145,250 @@ impl Sprite {
 // Note: Transform2D and Camera2D are now re-exported from common crate
 // This eliminates ~170 lines of duplicated code
 
-/// Sprite animation component
+/// One named animation clip: which sheet cells to show, how fast, and whether
+/// it repeats.
+///
+/// A clip is **not** a component — clips live inside [`SpriteAnimation`], which
+/// is. `frame_indices` are cell indices into that component's [`SheetGrid`],
+/// so a clip is just a playlist over the sheet: `[0, 1, 2, 3]` plays the first
+/// four cells in order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnimationClip {
+    /// Sheet cell indices, played in this order.
+    pub frame_indices: Vec<u32>,
+    /// Playback rate. Must be finite and positive to advance.
+    pub fps: f32,
+    /// Whether playback wraps back to the first frame at the end.
+    pub looping: bool,
+}
+
+impl AnimationClip {
+    /// Create a looping clip over the given cell indices.
+    pub fn new(frame_indices: impl Into<Vec<u32>>, fps: f32) -> Self {
+        Self {
+            frame_indices: frame_indices.into(),
+            fps,
+            looping: true,
+        }
+    }
+
+    /// Set whether the clip loops.
+    pub fn with_looping(mut self, looping: bool) -> Self {
+        self.looping = looping;
+        self
+    }
+}
+
+/// Named-clip sprite animation over a sheet.
+///
+/// The component owns a [`SheetGrid`] describing how its sheet is cut into
+/// cells, plus a set of named [`AnimationClip`]s. Game code plays clips **by
+/// name** (`play("walk")`) and never touches raw cell indices — the names are
+/// the stable API across art revisions.
+///
+/// # Ownership of `Sprite.tex_region`
+///
+/// While [`current_clip`](Self::current_clip) is `Some` and the active frame
+/// resolves to a cell, this component **owns** the entity's `Sprite.tex_region`:
+/// `SpriteAnimationSystem` overwrites it every frame, so manual writes are
+/// lost. When [`current_uv`](Self::current_uv) yields `None` (nothing playing,
+/// empty clip, or a frame index past the end of the grid) the sprite's region
+/// is left exactly as it is.
 #[derive(Debug, Clone, Serialize, Deserialize, DeriveComponentMeta)]
 pub struct SpriteAnimation {
-    /// Current frame index
-    pub current_frame: usize,
-    /// Animation speed (frames per second)
-    pub fps: f32,
-    /// Whether the animation is playing
+    /// How the sheet is cut into cells.
+    pub grid: SheetGrid,
+    /// Clips by name, in declaration order — ordered rather than a map so
+    /// serialization and the inspector display are deterministic. Clip counts
+    /// are single-digit, so lookup is a linear scan.
+    pub clips: Vec<(String, AnimationClip)>,
+    /// Path of the sheet PNG this animation came from, exactly as passed to
+    /// `load_sprite_sheet` (base-path-relative). Its `.sheet.ron` sidecar —
+    /// same stem, so `sprites/deion.png` → `sprites/deion.sheet.ron` — is the
+    /// source of truth for `grid` and `clips` when a scene reloads.
+    pub sheet: Option<String>,
+    /// Name of the clip currently selected, or `None` when nothing is playing.
+    pub current_clip: Option<String>,
+    /// Whether the selected clip is advancing.
     pub playing: bool,
-    /// Whether the animation should loop
-    pub loop_animation: bool,
-    /// Time accumulator for frame timing
+    /// Position within the active clip's `frame_indices` (not a cell index).
+    pub current_frame: usize,
+    /// Time carried over toward the next frame.
     pub time_accumulator: f32,
-    /// Texture regions for each frame [x, y, width, height]
-    pub frames: Vec<[f32; 4]>,
 }
 
 impl Default for SpriteAnimation {
     fn default() -> Self {
         Self {
+            grid: SheetGrid::new(1, 1),
+            clips: Vec::new(),
+            sheet: None,
+            current_clip: None,
+            playing: false,
             current_frame: 0,
-            fps: 10.0,
-            playing: true,
-            loop_animation: true,
             time_accumulator: 0.0,
-            frames: vec![[0.0, 0.0, 1.0, 1.0]], // Single frame covering entire texture
         }
     }
 }
 
 impl SpriteAnimation {
-    /// Create a new sprite animation
-    pub fn new(fps: f32, frames: Vec<[f32; 4]>) -> Self {
+    /// Create an animation over the given sheet grid, with no clips yet.
+    pub fn new(grid: SheetGrid) -> Self {
         Self {
-            fps,
-            frames,
+            grid,
             ..Default::default()
         }
     }
 
-    /// Set whether to loop
-    pub fn with_loop(mut self, loop_animation: bool) -> Self {
-        self.loop_animation = loop_animation;
+    /// Add a named clip.
+    pub fn with_clip(mut self, name: impl Into<String>, clip: AnimationClip) -> Self {
+        self.clips.push((name.into(), clip));
         self
     }
 
-    /// Start playing the animation
-    pub fn play(&mut self) {
+    /// Whether a clip with this name exists.
+    pub fn has_clip(&self, name: &str) -> bool {
+        self.clips.iter().any(|(n, _)| n == name)
+    }
+
+    /// The clip [`current_clip`](Self::current_clip) names, if any.
+    pub fn active_clip(&self) -> Option<&AnimationClip> {
+        let name = self.current_clip.as_deref()?;
+        self.clips
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, clip)| clip)
+    }
+
+    /// Select a clip and **start it from the beginning**.
+    ///
+    /// This is a transition call, not a per-frame one: it always resets to
+    /// frame 0 and clears the time accumulator, whether or not `name` is
+    /// already the current clip and whether or not it was playing. Calling it
+    /// every frame therefore pins the animation to frame 0 — use
+    /// [`ensure_playing`](Self::ensure_playing) from state-machine code that
+    /// re-asserts its clip each update, and [`resume`](Self::resume) to
+    /// continue a paused clip.
+    ///
+    /// Returns `false` for an unknown clip name: the call is a warned no-op
+    /// and the current clip keeps playing.
+    pub fn play(&mut self, name: &str) -> bool {
+        if !self.has_clip(name) {
+            log::warn!(
+                "SpriteAnimation::play: no clip named '{}' (keeping {:?}); known clips: {:?}",
+                name,
+                self.current_clip,
+                self.clips.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>()
+            );
+            return false;
+        }
+        self.current_clip = Some(name.to_string());
+        self.current_frame = 0;
+        self.time_accumulator = 0.0;
         self.playing = true;
+        true
     }
 
-    /// Pause the animation
-    pub fn pause(&mut self) {
+    /// Play `name` unless it is already the clip that is playing — the
+    /// per-frame-safe form of [`play`](Self::play).
+    ///
+    /// Safe to call every update: an already-running clip keeps advancing
+    /// instead of restarting. A paused or finished clip of the same name does
+    /// restart. Returns `false` for an unknown clip name.
+    pub fn ensure_playing(&mut self, name: &str) -> bool {
+        if self.playing && self.current_clip.as_deref() == Some(name) {
+            return true;
+        }
+        self.play(name)
+    }
+
+    /// Stop playback and deselect the clip: nothing advances and
+    /// [`current_uv`](Self::current_uv) yields `None`, so the sprite keeps
+    /// whatever region it is showing.
+    pub fn stop(&mut self) {
         self.playing = false;
-    }
-
-    /// Reset to first frame
-    pub fn reset(&mut self) {
+        self.current_clip = None;
         self.current_frame = 0;
         self.time_accumulator = 0.0;
     }
 
-    /// Update the animation (should be called every frame)
+    /// Freeze on the current frame, keeping the clip and position.
+    pub fn pause(&mut self) {
+        self.playing = false;
+    }
+
+    /// Continue a paused clip from where it stopped. No-op when no clip is
+    /// selected.
+    pub fn resume(&mut self) {
+        if self.current_clip.is_some() {
+            self.playing = true;
+        }
+    }
+
+    /// Advance the active clip by `delta_time` seconds.
+    ///
+    /// Frame advance is computed arithmetically rather than by repeatedly
+    /// subtracting a frame duration, so no combination of `fps` and
+    /// `delta_time` can spin. Clips that cannot advance — no frames, or an
+    /// `fps` that is zero, negative, or not finite — simply hold their frame.
+    /// Authored clips are rejected at parse time; these guards are the second
+    /// net for components built programmatically.
     pub fn update(&mut self, delta_time: f32) {
-        if !self.playing || self.frames.is_empty() {
+        if !self.playing || !delta_time.is_finite() || delta_time <= 0.0 {
+            return;
+        }
+        let Some((fps, looping, frame_count)) = self
+            .active_clip()
+            .map(|clip| (clip.fps, clip.looping, clip.frame_indices.len()))
+        else {
+            return;
+        };
+        if frame_count == 0 || !fps.is_finite() || fps <= 0.0 {
             return;
         }
 
         self.time_accumulator += delta_time;
-        let frame_duration = 1.0 / self.fps;
-
-        while self.time_accumulator >= frame_duration {
-            self.time_accumulator -= frame_duration;
-            self.current_frame += 1;
-
-            if self.current_frame >= self.frames.len() {
-                if self.loop_animation {
-                    self.current_frame = 0;
-                } else {
-                    self.current_frame = self.frames.len() - 1;
-                    self.playing = false;
-                }
-            }
+        let frame_duration = 1.0 / fps;
+        // Float-to-int casts saturate in Rust, so even an absurd accumulator
+        // yields a finite step count instead of looping forever.
+        let advanced = (self.time_accumulator / frame_duration) as usize;
+        if advanced == 0 {
+            return;
         }
-    }
+        self.time_accumulator -= advanced as f32 * frame_duration;
 
-    /// Get the current frame's texture region
-    pub fn current_frame_region(&self) -> [f32; 4] {
-        if self.frames.is_empty() {
-            [0.0, 0.0, 1.0, 1.0]
+        let next = self.current_frame.saturating_add(advanced);
+        if next < frame_count {
+            self.current_frame = next;
+        } else if looping {
+            self.current_frame = next % frame_count;
         } else {
-            self.frames[self.current_frame.min(self.frames.len() - 1)]
+            self.current_frame = frame_count - 1;
+            self.time_accumulator = 0.0;
+            self.playing = false;
         }
     }
 
-    /// Check if animation is complete (for non-looping animations)
+    /// The texture region of the current frame, or `None` when nothing
+    /// resolves — no clip selected, an empty clip, or a frame index past the
+    /// last cell of the grid.
+    pub fn current_uv(&self) -> Option<[f32; 4]> {
+        let clip = self.active_clip()?;
+        let cell = *clip.frame_indices.get(self.current_frame)?;
+        self.grid.uv_rect_checked(cell)
+    }
+
+    /// Whether a non-looping clip has finished on its last frame.
     pub fn is_complete(&self) -> bool {
-        !self.loop_animation && !self.playing && self.current_frame == self.frames.len().saturating_sub(1)
+        match self.active_clip() {
+            Some(clip) => {
+                !clip.looping
+                    && !self.playing
+                    && !clip.frame_indices.is_empty()
+                    && self.current_frame + 1 >= clip.frame_indices.len()
+            }
+            None => false,
+        }
     }
 }
 

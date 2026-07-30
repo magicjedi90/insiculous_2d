@@ -34,6 +34,7 @@ editor_integration ──→ editor, engine_core, ecs, ui, input, renderer, comm
 - `lib.rs` — Public re-exports
 
 ## Key Patterns
+- **Engine-time freeze (Jul 2026)**: `EditorGame::update` sets `ctx.time_scale = 0.0` whenever not Playing (`editor_time_scale()`, headless-testable), holding the game's own value in `frozen_time_scale` and handing it back on Play/Resume — particles AND sprite animations hold still while Editing/Paused, and a game that paused itself stays paused across an editor Pause.
 - **Camera sync (Jul 2026)**: the editor viewport is the single source of truth for the view. `EditorGame::render` overrides `ctx.camera` with `viewport.to_window_render_camera(window_size)` every frame; while Playing, `sync_viewport_from_main_camera` mirrors the game's main-camera entity onto the viewport (editing pan/zoom saved on Play, restored on Stop). Never sync the other direction.
 - **Scale tool scales colliders**: physics ignores Transform2D.scale, so the gizmo scale branch also calls `scale_collider` and records one `MacroCommand` (transform+collider) per drag.
 - **Asset browser** (`panel_renderer/asset_browser.rs`): scan-on-open + Rescan, lazy thumbnails (≤4 loads/frame), click-to-assign, drag-drop (ghost via ui overlay; viewport drop assigns on sprite hit, spawns on empty space — both undoable).
@@ -56,7 +57,7 @@ Currently in Phase 2 (Ideal Editor UI). See `PROJECT_ROADMAP.md`.
 See `TECH_DEBT.md` (all files < 600 lines since June 2026; remaining: no file picker, menu-label string matching)
 
 ## Testing
-- 79 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry)
+- 81 passing (incl. 1 compile-only doc test), 0 ignored — `cargo test -p editor_integration` (component-dispatch tests moved to the editor crate with the registry; `editor_game/time_freeze_tests.rs` locks the engine-time freeze)
 - `entity_ops` is fully headless-testable (no UI dependency)
 
 ## Godot Oracle — When Stuck

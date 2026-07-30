@@ -5,6 +5,7 @@
 //! Child module of `game` (like `render`) so it can reach the runner's
 //! private fields without widening visibility.
 
+use ecs::System as _;
 use glam::Vec2;
 
 use super::{Game, GameRunner};
@@ -21,6 +22,11 @@ impl<G: Game> GameRunner<G> {
             &mut self.particles,
             delta_time * self.time_scale,
         );
+
+        // Advance named-clip sprite animations and stamp the resulting cell
+        // region onto each Sprite. Same time-scaled delta as the particles,
+        // so pausing (time_scale 0.0) freezes animation with the world.
+        ecs::SpriteAnimationSystem.update(&mut self.scene.world, delta_time * self.time_scale);
 
         // Forward the line vertices the game pushed during update to the
         // renderer. Empty buffer == no lines drawn this frame.

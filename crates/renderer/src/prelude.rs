@@ -8,7 +8,8 @@ pub use crate::{
     window::{create_window_with_active_loop, WindowConfig},
     sprite_data::{Camera, SpriteVertex, SpriteInstance, CameraUniform, TextureResource, DynamicBuffer},
     sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline},
-    texture::{TextureHandle, TextureManager, TextureLoadConfig, TextureError, TextureFilter},
+    texture::{TextureHandle, TextureManager, TextureLoadConfig, TextureError},
+    texture_filter::TextureFilter,
     Time,
     Renderer, RendererConfig, RendererError,
 };

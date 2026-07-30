@@ -28,7 +28,8 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 - `sprite/batch.rs` — `SpriteBatch`, `SpriteBatcher` (CPU-side grouping by texture)
 - `sprite/pipeline.rs` — `SpritePipeline` (GPU pipeline, bind group caches, draw)
 - `sprite_data.rs` — GPU data structures (`SpriteVertex`, `SpriteInstance` incl. `shape: [f32;4]` SDF params [kind, corner_radius, border_width, _] — kind 0=quad/1=rounded rect/2=circle, 76-byte stride, attr @10; fragment masks with sdRoundedBox + 1.5px AA), `DynamicBuffer`
-- `texture.rs` — `TextureManager`, `TextureHandle` (incl. `WHITE`), `SamplerConfig`, `TextureFilter` (Linear/Nearest → `SamplerConfig` via `From`; the pixel-art knob engine_core plumbs from `GameConfig`)
+- `texture.rs` — `TextureManager`, `TextureHandle` (incl. `WHITE`), `SamplerConfig`
+- `texture_filter.rs` — `TextureFilter` (Linear/Nearest → `SamplerConfig` via `From`; the pixel-art knob engine_core plumbs from `GameConfig` and `.sheet.ron` sidecars); public path is still `renderer::TextureFilter`
 - `render_targets.rs` — HDR/depth/bloom textures, resize handling
 - `bloom.rs` — bloom passes + `BloomConfig` (runtime-tunable)
 - `line_pipeline.rs` — `LinePipeline`, `LineVertex`

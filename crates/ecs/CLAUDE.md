@@ -24,7 +24,7 @@ Query types: Single<T>, Pair<T, U>, Triple<T, U, V>
 - `Camera` / `Camera2D` — viewport, zoom, main camera flag
 - `Name` — entity display name
 - `AudioSource`, `AudioListener` — audio components
-- `SpriteAnimation` — frame-based animation
+- `SpriteAnimation` — named-clip animation over a `SheetGrid` (`clips: Vec<(String, AnimationClip)>`, played by name via `play`/`ensure_playing`). `AnimationClip` is NOT a component — it lives inside. While a clip is selected and its frame resolves, the component owns `Sprite.tex_region`
 - `Tilemap` — row-major tile grid drawn from a tileset (`sprite_instances()` yields plain data; engine_core expands to the sprite batch)
 - `UiLabel` / `UiPanel` / `UiButton` — data-driven screen-space UI (`ui_components.rs`): `UiAnchor` 9-point anchor + pixel offset (NO Transform2D), serde defaults on every field; `@key` text localizes; drawn by engine_core's `ui_element_system`
 
@@ -41,7 +41,8 @@ components like any other type, but the physics crate owns their definitions.
 - `lifetime.rs` — `Lifetime` component + `LifetimeSystem` (auto-despawn after N seconds; bullets/effects)
 - `tilemap.rs` — `Tilemap` component + `TileInstance` (top-left-tile anchor, row 0 on top, tile 0 = empty, depth default -1.0)
 - `component_registry.rs` — Global component type registry
-- `sprite_components.rs` — Built-in component definitions
+- `sprite_components.rs` — Built-in component definitions (incl. `AnimationClip` + `SpriteAnimation`)
+- `sprite_system.rs` — `SpriteAnimationSystem`: advances each clip, then writes `current_uv()` into `Sprite.tex_region`. Scheduled by engine_core's `game/frame_tail.rs` with the time-scaled delta (so pausing freezes animation); nothing in ecs drives it
 - `ui_components.rs` — UiAnchor + resolve_anchored_pos + UiLabel/UiPanel/UiButton
 
 ## Critical Patterns
@@ -69,7 +70,7 @@ components like any other type, but the physics crate owns their definitions.
 - serde_json for inspector, RON for scene files — both must work
 
 ## Testing
-- 208 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
+- 225 passing (incl. 10 doc tests), 0 ignored — `cargo test -p ecs`
 - Integration tests in `tests/world.rs`, unit tests inline in source
 - Naming: `test_<behavior_description>`
 

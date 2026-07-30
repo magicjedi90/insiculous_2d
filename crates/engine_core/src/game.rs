@@ -93,10 +93,15 @@ pub trait Game: Sized + 'static {
 
                 // Use the texture handle from the ECS sprite component
                 let texture = TextureHandle { id: ecs_sprite.texture_handle };
+                // The region carries sheet-cell UVs for animated and
+                // sub-image sprites; the default [0, 0, 1, 1] is the full
+                // texture, so unanimated content renders exactly as before.
+                let region = ecs_sprite.tex_region;
                 let renderer_sprite = renderer::Sprite::new(texture)
                     .with_position(position)
                     .with_rotation(rotation)
                     .with_scale(scale * ecs_sprite.scale * crate::RENDER_UNIT)
+                    .with_tex_region(region[0], region[1], region[2], region[3])
                     .with_color(ecs_sprite.color)
                     .with_depth(ecs_sprite.depth)
                     .with_emissive(ecs_sprite.emissive);

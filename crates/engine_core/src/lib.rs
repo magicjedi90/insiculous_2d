@@ -41,6 +41,8 @@ pub mod scene_serializer;
 #[cfg(test)]
 mod scene_serializer_tests;
 mod texture_ref;
+pub mod sheet_file;
+pub(crate) mod texture_filter_serde;
 mod tilemap_render;
 pub mod render_manager;
 pub mod window_manager;
@@ -75,14 +77,15 @@ pub use timing::Timer;
 pub use scene::Scene;
 pub use scene_manager::SceneManager;
 pub use lifecycle::{Lifecycle, LifecycleManager, LifecycleState};
-pub use assets::{AssetConfig, AssetError, AssetManager};
+pub use assets::{sprite_sheet::SpriteSheet, AssetConfig, AssetError, AssetManager};
+pub use sheet_file::{sidecar_path_for, SheetFile, SHEET_FILE_VERSION};
 pub use scene_data::{
     BehaviorData, ColliderShapeData, ComponentData, EditorSettings, EntityData, PhysicsSettings,
     PrefabData, RigidBodyTypeData, SceneData, SceneLoadError,
 };
 pub use chaos_theme::ChaosTheme;
 pub use scene_loader::{SceneInstance, SceneLoader};
-pub use texture_ref::TextureResolver;
+pub use texture_ref::{SheetData, TextureResolver};
 
 /// The game's root directory for asset/save anchoring (exe dir when shipped
 /// with an `assets/` folder beside it, the game crate's directory under

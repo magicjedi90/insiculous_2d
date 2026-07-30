@@ -12,6 +12,9 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `ui_manager.rs` / `render_manager.rs` / `window_manager.rs` / `scene_manager.rs` - Focused managers (UI lifecycle, renderer lifecycle, window creation, scene stack)
   - `contexts.rs` - `GameContext` / `RenderContext` passed to Game methods
   - `assets.rs` - Asset loading and caching (tracks handle→path for scene save)
+  - `assets/sprite_sheet.rs` - `AssetManager::load_sprite_sheet` (PNG + sidecar → `SpriteSheet`), `SidecarCache` (one sidecar read per path per scene load, cleared at the top of every load)
+  - `sheet_file.rs` - **the `.sheet.ron` schema** (`SheetFile` v1, `parse_sheet_file`, `into_parts`, `sidecar_path_for`); all sidecar validation lives here
+  - `texture_filter_serde.rs` - shared serde bridge for `TextureFilter` (renderer stays serde-free); used by `GameConfig.texture_filter` and `SheetFile.filter`
   - `scene.rs` / `scene_loader.rs` / `scene_data.rs` / `scene_serializer.rs` - Scene lifecycle, RON load, schema, World→RON save (the ONLY save pipeline)
   - `behavior_runner/` (`mod.rs` + `handlers.rs` + `camera.rs`) / `behavior_data.rs` - Behavior system + Behavior↔BehaviorData `From` pair
   - `chaos_mode.rs` - `ChaosMode` enum (cross-game intensity theme)
@@ -24,7 +27,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `particles/` - Pooled particle system (ring buffer, config builder)
   - `grid/` - Deformable spring-mass grid effect (general-purpose visual)
   - `glyph_texture_cache.rs` - UI glyph bitmap → GPU texture cache
-  - `texture_ref.rs` - Scene texture references (`#white`, `#solid:RRGGBB`, paths)
+  - `texture_ref.rs` - Scene texture references (`#white`, `#solid:RRGGBB`, paths); the `TextureResolver` trait is the GPU/filesystem seam — also `sheet_for()` (sidecar → `SheetData`) and `clear_sidecar_cache()`
   - `tilemap_render.rs` - Tilemap → sprite-batch expansion (default `Game::render` calls it; one batch per tileset)
   - `ui_integration.rs` - UI-to-renderer bridge; `debug.rs` - collider outline drawing
   - `lifecycle.rs` - FSM for scene lifecycle; `timing.rs` - Timer utilities
@@ -43,7 +46,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `component_registry.rs` - Global type registry (create components by name), `define_component!`
   - `query.rs` - Type-safe query types (Single, Pair, Triple)
   - `hierarchy.rs` / `hierarchy_extension.rs` / `hierarchy_system.rs` - Parent/child links, `WorldHierarchyExt`, transform propagation
-  - `sprite_components.rs` - Sprite, Transform2D, Camera components; `sprite_system.rs` - animation
+  - `sprite_components.rs` - Sprite, Transform2D, Camera, plus `AnimationClip` + `SpriteAnimation` (named clips over a `SheetGrid`); `sprite_system.rs` - `SpriteAnimationSystem` advances clips and writes `Sprite.tex_region` (driven from engine_core's `frame_tail.rs`)
   - `behavior.rs` - Scene-driven `Behavior` enum + `BehaviorState` (incl. `CameraFollow`)
   - `tilemap.rs` - `Tilemap` component (row-major tile grid over a tileset; `sprite_instances()` yields plain per-tile data)
   - `state_machine.rs` - `StateMachine` / `HierarchicalStateMachine` FSM components
@@ -270,6 +273,72 @@ world.add_component(&entity, Sprite::new(texture.id)).ok();
 ```
 
 **Files:** `assets.rs`, `texture.rs`
+
+### Sprite Sheet Pattern (`.sheet.ron` + named clips)
+A sheet is a PNG plus a `.sheet.ron` sidecar under the **same stem**
+(`sprites/deion_16.png` ↔ `sprites/deion_16.sheet.ron`). The sidecar declares
+the pixel cell size, the sampling filter, and the clips; the grid is derived at
+load from the PNG's dimensions ÷ the cell size, so normalized UVs never appear
+in any file.
+
+```ron
+// assets/sprites/deion_16.sheet.ron
+SheetFile(
+    version: 1,
+    cell: (16, 16),          // PIXEL cell size — what the artist knows
+    filter: Nearest,         // omitted defaults to Nearest (sheets are pixel art)
+    clips: [
+        ("idle", (frames: [0, 1, 2, 3], fps: 6.0, looping: true)),
+        ("walk", (frames: [8, 9, 10, 11], fps: 10.0)),  // `looping` defaults true
+    ],
+)
+```
+
+```rust
+// One call loads the PNG (with the sidecar's filter) and its clips.
+let sheet = ctx.assets.load_sprite_sheet("sprites/deion_16.png")?;
+
+let hero = ctx.world.create_entity();
+ctx.world.add_component(&hero, Transform2D::new(Vec2::ZERO)).ok();
+ctx.world.add_component(&hero, sheet.sprite()).ok();   // bound to the texture, first cell
+
+let mut animation = sheet.animation();                  // grid + clips + sheet path
+animation.play("walk");                                 // clip NAMES are the API
+ctx.world.add_component(&hero, animation).ok();
+```
+
+Playback rules worth knowing:
+- **`play(name)` always restarts** at frame 0 — it's a transition call. From
+  code that re-asserts its clip every frame (a state machine), use
+  **`ensure_playing(name)`**, which only restarts when the named clip isn't
+  already the one playing. `resume()` continues a paused clip; `stop()`
+  deselects it entirely.
+- Both return `false` for an unknown clip name: a warned no-op that leaves the
+  current clip running, never a panic.
+- While a clip is selected and its frame resolves, `SpriteAnimation` **owns**
+  `Sprite.tex_region` — `SpriteAnimationSystem` overwrites it every frame from
+  `frame_tail.rs`, using the same time-scaled delta as particles, so a paused
+  game (`ctx.time_scale = 0.0`) freezes animations for free.
+- Authored sidecars fail loud at load: unknown version, zero cell size, empty
+  `frames`, a non-finite/non-positive `fps`, or a frame index past the last
+  cell is an error naming the file and the clip. `load_sprite_sheet` validates
+  **before** loading the texture, so a bad sheet leaves no handle behind.
+
+In scene RON the component stores its sheet path plus a baked snapshot; the
+sidecar wins on load, so re-cutting a sheet propagates to every scene without
+re-saving any of them:
+
+```ron
+SpriteAnimation(
+    sheet: Some("sprites/deion_16.png"),
+    grid: (cols: 4, rows: 2),        // baked fallback if the sidecar is missing
+    clips: [("walk", (frames: [0, 1, 2, 3], fps: 8.0, looping: true))],
+    autoplay: Some("walk"),          // written only for an animation that was playing
+)
+```
+
+**Files:** `engine_core/sheet_file.rs` (schema SSOT), `engine_core/assets/sprite_sheet.rs`,
+`ecs/sprite_components.rs`, `ecs/sprite_system.rs`, `engine_core/scene_data.rs` (`ClipData`/`GridData`)
 
 ### Generic Component Inspector Pattern
 Display any Serialize component without hardcoding field display logic:

@@ -124,16 +124,18 @@ fn extract_components(
 
     // SpriteAnimation
     if let Some(a) = world.get::<SpriteAnimation>(entity) {
-        let frames: Vec<(f32, f32, f32, f32)> = a
-            .frames
-            .iter()
-            .map(|f| (f[0], f[1], f[2], f[3]))
-            .collect();
         components.push(ComponentData::SpriteAnimation {
-            fps: a.fps,
-            frames,
-            playing: a.playing,
-            loop_animation: a.loop_animation,
+            sheet: a.sheet.clone(),
+            grid: a.grid.into(),
+            clips: a
+                .clips
+                .iter()
+                .map(|(name, clip)| (name.clone(), ClipData::from(clip.clone())))
+                .collect(),
+            // Only a running animation names an autoplay clip: a paused one
+            // must not come back playing. Frame position is runtime state and
+            // is never written, so playback always restarts from the top.
+            autoplay: a.playing.then(|| a.current_clip.clone()).flatten(),
         });
     }
 

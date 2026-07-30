@@ -100,6 +100,11 @@ impl SceneLoader {
         world: &mut World,
         assets: &mut impl TextureResolver,
     ) -> Result<SceneInstance, SceneLoadError> {
+        // Sidecar reads are cached for the duration of a load; start each one
+        // from disk so an artist's `.sheet.ron` edit — including fixing a file
+        // that was malformed a moment ago — takes effect on reload.
+        assets.clear_sidecar_cache();
+
         let mut named_entities = HashMap::new();
         let mut entities = Vec::new();
 

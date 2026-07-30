@@ -33,6 +33,8 @@ encode lessons already learned here — following them is cheaper than re-learni
 | Editor-visible components | `crates/editor/src/stored_component.rs` — one line in `editor_component_registry!` |
 | Dynamic component creation by name | `crates/ecs/src/component_registry.rs` — `registry.register::<T>()` in the global-registry fn |
 | Scene RON schema (load) | `crates/engine_core/src/scene_data.rs` — `ComponentData` enum + `scene_loader.rs` |
+| `.sheet.ron` sidecar schema | `crates/engine_core/src/sheet_file.rs` — `SheetFile` + `parse_sheet_file` + `into_parts` (validation lives here too) |
+| Animation clip wire format | `ClipData` in `scene_data.rs` — ONE DTO shared by scene RON and `.sheet.ron` |
 | World → RON save | `crates/engine_core/src/scene_serializer.rs` — `extract_components()` (the ONLY save pipeline) |
 | Inspector writeback / undo merge | `apply_component_edit()` in `crates/editor/src/component_editors.rs` (called by the registry-generated `edit_all_components`); `impl_set_component_command!` in `crates/editor/src/commands/set_commands.rs` |
 | Frame timing | `GameLoopManager` (`game_loop_manager.rs`) — there is no other frame timer |

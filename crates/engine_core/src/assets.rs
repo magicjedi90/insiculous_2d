@@ -38,6 +38,8 @@ use crate::game_config::GameConfig;
 // Re-export wgpu types from renderer
 use renderer::wgpu::{Device, Queue};
 
+pub mod sprite_sheet;
+
 /// Asset loading errors
 #[derive(Debug, thiserror::Error)]
 pub enum AssetError {
@@ -119,6 +121,9 @@ pub struct AssetManager {
     config: AssetConfig,
     /// Maps texture handle IDs back to their original path strings for serialization.
     handle_to_path: HashMap<u32, String>,
+    /// `.sheet.ron` reads, cached per texture path for the duration of a
+    /// scene load (see [`sprite_sheet::SidecarCache`]).
+    sidecar_cache: sprite_sheet::SidecarCache,
 }
 
 impl AssetManager {
@@ -131,6 +136,7 @@ impl AssetManager {
             texture_manager: TextureManager::new(device, queue),
             config: AssetConfig::default(),
             handle_to_path,
+            sidecar_cache: sprite_sheet::SidecarCache::default(),
         }
     }
 
@@ -143,6 +149,7 @@ impl AssetManager {
             texture_manager: TextureManager::new(device, queue),
             config,
             handle_to_path,
+            sidecar_cache: sprite_sheet::SidecarCache::default(),
         }
     }
 

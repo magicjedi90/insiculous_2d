@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use common::SheetGrid;
+use ecs::sprite_components::AnimationClip;
 use serde::{Deserialize, Serialize};
 
 // BehaviorData (+ its Behavior conversions) lives in `behavior_data.rs` for
@@ -166,16 +168,27 @@ pub enum ComponentData {
         #[serde(default)]
         is_main_camera: bool,
     },
-    /// Sprite animation component
+    /// Named-clip sprite animation over a sheet.
+    ///
+    /// `sheet` names the PNG; its `.sheet.ron` sidecar (same stem) is the
+    /// source of truth and its grid + clips win over the inline values on
+    /// load, so an artist's sidecar edit reaches every scene that references
+    /// it. The inline `grid`/`clips` are the baked snapshot used when the
+    /// sheet is absent or its sidecar cannot be read.
+    ///
+    /// Playback position is deliberately not serialized: `current_frame` and
+    /// `time_accumulator` are runtime state, and `autoplay` — the clip to
+    /// start on load — is written only for an animation that was actually
+    /// playing, so a paused one does not resurrect running.
     SpriteAnimation {
-        #[serde(default = "default_fps")]
-        fps: f32,
         #[serde(default)]
-        frames: Vec<(f32, f32, f32, f32)>,
-        #[serde(default = "default_true")]
-        playing: bool,
-        #[serde(default = "default_true")]
-        loop_animation: bool,
+        sheet: Option<String>,
+        #[serde(default)]
+        grid: GridData,
+        #[serde(default)]
+        clips: Vec<(String, ClipData)>,
+        #[serde(default)]
+        autoplay: Option<String>,
     },
     /// Rigid body component
     RigidBody {
@@ -301,6 +314,84 @@ pub enum ComponentData {
     },
 }
 
+/// Wire form of a [`SheetGrid`](common::SheetGrid) in scene RON: the cell
+/// counts only.
+///
+/// The grid's normalized cell size is derived, never written — scene files
+/// speak in columns and rows, `.sheet.ron` sidecars speak in pixel cell sizes,
+/// and neither spells out UVs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GridData {
+    #[serde(default = "default_grid_axis")]
+    pub cols: u32,
+    #[serde(default = "default_grid_axis")]
+    pub rows: u32,
+}
+
+impl Default for GridData {
+    fn default() -> Self {
+        Self { cols: 1, rows: 1 }
+    }
+}
+
+fn default_grid_axis() -> u32 {
+    1
+}
+
+impl From<GridData> for SheetGrid {
+    fn from(data: GridData) -> Self {
+        SheetGrid::new(data.cols, data.rows)
+    }
+}
+
+impl From<SheetGrid> for GridData {
+    fn from(grid: SheetGrid) -> Self {
+        Self {
+            cols: grid.cols,
+            rows: grid.rows,
+        }
+    }
+}
+
+/// Wire form of an [`AnimationClip`] — one shape shared by scene RON and
+/// `.sheet.ron` sidecars, so a clip reads and writes identically wherever it
+/// appears.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClipData {
+    /// Sheet cell indices, in playback order.
+    pub frames: Vec<u32>,
+    pub fps: f32,
+    /// Omitted means looping: most clips repeat, and the plain serde default
+    /// for a bool would silently make every clip a one-shot.
+    #[serde(default = "default_looping")]
+    pub looping: bool,
+}
+
+/// Clips loop unless a file says otherwise.
+pub fn default_looping() -> bool {
+    true
+}
+
+impl From<ClipData> for AnimationClip {
+    fn from(data: ClipData) -> Self {
+        Self {
+            frame_indices: data.frames,
+            fps: data.fps,
+            looping: data.looping,
+        }
+    }
+}
+
+impl From<AnimationClip> for ClipData {
+    fn from(clip: AnimationClip) -> Self {
+        Self {
+            frames: clip.frame_indices,
+            fps: clip.fps,
+            looping: clip.looping,
+        }
+    }
+}
+
 // Default value functions
 fn default_scale() -> (f32, f32) {
     (1.0, 1.0)
@@ -320,10 +411,6 @@ fn default_zoom() -> f32 {
 
 fn default_viewport() -> (f32, f32) {
     (800.0, 600.0)
-}
-
-fn default_fps() -> f32 {
-    10.0
 }
 
 fn default_ui_font_size() -> f32 {

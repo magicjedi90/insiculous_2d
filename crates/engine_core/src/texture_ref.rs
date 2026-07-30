@@ -5,24 +5,62 @@
 //! - `#solid:RRGGBB` (or `RRGGBBAA`) — a generated solid-color texture
 //! - Any other string — loaded as a file path
 
+use common::SheetGrid;
+use ecs::sprite_components::AnimationClip;
 use renderer::TextureHandle;
 
 use crate::assets::AssetManager;
 use crate::scene_data::SceneLoadError;
 
+/// What a `.sheet.ron` sidecar contributes to a `SpriteAnimation`: how the
+/// sheet is cut up, and the clips authored over it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SheetData {
+    pub grid: SheetGrid,
+    pub clips: Vec<(String, AnimationClip)>,
+}
+
 /// Resolves scene texture references (`#white`, `#solid:RRGGBB`, file paths)
-/// to texture handles.
+/// to texture handles, and reads the `.sheet.ron` sidecars that sit beside
+/// sheet PNGs.
 ///
 /// [`AssetManager`] is the production implementation; tests substitute a
 /// stub so scene and prefab instantiation stay headless-testable (no GPU).
+/// Everything that touches the filesystem or the GPU lives behind this trait,
+/// including the PNG dimension probe a sidecar needs to derive its grid.
 pub trait TextureResolver {
     /// Resolve a texture reference string to a handle.
     fn resolve_texture(&mut self, texture_ref: &str) -> Result<TextureHandle, SceneLoadError>;
+
+    /// Read the sidecar belonging to a sheet PNG, if there is a usable one.
+    ///
+    /// `texture_ref` is the PNG path; the sidecar is its same-stem
+    /// `.sheet.ron` neighbour. `None` covers every "carry on without it"
+    /// case — no sidecar, unreadable PNG, malformed RON — so a scene load
+    /// falls back to its baked values rather than dying on a half-saved
+    /// file. Implementations warn; they do not fail.
+    fn sheet_for(&mut self, _texture_ref: &str) -> Option<SheetData> {
+        None
+    }
+
+    /// Drop any cached sidecar reads, so the next resolve sees the files as
+    /// they are on disk. Called at the start of every scene load.
+    fn clear_sidecar_cache(&mut self) {}
 }
 
 impl TextureResolver for AssetManager {
     fn resolve_texture(&mut self, texture_ref: &str) -> Result<TextureHandle, SceneLoadError> {
         resolve_texture(texture_ref, self)
+    }
+
+    fn sheet_for(&mut self, texture_ref: &str) -> Option<SheetData> {
+        self.sidecar_sheet(texture_ref)
+    }
+
+    fn clear_sidecar_cache(&mut self) {
+        // Spelled out rather than `self.clear_sidecar_cache()`, which would
+        // read as recursion even though the inherent method wins.
+        AssetManager::clear_sidecar_cache(self)
     }
 }
 
@@ -52,10 +90,15 @@ pub(crate) fn resolve_texture(
         );
         Ok(TextureHandle { id: 0 })
     } else {
-        // Load as file path
-        assets
-            .load_texture(texture_ref)
-            .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
+        // Load as file path. A sheet declares its own sampling in its
+        // `.sheet.ron` sidecar, so scene-referenced pixel-art sheets get
+        // Nearest without every game repeating itself; anything without a
+        // usable sidecar takes the project default.
+        match assets.sidecar_filter(texture_ref) {
+            Some(filter) => assets.load_texture_filtered(texture_ref, filter),
+            None => assets.load_texture(texture_ref),
+        }
+        .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
     }
 }
 

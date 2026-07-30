@@ -2,7 +2,7 @@
 
 use crate::scene_serializer::*;
 use crate::scene_data::*;
-use ecs::sprite_components::{Camera, Name, Sprite, SpriteAnimation, Transform2D};
+use ecs::sprite_components::{Camera, Name, Sprite, Transform2D};
 use ecs::{World, WorldHierarchyExt};
 use glam::{Vec2, Vec4};
 
@@ -190,39 +190,9 @@ fn test_entity_with_camera() {
     }
 }
 
-#[test]
-fn test_entity_with_sprite_animation() {
-    let mut world = World::new();
-    let entity = world.create_entity();
-    let anim = SpriteAnimation {
-        fps: 12.0,
-        frames: vec![[0.0, 0.0, 0.25, 1.0], [0.25, 0.0, 0.25, 1.0]],
-        playing: true,
-        loop_animation: false,
-        current_frame: 0,
-        time_accumulator: 0.0,
-    };
-    world.add_component(&entity, anim).ok();
-
-    let scene = world_to_scene_data(&world, "AnimTest", None, &test_texture_path);
-
-    match &scene.entities[0].components[0] {
-        ComponentData::SpriteAnimation {
-            fps,
-            frames,
-            playing,
-            loop_animation,
-        } => {
-            assert_eq!(*fps, 12.0);
-            assert_eq!(frames.len(), 2);
-            assert_eq!(frames[0], (0.0, 0.0, 0.25, 1.0));
-            assert_eq!(frames[1], (0.25, 0.0, 0.25, 1.0));
-            assert!(*playing);
-            assert!(!*loop_animation);
-        }
-        other => panic!("Expected SpriteAnimation, got {:?}", other),
-    }
-}
+// SpriteAnimation's serializer coverage lives in
+// `tests/sprite_animation_scene.rs`, next to the rest of the animation
+// scene chain.
 
 #[test]
 fn test_entity_with_rigid_body() {

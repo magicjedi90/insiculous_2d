@@ -150,6 +150,11 @@ Concrete engine blockers, all found by grepping `crates/`:
    `ui/font/mod.rs`, and `audio/manager.rs`. Reads become fetches; **writes**
    (achievement saves, input settings) need `localStorage`, and the engine's
    atomic temp-file-plus-rename save has no analogue there.
+   *Added post-spike by E4 (Jul 30):* `assets/sprite_sheet.rs` —
+   `prepare_sheet` (`std::fs::read_to_string` + `image::image_dimensions` on
+   a path) and `SidecarCache::read` (`Path::exists` probe), now on the load
+   path of every file-referencing scene texture. H2 needs a bytes-primary
+   redesign here too (dimension probe from fetched bytes, not a path).
 5. **winit does not put its canvas in the DOM.** `spawn_app` creates the canvas
    but you must append it yourself via `WindowExtWebSys::canvas()`. Easy to
    miss — everything "works" and nothing appears.

@@ -57,6 +57,9 @@ struct EditorGame<G: Game> {
     /// The default font right after the inner game's init — what the game
     /// view uses when no locale font is active.
     game_base_font: Option<ui::FontHandle>,
+    /// The game's own `time_scale`, held while the editor freezes engine
+    /// time outside Play mode. `None` means time is not currently frozen.
+    frozen_time_scale: Option<f32>,
 }
 
 impl<G: Game> EditorGame<G> {
@@ -75,7 +78,27 @@ impl<G: Game> EditorGame<G> {
             editing_camera: None,
             editor_font: None,
             game_base_font: None,
+            frozen_time_scale: None,
         }
+    }
+
+    /// The engine time multiplier to run this frame, given the one the game
+    /// last asked for.
+    ///
+    /// Outside Play mode the answer is always `0.0`: the game's `update()`
+    /// does not run, so anything the engine steps on its own — particles,
+    /// sprite animations — would otherwise drift while the scene sits still
+    /// in the editor. The game's own value is held and handed back when Play
+    /// resumes, so a game that was running at half speed still is.
+    ///
+    /// Takes and returns a plain `f32` rather than a `GameContext` so the
+    /// gate is testable headless, the same shape as `PauseMenu`.
+    fn editor_time_scale(&mut self, game_time_scale: f32) -> f32 {
+        if self.editor.is_playing() {
+            return self.frozen_time_scale.take().unwrap_or(game_time_scale);
+        }
+        self.frozen_time_scale.get_or_insert(game_time_scale);
+        0.0
     }
 
     /// While Playing, mirror the game's main-camera entity onto the editor
@@ -257,7 +280,12 @@ impl<G: Game> Game for EditorGame<G> {
     fn update(&mut self, ctx: &mut GameContext) {
         let window_size = ctx.window_size;
 
-        // 0. Editor chrome always renders in the editor font — re-asserted
+        // 0. Freeze engine-side time unless we're Playing. Set before the
+        // inner game runs so a Playing game's own write to `time_scale`
+        // (a pause menu, say) is the value that survives the frame.
+        ctx.time_scale = self.editor_time_scale(ctx.time_scale);
+
+        // 0b. Editor chrome always renders in the editor font — re-asserted
         // every frame because the engine applies locale fonts after update.
         if let Some(editor_font) = self.editor_font {
             ctx.ui.set_default_font(editor_font);
@@ -362,3 +390,5 @@ pub fn run_game_with_editor<G: Game>(game: G, mut config: GameConfig) -> Result<
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod time_freeze_tests;

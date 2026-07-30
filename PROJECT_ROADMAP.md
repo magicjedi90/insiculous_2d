@@ -32,8 +32,8 @@ below are the reworked roadmap.
 | ECS | ✅ Complete | HashMap-based per-type storage, type-safe queries, hierarchy |
 | Physics | ✅ Complete | Rapier2d, platformer + top-down presets, collision events (bus + `take_collision_events()`) |
 | Rendering | ✅ Complete | WGPU 28, instanced sprites, batching |
-| Sprite Animation | 🔧 Rework (Phase E) | `SpriteAnimation` ticks frames but nothing writes `current_frame_region()` into `Sprite.tex_region` — disconnected from rendering. Phase E replaces it with named clips over a sheet grid |
-| Pixel-Art Pipeline | 🔧 In progress (Phase E) | E1 ☑ `TextureFilter` knob (config default + per-call override), E2 ☑ `common::SheetGrid` shared UV math, E6 ☑ dead `atlas.rs` deleted (all Jul 30 2026). Remaining: named-clip animation (E3), `.sheet.ron` loader (E4), `#solid`/`#rgba` scene round-trip (E5) |
+| Sprite Animation | ✅ Complete (E3, Jul 30 2026) | Named clips over `SheetGrid`; `SpriteAnimationSystem` writes `Sprite.tex_region` every frame from `frame_tail.rs` (time-scaled — pause freezes it); render path passes the region through |
+| Pixel-Art Pipeline | 🔧 In progress (Phase E) | E1 ☑ `TextureFilter` knob, E2 ☑ `common::SheetGrid`, E6 ☑ `atlas.rs` deleted, E3 ☑ named-clip animation, E4 ☑ `.sheet.ron` loader + `load_sprite_sheet` (schema freeze REACHED — all Jul 30 2026). Remaining: `#solid`/`#rgba` scene round-trip (E5), alpha-cutoff (E7) |
 | Audio | ✅ Complete | Rodio backend, SFX/music/master buses (spatial audio components are editor-only data — no runtime system) |
 | Input | ✅ Complete | Keyboard/mouse/gamepads (gilrs backend), `InputMapping<A>`, player-aware `InputSettings` (`ctx.players`, JSON-persisted bindings) |
 | Local 2-Player | ✅ Complete | All games 2-player (Jul 2026) |
@@ -84,16 +84,16 @@ Make pixel art actually work, end-to-end, headless-tested.
 |---|------|---------------|
 | E1 ☑ | `TextureFilter` knob | DONE Jul 30 2026. Config default (`GameConfig::with_texture_filter` → `AssetConfig.default_filter`) + per-call `load_texture_filtered`; `Linear` default for plain loads (back-compat) |
 | E2 ☑ | `common::SheetGrid` | DONE Jul 30 2026. Tilemap delegates (behavior-identical, test-locked incl. out-of-range passthrough); `uv_rect_checked` for E3/E4 consumers. E4 note: `Deserialize` needs explicit `cell_uv` on the wire |
-| E3 | `SpriteAnimation` rework | Named clips over a sheet grid (`AnimationClip { frame_indices, fps, looping }` + clip map + `play(name)`); system writes current UV into `Sprite.tex_region` while playing. Ownership rule documented: SpriteAnimation owns `tex_region` while a clip plays. **Crosses the full SSOT chain — single-agent task, never parallelized** |
-| E4 | `load_sprite_sheet()` + `.sheet.ron` | PNG sheet + RON sidecar (grid, filter, named clips). Sheet loads default `Nearest`. **Named clips are the stable API — game code never references raw grid indices.** Schema goes in CLAUDE.md SSOT table |
-| E5 | Scene serialization fixes | `create_solid_color` records `#solid:RRGGBB`; serialize `tex_region` + `visible` with `#[serde(default)]` (old scenes load unchanged); `#rgba` becomes a per-sprite save-time error naming the entity — **enforced only after F3 migrates Frogger's tileset** |
+| E3 ☑ | `SpriteAnimation` rework | DONE Jul 30 2026 (plan-v4, 3 adversarial rounds). Named clips over `SheetGrid` (`play`/`ensure_playing`/`resume`, arithmetic frame advance, fps/empty-clip guards); `SpriteAnimationSystem` driven from `frame_tail.rs` on the time-scaled delta; render path passes `tex_region`; scene chain uses `GridData` + shared `ClipData` DTOs, `autoplay` written only while playing; sidecar-as-SSOT on reload via `TextureResolver::sheet_for`; editor freezes engine time outside Play (`editor_time_scale`) |
+| E4 ☑ | `load_sprite_sheet()` + `.sheet.ron` | DONE Jul 30 2026. `SheetFile` v1 schema in `sheet_file.rs` (pixel `cell`, filter defaults Nearest, looping defaults true, fail-loud validation incl. inf/NaN fps + index-past-grid); validate-before-GPU ordering (no handle leak); `SidecarCache` (one read per path per load, cleared at every scene load); scene texture refs take the sidecar's filter automatically |
+| E5 | Scene serialization fixes | `create_solid_color` records `#solid:RRGGBB`; serialize `tex_region` + `visible` with `#[serde(default)]` (old scenes load unchanged); `#rgba` becomes a per-sprite save-time error naming the entity — **enforced only after F3 migrates Frogger's tileset**. **Priority raised by the E3/E4 code review (F1): the `tex_region` half must land BEFORE Phase F asset production** — now that rendering honors `tex_region`, a saved static/stopped sheet prop reloads showing the whole sheet (only the `#rgba` error is gated on F3) |
 | E6 ☑ | Delete `renderer/src/atlas.rs` | DONE Jul 30 2026 (incl. orphaned `TextureError::TextureCreationError`) |
 | E7 | Sprite-shader alpha-cutoff | Configurable threshold, conservative default; closes the renderer TECH_DEBT alpha/depth item |
 | E8 | Inspector wiring | Via `/add-component` only; [Animation] timeline tab stays backlog |
-| E9 | Docs | training.md + crate CLAUDE.md updates for the new APIs |
+| E9 ☑ | Docs | DONE Jul 30 2026 with E3/E4: training.md Sprite Sheet Pattern section + directory map, ecs/engine_core CLAUDE.md, root CLAUDE.md SSOT rows (`.sheet.ron` schema, `ClipData` wire format) |
 
-**Checkpoint: E2 + E4 merged = schema freeze.** Asset production (F2 onward)
-does not start before it.
+**Checkpoint: E2 + E4 merged = schema freeze — REACHED Jul 30 2026.** Asset
+production (F2 onward) is unblocked.
 
 ## Phase F — Deion Style Guide + Asset Production
 
