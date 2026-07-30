@@ -5,7 +5,6 @@
 use std::sync::Arc;
 use winit::window::Window;
 
-pub mod atlas;
 pub mod bloom;
 mod error;
 pub mod line_pipeline;
@@ -29,9 +28,8 @@ pub use window::*;
 
 // Selective re-exports to avoid conflicts
 // TextureHandle is the canonical definition in texture.rs
-pub use atlas::{AtlasRegion, TextureAtlas, TextureAtlasBuilder};
 pub use sprite::{Sprite, SpriteBatch, SpriteBatcher, SpritePipeline};
-pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureHandle};
+pub use texture::{TextureManager, TextureLoadConfig, SamplerConfig, TextureError, TextureFilter, TextureHandle};
 
 // Re-export Time from common crate (moved from renderer for proper placement)
 pub use common::Time;

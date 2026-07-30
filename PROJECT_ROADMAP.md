@@ -33,7 +33,7 @@ below are the reworked roadmap.
 | Physics | ✅ Complete | Rapier2d, platformer + top-down presets, collision events (bus + `take_collision_events()`) |
 | Rendering | ✅ Complete | WGPU 28, instanced sprites, batching |
 | Sprite Animation | 🔧 Rework (Phase E) | `SpriteAnimation` ticks frames but nothing writes `current_frame_region()` into `Sprite.tex_region` — disconnected from rendering. Phase E replaces it with named clips over a sheet grid |
-| Pixel-Art Pipeline | ❌ Missing (Phase E) | `load_texture` is linear-filtered (no nearest knob), no sheet slicing outside `Tilemap`, `atlas.rs` is a dead stub, `#solid`/`#rgba` textures don't survive scene save/load |
+| Pixel-Art Pipeline | 🔧 In progress (Phase E) | E1 ☑ `TextureFilter` knob (config default + per-call override), E2 ☑ `common::SheetGrid` shared UV math, E6 ☑ dead `atlas.rs` deleted (all Jul 30 2026). Remaining: named-clip animation (E3), `.sheet.ron` loader (E4), `#solid`/`#rgba` scene round-trip (E5) |
 | Audio | ✅ Complete | Rodio backend, SFX/music/master buses (spatial audio components are editor-only data — no runtime system) |
 | Input | ✅ Complete | Keyboard/mouse/gamepads (gilrs backend), `InputMapping<A>`, player-aware `InputSettings` (`ctx.players`, JSON-persisted bindings) |
 | Local 2-Player | ✅ Complete | All games 2-player (Jul 2026) |
@@ -45,7 +45,7 @@ below are the reworked roadmap.
 | Scene Editor | ✅ Complete | Entity CRUD, inspector, gizmos, play/pause/stop, undo/redo, save/load, asset browser + drag-to-assign |
 | Standalone Editor | ✅ Complete | `cargo run --bin editor -- /path/to/project` |
 | Tilemap | ✅ Complete | `Tilemap` component, batched through the sprite pipeline (Frogger is first consumer) |
-| Web/WASM Export | ❌ Missing (Phase H) | Desktop-only today: `pollster::block_on` init, `thread::sleep` throttle, `std::time::Instant`, ~26 `std::fs` sites (all loaders have bytes twins), rodio/gilrs without web backends |
+| Web/WASM Export | 🔧 In progress (Phase H) | H1 spike ☑ PASSED Jul 30 2026 (`coordination/H1_SPIKE.md`): 14/14 deps compile for wasm32, **audio decision: stay on rodio** (works in live browser), WebGPU demo screenshot-verified, gilrs has a real web backend (no no-op gating needed). Remaining (H2–H6, known refactor): `pollster::block_on` init → async, `thread::sleep` throttle, `Instant`/`SystemTime` → `web-time`, `std::fs` sites → bytes-primary API + localStorage persistence |
 
 ---
 
@@ -82,12 +82,12 @@ Make pixel art actually work, end-to-end, headless-tested.
 
 | # | Task | Key decisions |
 |---|------|---------------|
-| E1 | `TextureFilter` knob | Config default + per-call override; `Linear` default for plain loads (back-compat) |
-| E2 | `common::SheetGrid` | Extract Tilemap's grid-UV math; both Tilemap and sprite sheets consume it (SSOT). Behavior-identical, test-locked |
+| E1 ☑ | `TextureFilter` knob | DONE Jul 30 2026. Config default (`GameConfig::with_texture_filter` → `AssetConfig.default_filter`) + per-call `load_texture_filtered`; `Linear` default for plain loads (back-compat) |
+| E2 ☑ | `common::SheetGrid` | DONE Jul 30 2026. Tilemap delegates (behavior-identical, test-locked incl. out-of-range passthrough); `uv_rect_checked` for E3/E4 consumers. E4 note: `Deserialize` needs explicit `cell_uv` on the wire |
 | E3 | `SpriteAnimation` rework | Named clips over a sheet grid (`AnimationClip { frame_indices, fps, looping }` + clip map + `play(name)`); system writes current UV into `Sprite.tex_region` while playing. Ownership rule documented: SpriteAnimation owns `tex_region` while a clip plays. **Crosses the full SSOT chain — single-agent task, never parallelized** |
 | E4 | `load_sprite_sheet()` + `.sheet.ron` | PNG sheet + RON sidecar (grid, filter, named clips). Sheet loads default `Nearest`. **Named clips are the stable API — game code never references raw grid indices.** Schema goes in CLAUDE.md SSOT table |
 | E5 | Scene serialization fixes | `create_solid_color` records `#solid:RRGGBB`; serialize `tex_region` + `visible` with `#[serde(default)]` (old scenes load unchanged); `#rgba` becomes a per-sprite save-time error naming the entity — **enforced only after F3 migrates Frogger's tileset** |
-| E6 | Delete `renderer/src/atlas.rs` | Dead stub: never uploads pixels, zero consumers |
+| E6 ☑ | Delete `renderer/src/atlas.rs` | DONE Jul 30 2026 (incl. orphaned `TextureError::TextureCreationError`) |
 | E7 | Sprite-shader alpha-cutoff | Configurable threshold, conservative default; closes the renderer TECH_DEBT alpha/depth item |
 | E8 | Inspector wiring | Via `/add-component` only; [Animation] timeline tab stays backlog |
 | E9 | Docs | training.md + crate CLAUDE.md updates for the new APIs |
@@ -133,12 +133,16 @@ Cross-cutting: **G0** update `/new-game` skill ("Neon look" → "Deion look") ·
 
 ## Phase H — WASM Port (spike starts immediately, parallel with E)
 
-**H1 spike (timeboxed):** minimal hello_world in a browser — async wgpu init,
-winit `spawn_app`, `web-time`, one fetched texture, and **audible sound playing
-end-to-end** (rodio-wasm go/no-go; fallback = kira or thin web-sys AudioContext
-behind the AudioManager API — surface is play/loop/volume buses only). Also
-produces a **per-dependency wasm pass/fail list**. Web audio backend decision
-recorded before H2.
+**H1 spike ☑ DONE Jul 30 2026** (`coordination/H1_SPIKE.md`, demo in
+`../spikes/h1_wasm/`): browser demo renders a fetched texture (wgpu 28 +
+winit 0.30, WebGPU, screenshot-verified); 14/14 dependency pass/fail table
+with exact feature sets; **audio decision: STAY ON RODIO** (OutputStream +
+symphonia decode confirmed in a live browser via an AudioManager-surface
+mirror; kira / web-sys shim not needed). Outstanding: Jesse's audible-sound
+listen test (4 checks in the report). Corrections to this phase's
+assumptions: gilrs ships a web backend (no no-op gating needed); wgpu builds
+for wasm with unchanged Cargo.toml. Forced H2 API change: `load_sound` /
+`play_music` become bytes-primary (path versions native-only convenience).
 
 | # | Task | Key decisions |
 |---|------|---------------|
@@ -147,13 +151,18 @@ recorded before H2.
 | H4 | Async renderer init | `wasm_bindgen_futures::spawn_local` on wasm; pollster only at the native outer edge. Single-agent |
 | H5 | Asset manifest + fetch boot phase | Generated per-game manifest; web boot fetches all entries into a bytes map (loading screen), sync bytes-twin loaders consume; locale dir-scan becomes a manifest list; `include_bytes!` for bootstrap minimum only |
 | H6 | `KvStore` trait | Returns `Result`, errors logged never panic; native = JSON files (achievements keep atomic tmp+rename), wasm = localStorage. IndexedDB rejected (KB-scale blobs) |
-| H7 | Audio backend | Per spike outcome |
+| H7 | Audio backend | ☑ DECIDED (H1 spike): stay on rodio. Remaining H7 work: gesture-gated `OutputStream` init (start in `disabled()` mode, upgrade on first gesture; `try_default()` Ok does NOT prove the context is running — don't use as a health check) |
 | H8 | Incremental wasm CI guard | `cargo check --target wasm32-unknown-unknown` starting on `common`/`ecs`, expanding crate-by-crate |
 | H9 | Port all 6 games | Shared `scripts/build_wasm.sh` + index.html template (wasm-bindgen loader) + `[profile.release]` snippet (opt-level="s", lto). Gates on G per game only for final art |
 
 WebGPU-only at launch; WebGL2 fallback revisited at the post-I2 launch review.
-`thread::spawn` (lifecycle.rs) + gilrs feature-gated to no-op on wasm.
-H2–H6 parallelizable across crates after the spike.
+`thread::spawn` (lifecycle.rs) feature-gated to no-op on wasm; gilrs does NOT
+need gating (H1 finding: gilrs-core has a web-sys Gamepad backend — web
+gamepad support may be nearly free). H2–H6 parallelizable across crates now
+that the spike is done. Note for H6/H9: 1.83 MB wasm for triangle+audio —
+budget `wasm-opt -Oz` + compression; CI smoke tests need a real GPU session
+or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
+`navigator.gpu`).
 
 ## Phase I — Deployment
 

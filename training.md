@@ -33,7 +33,7 @@ Insiculous 2D is a lightweight, modular game engine designed for creating 2D gam
   - `renderer.rs` - WGPU device/queue/surface lifecycle, `RendererConfig`
   - `sprite.rs` + `sprite/batch.rs` + `sprite/pipeline.rs` - Sprite type, CPU batching, GPU pipeline
   - `sprite_data.rs` - GPU data structures (Vertex, Instance, DynamicBuffer)
-  - `texture.rs` - Texture manager with caching (`TextureHandle::WHITE`); `atlas.rs` - atlas building
+  - `texture.rs` - Texture manager with caching (`TextureHandle::WHITE`), `TextureFilter` (Linear/Nearest sampling knob)
   - `line_pipeline.rs` - Line-list geometry (grid effect); `bloom.rs` + `render_targets.rs` - HDR post-processing
   - `shaders/` - WGSL shaders
 

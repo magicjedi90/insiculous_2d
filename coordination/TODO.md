@@ -6,31 +6,34 @@ Roadmap reworked via adversarial review (kimi round 1, 13 accepted / 2
 rebutted; plan settled with Jesse). The 20 Games Challenge is PAUSED at game 7
 (Tetris) until Phases E–I land. Full phase specs: `PROJECT_ROADMAP.md`.
 
-### Ready now (parallel-safe: different crates)
+### Waiting on Jesse
 
-- **TASK-E1** — `TextureFilter` knob (renderer + engine_core assets): config
-  default + per-call override, `Linear` default for plain loads. Crates:
-  renderer, engine_core.
-- **TASK-E2** — `common::SheetGrid`: extract Tilemap's grid-UV math, refactor
-  `Tilemap`/`tilemap_render.rs` onto it, behavior-identical + test-locked.
-  Crates: common, ecs, engine_core.
-- **TASK-E6** — Delete `crates/renderer/src/atlas.rs` (dead stub: never
-  uploads pixels, zero consumers) + prelude/lib re-exports. Crate: renderer.
-- **TASK-H1** — WASM spike (timeboxed, findings + working demo, NOT merged
-  engine code): minimal wgpu28+winit hello triangle-or-sprite in browser with
-  async init + `spawn_app` + `web-time`, one fetched texture, **audible sound
-  end-to-end** (rodio-wasm go/no-go; fallback candidates: kira, web-sys
-  AudioContext). Deliverables: `coordination/H1_SPIKE.md` findings +
-  per-dependency wasm pass/fail list + web audio backend decision.
+- **H1 listen test** — the spike PASSED (verdict YES, audio decision: stay
+  on rodio; see `coordination/H1_SPIKE.md`) but no one has *heard* it. Run
+  `cd ../spikes/h1_wasm && ./build.sh`, open `http://127.0.0.1:8777/`
+  (Chrome as-is; Firefox needs `dom.webgpu.enabled=true`), click "Enable
+  Audio & Start", then verify: SFX @ 0.25 quieter than @ 1.00; music loop
+  seamless; master 0.20 ducks already-playing music immediately; Stop
+  silences. Any failure → fallback ladder is kira, then web-sys shim.
 
-### Blocked / sequenced
+### Ready now
 
 - **TASK-E3** — `SpriteAnimation` rework (named clips, system writes
-  `Sprite.tex_region` while playing). SINGLE-AGENT — crosses the SSOT chain
-  (scene_data/serializer/loader, editor registry, undo). After E2.
+  `Sprite.tex_region` while playing; consume `common::SheetGrid` —
+  `uv_rect_checked` is the intended accessor). SINGLE-AGENT — crosses the
+  SSOT chain (scene_data/serializer/loader, editor registry, undo).
+  UNBLOCKED: E2 shipped Jul 30. Pre-task: extract `TextureFilter` into its
+  own renderer module first — `texture.rs` sits at 591/600 lines.
 - **TASK-E4** — `load_sprite_sheet()` + `.sheet.ron` schema (sheets default
-  Nearest; clips are the stable API). After E1+E2. **E2+E4 merged = schema
-  freeze** gating all asset production (F2+).
+  Nearest; clips are the stable API). UNBLOCKED: E1+E2 shipped Jul 30.
+  Open schema decision: `SheetGrid::Deserialize` requires explicit `cell_uv`
+  on the wire; make it optional-and-derived via a serde shim if `.sheet.ron`
+  wants that. **E2+E4 merged = schema freeze** gating all asset production
+  (F2+).
+
+(E1, E2, E6 shipped Jul 30 2026 — see PROGRESS.md.)
+
+### Blocked / sequenced
 - **TASK-E5** — Scene serialization fixes (`#solid:RRGGBB` round-trip,
   `tex_region`/`visible` with serde defaults). The `#rgba` per-sprite
   save-error flips ONLY after F3 migrates Frogger's tileset to PNGs.

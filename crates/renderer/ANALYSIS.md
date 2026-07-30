@@ -69,8 +69,7 @@ SpriteBatcher (sprite.rs)
 
 TextureManager (texture.rs)
 ├── Handle Registry
-├── Texture Cache
-└── Atlas Builder
+└── Texture Cache
 ```
 
 ### Design Decisions
@@ -109,8 +108,8 @@ Suggested split when this crate is next revisited:
 - `CameraManager` — camera uniform buffer + cached bind group
 - `TextureBindCache` — the `HashMap<TextureHandle, BindGroup>` + layout
 
-Pull `SpriteBatcher` / `SpriteBatch` / `Sprite` and `TextureAtlas` into their
-own modules while at it.
+Pull `SpriteBatcher` / `SpriteBatch` / `Sprite` into their own modules while at
+it.
 
 ### Redundant Device/Queue Accessors
 

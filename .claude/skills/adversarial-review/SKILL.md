@@ -22,18 +22,19 @@ The reviewer's framing lives in `prompts/adversarial-plan-review.md` and
 `prompts/adversarial-code-review.md` — these are fixed; never edit them
 mid-review to soften or steer the critique.
 
-**Starting a new subject — clear the folder first.** If `review/` holds
-artifacts from a *previous* review subject (a different plan or diff), delete
-them before writing the new draft:
+**Artifact lifecycle — clear the folder when the subject settles.** When the
+user calls the review settled (plan dispatched / diff committed), first fold
+anything durable into the real docs (roadmap, TODO, PROGRESS, log_archive —
+the artifacts themselves are transients, not the record), then delete them:
 ```
 rm -f review/plan.md review/plan-v*.md review/review-*.md review/rebuttal-*.md review/draft.diff
 ```
-This restarts numbering at `review-1.md` and keeps the reviewer (whose tool
-access is scoped to `review/`) from reading a stale plan as context. Anything
-worth keeping from a settled review has already been folded into the real
-docs (roadmap/TODO/log_archive). Never clear between rounds of the *same*
-subject — `plan-vN.md`/`rebuttal-N.md` history is what makes later rounds
-coherent.
+The folder is empty between subjects, and numbering naturally restarts at
+`review-1.md`. Safety net: if a previous subject's artifacts are still
+present when a new subject starts (a session died before cleanup), clear
+them then instead — the reviewer's tool access is scoped to `review/`, so
+stale files leak into its context. Never clear mid-subject —
+`plan-vN.md`/`rebuttal-N.md` history is what makes later rounds coherent.
 
 ## Plan mode
 
@@ -79,6 +80,22 @@ coherent.
    (`cargo check` / tests per CLAUDE.md).
 5. If edits were made and the user wants another round, regenerate the diff
    and repeat.
+
+## Hooks that route into this skill (`.claude/settings.json`)
+
+Two project hooks make this skill the default, not an opt-in:
+
+- **Plan gate** (PostToolUse on ExitPlanMode): every approved top-level plan
+  is instructed through plan mode of this skill before implementation.
+  Subagents implementing a section of an already-reviewed plan are exempt.
+- **Commit gate** (PreToolUse on Bash, `scripts/commit-review-hook.sh`):
+  a `git commit` with ≥100 pending changed lines is DENIED until the diff
+  goes through code mode. After the findings are adjudicated with the user
+  (or the user explicitly skips review), retry the commit prefixed with
+  `ADV_REVIEWED=1`. Small commits pass silently.
+
+Findings are always adjudicated with the user — an explicit user opt-out
+always wins (expressed via the same `ADV_REVIEWED=1` prefix).
 
 ## Rules
 

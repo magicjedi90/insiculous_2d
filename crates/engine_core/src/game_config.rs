@@ -2,6 +2,7 @@
 //!
 //! This module provides configuration for game window and engine settings.
 
+use renderer::TextureFilter;
 use serde::{Deserialize, Serialize};
 
 use crate::chaos_mode::ChaosMode;
@@ -66,6 +67,11 @@ pub struct GameConfig {
     /// base path (default `"locales"` → `assets/locales/`).
     #[serde(default = "default_locales_dir")]
     pub locales_dir: String,
+    /// Default sampling filter for textures loaded through
+    /// `GameContext::assets` (default [`TextureFilter::Linear`]). Pixel-art
+    /// projects set [`TextureFilter::Nearest`] so texel edges stay hard.
+    #[serde(default, with = "texture_filter_serde")]
+    pub texture_filter: TextureFilter,
 }
 
 impl Default for GameConfig {
@@ -84,6 +90,7 @@ impl Default for GameConfig {
             input_settings_path: None,
             locale: default_locale(),
             locales_dir: default_locales_dir(),
+            texture_filter: TextureFilter::Linear,
         }
     }
 }
@@ -164,6 +171,69 @@ impl GameConfig {
         self.locales_dir = dir.into();
         self
     }
+
+    /// Sample textures loaded through the asset manager with this filter
+    /// (default [`TextureFilter::Linear`]). Pixel-art games want
+    /// [`TextureFilter::Nearest`].
+    ///
+    /// Applies to `AssetManager::load_texture` and
+    /// `load_texture_from_bytes`. Solid-color, checkerboard and glyph
+    /// textures stay Linear regardless; `create_texture_from_rgba` stays
+    /// Nearest regardless.
+    pub fn with_texture_filter(mut self, filter: TextureFilter) -> Self {
+        self.texture_filter = filter;
+        self
+    }
+}
+
+/// Serde bridge for [`TextureFilter`]. The renderer crate has no serde
+/// dependency, so the variants are mirrored here; the encoding is the same
+/// one a derive on `TextureFilter` itself would produce.
+mod texture_filter_serde {
+    use renderer::TextureFilter;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// Canonical wire form is `"Linear"` / `"Nearest"`; lowercase aliases are
+    /// accepted on read for hand-edited configs. Unknown values still fail
+    /// loudly — silently coercing a typo to Linear would hide the error.
+    #[derive(Serialize, Deserialize)]
+    enum Repr {
+        #[serde(alias = "linear")]
+        Linear,
+        #[serde(alias = "nearest")]
+        Nearest,
+    }
+
+    impl From<TextureFilter> for Repr {
+        fn from(filter: TextureFilter) -> Self {
+            match filter {
+                TextureFilter::Linear => Repr::Linear,
+                TextureFilter::Nearest => Repr::Nearest,
+            }
+        }
+    }
+
+    impl From<Repr> for TextureFilter {
+        fn from(repr: Repr) -> Self {
+            match repr {
+                Repr::Linear => TextureFilter::Linear,
+                Repr::Nearest => TextureFilter::Nearest,
+            }
+        }
+    }
+
+    pub fn serialize<S: Serializer>(
+        filter: &TextureFilter,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        Repr::from(*filter).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<TextureFilter, D::Error> {
+        Repr::deserialize(deserializer).map(TextureFilter::from)
+    }
 }
 
 #[cfg(test)]
@@ -221,6 +291,51 @@ mod tests {
         let config: GameConfig = serde_json::from_str(legacy).expect("legacy config parses");
         assert_eq!(config.locale, "en");
         assert_eq!(config.locales_dir, "locales");
+        // Same for a config written before the texture-filter knob existed.
+        assert_eq!(config.texture_filter, TextureFilter::Linear);
+    }
+
+    #[test]
+    fn test_game_config_defaults_to_linear_texture_filter() {
+        assert_eq!(GameConfig::default().texture_filter, TextureFilter::Linear);
+    }
+
+    #[test]
+    fn test_game_config_with_texture_filter() {
+        let config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
+        assert_eq!(config.texture_filter, TextureFilter::Nearest);
+    }
+
+    #[test]
+    fn test_game_config_texture_filter_survives_serde_roundtrip() {
+        let config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
+        let json = serde_json::to_string(&config).expect("config serializes");
+        let restored: GameConfig = serde_json::from_str(&json).expect("config parses");
+        assert_eq!(restored.texture_filter, TextureFilter::Nearest);
+    }
+
+    #[test]
+    fn test_game_config_texture_filter_encodes_as_variant_name() {
+        let config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
+        let json = serde_json::to_string(&config).expect("config serializes");
+        assert!(json.contains(r#""texture_filter":"Nearest""#), "got {json}");
+    }
+
+    #[test]
+    fn test_game_config_texture_filter_accepts_lowercase_alias() {
+        let config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
+        let json = serde_json::to_string(&config).expect("config serializes");
+
+        // Hand-edited configs may use lowercase; unknown values still fail.
+        let lowered = json.replace(r#""texture_filter":"Nearest""#, r#""texture_filter":"nearest""#);
+        let restored: GameConfig = serde_json::from_str(&lowered).expect("lowercase alias parses");
+        assert_eq!(restored.texture_filter, TextureFilter::Nearest);
+
+        let typo = json.replace(r#""texture_filter":"Nearest""#, r#""texture_filter":"Nearset""#);
+        assert!(
+            serde_json::from_str::<GameConfig>(&typo).is_err(),
+            "typos must fail loudly, not coerce to Linear"
+        );
     }
 
     #[test]

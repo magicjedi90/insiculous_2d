@@ -307,17 +307,8 @@ impl<G: Game> GameRunner<G> {
 
         // Create asset manager with renderer's device and queue
         if let (Some(device), Some(queue)) = (self.render_manager.device(), self.render_manager.queue()) {
-            let asset_manager = match &self.config.asset_base_path {
-                Some(base_path) => {
-                    let asset_config = AssetConfig {
-                        base_path: base_path.clone(),
-                        ..AssetConfig::default()
-                    };
-                    AssetManager::with_config(device, queue, asset_config)
-                }
-                None => AssetManager::new(device, queue),
-            };
-            self.asset_manager = Some(asset_manager);
+            let asset_config = AssetConfig::from(&self.config);
+            self.asset_manager = Some(AssetManager::with_config(device, queue, asset_config));
             log::info!("Asset manager initialized");
         }
 

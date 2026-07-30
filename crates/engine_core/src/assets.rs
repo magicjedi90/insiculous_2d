@@ -30,8 +30,10 @@ use std::sync::Arc;
 
 use renderer::{
     TextureManager, TextureHandle, TextureResource, TextureLoadConfig, TextureError,
-    SamplerConfig,
+    TextureFilter,
 };
+
+use crate::game_config::GameConfig;
 
 // Re-export wgpu types from renderer
 use renderer::wgpu::{Device, Queue};
@@ -77,6 +79,9 @@ pub struct AssetConfig {
     pub base_path: String,
     /// Whether to log asset loading operations
     pub log_loading: bool,
+    /// Filter applied to textures loaded from files or bytes when the caller
+    /// doesn't ask for a specific one.
+    pub default_filter: TextureFilter,
 }
 
 impl Default for AssetConfig {
@@ -84,7 +89,24 @@ impl Default for AssetConfig {
         Self {
             base_path: "assets".to_string(),
             log_loading: true,
+            default_filter: TextureFilter::Linear,
         }
+    }
+}
+
+impl From<&GameConfig> for AssetConfig {
+    /// Derive the asset-manager configuration the engine runs with: the
+    /// game's asset base path (falling back to the default `assets`
+    /// directory) and its default texture filter.
+    fn from(config: &GameConfig) -> Self {
+        let mut asset_config = Self {
+            default_filter: config.texture_filter,
+            ..Self::default()
+        };
+        if let Some(base_path) = &config.asset_base_path {
+            asset_config.base_path = base_path.clone();
+        }
+        asset_config
     }
 }
 
@@ -139,7 +161,35 @@ impl AssetManager {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Sampling uses the configured default filter
+    /// (`GameConfig::with_texture_filter`, Linear unless changed). Use
+    /// [`load_texture_filtered`](Self::load_texture_filtered) to override it
+    /// for a single texture.
     pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> Result<TextureHandle, AssetError> {
+        self.load_texture_filtered(path, self.config.default_filter)
+    }
+
+    /// Load a texture from a file path with an explicit sampling filter,
+    /// ignoring the configured default.
+    ///
+    /// Use this for the odd texture that disagrees with the project default —
+    /// a pixel-art sprite in a linear-filtered game, or a smooth gradient in a
+    /// nearest-filtered one.
+    ///
+    /// # Example
+    /// ```
+    /// # use engine_core::prelude::*;
+    /// # fn load(assets: &mut AssetManager) -> Result<(), AssetError> {
+    /// let handle = assets.load_texture_filtered("tiles.png", TextureFilter::Nearest)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn load_texture_filtered<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+        filter: TextureFilter,
+    ) -> Result<TextureHandle, AssetError> {
         let path = path.as_ref();
         let original_path_string = path.to_string_lossy().to_string();
 
@@ -154,7 +204,11 @@ impl AssetManager {
             log::info!("Loading texture: {:?}", full_path);
         }
 
-        let handle = self.texture_manager.load_texture(&full_path, TextureLoadConfig::default())?;
+        let config = TextureLoadConfig {
+            sampler_config: filter.into(),
+            ..TextureLoadConfig::default()
+        };
+        let handle = self.texture_manager.load_texture(&full_path, config)?;
         self.handle_to_path.insert(handle.id, original_path_string);
 
         Ok(handle)
@@ -187,14 +241,23 @@ impl AssetManager {
     /// Load a texture from raw bytes (file contents)
     ///
     /// Useful for loading textures from embedded assets or network resources.
+    /// Sampling uses the configured default filter
+    /// (`GameConfig::with_texture_filter`, Linear unless changed).
     pub fn load_texture_from_bytes(&mut self, bytes: &[u8]) -> Result<TextureHandle, AssetError> {
-        let handle = self.texture_manager.load_texture_from_bytes(bytes, TextureLoadConfig::default())?;
+        let config = TextureLoadConfig {
+            sampler_config: self.config.default_filter.into(),
+            ..TextureLoadConfig::default()
+        };
+        let handle = self.texture_manager.load_texture_from_bytes(bytes, config)?;
         Ok(handle)
     }
 
     /// Create a solid color texture
     ///
     /// Useful for placeholder textures or colored rectangles.
+    ///
+    /// Always Linear-filtered regardless of the configured default — a flat
+    /// color samples identically either way.
     pub fn create_solid_color(
         &mut self,
         width: u32,
@@ -208,7 +271,8 @@ impl AssetManager {
 
     /// Create a checkerboard pattern texture
     ///
-    /// Useful for debugging or placeholder textures.
+    /// Useful for debugging or placeholder textures. Always Linear-filtered
+    /// regardless of the configured default.
     pub fn create_checkerboard(
         &mut self,
         width: u32,
@@ -227,6 +291,9 @@ impl AssetManager {
     /// contain the grayscale value. This creates an alpha mask that can be
     /// multiplied by any text color at render time, enabling cache reuse for
     /// the same glyph rendered in different colors.
+    ///
+    /// Always Linear-filtered regardless of the configured default: nearest
+    /// sampling would alias the antialiased glyph edges fontdue produces.
     pub fn create_glyph_texture(
         &mut self,
         width: u32,
@@ -279,11 +346,7 @@ impl AssetManager {
         validate_rgba(width, height, rgba.len())?;
         let config = TextureLoadConfig {
             format: None,
-            sampler_config: SamplerConfig {
-                mag_filter: renderer::wgpu::FilterMode::Nearest,
-                min_filter: renderer::wgpu::FilterMode::Nearest,
-                ..SamplerConfig::default()
-            },
+            sampler_config: TextureFilter::Nearest.into(),
         };
         let handle = self
             .texture_manager
@@ -352,6 +415,41 @@ mod tests {
         let config = AssetConfig::default();
         assert_eq!(config.base_path, "assets");
         assert!(config.log_loading);
+        assert_eq!(config.default_filter, TextureFilter::Linear);
+    }
+
+    #[test]
+    fn test_asset_config_from_game_config_carries_texture_filter() {
+        let game_config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
+        assert_eq!(
+            AssetConfig::from(&game_config).default_filter,
+            TextureFilter::Nearest
+        );
+    }
+
+    #[test]
+    fn test_asset_config_from_game_config_defaults_to_linear_filter() {
+        let game_config = GameConfig::new("Test");
+        assert_eq!(
+            AssetConfig::from(&game_config).default_filter,
+            TextureFilter::Linear
+        );
+    }
+
+    #[test]
+    fn test_asset_config_from_game_config_keeps_default_base_path_when_unset() {
+        let game_config = GameConfig::new("Test");
+        assert!(game_config.asset_base_path.is_none());
+        assert_eq!(AssetConfig::from(&game_config).base_path, "assets");
+    }
+
+    #[test]
+    fn test_asset_config_from_game_config_uses_asset_base_path_when_set() {
+        let game_config = GameConfig::new("Test").with_asset_base_path("/games/pong/assets");
+        assert_eq!(
+            AssetConfig::from(&game_config).base_path,
+            "/games/pong/assets"
+        );
     }
 
     #[test]

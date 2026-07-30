@@ -4,7 +4,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 
 ## Key Types
 - `Game` trait — `init()`, `update()`, `on_key_pressed()` — the public API for games
-- `GameConfig` — window title, size, clear color, **`chaos_mode`**
+- `GameConfig` — window title, size, clear color, **`chaos_mode`**, **`texture_filter`** (default sampling for loaded textures; `TextureFilter::Nearest` for pixel art)
 - `run_game(game, config)` — entry point, creates window + event loop
 - `GameContext` — passed to Game methods: world, input, **players** (per-player
   `InputSettings`: `ctx.players.is_active(PlayerId::P1, GameAction::Action1, ctx.input)`,
@@ -54,7 +54,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `scene_data.rs` — SceneData / PrefabData / EntityData structs (schema incl. `ComponentData::EntityTag`, Sprite `emissive`)
 - `behavior_data.rs` — `BehaviorData` + the `Behavior`↔`BehaviorData` From impl pair (re-exported via `scene_data`)
 - `texture_ref.rs` — scene texture reference resolution (`#white`, `#solid:RRGGBB`, file paths); `TextureResolver` trait is the GPU seam (AssetManager = production impl, tests stub it)
-- `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save; `create_texture_from_rgba` (raw RGBA8 → nearest-filtered texture for tileset strips; validates before device, `"#rgba"` sentinel path); `game_root_from()` + the `game_root!()` macro (asset/save anchoring — macro so the game crate's manifest dir is baked in)
+- `assets.rs` — Asset loading (textures, fonts); tracks `handle_to_path` for save; `AssetConfig.default_filter` (from `GameConfig::with_texture_filter` via `impl From<&GameConfig>` — the one place `game.rs` builds it) applies to `load_texture`/`load_texture_from_bytes`, per-call override with `load_texture_filtered`, while `create_solid_color`/`create_checkerboard`/`create_glyph_texture` stay Linear; `create_texture_from_rgba` (raw RGBA8 → always-nearest texture for tileset strips; validates before device, `"#rgba"` sentinel path); `game_root_from()` + the `game_root!()` macro (asset/save anchoring — macro so the game crate's manifest dir is baked in)
 - `behavior_runner/` — Entity behavior system: `mod.rs` (runner, dispatch loop, command
   application), `handlers.rs` (player/AI/collectible handlers), `camera.rs` (`CameraFollow`
   incl. input-driven look-ahead)
@@ -89,7 +89,7 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - Loader attaches a `Name` component for named entities (in addition to `SceneInstance.named_entities`), so names survive an editor load→save round-trip
 
 ## Testing
-- 288 passing (incl. doc tests; GPU/window-bound ones compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
+- 297 passing (incl. doc tests; GPU/window-bound ones compile-only `no_run`), 0 ignored — `cargo test -p engine_core`
 
 ## Godot Oracle
 - Game loop: `main/main.cpp` — `iteration()` method

@@ -15,8 +15,10 @@
 //! - `tile_size` is in pixels — the same space as `Transform2D.position`
 //!   (only sprite *scale* goes through `RENDER_UNIT`, positions never do).
 //! - Tile value `0` = empty; value `t` selects tileset cell `t - 1`, counted
-//!   row-major across a tileset with `1 / tile_uv_size.x` columns.
+//!   row-major across a tileset with `1 / tile_uv_size.x` columns — the shared
+//!   [`common::SheetGrid`] owns that math.
 
+use common::SheetGrid;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
@@ -101,14 +103,7 @@ impl Tilemap {
     /// `width * height` yields only the tiles it holds; extra entries are
     /// ignored.
     pub fn sprite_instances(&self) -> impl Iterator<Item = TileInstance> + '_ {
-        let uv_w = self.tile_uv_size.x;
-        let uv_h = self.tile_uv_size.y;
-        // Columns in the tileset texture (at least 1 to avoid div-by-zero).
-        let tileset_cols = if uv_w > 0.0 {
-            ((1.0 / uv_w).round() as u32).max(1)
-        } else {
-            1
-        };
+        let grid = SheetGrid::from_uv_size(self.tile_uv_size);
 
         self.tiles
             .iter()
@@ -118,18 +113,12 @@ impl Tilemap {
             .map(move |(i, &value)| {
                 let col = i as u32 % self.width;
                 let row = i as u32 / self.width;
-                let cell = value - 1;
                 TileInstance {
                     offset: Vec2::new(
                         col as f32 * self.tile_size,
                         -(row as f32) * self.tile_size,
                     ),
-                    tex_region: [
-                        (cell % tileset_cols) as f32 * uv_w,
-                        (cell / tileset_cols) as f32 * uv_h,
-                        uv_w,
-                        uv_h,
-                    ],
+                    tex_region: grid.uv_rect(value - 1),
                 }
             })
     }

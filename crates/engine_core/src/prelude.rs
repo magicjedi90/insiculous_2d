@@ -66,7 +66,7 @@ pub use input::prelude::{
 };
 
 // Re-export renderer types
-pub use renderer::{TextureHandle, TextureLoadConfig};
+pub use renderer::{TextureFilter, TextureHandle, TextureLoadConfig};
 pub use renderer::line_pipeline::LineVertex;
 
 // Re-export audio types
