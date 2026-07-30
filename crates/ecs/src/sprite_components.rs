@@ -48,7 +48,10 @@ pub struct Sprite {
     pub rotation: f32,
     /// Scale
     pub scale: Vec2,
-    /// Texture region (x, y, width, height) in texture coordinates [0, 1]
+    /// Texture region (x, y, width, height) in texture coordinates [0, 1].
+    /// Omitted means the full texture, matching the scene-wire default — a
+    /// plain serde default would be the empty region and render nothing.
+    #[serde(default = "default_tex_region")]
     pub tex_region: [f32; 4],
     /// Color tint
     pub color: Vec4,
@@ -67,6 +70,10 @@ pub struct Sprite {
 }
 
 fn default_visible() -> bool { true }
+
+fn default_tex_region() -> [f32; 4] {
+    [0.0, 0.0, 1.0, 1.0]
+}
 
 impl Default for Sprite {
     fn default() -> Self {

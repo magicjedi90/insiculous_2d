@@ -30,9 +30,10 @@ spike agent; note Firefox needs a full restart after enabling
 (E1, E2, E6 shipped Jul 30 2026 — see PROGRESS.md.)
 
 ### Blocked / sequenced
-- **TASK-E5** — Scene serialization fixes (`#solid:RRGGBB` round-trip,
-  `tex_region`/`visible` with serde defaults). The `#rgba` per-sprite
-  save-error flips ONLY after F3 migrates Frogger's tileset to PNGs.
+- **TASK-E5 (remaining half)** — the `#rgba` per-sprite save-error, which
+  flips ONLY after F3 migrates Frogger's tileset to PNGs. (The round-trip
+  half — `#solid:RRGGBB` recording, `tex_region`/`visible` serde — shipped
+  Jul 30 2026, see PROGRESS.md.)
 - **TASK-E7** — Sprite-shader alpha-cutoff (configurable threshold); closes
   renderer TECH_DEBT alpha/depth item.
 - **TASK-E8/E9** — Inspector wiring (`/add-component`) + docs.

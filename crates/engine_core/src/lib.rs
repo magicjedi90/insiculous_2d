@@ -39,6 +39,8 @@ pub mod scene_loader;
 mod scene_loader_components;
 pub mod scene_serializer;
 #[cfg(test)]
+mod scene_serializer_roundtrip_tests;
+#[cfg(test)]
 mod scene_serializer_tests;
 mod texture_ref;
 pub mod sheet_file;

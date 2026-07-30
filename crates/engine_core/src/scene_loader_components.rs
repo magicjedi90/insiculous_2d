@@ -65,6 +65,8 @@ impl SceneLoader {
                 color,
                 depth,
                 emissive,
+                tex_region,
+                visible,
             } => {
                 let texture_handle = assets.resolve_texture(texture)?;
                 let sprite = Sprite {
@@ -74,9 +76,9 @@ impl SceneLoader {
                     scale: Vec2::new(scale.0, scale.1),
                     color: glam::Vec4::new(color.0, color.1, color.2, color.3),
                     depth: *depth,
-                    visible: true,
+                    visible: *visible,
                     emissive: *emissive,
-                    tex_region: [0.0, 0.0, 1.0, 1.0],
+                    tex_region: [tex_region.0, tex_region.1, tex_region.2, tex_region.3],
                 };
                 Self::add_component_logged(world, entity_id, sprite);
             }

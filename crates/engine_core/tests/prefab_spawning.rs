@@ -36,6 +36,8 @@ fn ball_scene() -> SceneData {
                 color: (1.0, 1.0, 1.0, 1.0),
                 depth: 0.0,
                 emissive: 0.0,
+                tex_region: (0.0, 0.0, 1.0, 1.0),
+                visible: true,
             },
             ComponentData::EntityTag { tag: "ball".to_string() },
         ],

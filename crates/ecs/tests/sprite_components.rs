@@ -531,3 +531,24 @@ fn test_camera_component_meta() {
     let fields = <Camera as ComponentMeta>::field_names();
     assert_eq!(fields, &["position", "rotation", "zoom", "viewport_size", "is_main_camera", "near", "far"]);
 }
+#[test]
+fn test_sprite_deserializes_omitted_region_and_visibility_to_full_and_visible() {
+    // Direct Sprite serde must match the scene-wire semantics: an omitted
+    // tex_region is the FULL texture (a plain serde default would be the
+    // empty region and render nothing) and an omitted visible is true.
+    // This is the contract dynamic component creation (ARCH-006/GPP-06)
+    // will rely on.
+    let sprite: Sprite = serde_json::from_value(serde_json::json!({
+        "offset": [0.0, 0.0],
+        "rotation": 0.0,
+        "scale": [1.0, 1.0],
+        "color": [1.0, 1.0, 1.0, 1.0],
+        "depth": 0.0,
+        "texture_handle": 0
+    }))
+    .expect("Sprite without tex_region/visible/emissive still deserializes");
+
+    assert_eq!(sprite.tex_region, [0.0, 0.0, 1.0, 1.0]);
+    assert!(sprite.visible);
+    assert_eq!(sprite.emissive, 0.0);
+}

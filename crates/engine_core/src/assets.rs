@@ -265,6 +265,11 @@ impl AssetManager {
     ///
     /// Always Linear-filtered regardless of the configured default — a flat
     /// color samples identically either way.
+    ///
+    /// The handle's recorded path is the canonical `#solid:RRGGBB` (with an
+    /// alpha byte when translucent), so the color survives scene save/load.
+    /// The dimensions are not recorded — a reload rebuilds it as 1×1, which
+    /// samples identically on a stretched quad.
     pub fn create_solid_color(
         &mut self,
         width: u32,
@@ -272,7 +277,7 @@ impl AssetManager {
         color: [u8; 4],
     ) -> Result<TextureHandle, AssetError> {
         let handle = self.texture_manager.create_solid_color(width, height, color)?;
-        self.handle_to_path.insert(handle.id, "#solid".to_string());
+        self.handle_to_path.insert(handle.id, crate::texture_ref::solid_color_path(color));
         Ok(handle)
     }
 
@@ -340,10 +345,10 @@ impl AssetManager {
     /// Dimensions and data length are validated before any GPU work; bad
     /// input returns [`AssetError::InvalidData`], never panics.
     ///
-    /// The handle's recorded path is the sentinel `"#rgba"` — like
-    /// `"#solid"`, it is **non-unique** and cannot be resolved back to pixel
-    /// data, so textures created here do not survive scene save/load or any
-    /// path-based lookup.
+    /// The handle's recorded path is the sentinel `"#rgba"` — it is
+    /// **non-unique** and cannot be resolved back to pixel data, so textures
+    /// created here do not survive scene save/load or any path-based lookup
+    /// (unlike `create_solid_color`, whose `#solid:RRGGBB` path rebuilds).
     pub fn create_texture_from_rgba(
         &mut self,
         width: u32,

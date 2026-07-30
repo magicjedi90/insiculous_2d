@@ -40,7 +40,7 @@ below are the reworked roadmap.
 | Pause + Menu Chrome | ✅ Complete | Engine `PauseMenu` + `MenuPanel` window chrome — all games |
 | UI | ✅ Complete | Immediate-mode, text editing, data-driven UiLabel/UiPanel/UiButton components |
 | Localization | ✅ Complete | `ctx.strings`, RON locale files, per-locale fonts (Pong + Frogger localized) |
-| Scene Serialization | ✅ Complete | RON format, prefabs, hierarchy (Phase E adds `tex_region`/`visible` + `#solid` round-trip fixes) |
+| Scene Serialization | ✅ Complete | RON format, prefabs, hierarchy; `tex_region`/`visible` + `#solid:RRGGBB` round-trip (E5, Jul 30 2026 — only the F3-gated `#rgba` save error remains) |
 | Behaviors | ✅ Complete | `PlayerPlatformer`, `PlayerTopDown`, `Patrol`, `FollowEntity`, `FollowTagged`, `Collectible`, `CameraFollow` |
 | Scene Editor | ✅ Complete | Entity CRUD, inspector, gizmos, play/pause/stop, undo/redo, save/load, asset browser + drag-to-assign |
 | Standalone Editor | ✅ Complete | `cargo run --bin editor -- /path/to/project` |
@@ -86,7 +86,7 @@ Make pixel art actually work, end-to-end, headless-tested.
 | E2 ☑ | `common::SheetGrid` | DONE Jul 30 2026. Tilemap delegates (behavior-identical, test-locked incl. out-of-range passthrough); `uv_rect_checked` for E3/E4 consumers. E4 note: `Deserialize` needs explicit `cell_uv` on the wire |
 | E3 ☑ | `SpriteAnimation` rework | DONE Jul 30 2026 (plan-v4, 3 adversarial rounds). Named clips over `SheetGrid` (`play`/`ensure_playing`/`resume`, arithmetic frame advance, fps/empty-clip guards); `SpriteAnimationSystem` driven from `frame_tail.rs` on the time-scaled delta; render path passes `tex_region`; scene chain uses `GridData` + shared `ClipData` DTOs, `autoplay` written only while playing; sidecar-as-SSOT on reload via `TextureResolver::sheet_for`; editor freezes engine time outside Play (`editor_time_scale`) |
 | E4 ☑ | `load_sprite_sheet()` + `.sheet.ron` | DONE Jul 30 2026. `SheetFile` v1 schema in `sheet_file.rs` (pixel `cell`, filter defaults Nearest, looping defaults true, fail-loud validation incl. inf/NaN fps + index-past-grid); validate-before-GPU ordering (no handle leak); `SidecarCache` (one read per path per load, cleared at every scene load); scene texture refs take the sidecar's filter automatically |
-| E5 | Scene serialization fixes | `create_solid_color` records `#solid:RRGGBB`; serialize `tex_region` + `visible` with `#[serde(default)]` (old scenes load unchanged); `#rgba` becomes a per-sprite save-time error naming the entity — **enforced only after F3 migrates Frogger's tileset**. **Priority raised by the E3/E4 code review (F1): the `tex_region` half must land BEFORE Phase F asset production** — now that rendering honors `tex_region`, a saved static/stopped sheet prop reloads showing the whole sheet (only the `#rgba` error is gated on F3) |
+| E5 🔧 | Scene serialization fixes | **Round-trip half DONE Jul 30 2026** (adversarially reviewed): `create_solid_color` records canonical `#solid:RRGGBB` (`solid_color_path` in `texture_ref.rs`, alpha byte when translucent); `tex_region` + `visible` on the `Sprite` wire with named serde defaults (old scenes load unchanged; autoplaying clips still overwrite the saved region snapshot on load — test-locked). Remaining: `#rgba` becomes a per-sprite save-time error naming the entity — **enforced only after F3 migrates Frogger's tileset** |
 | E6 ☑ | Delete `renderer/src/atlas.rs` | DONE Jul 30 2026 (incl. orphaned `TextureError::TextureCreationError`) |
 | E7 | Sprite-shader alpha-cutoff | Configurable threshold, conservative default; closes the renderer TECH_DEBT alpha/depth item |
 | E8 | Inspector wiring | Via `/add-component` only; [Animation] timeline tab stays backlog |
@@ -168,7 +168,7 @@ or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
 
 | # | Task | Notes |
 |---|------|-------|
-| I1 | Static site skeleton + first game live | `../games/website/`: landing gallery + one dir per game, assembled from per-game `dist/`; GitHub Pages. Verify `.wasm` serving; document WebGPU browser requirements on the page |
+| I1 | Static site skeleton + first game live | `../insiculous_web/` (sibling of `insiculous_2d` and `games/`, NOT nested in `games/` — Jesse, Jul 30 2026): landing gallery + one dir per game, assembled from per-game `dist/`; GitHub Pages. Verify `.wasm` serving; document WebGPU browser requirements on the page |
 | I2 | Remaining games on the site | |
 | I3 | itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side |
 | I4 | `docs/STEAM_CHECKLIST.md` | Doc only — Steam = native packaging + Steamworks, explicitly deferred (Steam doesn't host HTML5) |

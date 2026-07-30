@@ -95,6 +95,8 @@ fn extract_components(
             color: (s.color.x, s.color.y, s.color.z, s.color.w),
             depth: s.depth,
             emissive: s.emissive,
+            tex_region: (s.tex_region[0], s.tex_region[1], s.tex_region[2], s.tex_region[3]),
+            visible: s.visible,
         });
     }
 

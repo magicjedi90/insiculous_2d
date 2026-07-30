@@ -82,8 +82,8 @@ pub(crate) fn resolve_texture(
             .map_err(|e| SceneLoadError::TextureLoadError(e.to_string()))
     } else if is_unresolvable_sentinel(texture_ref) {
         // Placeholder paths recorded for runtime-generated textures
-        // ("#rgba", bare "#solid") carry no pixel data to rebuild from.
-        // Degrade to the white texture instead of failing the scene load.
+        // ("#rgba", bare "#solid" from pre-E5 saves) carry no pixel data to
+        // rebuild from. Degrade to white instead of failing the scene load.
         log::warn!(
             "texture ref '{texture_ref}' is a generated-texture placeholder and cannot be \
              reloaded; substituting the white texture"
@@ -110,6 +110,19 @@ pub(crate) fn is_unresolvable_sentinel(texture_ref: &str) -> bool {
     texture_ref.starts_with('#')
         && texture_ref != "#white"
         && !texture_ref.starts_with("#solid:")
+}
+
+/// The canonical `#solid:RRGGBB` reference for a solid-color texture —
+/// what `AssetManager::create_solid_color` records so the color survives
+/// scene save/load. Opaque colors omit the alpha byte; anything else is
+/// written `#solid:RRGGBBAA`. Inverse of [`parse_hex_color`].
+pub(crate) fn solid_color_path(color: [u8; 4]) -> String {
+    let [r, g, b, a] = color;
+    if a == 255 {
+        format!("#solid:{r:02X}{g:02X}{b:02X}")
+    } else {
+        format!("#solid:{r:02X}{g:02X}{b:02X}{a:02X}")
+    }
 }
 
 /// Parse a hex color string (RRGGBB or RRGGBBAA) to [u8; 4]
@@ -165,6 +178,35 @@ mod tests {
     #[test]
     fn test_parse_hex_color_rejects_non_hex() {
         assert!(parse_hex_color("GGGGGG").is_err());
+    }
+
+    #[test]
+    fn test_solid_color_path_omits_alpha_when_opaque() {
+        assert_eq!(solid_color_path([255, 0, 255, 255]), "#solid:FF00FF");
+        assert_eq!(solid_color_path([0, 128, 7, 255]), "#solid:008007");
+    }
+
+    #[test]
+    fn test_solid_color_path_writes_alpha_when_translucent() {
+        assert_eq!(solid_color_path([255, 0, 0, 128]), "#solid:FF000080");
+        assert_eq!(solid_color_path([0, 0, 0, 0]), "#solid:00000000");
+    }
+
+    #[test]
+    fn test_solid_color_path_round_trips_through_parse() {
+        for color in [[255, 0, 255, 255], [1, 2, 3, 255], [10, 20, 30, 40]] {
+            let path = solid_color_path(color);
+            let hex = path.strip_prefix("#solid:").expect("canonical prefix");
+            assert_eq!(parse_hex_color(hex).unwrap(), color, "path {path}");
+        }
+    }
+
+    #[test]
+    fn test_solid_color_path_is_resolvable_on_load() {
+        // The recorded path must take the `#solid:` reconstruction branch,
+        // never the degrade-to-white sentinel branch.
+        assert!(!is_unresolvable_sentinel(&solid_color_path([9, 9, 9, 255])));
+        assert!(!is_unresolvable_sentinel(&solid_color_path([9, 9, 9, 9])));
     }
 
     #[test]

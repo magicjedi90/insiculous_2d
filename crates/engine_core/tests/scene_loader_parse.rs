@@ -101,6 +101,62 @@ fn test_parse_sprite_emissive_explicit() {
 }
 
 #[test]
+fn test_parse_sprite_tex_region_and_visible_default() {
+    // Scenes written before these fields existed must load unchanged:
+    // full-texture region, visible.
+    let scene_ron = r##"
+        SceneData(
+            name: "Region Default",
+            entities: [
+                EntityData(
+                    components: [
+                        Sprite(texture: "#white"),
+                    ],
+                ),
+            ],
+        )
+    "##;
+
+    let scene = SceneLoader::parse(scene_ron).unwrap();
+    match &scene.entities[0].components[0] {
+        ComponentData::Sprite { tex_region, visible, .. } => {
+            assert_eq!(*tex_region, (0.0, 0.0, 1.0, 1.0));
+            assert!(*visible);
+        }
+        other => panic!("Expected Sprite, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_sprite_tex_region_and_visible_explicit() {
+    let scene_ron = r##"
+        SceneData(
+            name: "Region",
+            entities: [
+                EntityData(
+                    components: [
+                        Sprite(
+                            texture: "#white",
+                            tex_region: (0.25, 0.5, 0.25, 0.5),
+                            visible: false,
+                        ),
+                    ],
+                ),
+            ],
+        )
+    "##;
+
+    let scene = SceneLoader::parse(scene_ron).unwrap();
+    match &scene.entities[0].components[0] {
+        ComponentData::Sprite { tex_region, visible, .. } => {
+            assert_eq!(*tex_region, (0.25, 0.5, 0.25, 0.5));
+            assert!(!*visible);
+        }
+        other => panic!("Expected Sprite, got {:?}", other),
+    }
+}
+
+#[test]
 fn test_parse_entity_tag_component() {
     let scene_ron = r#"
         SceneData(

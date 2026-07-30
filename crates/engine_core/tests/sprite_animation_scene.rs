@@ -199,6 +199,45 @@ fn test_sprite_animation_round_trips_through_scene_ron() {
 }
 
 #[test]
+fn test_static_sprite_region_and_visibility_round_trip_through_scene_ron() {
+    // A static sheet prop (no animation) keeps its authored cell and
+    // visibility across save/load — the E5 fix; before it, a saved prop
+    // reloaded showing the whole sheet.
+    let mut world = World::new();
+    let entity = world.create_entity();
+    let sprite = Sprite::new(0)
+        .with_tex_region(0.25, 0.5, 0.25, 0.5)
+        .with_visible(false);
+    world.add_component(&entity, sprite).ok();
+
+    let (loaded, e) = roundtrip(&world, &mut BareResolver::default());
+    let sprite = loaded.get::<Sprite>(e).expect("sprite survives");
+
+    assert_eq!(sprite.tex_region, [0.25, 0.5, 0.25, 0.5]);
+    assert!(!sprite.visible);
+}
+
+#[test]
+fn test_autoplaying_clip_overwrites_the_saved_region_snapshot_on_load() {
+    // A scene saved mid-animation carries a frame snapshot in the sprite's
+    // tex_region. On load the autoplaying clip is the SSOT: the animation
+    // system re-asserts its current frame (the clip start), overwriting the
+    // snapshot — the editor never shows a stale mid-animation cell.
+    let mut world = World::new();
+    let entity = world.create_entity();
+    let sprite = Sprite::new(0).with_tex_region(0.5, 0.0, 0.25, 0.5); // cell 2 snapshot
+    world.add_component(&entity, sprite).ok();
+    world.add_component(&entity, walking_animation()).ok();
+
+    let (mut loaded, e) = roundtrip(&world, &mut BareResolver::default());
+    ecs::System::update(&mut ecs::SpriteAnimationSystem, &mut loaded, 0.0);
+
+    let sprite = loaded.get::<Sprite>(e).expect("sprite survives");
+    // "walk" restarts at frame index 0 → cell 0 of the 4x2 grid.
+    assert_eq!(sprite.tex_region, [0.0, 0.0, 0.25, 0.5]);
+}
+
+#[test]
 fn test_paused_animation_loads_stopped() {
     let mut world = World::new();
     let entity = world.create_entity();

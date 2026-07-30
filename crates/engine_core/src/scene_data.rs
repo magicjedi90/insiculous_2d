@@ -154,6 +154,17 @@ pub enum ComponentData {
         /// Emissive strength for bloom (0.0 = no glow)
         #[serde(default)]
         emissive: f32,
+        /// Texture sub-region (x, y, w, h) in normalized [0, 1] coordinates.
+        /// Omitted means the full texture — a plain serde default would be
+        /// the empty region (0,0,0,0) and render nothing. For an entity with
+        /// a playing `SpriteAnimation` this is a frame snapshot the
+        /// animation overwrites on load; it matters for static sheet props.
+        #[serde(default = "default_tex_region")]
+        tex_region: (f32, f32, f32, f32),
+        /// Omitted means visible: a plain serde default would silently hide
+        /// every sprite in scenes written before this field existed.
+        #[serde(default = "default_true")]
+        visible: bool,
     },
     /// Camera component
     Camera2D {
@@ -403,6 +414,10 @@ fn default_texture() -> String {
 
 fn default_color() -> (f32, f32, f32, f32) {
     (1.0, 1.0, 1.0, 1.0)
+}
+
+fn default_tex_region() -> (f32, f32, f32, f32) {
+    (0.0, 0.0, 1.0, 1.0)
 }
 
 fn default_zoom() -> f32 {
