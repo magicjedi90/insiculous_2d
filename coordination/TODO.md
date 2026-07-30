@@ -6,15 +6,11 @@ Roadmap reworked via adversarial review (kimi round 1, 13 accepted / 2
 rebutted; plan settled with Jesse). The 20 Games Challenge is PAUSED at game 7
 (Tetris) until Phases E–I land. Full phase specs: `PROJECT_ROADMAP.md`.
 
-### Waiting on Jesse
-
-- **H1 listen test** — the spike PASSED (verdict YES, audio decision: stay
-  on rodio; see `coordination/H1_SPIKE.md`) but no one has *heard* it. Run
-  `cd ../spikes/h1_wasm && ./build.sh`, open `http://127.0.0.1:8777/`
-  (Chrome as-is; Firefox needs `dom.webgpu.enabled=true`), click "Enable
-  Audio & Start", then verify: SFX @ 0.25 quieter than @ 1.00; music loop
-  seamless; master 0.20 ducks already-playing music immediately; Stop
-  silences. Any failure → fallback ladder is kira, then web-sys shim.
+(H1 listen test PASSED Jul 30 2026 — Jesse confirmed all four audio checks
+in Firefox: SFX bus math, seamless music loop, live master duck, stop.
+Audio decision FINAL: stay on rodio. Render was screenshot-verified by the
+spike agent; note Firefox needs a full restart after enabling
+`dom.webgpu.enabled`, not just a new tab.)
 
 ### Ready now
 

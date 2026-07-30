@@ -138,8 +138,8 @@ Cross-cutting: **G0** update `/new-game` skill ("Neon look" → "Deion look") ·
 winit 0.30, WebGPU, screenshot-verified); 14/14 dependency pass/fail table
 with exact feature sets; **audio decision: STAY ON RODIO** (OutputStream +
 symphonia decode confirmed in a live browser via an AudioManager-surface
-mirror; kira / web-sys shim not needed). Outstanding: Jesse's audible-sound
-listen test (4 checks in the report). Corrections to this phase's
+mirror; kira / web-sys shim not needed). Listen test PASSED Jul 30 2026 —
+Jesse confirmed all 4 audio checks by ear; the rodio decision is FINAL. Corrections to this phase's
 assumptions: gilrs ships a web backend (no no-op gating needed); wgpu builds
 for wasm with unchanged Cargo.toml. Forced H2 API change: `load_sound` /
 `play_music` become bytes-primary (path versions native-only convenience).
