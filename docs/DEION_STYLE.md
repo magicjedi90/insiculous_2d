@@ -46,8 +46,9 @@ treatment.
 
 **Legacy characters note:** the villain concepts in `docs/concepts/` predate
 the food-theme decision; the **food-ification pass landed Aug 2 2026** —
-every rogue now has a food identity and pun name (ham Michael, angry cream
-pie, prune Prunely, mushroom Funguy; see the Rogues Gallery below). The
+every rogue now has a food identity and pun name (Captham Michael the ham,
+angry cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy; see the
+Rogues Gallery below). The
 concept PNGs remain as silhouette/personality references.
 
 ### The Cast (canon — Jesse's characters)
@@ -111,10 +112,11 @@ mid-boss/lieutenant; per-game castings stay proposals in §5. In-Bread Yokels
 remain the rank-and-file. AI baselines of every entry (side view, iconic look)
 live in the `ai/` quarantine — Jesse's hand-drawn sheets replace them.
 
-**Captain Michael** — **a ham.** Oval pink ham body (rind stripes), grumpy
-face, tiny captain hat. Signature weapon: the **canadian bacon grenade
-launcher** — lobbed bacon-disc grenades are his projectile language.
-Pre-food-ification concept: `docs/concepts/cpt_michael_ref.png`.
+**Captham Michael** *(formerly Captain Michael — the rank IS the pun)* —
+**a ham.** Oval pink ham body (rind stripes), grumpy face, tiny captain hat.
+Signature weapon: the **canadian bacon grenade launcher** — lobbed bacon-disc
+grenades are his projectile language. Pre-food-ification concept:
+`docs/concepts/cpt_michael_ref.png`.
 
 **Bananakin** — a banana with a face (Star-Wars pun; name is canon). Thin
 stick limbs, mischievous. Concept: `docs/concepts/bananakin_ref.png`
@@ -200,7 +202,7 @@ devil's-food darks + candy-red horns/eyes. In-Bread Yokels = crust browns
 (toast) + cream ramp (egg white) + cheese ramp (yolk). Flying Funk hull =
 plate neutrals with an ice-family canopy. Rogues gallery: Bananakin =
 cheese/butter yellows; Master Pi = crust browns + cream (whipped top);
-Captain Michael = candy/sauce reds (ham pinks live at the ramp's light end) +
+Captham Michael = candy/sauce reds (ham pinks live at the ramp's light end) +
 `#14101F` hat; Aleister Prunely = grape/berry purples + `#14101F` top hat;
 Funguy = candy/sauce reds (spotted cap) + cream (stem); bacon grenades =
 candy/sauce reds + cream.
@@ -261,7 +263,7 @@ docs/concepts/                    # reference/concept art (not shipped)
   characters/cubert/cubert_16.png
   characters/maxwell/maxwell_32.png
   characters/yokel/yokel_16.png
-  characters/michael/michael_32.png   # rogues gallery (names settled Aug 2)
+  characters/captham/captham_32.png   # rogues gallery (names settled Aug 2)
   characters/bananakin/bananakin_32.png
   characters/master_pi/master_pi_32.png
   characters/prunely/prunely_32.png
@@ -304,9 +306,9 @@ exists ahead of content.
 - In-Bread Yokel (1–3 toast variants, `march` clip).
 - The Flying Funk (+ Cubert's ship if co-op ships differ; name Cubert's ship).
 - Rogues-gallery hand-drawn sheets to replace the AI baselines (identities
-  settled Aug 2: ham Michael, Bananakin color pass, angry cream-pie Master Pi,
-  prune Aleister Prunely, mushroom Funguy) — palette conformance to the §4
-  ramps happens here (AI baselines are AI-picked colors).
+  settled Aug 2: Captham Michael the ham, Bananakin color pass, angry
+  cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy) — palette
+  conformance to the §4 ramps happens here (AI baselines are AI-picked colors).
 - Palette + castings sign-off (edit sections 4/5 in place — this doc is the
   single source of truth for style decisions).
 

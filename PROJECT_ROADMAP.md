@@ -111,10 +111,10 @@ production (F2 onward) is unblocked.
 **Split:** Jesse draws hero sheets (idle/walk/jump/hurt), per-game variants,
 key characters, palette sign-off. Agents do everything else.
 
-**AI baseline stand-ins (Aug 2 2026, pixellab trial — 16/40 generations
+**AI baseline stand-ins (Aug 2 2026, pixellab trial — 17/40 generations
 used):** full-cast baselines quarantined in `../games/deion_assets/ai/`
-(`ai_<name>_64_side.png`, 7 PNGs: Bananakin, ham Captain Michael, angry
-cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy, Cubert,
+(`ai_<name>_64_side.png`, 8 PNGs: Deion, Cubert, Bananakin, ham **Captham
+Michael**, angry cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy,
 Dr. Maxwell — 64×64 single side-view iconic poses, shape-with-a-face style,
 food identities settled by Jesse same day). Policy: AI art is stand-in ONLY —
 `scripts/check_no_ai_assets.sh <assets-dir>` must pass on any shipping build
