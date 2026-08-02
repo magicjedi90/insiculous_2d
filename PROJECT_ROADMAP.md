@@ -111,6 +111,26 @@ production (F2 onward) is unblocked.
 **Split:** Jesse draws hero sheets (idle/walk/jump/hurt), per-game variants,
 key characters, palette sign-off. Agents do everything else.
 
+**AI baseline stand-ins (Aug 2 2026, pixellab trial — 5/40 generations used):**
+rogues-gallery baselines generated and quarantined in
+`../games/deion_assets/ai/` (`ai_<name>_48_<south|east|north|west>.png`, 20
+PNGs, 4-direction side view; pixellab character IDs kept in the service, can
+be animated later). Policy: AI art is stand-in ONLY — `scripts/check_no_ai_assets.sh <assets-dir>`
+must pass on any shipping build (DEION_STYLE.md §6). Outstanding tweaks before
+these are even good stand-ins:
+- **Captain Michael is off-model** — generated as a generic uniformed captain,
+  not the round dark ball, and the canadian bacon grenade launcher is missing;
+  regenerate or hand-fix if the stand-in matters before real art.
+- All five use **black outlines**; settled style (Aug 2) is **selective
+  outline** — real art follows DEION_STYLE.md §4, stand-ins stay as-is.
+- Actual size is **48×48** (pixellab pads the 32px request), not on the 16px
+  grid — placeholder use must not bake 48px into colliders/`.sheet.ron` cells.
+- No `.sheet.ron` sidecars authored for them (single poses, no clips); F4
+  placeholder sheets remain the real deliverable.
+- Food identities for Mr. Crowley + Gunguy still TBD (Jesse), pun renames
+  pending (DEION_STYLE.md §1 rogues gallery) — filenames follow the working
+  names and will be regenerated/renamed after the food-ification pass.
+
 ## Phase G — Re-skin Games 1–6
 
 Order (each independently shippable): **Pong → Frogger → Breakout → Snake →
@@ -171,6 +191,7 @@ or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
 | I1 | Static site skeleton + first game live | `../insiculous_web/` (sibling of `insiculous_2d` and `games/`, NOT nested in `games/` — Jesse, Jul 30 2026): landing gallery + one dir per game, assembled from per-game `dist/`; GitHub Pages. Verify `.wasm` serving; document WebGPU browser requirements on the page |
 | I2 | Remaining games on the site | |
 | I3 | itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side |
+| I0 | AI-asset purge gate | Every publish path (I1 site assembly, I3 butler push) runs `scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file — AI stand-ins never reach a storefront (DEION_STYLE.md §6) |
 | I4 | `docs/STEAM_CHECKLIST.md` | Doc only — Steam = native packaging + Steamworks, explicitly deferred (Steam doesn't host HTML5) |
 
 ---
