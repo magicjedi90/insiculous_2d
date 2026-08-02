@@ -111,25 +111,25 @@ production (F2 onward) is unblocked.
 **Split:** Jesse draws hero sheets (idle/walk/jump/hurt), per-game variants,
 key characters, palette sign-off. Agents do everything else.
 
-**AI baseline stand-ins (Aug 2 2026, pixellab trial — 5/40 generations used):**
-rogues-gallery baselines generated and quarantined in
-`../games/deion_assets/ai/` (`ai_<name>_48_<south|east|north|west>.png`, 20
-PNGs, 4-direction side view; pixellab character IDs kept in the service, can
-be animated later). Policy: AI art is stand-in ONLY — `scripts/check_no_ai_assets.sh <assets-dir>`
-must pass on any shipping build (DEION_STYLE.md §6). Outstanding tweaks before
-these are even good stand-ins:
-- **Captain Michael is off-model** — generated as a generic uniformed captain,
-  not the round dark ball, and the canadian bacon grenade launcher is missing;
-  regenerate or hand-fix if the stand-in matters before real art.
-- All five use **black outlines**; settled style (Aug 2) is **selective
-  outline** — real art follows DEION_STYLE.md §4, stand-ins stay as-is.
-- Actual size is **48×48** (pixellab pads the 32px request), not on the 16px
-  grid — placeholder use must not bake 48px into colliders/`.sheet.ron` cells.
-- No `.sheet.ron` sidecars authored for them (single poses, no clips); F4
-  placeholder sheets remain the real deliverable.
-- Food identities for Mr. Crowley + Gunguy still TBD (Jesse), pun renames
-  pending (DEION_STYLE.md §1 rogues gallery) — filenames follow the working
-  names and will be regenerated/renamed after the food-ification pass.
+**AI baseline stand-ins (Aug 2 2026, pixellab trial — 16/40 generations
+used):** full-cast baselines quarantined in `../games/deion_assets/ai/`
+(`ai_<name>_64_side.png`, 7 PNGs: Bananakin, ham Captain Michael, angry
+cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy, Cubert,
+Dr. Maxwell — 64×64 single side-view iconic poses, shape-with-a-face style,
+food identities settled by Jesse same day). Policy: AI art is stand-in ONLY —
+`scripts/check_no_ai_assets.sh <assets-dir>` must pass on any shipping build
+(DEION_STYLE.md §6).
+- **Tooling lesson (paid for once):** pixellab `create_character` forces a
+  humanoid/quadruped SKELETON — it produced 5 little humans, all rejected by
+  Jesse (first batch, deleted). For this project's geometric shape-with-a-face
+  cast use **`create_image_pixflux`** (freeform, 1 generation, `view: side`,
+  `no_background`, ~8 concurrent jobs max) — landed on-style first try.
+- Remaining tweaks: single poses only (no walk/attack frames, no `.sheet.ron`
+  sidecars — F4 placeholder sheets remain the real deliverable); 64×64 is off
+  the 16px grid (don't bake into colliders/cells); palette is AI-picked, not
+  the §4 ramps (conformance happens in Jesse's hand-drawn replacements);
+  top-down variants not generated yet (make them per-game when a top-down
+  game needs the character — iconic look is side-view first per Jesse).
 
 ## Phase G — Re-skin Games 1–6
 

@@ -45,10 +45,10 @@ Localization is part of the same pillar: the shipped **pirate-English locale**
 treatment.
 
 **Legacy characters note:** the villain concepts in `docs/concepts/` predate
-the food-theme decision and are due a **food-ification pass** — new
-food-inspired designs and pun names, Jesse's call. Captain Michael's canadian
-bacon grenade launcher is his existing food credential and survives any
-redesign.
+the food-theme decision; the **food-ification pass landed Aug 2 2026** —
+every rogue now has a food identity and pun name (ham Michael, angry cream
+pie, prune Prunely, mushroom Funguy; see the Rogues Gallery below). The
+concept PNGs remain as silhouette/personality references.
 
 ### The Cast (canon — Jesse's characters)
 
@@ -82,6 +82,7 @@ splashes, drips, and refreezes.
 
 **Cubert** — Deion's best friend, an ice cube. The Diddy to his Kong, the
 Luigi to his Mario. **Default P2 character across all 2-player modes.**
+Concept reference: `docs/concepts/cubert_ref.png` (64×64 sheet, 16px cells).
 - Square silhouette (contrast to Deion's round one), same ice-family palette,
   pale-cyan faces with frost sparkle.
 - Physical comedy is his thing: he slides, he slips, he falls over on
@@ -103,32 +104,35 @@ The egg is the face. Dopey, numerous, march in formation.
 **The Flying Funk** — Deion's spaceship (easter egg: named after a song by
 Jesse's friend). The name appears on the hull/HUD wherever the ship shows up.
 
-### Dr. Maxwell's Rogues Gallery (concept drafts — food-ification pending)
+### Dr. Maxwell's Rogues Gallery (food identities settled Aug 2 2026)
 
-All villains, all on Maxwell's side. **Every entry is a style draft**: the
-silhouette and personality are the keepers; each is due a food-inspired
-redesign plus (where not already a food pun) a pun rename by Jesse. The
-gallery gives each game a candidate mid-boss/lieutenant; per-game castings
-stay proposals in §5. In-Bread Yokels remain the rank-and-file.
+All villains, all on Maxwell's side. The gallery gives each game a candidate
+mid-boss/lieutenant; per-game castings stay proposals in §5. In-Bread Yokels
+remain the rank-and-file. AI baselines of every entry (side view, iconic look)
+live in the `ai/` quarantine — Jesse's hand-drawn sheets replace them.
 
-**Captain Michael** — `docs/concepts/cpt_michael_ref.png`. Small round dark
-character. Signature weapon: the **canadian bacon grenade launcher** — lobbed
-bacon-disc grenades are his projectile language and his food credential.
+**Captain Michael** — **a ham.** Oval pink ham body (rind stripes), grumpy
+face, tiny captain hat. Signature weapon: the **canadian bacon grenade
+launcher** — lobbed bacon-disc grenades are his projectile language.
+Pre-food-ification concept: `docs/concepts/cpt_michael_ref.png`.
 
-**Bananakin** — `docs/concepts/bananakin_ref.png`. A banana with a face
-(Star-Wars pun — the name already IS a food pun, likely survives the pass).
-Concept is uncolored line art; color pass = cheese/butter yellows ramp.
+**Bananakin** — a banana with a face (Star-Wars pun; name is canon). Thin
+stick limbs, mischievous. Concept: `docs/concepts/bananakin_ref.png`
+(uncolored line art; color = cheese/butter yellows ramp).
 
-**Master Pi** — `docs/concepts/master_pi_ref.png`. Round ninja with a
-headband; pi/pie pun is already food-adjacent — lean the redesign toward
-actual pie (crust body, lattice top).
+**Master Pi** — an **angry pie**: golden-brown crust body, **whipped-cream
+top** (the iconic cream-pie look), white ninja headband, permanent scowl.
+Concept: `docs/concepts/master_pi_ref.png` (pre-cream-top draft).
 
-**Mr. Crowley** — `docs/concepts/mr_crowley_ref.png`. Top hat + mustache,
-occult-dandy vibe. Needs a food identity + pun rename.
+**Aleister Prunely** *(formerly Mr. Crowley — Ozzy reference survives the
+pun)* — **a wrinkled prune**: dark-purple dried-plum body, tall black top
+hat, curly mustache, sly occult-dandy grin. Pre-prune concept:
+`docs/concepts/mr_crowley_ref.png`.
 
-**Gunguy** *(working name)* — `docs/concepts/gunguy_ref.png`. Stick-thin
-soldier hauling a huge shoulder cannon. Needs a food identity + pun name;
-role TBD (candidate: Maxwell's artillery man).
+**Funguy** *(formerly Gunguy — net-new design, original concept retired)* —
+**a mushroom**: wide spotted cap, grinning face on the stem, hauling a huge
+cylindrical cannon across his shoulders. Maxwell's artillery man — a real
+fun guy at parties.
 
 ## 2. Sprite Metrics (settled — not up for reinterpretation)
 
@@ -194,11 +198,12 @@ the heroes). Deion steam forms = cream/plate neutrals (dithered wisps) + water
 ramp for the Insane mohawk, rim-highlight ice for Insiculous. Dr. Maxwell =
 devil's-food darks + candy-red horns/eyes. In-Bread Yokels = crust browns
 (toast) + cream ramp (egg white) + cheese ramp (yolk). Flying Funk hull =
-plate neutrals with an ice-family canopy. Rogues gallery (pre-food-ification
-baselines): Bananakin = cheese/butter yellows; Master Pi = crust browns +
-cream (pie) with a dark headband; Captain Michael + Mr. Crowley =
-`#14101F`-anchored darks + plate neutrals with candy-red accents; bacon
-grenades = candy/sauce reds + cream.
+plate neutrals with an ice-family canopy. Rogues gallery: Bananakin =
+cheese/butter yellows; Master Pi = crust browns + cream (whipped top);
+Captain Michael = candy/sauce reds (ham pinks live at the ramp's light end) +
+`#14101F` hat; Aleister Prunely = grape/berry purples + `#14101F` top hat;
+Funguy = candy/sauce reds (spotted cap) + cream (stem); bacon grenades =
+candy/sauce reds + cream.
 
 ### ChaosTheme = the FX/accent layer (mapping of record)
 The neon `ChaosTheme` palette survives, demoted from "the art" to "the
@@ -244,9 +249,9 @@ hard-assigned yet.
 
 ```
 docs/concepts/                    # reference/concept art (not shipped)
-  deion_ref.png
+  deion_ref.png      cubert_ref.png
   bananakin_ref.png  cpt_michael_ref.png  dr_maxwell_ref.png
-  gunguy_ref.png     master_pi_ref.png    mr_crowley_ref.png
+  master_pi_ref.png  mr_crowley_ref.png   # (crowley = Prunely's pre-prune draft)
 ../games/deion_assets/            # canonical source (synced per game, F2)
   ai/                                 # AI-generated STAND-INS ONLY (see rule below)
   characters/deion/deion_16.png       + deion_16.sheet.ron
@@ -256,11 +261,11 @@ docs/concepts/                    # reference/concept art (not shipped)
   characters/cubert/cubert_16.png
   characters/maxwell/maxwell_32.png
   characters/yokel/yokel_16.png
-  characters/michael/michael_32.png   # rogues gallery (working names —
-  characters/bananakin/bananakin_32.png   renamed when pun names land; cheap
-  characters/master_pi/master_pi_32.png   now, nothing ships yet)
-  characters/crowley/crowley_32.png
-  characters/gunguy/gunguy_32.png
+  characters/michael/michael_32.png   # rogues gallery (names settled Aug 2)
+  characters/bananakin/bananakin_32.png
+  characters/master_pi/master_pi_32.png
+  characters/prunely/prunely_32.png
+  characters/funguy/funguy_32.png
   ships/flying_funk_32.png
   tiles/<set>_16.png                  # gen_tiles output lands here too
   props/<prop>_16.png
@@ -298,10 +303,10 @@ exists ahead of content.
 - Dr. Maxwell (at least a menacing `idle` + saucer/fortress appearances).
 - In-Bread Yokel (1–3 toast variants, `march` clip).
 - The Flying Funk (+ Cubert's ship if co-op ships differ; name Cubert's ship).
-- The rogues-gallery **food-ification pass**: food-inspired redesigns + pun
-  renames (Michael keeps the bacon launcher; Bananakin keeps the name; color
-  pass on Bananakin; food identities for Crowley + Gunguy; real name for
-  Gunguy) and gallery sign-off.
+- Rogues-gallery hand-drawn sheets to replace the AI baselines (identities
+  settled Aug 2: ham Michael, Bananakin color pass, angry cream-pie Master Pi,
+  prune Aleister Prunely, mushroom Funguy) — palette conformance to the §4
+  ramps happens here (AI baselines are AI-picked colors).
 - Palette + castings sign-off (edit sections 4/5 in place — this doc is the
   single source of truth for style decisions).
 
