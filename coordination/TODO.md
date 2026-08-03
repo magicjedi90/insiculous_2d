@@ -37,7 +37,7 @@ spike agent; note Firefox needs a full restart after enabling
 - **TASK-E7** — Sprite-shader alpha-cutoff (configurable threshold); closes
   renderer TECH_DEBT alpha/depth item.
 - **TASK-E8/E9** — Inspector wiring (`/add-component`) + docs.
-- **Phase F** — F1 style doc DRAFTED Jul 28 (`docs/DEION_STYLE.md` — castings
+- **Phase F** — F1 style doc DRAFTED Jul 28 (`../games/deion_assets/DEION_STYLE.md` — castings
   + palette are proposals awaiting Jesse's sign-off; edit in place). F2–F5
   gated on schema freeze.
 - **Phase G/H2+/I** — per PROJECT_ROADMAP.md dependency table.

@@ -99,7 +99,7 @@ production (F2 onward) is unblocked.
 
 | # | Task | Notes |
 |---|------|-------|
-| F1 | `docs/DEION_STYLE.md` + castings proposal | World bible (Deion, food-coded world), palette, metrics, per-game castings table, naming, export rules (**no anti-aliased edges** in pixel exports), clips-are-the-API convention. May start before schema freeze |
+| F1 | `../games/deion_assets/DEION_STYLE.md` + castings proposal | World bible (Deion, food-coded world), palette, metrics, per-game castings table, naming, export rules (**no anti-aliased edges** in pixel exports), clips-are-the-API convention. May start before schema freeze |
 | F2 | `../games/deion_assets/` + sync script | Canonical asset source; sync copies into each game's `assets/sprites/`; **`--check` hash-compare mode** wired into build + definition of done. No symlinks |
 | F3 | `scripts/gen_tiles` offline generator | image-crate bin producing PNGs; first consumers: Frogger lanes (migrates its in-code rgba tileset — unblocks E5's `#rgba` error), Breakout bricks |
 | F4 | Placeholder sheets for all 6 games | Agent-made: correct cell size, blocked-out colors, **final clip names** — Phase G never blocks on art |
@@ -111,19 +111,33 @@ production (F2 onward) is unblocked.
 **Split:** Jesse draws hero sheets (idle/walk/jump/hurt), per-game variants,
 key characters, palette sign-off. Agents do everything else.
 
-**AI baseline stand-ins (Aug 2 2026, pixellab trial — 17/40 generations
+**AI baseline stand-ins (Aug 2 2026, pixellab trial — 25/40 generations
 used):** full-cast baselines quarantined in `../games/deion_assets/ai/`
 (`ai_<name>_64_side.png`, 8 PNGs: Deion, Cubert, Bananakin, ham **Captham
 Michael**, angry cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy,
 Dr. Maxwell — 64×64 single side-view iconic poses, shape-with-a-face style,
 food identities settled by Jesse same day). Policy: AI art is stand-in ONLY —
-`scripts/check_no_ai_assets.sh <assets-dir>` must pass on any shipping build
+`../games/deion_assets/scripts/check_no_ai_assets.sh <assets-dir>` must pass on any shipping build
 (DEION_STYLE.md §6).
 - **Tooling lesson (paid for once):** pixellab `create_character` forces a
   humanoid/quadruped SKELETON — it produced 5 little humans, all rejected by
   Jesse (first batch, deleted). For this project's geometric shape-with-a-face
   cast use **`create_image_pixflux`** (freeform, 1 generation, `view: side`,
   `no_background`, ~8 concurrent jobs max) — landed on-style first try.
+- **Style transfer (validated Aug 2):** img2img (`init_image`, strength 160)
+  re-renders an existing concept into Jesse's flat hand-drawn style while
+  keeping identity — whole cast restyled this way (deion_assets commits
+  0820e4f → 09bd21d hold before/after). Prompts for the batch went through
+  the deion_assets **prompt-mode adversarial review** (kimi, 7 findings, all
+  accepted — the mode's first live run).
+- **Animation workflow (validated Aug 2):** `animate_image` on
+  Jesse's HAND-DRAWN sprite (loose PNG, no rig; 64×64×8 frames = 1 generation)
+  preserves his style — palette/mohawk/face carry through because frames derive
+  from his pixels. Results in `ai/`: `ai_deion_walk_sheet_64.png` (9f) +
+  `ai_deion_idle_sheet_64.png` (5f) + GIF previews + loose frames. Caveat:
+  mid-sequence frames drift off-model (faces mutate) — workflow is generate 8,
+  curate the best 4–6, hand-fix stragglers in Aseprite; still far faster than
+  animating from scratch. `seed` param allows re-rolls.
 - Remaining tweaks: single poses only (no walk/attack frames, no `.sheet.ron`
   sidecars — F4 placeholder sheets remain the real deliverable); 64×64 is off
   the 16px grid (don't bake into colliders/cells); palette is AI-picked, not
@@ -191,7 +205,7 @@ or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
 | I1 | Static site skeleton + first game live | `../insiculous_web/` (sibling of `insiculous_2d` and `games/`, NOT nested in `games/` — Jesse, Jul 30 2026): landing gallery + one dir per game, assembled from per-game `dist/`; GitHub Pages. Verify `.wasm` serving; document WebGPU browser requirements on the page |
 | I2 | Remaining games on the site | |
 | I3 | itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side |
-| I0 | AI-asset purge gate | Every publish path (I1 site assembly, I3 butler push) runs `scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file — AI stand-ins never reach a storefront (DEION_STYLE.md §6) |
+| I0 | AI-asset purge gate | Every publish path (I1 site assembly, I3 butler push) runs `../games/deion_assets/scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file — AI stand-ins never reach a storefront (DEION_STYLE.md §6) |
 | I4 | `docs/STEAM_CHECKLIST.md` | Doc only — Steam = native packaging + Steamworks, explicitly deferred (Steam doesn't host HTML5) |
 
 ---
@@ -277,7 +291,7 @@ are tracked in `crates/*/TECH_DEBT.md`. Resolved items live in `log_archive.md`.
 2. Depends on `engine_core` (includes physics by default) + `ecs` if needed directly — no editor dep
 3. Has a `README.md` with: controls, how to run, what patterns it demonstrates
 4. `cargo run` from the game directory launches it
-5. **Deion Style**: sprites from `.sheet.ron` sheets per `docs/DEION_STYLE.md` (post-Phase F); ChaosTheme neon is the accent layer
+5. **Deion Style**: sprites from `.sheet.ron` sheets per `../games/deion_assets/DEION_STYLE.md` (post-Phase F); ChaosTheme neon is the accent layer
 
 ### AI-Friendly Development
 1. **CLI-testable** — All logic testable without GPU/window. `cargo test --workspace` validates everything.
@@ -315,7 +329,7 @@ cd ../games/pong && cargo run
 - `AGENTS.md` — AI agent guidance (high-level)
 - `training.md` — API patterns and examples
 - `PROJECT_ROADMAP.md` — This file
-- `docs/DEION_STYLE.md` — Deion style guide (lands in Phase F)
+- `../games/deion_assets/DEION_STYLE.md` — Deion style guide (lands in Phase F)
 - `../games/` — Sibling directory with all game projects
 - `src/bin/editor.rs` — Standalone editor binary
 - `crates/editor/IdealEditor.png` — Target mockup for editor UI
