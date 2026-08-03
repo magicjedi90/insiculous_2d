@@ -111,8 +111,14 @@ production (F2 onward) is unblocked.
 **Split:** Jesse draws hero sheets (idle/walk/jump/hurt), per-game variants,
 key characters, palette sign-off. Agents do everything else.
 
-**AI baseline stand-ins (Aug 2 2026, pixellab trial — 25/40 generations
-used):** full-cast baselines quarantined in `../games/deion_assets/ai/`
+**AI baseline stand-ins (Aug 2 2026, pixellab trial — 37/40 generations
+used, treat the remaining 3 as reserve):** full cast now has restyled
+side-view baselines AND 8-frame walk-cycle sheets + GIF previews
+(deion_assets commit e2ea5be; Funguy de-armed, Maxwell got his face on
+attempt 3, Cubert is side-profile with Deion-matching icicle mohawk — canon
+in DEION_STYLE.md). Walk frames carry the known mid-sequence drift —
+curation to 4–6 keepers per clip is the next step (Jesse or agent, in
+Aseprite). full-cast baselines quarantined in `../games/deion_assets/ai/`
 (`ai_<name>_64_side.png`, 8 PNGs: Deion, Cubert, Bananakin, ham **Captham
 Michael**, angry cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy,
 Dr. Maxwell — 64×64 single side-view iconic poses, shape-with-a-face style,
