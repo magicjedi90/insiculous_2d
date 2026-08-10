@@ -158,6 +158,23 @@ Space Invaders → Asteroids.** Pong validates the pipeline (smallest, has PNGs)
 Frogger validates tile sheets; Breakout validates the scene-RON fixes;
 Asteroids last (rotation/animation heavy).
 
+**Per-game identities (settled with Jesse, Aug 9 2026 — detail lives in each
+game's README "Deion Pivot" section; castings SSOT is DEION_STYLE.md §5):**
+
+| Game | New identity |
+|------|-------------|
+| Pong | **Tong** — paddles are living tong characters (rounded grip = rounded paddle surface); Deion stays the ball. Tong art shared with Breakout |
+| Frogger | **Chicken Coop** — chicken player(s) crossing food traffic; co-op = 2 chickens (the pun); home slots = coop nest boxes |
+| Breakout | **The Food Pyramid** — level select is a 1992-USDA-style pyramid: Fruits & Veggies base (L1/L2) → Bread (L3) → Dairy (L4) + Meats (L5) side by side → Sweets & Fats finale (L6). Gates: L1+L2 → L3; L3 → choose L4/L5 → L6. Per-level brick themes + power-up re-themes; paddle = tong character. Level-select screen + unlock persistence are new scope — **design TBD at re-skin time** (incl. the L4/L5 both-or-either gate) |
+| Snake | **Hot Dog!** — the snake is a wiener dog (working name "Frank", Jesse signs off); body growth introduces Tilemap logic (2nd engine Tilemap consumer); angry-meatball hazard |
+| Space Invaders | **Burger Invaders** — Deion fires mohawk icicles up; levels build a burger bottom-up (patty → +cheese → +lettuce → …), enemy ranks match the layer (buns = In-Bread Yokels, patty = angry meatballs, cheese = wedge guys). Per-level enemy rosters are new scope vs today's single formation — design TBD at re-skin time |
+| Asteroids | **Meatieroids** — asteroids are roided-out flexing meatballs (3 sizes, flex-burst splits); Flying Funk / icicle shots / Maxwell UFO kept |
+
+Cross-game: the **angry meatball** family recurs (Meatieroids rocks, Hot Dog!
+hazard, Burger Invaders patty rank). New characters needing Jesse's design +
+castings sign-off: tong characters, the chicken, the wiener dog, angry
+meatballs, cheese-wedge guys.
+
 Per game:
 - Gameplay entities get sheet sprites; ChaosTheme/bloom/grid kept as accent;
   wireframes debug-only.
