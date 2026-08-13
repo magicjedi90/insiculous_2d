@@ -56,41 +56,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_is_editing() {
-        let state = EditorPlayState::default();
-        assert_eq!(state, EditorPlayState::Editing);
-        assert!(state.is_editing());
-        assert!(!state.is_playing());
-        assert!(!state.is_paused());
-    }
-
-    #[test]
-    fn test_playing_state() {
-        let state = EditorPlayState::Playing;
-        assert!(!state.is_editing());
-        assert!(state.is_playing());
-        assert!(!state.is_paused());
-    }
-
-    #[test]
-    fn test_paused_state() {
-        let state = EditorPlayState::Paused;
-        assert!(!state.is_editing());
-        assert!(!state.is_playing());
-        assert!(state.is_paused());
-    }
-
-    #[test]
     fn test_in_play_session() {
         assert!(!EditorPlayState::Editing.in_play_session());
         assert!(EditorPlayState::Playing.in_play_session());
         assert!(EditorPlayState::Paused.in_play_session());
-    }
-
-    #[test]
-    fn test_labels() {
-        assert_eq!(EditorPlayState::Editing.label(), "Editing");
-        assert_eq!(EditorPlayState::Playing.label(), "Playing");
-        assert_eq!(EditorPlayState::Paused.label(), "Paused");
     }
 }

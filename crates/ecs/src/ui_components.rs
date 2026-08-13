@@ -284,13 +284,6 @@ mod tests {
     }
 
     #[test]
-    fn test_component_meta_names() {
-        assert_eq!(UiLabel::type_name(), "UiLabel");
-        assert_eq!(UiPanel::type_name(), "UiPanel");
-        assert_eq!(UiButton::type_name(), "UiButton");
-    }
-
-    #[test]
     fn test_serde_defaults_fill_missing_fields() {
         // Old/hand-written scene data with only some fields must deserialize.
         let label: UiLabel = serde_json::from_str(r#"{"text": "@hud.score"}"#).unwrap();
@@ -309,7 +302,17 @@ mod tests {
     }
 
     #[test]
-    fn test_defaults_are_visible() {
+    fn test_component_meta_names() {
+        // Derive-macro output: the registry and inspector look these up by name.
+        assert_eq!(UiLabel::type_name(), "UiLabel");
+        assert_eq!(UiPanel::type_name(), "UiPanel");
+        assert_eq!(UiButton::type_name(), "UiButton");
+    }
+
+    #[test]
+    fn test_ui_components_default_to_visible() {
+        // Scene RON omitting `visible` must yield elements that render —
+        // a false default would silently hide every hand-written label/button.
         assert!(UiLabel::default().visible);
         assert!(UiPanel::default().visible);
         assert!(UiButton::default().visible);

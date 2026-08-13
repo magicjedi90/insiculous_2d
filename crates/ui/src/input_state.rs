@@ -275,26 +275,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_input_state_default() {
-        let input = InputState::default();
-        assert_eq!(input.mouse_pos, Vec2::ZERO);
-        assert!(!input.mouse_down);
-        assert!(!input.mouse_just_pressed);
-        assert!(!input.mouse_just_released);
-        assert!(input.typed_chars.is_empty());
-        assert!(!input.enter_pressed);
-        assert!(!input.escape_pressed);
-        assert!(!input.backspace_pressed);
-        assert!(!input.tab_pressed);
-        assert!(!input.left_pressed);
-        assert!(!input.right_pressed);
-        assert!(!input.home_pressed);
-        assert!(!input.end_pressed);
-        assert!(!input.delete_pressed);
-        assert!(!input.shift_down);
-    }
-
-    #[test]
     fn test_keycode_to_char_digits() {
         assert_eq!(keycode_to_char(KeyCode::Digit0, false), Some('0'));
         assert_eq!(keycode_to_char(KeyCode::Digit9, false), Some('9'));

@@ -212,44 +212,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_window_config_default() {
-        let config = WindowConfig::default();
-        assert_eq!(config.title, "Insiculous 2D");
-        assert_eq!(config.width, 800);
-        assert_eq!(config.height, 600);
-        assert!(config.resizable);
-    }
-
-    #[test]
-    fn test_window_config_builder() {
-        let config = WindowConfig::new("Test Game")
-            .with_size(1024, 768)
-            .with_resizable(false);
-
-        assert_eq!(config.title, "Test Game");
-        assert_eq!(config.width, 1024);
-        assert_eq!(config.height, 768);
-        assert!(!config.resizable);
-    }
-
-    #[test]
-    fn test_window_manager_new() {
-        let config = WindowConfig::new("Test");
-        let manager = WindowManager::new(config);
-        assert!(!manager.is_created());
-        assert!(manager.window().is_none());
-    }
-
-    #[test]
-    fn test_window_manager_size() {
-        let config = WindowConfig::new("Test").with_size(1920, 1080);
-        let manager = WindowManager::new(config);
-        assert_eq!(manager.size(), (1920, 1080));
-        assert_eq!(manager.width(), 1920);
-        assert_eq!(manager.height(), 1080);
-    }
-
-    #[test]
     fn test_window_manager_resize() {
         let config = WindowConfig::default();
         let mut manager = WindowManager::new(config);
@@ -257,24 +219,6 @@ mod tests {
 
         manager.resize(1280, 720);
         assert_eq!(manager.size(), (1280, 720));
-    }
-
-    #[test]
-    fn test_window_manager_title() {
-        let config = WindowConfig::new("My Awesome Game");
-        let manager = WindowManager::new(config);
-        assert_eq!(manager.title(), "My Awesome Game");
-    }
-
-    #[test]
-    fn test_window_manager_scale_factor() {
-        let config = WindowConfig::default();
-        let mut manager = WindowManager::new(config);
-
-        assert_eq!(manager.scale_factor(), 1.0);
-
-        manager.set_scale_factor(2.0);
-        assert_eq!(manager.scale_factor(), 2.0);
     }
 
     #[test]

@@ -7,43 +7,6 @@ use super::render::resized_size;
 use super::*;
 
 #[test]
-fn test_panel_id_constants() {
-    assert_eq!(PanelId::SCENE_VIEW.0, 0);
-    assert_eq!(PanelId::INSPECTOR.0, 1);
-    assert_eq!(PanelId::HIERARCHY.0, 2);
-    assert_eq!(PanelId::ASSET_BROWSER.0, 3);
-    assert_eq!(PanelId::CONSOLE.0, 4);
-}
-
-#[test]
-fn test_dock_position_default() {
-    assert_eq!(DockPosition::default(), DockPosition::Center);
-}
-
-#[test]
-fn test_dock_panel_new() {
-    let panel = DockPanel::new(PanelId::INSPECTOR, "Inspector", DockPosition::Right);
-    assert_eq!(panel.id, PanelId::INSPECTOR);
-    assert_eq!(panel.title, "Inspector");
-    assert_eq!(panel.position, DockPosition::Right);
-    assert!(panel.visible);
-    assert!(panel.resizable);
-    assert!(!panel.collapsed);
-}
-
-#[test]
-fn test_dock_panel_builder() {
-    let panel = DockPanel::new(PanelId::HIERARCHY, "Hierarchy", DockPosition::Left)
-        .with_size(300.0)
-        .with_min_size(150.0)
-        .with_resizable(false);
-
-    assert_eq!(panel.size, 300.0);
-    assert_eq!(panel.min_size, 150.0);
-    assert!(!panel.resizable);
-}
-
-#[test]
 fn test_dock_panel_content_bounds() {
     let mut panel = DockPanel::new(PanelId::INSPECTOR, "Test", DockPosition::Right);
     panel.bounds = Rect::new(100.0, 50.0, 200.0, 400.0);
@@ -89,12 +52,6 @@ fn test_effective_size_center_ignores_collapsed_flag() {
     let mut panel = DockPanel::new(PanelId::SCENE_VIEW, "S", DockPosition::Center).with_size(300.0);
     panel.collapsed = true;
     assert_eq!(panel.effective_size(), 300.0);
-}
-
-#[test]
-fn test_dock_area_new() {
-    let area = DockArea::new();
-    assert!(area.panels().is_empty());
 }
 
 #[test]

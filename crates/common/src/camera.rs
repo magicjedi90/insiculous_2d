@@ -129,8 +129,8 @@ impl Camera {
             (self.viewport_size.y * 0.5 - screen_pos.y) / (self.viewport_size.y * 0.5),
         );
 
-        // Transform by inverse view matrix
-        let world_pos = self.view_matrix().inverse() * Vec4::new(ndc.x, ndc.y, 0.0, 1.0);
+        // Inverse of world_to_screen: unproject NDC through view-projection.
+        let world_pos = self.view_projection_matrix().inverse() * Vec4::new(ndc.x, ndc.y, 0.0, 1.0);
 
         Vec2::new(world_pos.x, world_pos.y)
     }
@@ -206,28 +206,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_camera_default() {
-        let camera = Camera::default();
-        assert_eq!(camera.position, Vec2::ZERO);
-        assert_eq!(camera.zoom, 1.0);
-        assert!(!camera.is_main_camera);
-    }
-
-    #[test]
-    fn test_camera_builder() {
-        let camera = Camera::new(Vec2::new(100.0, 200.0), Vec2::new(1920.0, 1080.0))
-            .with_zoom(2.0)
-            .with_rotation(0.5)
-            .as_main_camera();
-
-        assert_eq!(camera.position, Vec2::new(100.0, 200.0));
-        assert_eq!(camera.viewport_size, Vec2::new(1920.0, 1080.0));
-        assert_eq!(camera.zoom, 2.0);
-        assert_eq!(camera.rotation, 0.5);
-        assert!(camera.is_main_camera);
-    }
-
-    #[test]
     fn test_world_bounds() {
         let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
         let (min_x, min_y, max_x, max_y) = camera.world_bounds();
@@ -246,9 +224,38 @@ mod tests {
     }
 
     #[test]
-    fn test_camera_uniform() {
-        let camera = Camera::new(Vec2::new(50.0, 100.0), Vec2::new(800.0, 600.0));
-        let uniform = CameraUniform::from_camera(&camera);
-        assert_eq!(uniform.position, [50.0, 100.0]);
+    fn test_screen_center_maps_to_camera_position() {
+        let camera = Camera::new(Vec2::new(80.0, -20.0), Vec2::new(800.0, 600.0));
+        let world = camera.screen_to_world(Vec2::new(400.0, 300.0));
+        assert!(
+            (world - camera.position).length() < 0.001,
+            "screen center should be the camera position, got {world:?}"
+        );
+    }
+
+    #[test]
+    fn test_world_to_screen_round_trips_screen_to_world() {
+        let camera = Camera::new(Vec2::new(80.0, -20.0), Vec2::new(800.0, 600.0));
+        let screen = Vec2::new(120.0, 90.0);
+        let back = camera.world_to_screen(camera.screen_to_world(screen));
+        assert!(
+            (back - screen).length() < 0.05,
+            "expected {screen:?}, got {back:?}"
+        );
+    }
+
+    #[test]
+    fn test_screen_y_down_maps_to_world_y_up() {
+        let camera = Camera::new(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let above_center = camera.screen_to_world(Vec2::new(400.0, 100.0));
+        let below_center = camera.screen_to_world(Vec2::new(400.0, 500.0));
+        assert!(
+            above_center.y > 0.0,
+            "a point above screen center must be +Y in world, got {above_center:?}"
+        );
+        assert!(
+            below_center.y < 0.0,
+            "a point below screen center must be -Y in world, got {below_center:?}"
+        );
     }
 }

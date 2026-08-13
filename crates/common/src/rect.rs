@@ -191,13 +191,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_rect_new() {
-        let r = Rect::new(10.0, 20.0, 100.0, 50.0);
-        assert_eq!(r.x, 10.0);
-        assert_eq!(r.width, 100.0);
-    }
-
-    #[test]
     fn test_rect_center() {
         let r = Rect::new(0.0, 0.0, 100.0, 100.0);
         assert_eq!(r.center(), Vec2::new(50.0, 50.0));

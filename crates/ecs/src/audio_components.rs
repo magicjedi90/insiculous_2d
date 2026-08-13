@@ -237,33 +237,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_audio_source_builder() {
-        let source = AudioSource::new(1)
-            .with_volume(0.5)
-            .with_pitch(1.5)
-            .with_looping(true)
-            .with_play_on_spawn(true);
-
-        assert_eq!(source.sound_id, 1);
-        assert!((source.volume - 0.5).abs() < f32::EPSILON);
-        assert!((source.pitch - 1.5).abs() < f32::EPSILON);
-        assert!(source.looping);
-        assert!(source.play_on_spawn);
-        assert!(source.playing);
-    }
-
-    #[test]
-    fn test_audio_source_spatial_settings() {
-        let source = AudioSource::new(1)
-            .with_spatial_settings(500.0, 50.0, 2.0);
-
-        assert!(source.spatial);
-        assert!((source.max_distance - 500.0).abs() < f32::EPSILON);
-        assert!((source.reference_distance - 50.0).abs() < f32::EPSILON);
-        assert!((source.rolloff_factor - 2.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
     fn test_audio_source_attenuation() {
         let source = AudioSource::new(1)
             .with_spatial_settings(1000.0, 100.0, 1.0);
@@ -299,29 +272,6 @@ mod tests {
         assert!((source.calculate_attenuation(0.0) - 1.0).abs() < f32::EPSILON);
         assert!((source.calculate_attenuation(500.0) - 1.0).abs() < f32::EPSILON);
         assert!((source.calculate_attenuation(10000.0) - 1.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn test_audio_listener_builder() {
-        let listener = AudioListener::new()
-            .with_active(false)
-            .with_volume(0.8);
-
-        assert!(!listener.active);
-        assert!((listener.volume - 0.8).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn test_play_sound_effect_builder() {
-        let effect = PlaySoundEffect::new(5)
-            .with_volume(0.7)
-            .with_pitch(1.2)
-            .with_spatial();
-
-        assert_eq!(effect.sound_id, 5);
-        assert!((effect.volume - 0.7).abs() < f32::EPSILON);
-        assert!((effect.pitch - 1.2).abs() < f32::EPSILON);
-        assert!(effect.spatial);
     }
 
     #[test]

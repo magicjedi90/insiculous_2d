@@ -340,13 +340,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_draw_list_new() {
-        let list = DrawList::new();
-        assert!(list.is_empty());
-        assert_eq!(list.len(), 0);
-    }
-
-    #[test]
     fn test_draw_list_rect() {
         let mut list = DrawList::new();
         list.rect(Rect::new(0.0, 0.0, 100.0, 50.0), Color::RED);

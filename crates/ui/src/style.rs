@@ -280,15 +280,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_theme_defaults() {
-        let theme = Theme::default();
-        assert!(theme.button.padding > 0.0);
-        assert!(theme.panel.padding > 0.0);
-        assert!(theme.slider.thumb_radius > 0.0);
-        assert!(theme.text.font_size > 0.0);
-    }
-
-    #[test]
     fn test_color_reexport_works() {
         // Verify common::Color is properly re-exported
         let color = Color::from_hex(0xFF0000);

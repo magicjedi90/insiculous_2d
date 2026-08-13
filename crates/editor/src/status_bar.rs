@@ -157,14 +157,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_status_bar_default() {
-        let bar = StatusBar::new();
-        assert!(bar.message().is_none());
-        assert_eq!(bar.stats.entity_count, 0);
-        assert_eq!(bar.stats.fps, 0.0);
-    }
-
-    #[test]
     fn test_show_message() {
         let mut bar = StatusBar::new();
         bar.show_message("Entity created");
@@ -205,13 +197,6 @@ mod tests {
         bar.update_stats(42, 60.0);
         assert_eq!(bar.stats.entity_count, 42);
         assert_eq!(bar.stats.fps, 60.0);
-    }
-
-    #[test]
-    fn test_set_version() {
-        let mut bar = StatusBar::new();
-        bar.set_version("v2.0.1 - Stable");
-        assert_eq!(bar.version, "v2.0.1 - Stable");
     }
 
     #[test]

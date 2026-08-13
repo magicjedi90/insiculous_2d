@@ -110,13 +110,18 @@ impl Transform2D {
     }
 
     /// Transform a direction vector (rotation and scale only, no translation).
+    ///
+    /// Applies scale in local axes then rotation (the linear part of
+    /// [`matrix`](Self::matrix)'s `T * R * S`), so directions agree with
+    /// point transforms under non-uniform scale.
     #[inline]
     pub fn transform_direction(&self, direction: Vec2) -> Vec2 {
         let cos_r = self.rotation.cos();
         let sin_r = self.rotation.sin();
+        let scaled = direction * self.scale;
         Vec2::new(
-            (direction.x * cos_r - direction.y * sin_r) * self.scale.x,
-            (direction.x * sin_r + direction.y * cos_r) * self.scale.y,
+            scaled.x * cos_r - scaled.y * sin_r,
+            scaled.x * sin_r + scaled.y * cos_r,
         )
     }
 
@@ -160,25 +165,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_transform_default() {
-        let t = Transform2D::default();
-        assert_eq!(t.position, Vec2::ZERO);
-        assert_eq!(t.rotation, 0.0);
-        assert_eq!(t.scale, Vec2::ONE);
-    }
-
-    #[test]
-    fn test_transform_builder() {
-        let t = Transform2D::new(Vec2::new(10.0, 20.0))
-            .with_rotation(1.5)
-            .with_scale(Vec2::new(2.0, 3.0));
-
-        assert_eq!(t.position, Vec2::new(10.0, 20.0));
-        assert_eq!(t.rotation, 1.5);
-        assert_eq!(t.scale, Vec2::new(2.0, 3.0));
-    }
-
-    #[test]
     fn test_transform_point() {
         let t = Transform2D::new(Vec2::new(100.0, 50.0));
         let point = t.transform_point(Vec2::ZERO);
@@ -200,5 +186,74 @@ mod tests {
         let b = Transform2D::new(Vec2::new(100.0, 100.0));
         let mid = a.lerp(b, 0.5);
         assert!((mid.position.x - 50.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_inverse_transform_point_round_trips_translated_rotated_point() {
+        let t = Transform2D::new(Vec2::new(40.0, -15.0)).with_rotation(std::f32::consts::FRAC_PI_3);
+        let local = Vec2::new(12.0, -7.0);
+        let world = t.transform_point(local);
+        let back = t.inverse_transform_point(world);
+        assert!(
+            (back - local).length() < 0.001,
+            "expected {local:?}, got {back:?}"
+        );
+    }
+
+    #[test]
+    fn test_transform_direction_ignores_translation() {
+        let rotated = Transform2D::new(Vec2::new(100.0, 50.0)).with_rotation(std::f32::consts::FRAC_PI_2);
+        let origin = Transform2D::default().with_rotation(std::f32::consts::FRAC_PI_2);
+        let direction = Vec2::new(8.0, 0.0);
+
+        let from_translated = rotated.transform_direction(direction);
+        let from_origin = origin.transform_direction(direction);
+
+        assert!(
+            (from_translated - from_origin).length() < 0.001,
+            "translation must not affect directions: {from_translated:?} vs {from_origin:?}"
+        );
+        assert!(
+            (from_translated - Vec2::new(0.0, 8.0)).length() < 0.001,
+            "+X should rotate to +Y, got {from_translated:?}"
+        );
+    }
+
+    #[test]
+    fn test_matrix_applies_scale_before_rotation_before_translation() {
+        // T * R * S with non-uniform scale: (1,0) scales to (2,0),
+        // rotates 90° to (0,2), translates to (10,22). Guards the
+        // composition order — a T*S*R swap would yield (10,23).
+        let t = Transform2D::new(Vec2::new(10.0, 20.0))
+            .with_rotation(std::f32::consts::FRAC_PI_2)
+            .with_scale(Vec2::new(2.0, 3.0));
+
+        let transformed = t.transform_point(Vec2::new(1.0, 0.0));
+        assert!(
+            (transformed - Vec2::new(10.0, 22.0)).length() < 0.001,
+            "expected (10, 22), got {transformed:?}"
+        );
+    }
+
+    #[test]
+    fn test_transform_direction_agrees_with_matrix_under_nonuniform_scale() {
+        // Directions must be the linear part of matrix(): the same
+        // point-delta computed via transform_point.
+        let t = Transform2D::new(Vec2::new(10.0, 20.0))
+            .with_rotation(std::f32::consts::FRAC_PI_2)
+            .with_scale(Vec2::new(2.0, 1.0));
+        let direction = Vec2::new(1.0, 0.0);
+
+        let via_points = t.transform_point(direction) - t.transform_point(Vec2::ZERO);
+        let via_direction = t.transform_direction(direction);
+
+        assert!(
+            (via_direction - via_points).length() < 0.001,
+            "direction {via_direction:?} disagrees with point delta {via_points:?}"
+        );
+        assert!(
+            (via_direction - Vec2::new(0.0, 2.0)).length() < 0.001,
+            "scale (2,1) then 90° rotation should map +X to (0,2), got {via_direction:?}"
+        );
     }
 }

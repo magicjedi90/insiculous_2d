@@ -206,33 +206,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_font_handle_default() {
-        let handle = FontHandle::default();
-        assert_eq!(handle.id, 0);
-    }
-
-    #[test]
-    fn test_font_manager_new() {
-        let manager = FontManager::new();
-        assert!(manager.default_font().is_none());
-        let (fonts, glyphs) = manager.cache_stats();
-        assert_eq!(fonts, 0);
-        assert_eq!(glyphs, 0);
-    }
-
-    #[test]
-    fn test_font_metrics_struct() {
-        let metrics = FontMetrics {
-            ascent: 14.0,
-            descent: -4.0,
-            line_height: 20.0,
-        };
-        assert_eq!(metrics.ascent, 14.0);
-        assert_eq!(metrics.descent, -4.0);
-        assert_eq!(metrics.line_height, 20.0);
-    }
-
-    #[test]
     fn test_font_manager_metrics_no_font() {
         let manager = FontManager::new();
         let handle = FontHandle { id: 999 };

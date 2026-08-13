@@ -53,27 +53,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_time_default() {
-        let time = Time::default();
-        assert_eq!(time.delta_seconds, 0.0);
-        assert_eq!(time.elapsed_seconds, 0.0);
-    }
-
-    #[test]
-    fn test_time_new() {
-        let time = Time::new(0.016, 1.5);
-        assert_eq!(time.delta_seconds, 0.016);
-        assert_eq!(time.elapsed_seconds, 1.5);
-    }
-
-    #[test]
-    fn test_time_with_delta() {
-        let time = Time::with_delta(0.033);
-        assert_eq!(time.delta_seconds, 0.033);
-        assert_eq!(time.elapsed_seconds, 0.0);
-    }
-
-    #[test]
     fn test_time_tick() {
         let mut time = Time::default();
         time.tick(0.016);

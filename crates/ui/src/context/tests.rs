@@ -4,12 +4,6 @@ use super::*;
 use crate::DrawCommand;
 
 #[test]
-fn test_ui_context_new() {
-    let ui = UIContext::new();
-    assert!(ui.draw_list().is_empty());
-}
-
-#[test]
 fn test_ui_context_with_theme() {
     let theme = Theme::light();
     let ui = UIContext::with_theme(theme);
@@ -24,12 +18,6 @@ fn test_ui_context_set_theme() {
 
     ui.set_theme(Theme::light());
     assert_ne!(ui.theme().button.background.r, original_bg.r);
-}
-
-#[test]
-fn test_ui_context_window_size() {
-    let ui = UIContext::new();
-    assert_eq!(ui.window_size(), Vec2::new(800.0, 600.0));
 }
 
 #[test]
@@ -50,8 +38,13 @@ fn test_ui_context_label() {
 fn test_ui_context_panel() {
     let mut ui = UIContext::new();
     ui.panel(Rect::new(0.0, 0.0, 200.0, 100.0));
-    // Panel creates a rect and optionally a border
-    assert!(!ui.draw_list().is_empty());
+    match &ui.draw_list().commands()[0] {
+        DrawCommand::Rect { bounds, .. } => {
+            assert_eq!(bounds.width, 200.0);
+            assert_eq!(bounds.height, 100.0);
+        }
+        other => panic!("expected panel Rect, got {other:?}"),
+    }
 }
 
 #[test]
@@ -81,26 +74,18 @@ fn test_ui_context_hit_test() {
 fn test_ui_context_progress_bar() {
     let mut ui = UIContext::new();
     ui.progress_bar(0.5, Rect::new(0.0, 0.0, 200.0, 20.0));
-    // Progress bar creates background and fill rects
-    assert!(!ui.draw_list().is_empty());
-}
-
-#[test]
-fn test_ui_context_font_manager_access() {
-    let ui = UIContext::new();
-    // Font manager should be accessible and have no default font initially
-    assert!(ui.default_font().is_none());
-    assert!(ui.font_manager().default_font().is_none());
-}
-
-#[test]
-fn test_ui_context_font_manager_mut_access() {
-    let mut ui = UIContext::new();
-    // Should be able to get mutable access to font manager
-    let fm = ui.font_manager_mut();
-    let (fonts, glyphs) = fm.cache_stats();
-    assert_eq!(fonts, 0);
-    assert_eq!(glyphs, 0);
+    let commands = ui.draw_list().commands();
+    assert!(commands.len() >= 2, "progress bar needs a track and a fill");
+    match &commands[0] {
+        DrawCommand::Rect { bounds, .. } => assert_eq!(bounds.width, 200.0),
+        other => panic!("expected track Rect, got {other:?}"),
+    }
+    match &commands[1] {
+        DrawCommand::Rect { bounds, .. } => {
+            assert!((bounds.width - 100.0).abs() < 0.001, "50% fill of 200px, got {}", bounds.width);
+        }
+        other => panic!("expected fill Rect, got {other:?}"),
+    }
 }
 
 #[test]

@@ -204,20 +204,11 @@ mod tests {
         storage.insert(Score { value: 1 });
         storage.insert(Lives { count: 5 });
 
+        assert_eq!(storage.len(), 2);
         storage.clear();
         assert!(storage.is_empty());
+        assert_eq!(storage.len(), 0);
         assert!(storage.get::<Score>().is_none());
         assert!(storage.get::<Lives>().is_none());
-    }
-
-    #[test]
-    fn test_len_and_is_empty() {
-        let mut storage = ResourceStorage::new();
-        assert!(storage.is_empty());
-        assert_eq!(storage.len(), 0);
-
-        storage.insert(Score { value: 0 });
-        assert!(!storage.is_empty());
-        assert_eq!(storage.len(), 1);
     }
 }

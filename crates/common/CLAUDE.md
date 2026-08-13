@@ -27,4 +27,4 @@ Every type above is re-exported at the crate root; `Color`, `Transform2D`,
 `Camera`, `Rect`, `Time`, and `SheetGrid` are also in `common::prelude`.
 
 ## Testing
-- `cargo test -p common` — 39 tests (37 unit + 2 doc), 0 ignored
+- `cargo test -p common` — 36 tests (34 unit + 2 doc), 0 ignored

@@ -818,15 +818,29 @@ Please generate comprehensive documentation for the ECS world implementation. In
 
 ### Writing Tests
 
-```
-I need to write tests for the renderer module. Please help me create:
-1. Unit tests for individual functions
-2. Integration tests for the rendering pipeline
-3. Mock objects for testing without a GPU
-4. Test cases that cover error handling and edge cases
+A failing test must mean a **player- or author-visible contract** broke, not
+that a field assignment still assigns. Name tests after the behavior
+(`test_entity_despawns_when_lifetime_crosses_zero`), not the method
+(`test_new`). Models: `crates/ecs/src/lifetime.rs`, `crates/ecs/src/sprite_system.rs`.
 
-The tests should follow the existing testing patterns in the codebase.
-```
+A test **stays** if a game author or player would notice the failure:
+
+- Lifecycle / state machines (play→pause→stop, just-pressed clearing, lifetime despawn)
+- Cross-component wiring (`SpriteAnimationSystem` writes `Sprite.tex_region`)
+- Persistence (legacy JSON/RON still loads; texture-filter aliases)
+- Non-obvious math (capsule half-height, UV cells, camera bounds, attenuation)
+- Typed error paths (`AudioError::IoError` vs `DecodeError`)
+- GPU layout sizes the shader assumes
+- Derive-macro output (`type_name` / `field_names`)
+
+Do **not** add tests that only:
+
+- Echo a constructor/builder field (`with_x(v); assert_eq!(x, v)`)
+- Assert `Default` / `label()` / `type_name()` with no downstream contract
+- Construct and return (no assert, or “doesn’t panic” with no state check)
+- Reimplement production `if` logic inside the test
+- Duplicate another crate’s tests of the same type
+- Check `is_nan` / `is_finite` instead of the named behavior
 
 ### Implementing a New Feature
 

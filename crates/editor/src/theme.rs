@@ -437,95 +437,14 @@ mod tests {
     }
 
     #[test]
-    fn test_grid_colors_conversion() {
-        let theme = EditorTheme::default();
-        let grid = theme.grid_colors();
-        assert_eq!(grid.primary, theme.grid_primary);
-        assert_eq!(grid.secondary, theme.grid_secondary);
-        assert_eq!(grid.axis_x, theme.grid_axis_x);
-        assert_eq!(grid.axis_y, theme.grid_axis_y);
-    }
-
-    #[test]
-    fn test_inspector_style_conversion() {
-        let theme = EditorTheme::default();
-        let style = theme.inspector_style();
-        assert_eq!(style.label_color, theme.inspector_label);
-        assert_eq!(style.value_color, theme.inspector_value);
-        assert_eq!(style.header_color, theme.inspector_header);
-    }
-
-    #[test]
-    fn test_editable_field_style_conversion() {
-        let theme = EditorTheme::default();
-        let style = theme.editable_field_style();
-        assert_eq!(style.label_color, theme.inspector_label);
-        assert_eq!(style.value_color, theme.inspector_value);
-        assert_eq!(style.header_color, theme.inspector_header);
-    }
-
-    #[test]
-    fn test_ui_theme_derived_from_editor_palette() {
+    fn test_ui_theme_hover_and_type_are_usable() {
         let theme = EditorTheme::default();
         let ui_theme = theme.ui_theme();
-        assert_eq!(ui_theme.button.background, theme.bg_input);
-        assert_eq!(ui_theme.slider.track_fill, theme.accent_blue);
-        assert_eq!(ui_theme.text_input.border_focused, theme.accent_blue);
-        assert_eq!(ui_theme.text_input.font_size, theme.fonts.body);
         assert!(ui_theme.text_input.font_size >= crate::typography::MIN_READABLE_FONT);
         assert_ne!(
             ui_theme.button.background_hovered, ui_theme.button.background,
             "hover state must be visually distinct"
         );
-    }
-
-    #[test]
-    fn test_play_state_border_method() {
-        let theme = EditorTheme::default();
-        assert_eq!(
-            theme.play_state_border(crate::EditorPlayState::Editing),
-            theme.border_editing
-        );
-        assert_eq!(
-            theme.play_state_border(crate::EditorPlayState::Playing),
-            theme.border_playing
-        );
-        assert_eq!(
-            theme.play_state_border(crate::EditorPlayState::Paused),
-            theme.border_paused
-        );
-    }
-
-    #[test]
-    fn test_color_to_vec4() {
-        let color = Color::new(0.1, 0.2, 0.3, 0.4);
-        let v = EditorTheme::color_to_vec4(color);
-        assert!((v.x - 0.1).abs() < f32::EPSILON);
-        assert!((v.y - 0.2).abs() < f32::EPSILON);
-        assert!((v.z - 0.3).abs() < f32::EPSILON);
-        assert!((v.w - 0.4).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn test_gizmo_palette_matches_tokens() {
-        let theme = EditorTheme::default();
-        let palette = theme.gizmo_palette();
-        assert_eq!(palette.x, theme.gizmo_x);
-        assert_eq!(palette.y, theme.gizmo_y);
-        assert_eq!(palette.center, theme.gizmo_center);
-        assert_eq!(palette.x_hover, theme.gizmo_x_hover);
-        assert_eq!(palette.y_hover, theme.gizmo_y_hover);
-        assert_eq!(palette.ring, theme.gizmo_ring);
-        assert_eq!(palette.scale_handle_hover, theme.gizmo_scale_handle_hover);
-    }
-
-    #[test]
-    fn test_editable_field_style_includes_axis_and_channel_labels() {
-        let theme = EditorTheme::default();
-        let style = theme.editable_field_style();
-        assert_eq!(style.axis_x_label, theme.axis_x_label);
-        assert_eq!(style.axis_y_label, theme.axis_y_label);
-        assert_eq!(style.channel_labels, theme.channel_labels);
     }
 
     #[test]
@@ -538,23 +457,11 @@ mod tests {
     }
 
     #[test]
-    fn test_collider_overlay_colors_match_tokens_and_are_distinct() {
+    fn test_collider_overlay_colors_are_distinct() {
         let theme = EditorTheme::default();
-        let colors = theme.collider_overlay_colors();
-        assert_eq!(colors.solid, theme.collider_outline);
-        assert_eq!(colors.sensor, theme.collider_sensor);
-        assert_eq!(colors.selected, theme.collider_selected);
         // Each state must be visually distinguishable
         assert_ne!(theme.collider_outline, theme.collider_sensor);
         assert_ne!(theme.collider_outline, theme.collider_selected);
         assert_ne!(theme.collider_sensor, theme.collider_selected);
-    }
-
-    #[test]
-    fn test_dark_is_default() {
-        let dark = EditorTheme::dark();
-        let default = EditorTheme::default();
-        assert_eq!(dark.bg_primary, default.bg_primary);
-        assert_eq!(dark.accent_blue, default.accent_blue);
     }
 }

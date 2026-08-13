@@ -339,40 +339,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_rigid_body_default() {
-        let body = RigidBody::default();
-        assert_eq!(body.body_type, RigidBodyType::Dynamic);
-        assert_eq!(body.velocity, Vec2::ZERO);
-        assert_eq!(body.gravity_scale, 1.0);
-    }
-
-    #[test]
-    fn test_rigid_body_builder() {
-        let body = RigidBody::new_dynamic()
-            .with_velocity(Vec2::new(10.0, 20.0))
-            .with_gravity_scale(0.5)
-            .with_linear_damping(0.1);
-
-        assert_eq!(body.velocity, Vec2::new(10.0, 20.0));
-        assert_eq!(body.gravity_scale, 0.5);
-        assert_eq!(body.linear_damping, 0.1);
-    }
-
-    #[test]
-    fn test_collider_builder() {
-        let collider = Collider::box_collider(32.0, 64.0)
-            .with_friction(0.8)
-            .with_restitution(0.5)
-            .as_sensor();
-
-        assert!(collider.is_sensor);
-        assert_eq!(collider.friction, 0.8);
-        assert_eq!(collider.restitution, 0.5);
-
-        if let ColliderShape::Box { half_extents } = collider.shape {
-            assert_eq!(half_extents, Vec2::new(16.0, 32.0));
-        } else {
-            panic!("Expected box shape");
+    fn test_box_collider_stores_half_extents() {
+        let collider = Collider::box_collider(32.0, 64.0);
+        match collider.shape {
+            ColliderShape::Box { half_extents } => {
+                assert_eq!(half_extents, Vec2::new(16.0, 32.0));
+            }
+            other => panic!("expected box shape, got {other:?}"),
         }
     }
 

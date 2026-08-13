@@ -461,14 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn test_interaction_manager_new() {
-        let manager = InteractionManager::new();
-        assert!(manager.hot_widget.is_none());
-        assert!(manager.active_widget.is_none());
-        assert!(manager.focus_widget.is_none());
-    }
-
-    #[test]
     fn test_interaction_manager_state() {
         let mut manager = InteractionManager::new();
         let id = WidgetId::from_str("test_widget");
@@ -512,14 +504,6 @@ mod tests {
 
         let state = manager.get_state_if_exists(id).expect("focused state retained");
         assert_eq!(state.edit.text, "editing");
-    }
-
-    #[test]
-    fn test_interaction_result_default() {
-        let result = InteractionResult::default();
-        assert_eq!(result.state, WidgetState::Normal);
-        assert!(!result.clicked);
-        assert!(!result.dragging);
     }
 
     #[test]

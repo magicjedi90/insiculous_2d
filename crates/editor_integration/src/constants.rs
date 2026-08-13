@@ -3,6 +3,7 @@
 //! Centralizes values that would otherwise be scattered as magic numbers
 //! across the editor wrapper, entity operations, and panel rendering.
 
+use engine_core::GameConfig;
 use glam::Vec2;
 
 /// Default scene file path used until a file picker exists (Phase 2+).
@@ -16,6 +17,13 @@ pub(crate) const MIN_EDITOR_WINDOW_WIDTH: u32 = 1024;
 
 /// Minimum window height for the editor to be usable.
 pub(crate) const MIN_EDITOR_WINDOW_HEIGHT: u32 = 720;
+
+/// Enlarge a game config so the editor window is at least the usable minimum.
+pub(crate) fn clamp_editor_window_size(mut config: GameConfig) -> GameConfig {
+    config.width = config.width.max(MIN_EDITOR_WINDOW_WIDTH);
+    config.height = config.height.max(MIN_EDITOR_WINDOW_HEIGHT);
+    config
+}
 
 /// Smallest allowed entity scale when dragging the scale gizmo
 /// (prevents zero/negative scale).

@@ -191,40 +191,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_game_config_default() {
-        let config = GameConfig::default();
-        assert_eq!(config.title, "Insiculous 2D Game");
-        assert_eq!(config.width, 800);
-        assert_eq!(config.height, 600);
-        assert_eq!(config.target_fps, 60);
-        assert!(config.resizable);
-        assert!(config.vsync);
-        assert_eq!(config.chaos_mode, ChaosMode::Normal);
-    }
-
-    #[test]
-    fn test_game_config_with_vsync_disabled() {
-        let config = GameConfig::new("Test").with_vsync(false);
-        assert!(!config.vsync);
-    }
-
-    #[test]
-    fn test_game_config_with_chaos_mode() {
-        let config = GameConfig::new("Test").with_chaos_mode(ChaosMode::Insiculous);
-        assert_eq!(config.chaos_mode, ChaosMode::Insiculous);
-    }
-
-    #[test]
     fn test_game_config_locale_defaults_and_builders() {
         let config = GameConfig::default();
         assert_eq!(config.locale, "en");
         assert_eq!(config.locales_dir, "locales");
-
-        let config = GameConfig::new("Test")
-            .with_locale("pirate")
-            .with_locales_dir("i18n");
-        assert_eq!(config.locale, "pirate");
-        assert_eq!(config.locales_dir, "i18n");
     }
 
     #[test]
@@ -248,12 +218,6 @@ mod tests {
     #[test]
     fn test_game_config_defaults_to_linear_texture_filter() {
         assert_eq!(GameConfig::default().texture_filter, TextureFilter::Linear);
-    }
-
-    #[test]
-    fn test_game_config_with_texture_filter() {
-        let config = GameConfig::new("Test").with_texture_filter(TextureFilter::Nearest);
-        assert_eq!(config.texture_filter, TextureFilter::Nearest);
     }
 
     #[test]
@@ -286,19 +250,5 @@ mod tests {
             serde_json::from_str::<GameConfig>(&typo).is_err(),
             "typos must fail loudly, not coerce to Linear"
         );
-    }
-
-    #[test]
-    fn test_game_config_builder() {
-        let config = GameConfig::new("Test Game")
-            .with_size(1024, 768)
-            .with_fps(120)
-            .with_clear_color(0.5, 0.5, 0.5, 1.0);
-
-        assert_eq!(config.title, "Test Game");
-        assert_eq!(config.width, 1024);
-        assert_eq!(config.height, 768);
-        assert_eq!(config.target_fps, 120);
-        assert_eq!(config.clear_color, [0.5, 0.5, 0.5, 1.0]);
     }
 }

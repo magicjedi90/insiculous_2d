@@ -3,12 +3,6 @@ use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
 #[test]
-fn test_input_event_queue_creation() {
-    let _input_handler = InputHandler::new();
-    // Should not panic
-}
-
-#[test]
 fn test_input_event_queuing() {
     let mut input_handler = InputHandler::new();
     
@@ -88,20 +82,6 @@ fn test_multiple_events_processing_order() {
     assert!(input_handler.keyboard().is_key_pressed(KeyCode::KeyB));   // Still pressed
     assert!(input_handler.keyboard().is_key_just_released(KeyCode::KeyA));
     assert!(input_handler.keyboard().is_key_just_pressed(KeyCode::KeyB));
-}
-
-#[test]
-fn test_window_event_handling() {
-    let input_handler = InputHandler::new();
-    
-    // Test that window events are queued (we can't easily create them in tests)
-    // but we can test that the handle_window_event method exists and doesn't panic
-    
-    // Just verify the input handler is in a clean state
-    assert!(!input_handler.keyboard().is_key_pressed(KeyCode::KeyA));
-    
-    // The actual window event handling is tested indirectly through the event queue
-    // since handle_window_event calls queue_event internally
 }
 
 #[test]

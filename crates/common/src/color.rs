@@ -190,14 +190,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_color_constants() {
-        assert_eq!(Color::WHITE.r, 1.0);
-        assert_eq!(Color::BLACK.r, 0.0);
-        assert_eq!(Color::RED.r, 1.0);
-        assert_eq!(Color::RED.g, 0.0);
-    }
-
-    #[test]
     fn test_color_from_rgb8() {
         let color = Color::from_rgb8(255, 128, 0);
         assert!((color.r - 1.0).abs() < 0.01);

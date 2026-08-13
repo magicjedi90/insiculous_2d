@@ -22,7 +22,7 @@ use engine_core::scene_data::PhysicsSettings;
 use engine_core::Game;
 use engine_core::GameConfig;
 
-use crate::constants::{EDITOR_PREFS_PATH, MIN_EDITOR_WINDOW_HEIGHT, MIN_EDITOR_WINDOW_WIDTH};
+use crate::constants::{clamp_editor_window_size, EDITOR_PREFS_PATH};
 use crate::panel_renderer;
 
 mod menu_actions;
@@ -375,15 +375,8 @@ impl<G: Game> Game for EditorGame<G> {
 /// # Minimum window size
 /// The editor needs at least 1024x720 to be usable. If the provided config
 /// specifies a smaller size, it will be enlarged.
-pub fn run_game_with_editor<G: Game>(game: G, mut config: GameConfig) -> Result<(), Box<dyn std::error::Error>> {
-    // Enforce minimum window size for editor usability
-    if config.width < MIN_EDITOR_WINDOW_WIDTH {
-        config.width = MIN_EDITOR_WINDOW_WIDTH;
-    }
-    if config.height < MIN_EDITOR_WINDOW_HEIGHT {
-        config.height = MIN_EDITOR_WINDOW_HEIGHT;
-    }
-
+pub fn run_game_with_editor<G: Game>(game: G, config: GameConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let config = clamp_editor_window_size(config);
     let editor_game = EditorGame::new(game);
     engine_core::run_game(editor_game, config)
 }

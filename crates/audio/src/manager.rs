@@ -444,18 +444,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sound_settings_builder() {
-        let settings = SoundSettings::new()
-            .with_volume(0.5)
-            .with_speed(1.5)
-            .with_looping(true);
-
-        assert!((settings.volume - 0.5).abs() < f32::EPSILON);
-        assert!((settings.speed - 1.5).abs() < f32::EPSILON);
-        assert!(settings.looping);
-    }
-
-    #[test]
     fn test_sound_settings_volume_clamping() {
         let settings = SoundSettings::new().with_volume(2.0);
         assert!((settings.volume - 1.0).abs() < f32::EPSILON);
@@ -531,14 +519,9 @@ mod tests {
     }
 
     #[test]
-    fn test_disabled_manager_reports_not_enabled() {
-        let manager = AudioManager::disabled();
-        assert!(!manager.is_enabled());
-    }
-
-    #[test]
     fn test_disabled_manager_loads_and_plays_as_noop() {
         let mut manager = AudioManager::disabled();
+        assert!(!manager.is_enabled());
         let handle = manager.load_sound_from_bytes(tiny_wav()).unwrap();
         assert!(manager.play(handle).is_ok());
         assert_eq!(manager.active_sound_count(), 0, "no-op playback must not track sinks");
@@ -563,8 +546,10 @@ mod tests {
 
     #[test]
     fn test_new_or_disabled_never_fails() {
-        // With or without an audio device, construction must succeed.
-        let _manager = AudioManager::new_or_disabled();
+        // With or without an audio device, construction must succeed and be usable.
+        let mut manager = AudioManager::new_or_disabled();
+        let handle = manager.load_sound_from_bytes(tiny_wav()).unwrap();
+        assert!(manager.play(handle).is_ok());
     }
 
     #[test]

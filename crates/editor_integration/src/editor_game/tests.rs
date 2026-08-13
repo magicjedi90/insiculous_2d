@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use ecs::{GlobalTransform2D, World};
-use editor::{EditorTool, PlayControlAction};
+use editor::PlayControlAction;
 use glam::Vec2;
 
 use engine_core::contexts::GameContext;
@@ -9,11 +9,9 @@ use engine_core::scene_data::PhysicsSettings;
 use engine_core::Game;
 use engine_core::GameConfig;
 
+use crate::constants::clamp_editor_window_size;
 use super::viewport_interaction::build_pickable_entities;
 use super::EditorGame;
-
-
-
 
 struct DummyGame;
 impl Game for DummyGame {
@@ -21,57 +19,17 @@ impl Game for DummyGame {
 }
 
 #[test]
-fn test_editor_game_creation() {
-    let editor = EditorGame::new(DummyGame);
-    assert!(!editor.font_loaded);
-    assert!(editor.editor.selection.is_empty());
-    assert_eq!(editor.editor.current_tool(), EditorTool::Select);
-    assert!(editor.world_snapshot.is_none());
-    assert!(editor.editor.is_editing());
-    assert_eq!(editor.entity_counter, 0);
-}
-
-#[test]
-fn test_editor_game_font_pins_start_unset() {
-    // Both pins fill in during init(): the editor font from the chrome font
-    // load, the game base font after the inner game's init.
-    let editor = EditorGame::new(DummyGame);
-    assert!(editor.editor_font.is_none());
-    assert!(editor.game_base_font.is_none());
-}
-
-#[test]
-fn test_command_history_initialized() {
-    let editor = EditorGame::new(DummyGame);
-    assert!(!editor.command_history.can_undo());
-    assert!(!editor.command_history.can_redo());
-    assert!(editor.gizmo_drag_start.is_none());
-}
-
-#[test]
-fn test_editor_game_default_panels() {
-    let editor = EditorGame::new(DummyGame);
-    assert_eq!(editor.editor.dock_area.panels().len(), 4);
-}
-
-#[test]
 fn test_editor_config_enforces_minimum_size() {
-    let config = GameConfig::new("Test").with_size(640, 480);
-    let mut adjusted = config.clone();
-    if adjusted.width < 1024 { adjusted.width = 1024; }
-    if adjusted.height < 720 { adjusted.height = 720; }
-    assert_eq!(adjusted.width, 1024);
-    assert_eq!(adjusted.height, 720);
+    let config = clamp_editor_window_size(GameConfig::new("Test").with_size(640, 480));
+    assert_eq!(config.width, 1024);
+    assert_eq!(config.height, 720);
 }
 
 #[test]
 fn test_editor_config_preserves_large_size() {
-    let config = GameConfig::new("Test").with_size(1920, 1080);
-    let mut adjusted = config.clone();
-    if adjusted.width < 1024 { adjusted.width = 1024; }
-    if adjusted.height < 720 { adjusted.height = 720; }
-    assert_eq!(adjusted.width, 1920);
-    assert_eq!(adjusted.height, 1080);
+    let config = clamp_editor_window_size(GameConfig::new("Test").with_size(1920, 1080));
+    assert_eq!(config.width, 1920);
+    assert_eq!(config.height, 1080);
 }
 
 #[test]
