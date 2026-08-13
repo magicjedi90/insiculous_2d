@@ -1,0 +1,15 @@
+{
+    "github-anthropics-claude-plugins-official": {
+        "url": "https://github.com/anthropics/claude-plugins-official",
+        "extensions": [
+            "rust-analyzer-lsp",
+            "code-review",
+            "code-simplifier",
+            "claude-md-management"
+        ],
+        "source": {
+            "type": "git",
+            "url": "https://github.com/anthropics/claude-plugins-official"
+        }
+    }
+}
