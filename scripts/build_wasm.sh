@@ -84,8 +84,8 @@ import re, sys
 # Best effort: pull WIN_W/WIN_H from the game's constants; fall back 800x600.
 try:
     src = open(f"{sys.argv[1]}/src/constants.rs").read()
-    w = re.search(r"WIN_W[^=]*=\s*([0-9]+)", src)
-    h = re.search(r"WIN_H[^=]*=\s*([0-9]+)", src)
+    w = re.search(r"WIN_W[^=\n]*=\s*([0-9]+)", src)
+    h = re.search(r"WIN_H[^=\n]*=\s*([0-9]+)", src)
     print(int(w.group(1)) if w else 800, int(h.group(1)) if h else 600)
 except OSError:
     print(800, 600)
