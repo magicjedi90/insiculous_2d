@@ -3,7 +3,7 @@
 //!
 //! Every arcade game's title/select screens read the same four signals
 //! (up, down, confirm, back) and move a cursor through a wrapping list.
-//! Signals come from the keyboard (W/↑, S/↓, Space/Enter, Escape) and from
+//! Signals come from the keyboard (W/↑, S/↓, Space/Enter/NumpadEnter, Escape) and from
 //! **every connected gamepad** (dpad / left stick, A or Start, B) — menus
 //! don't care which player navigates. The engine owns that mechanism; games
 //! own what each screen and selection *means*.
@@ -29,7 +29,7 @@ pub struct MenuInput {
     pub up: bool,
     /// S/ArrowDown, or any pad's DPadDown / left-stick-down edge, was just pressed.
     pub down: bool,
-    /// Space/Enter, or any pad's A or Start, was just pressed.
+    /// Space/Enter/NumpadEnter, or any pad's A or Start, was just pressed.
     pub confirm: bool,
     /// Escape, or any pad's B, was just pressed.
     pub back: bool,
@@ -45,7 +45,8 @@ impl MenuInput {
             down: input.is_key_just_pressed(KeyCode::ArrowDown)
                 || input.is_key_just_pressed(KeyCode::KeyS),
             confirm: input.is_key_just_pressed(KeyCode::Space)
-                || input.is_key_just_pressed(KeyCode::Enter),
+                || input.is_key_just_pressed(KeyCode::Enter)
+                || input.is_key_just_pressed(KeyCode::NumpadEnter),
             back: input.is_key_just_pressed(KeyCode::Escape),
         };
         for (_, pad) in input.gamepads().iter() {
@@ -180,6 +181,15 @@ mod tests {
         let input = MenuInput::read(&handler);
         assert!(input.down);
         assert!(!input.up);
+    }
+
+    #[test]
+    fn test_numpad_enter_confirms_like_enter() {
+        let mut handler = InputHandler::new();
+        frame(&mut handler, &[InputEvent::KeyPressed(KeyCode::NumpadEnter)]);
+        let input = MenuInput::read(&handler);
+        assert!(input.confirm);
+        assert!(!input.up && !input.down && !input.back);
     }
 
     #[test]

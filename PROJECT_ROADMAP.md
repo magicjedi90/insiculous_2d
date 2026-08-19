@@ -14,6 +14,16 @@ teach the engine and expose gaps, building toward original Deion titles. The
 challenge is **paused at game 7 (Tetris)** while the Deion Pivot (Phases E–I
 below) lands; it resumes with the new asset style from day one.
 
+**Studio premise (Jesse, Aug 19 2026): Be Insiculous is an AI dev studio**, not
+a game dev studio that happens to use AI. AI-assisted development is the primary
+workflow and part of the product story — the studio umbrella also covers Mily's
+ongoing non-game AI work. Consequences: **free web releases showcase the AI
+workflow, AI art included**; **marketplace releases (Steam, iOS, Android —
+anything charging money) ship hand-drawn art only** (see the tiered AI-art rule
+in the settled decisions below). The first marketplace release target is
+**Insiculous Arcade** (Phase J): the non-original challenge games compiled into
+one Deion-skinned package.
+
 **Engine Status (July 2026):** Core systems complete. 1253 tests passing
 (100%), 0 ignored — every doc example compiles and runs (window/GPU-bound ones
 are `no_run`). Full DRY/SRP/KISS audit + Game Programming Patterns audit closed
@@ -72,7 +82,19 @@ Settled decisions (Jul 28 2026, adversarial review round 1; artifacts in
   tiles/props are code-generated **offline into PNGs** (never runtime rgba).
 - **All 6 games get full Deion-world theming**; ChaosTheme neon becomes the
   FX/accent layer.
-- **Deployment web-first** (WASM on a static site), then itch.io, Steam later.
+- **Deployment web-first in the CURRENT look (Jesse, Aug 19 2026):** the six
+  games ship to the website as they are today (neon look, AI stand-ins where
+  they exist) — **Phase H + I1/I2 are the open front, ahead of F/G**. Deion
+  re-skins roll out to the site as updates; **Insiculous Arcade (Phase J)** is
+  the marketplace milestone. Free itch.io follows the site; Steam/iOS/Android
+  wait for Phase J.
+- **Tiered AI-art rule (Jesse, Aug 19 2026 — supersedes "AI art never ships"):**
+  the money line is the boundary. AI-generated assets **may ship in free
+  releases** (the studio website, free itch.io games) as part of the AI-workflow
+  showcase; they **never ship in paid/marketplace releases** — the purge gate
+  (`check_no_ai_assets.sh`) applies to paid publish paths only. Quarantine
+  mechanics (`ai/` dir + `ai_` prefix + inspection gate) are unchanged and are
+  what keep the paid-tier purge greppable. SSOT: DEION_STYLE.md §6.
 - **Web assets fetch-by-default** (boot-phase manifest fetch into a bytes map;
   loaders stay sync); **WebGPU-only at launch**; **games stay standalone**.
 
@@ -96,6 +118,10 @@ Make pixel art actually work, end-to-end, headless-tested.
 production (F2 onward) is unblocked.
 
 ## Phase F — Deion Style Guide + Asset Production
+
+**Parallel art track since Aug 19 2026** — no longer the front (that's Phase
+H + I1/I2, per the web-first-in-current-look decision above). F/G continue
+alongside web work and land on the site as updates.
 
 | # | Task | Notes |
 |---|------|-------|
@@ -122,9 +148,11 @@ Aseprite). full-cast baselines quarantined in `../games/deion_assets/ai/`
 (`ai_<name>_64_side.png`, 8 PNGs: Deion, Cubert, Bananakin, ham **Captham
 Michael**, angry cream-pie Master Pi, prune Aleister Prunely, mushroom Funguy,
 Dr. Maxwell — 64×64 single side-view iconic poses, shape-with-a-face style,
-food identities settled by Jesse same day). Policy: AI art is stand-in ONLY —
-`../games/deion_assets/scripts/check_no_ai_assets.sh <assets-dir>` must pass on any shipping build
-(DEION_STYLE.md §6).
+food identities settled by Jesse same day). Policy (tiered since Aug 19 2026):
+AI art may ship in FREE releases (website, free itch.io) but never in
+paid/marketplace releases —
+`../games/deion_assets/scripts/check_no_ai_assets.sh <assets-dir>` must pass on
+any paid release's asset tree (DEION_STYLE.md §6).
 - **Tooling lesson (paid for once):** pixellab `create_character` forces a
   humanoid/quadruped SKELETON — it produced 5 little humans, all rejected by
   Jesse (first batch, deleted). For this project's geometric shape-with-a-face
@@ -152,6 +180,9 @@ food identities settled by Jesse same day). Policy: AI art is stand-in ONLY —
   game needs the character — iconic look is side-view first per Jesse).
 
 ## Phase G — Re-skin Games 1–6
+
+**Parallel art track since Aug 19 2026** — re-skins no longer gate anything
+going live on the web; each finished re-skin ships to the site as an update.
 
 Order (each independently shippable): **Pong → Frogger → Breakout → Snake →
 Space Invaders → Asteroids.** Pong validates the pipeline (smallest, has PNGs);
@@ -188,7 +219,10 @@ Per game:
 Cross-cutting: **G0** update `/new-game` skill ("Neon look" → "Deion look") ·
 **G7** rule-of-2+ promotion sweep after the 3rd re-skin.
 
-## Phase H — WASM Port (spike starts immediately, parallel with E)
+## Phase H — WASM Port — **THE OPEN FRONT (Aug 19 2026)**
+
+Web deployment in the current look is the top priority; H2–H8 are
+parallelizable across crates now and feed straight into H9 + I1/I2.
 
 **H1 spike ☑ DONE Jul 30 2026** (`coordination/H1_SPIKE.md`, demo in
 `../spikes/h1_wasm/`): browser demo renders a fetched texture (wgpu 28 +
@@ -210,7 +244,7 @@ for wasm with unchanged Cargo.toml. Forced H2 API change: `load_sound` /
 | H6 | `KvStore` trait | Returns `Result`, errors logged never panic; native = JSON files (achievements keep atomic tmp+rename), wasm = localStorage. IndexedDB rejected (KB-scale blobs) |
 | H7 | Audio backend | ☑ DECIDED (H1 spike): stay on rodio. Remaining H7 work: gesture-gated `OutputStream` init (start in `disabled()` mode, upgrade on first gesture; `try_default()` Ok does NOT prove the context is running — don't use as a health check) |
 | H8 | Incremental wasm CI guard | `cargo check --target wasm32-unknown-unknown` starting on `common`/`ecs`, expanding crate-by-crate |
-| H9 | Port all 6 games | Shared `scripts/build_wasm.sh` + index.html template (wasm-bindgen loader) + `[profile.release]` snippet (opt-level="s", lto). Gates on G per game only for final art |
+| H9 | Port all 6 games | Shared `scripts/build_wasm.sh` + index.html template (wasm-bindgen loader) + `[profile.release]` snippet (opt-level="s", lto). Does NOT gate on G at all (Aug 19 2026): games ship in their current look; G art lands on the site as later updates |
 
 WebGPU-only at launch; WebGL2 fallback revisited at the post-I2 launch review.
 `thread::spawn` (lifecycle.rs) feature-gated to no-op on wasm; gilrs does NOT
@@ -223,13 +257,59 @@ or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
 
 ## Phase I — Deployment
 
+The site already exists and deploys: `../insiculous_web/` is an **Astro 5 site
+shipping as a Cloudflare Workers static-assets Worker** (NOT GitHub Pages —
+corrected Aug 19 2026; wrangler `[assets]` on `dist/`, every push to `main`
+deploys via Workers Builds). **The repo belongs to Mily's GitHub account
+(`milyramic`) as of Aug 2026**; Cloudflare relink + final URL are tracked in the
+handoff notes below. The site has the WASM drop-in convention ready: put builds
+at `public/games/<slug>/v1/{game.js, game_bg.wasm}`, set frontmatter
+`wasm: '/games/<slug>/v1/game.js'`, and flip that game's `status:` to
+`playable` — **the flip happens per game, only when its H9 build actually
+lands** (a `postbuild-check.mjs` enforces existing paths + Cloudflare's 25 MiB
+per-file limit). All six game pages exist at `status: alpha` today.
+
 | # | Task | Notes |
 |---|------|-------|
-| I1 | Static site skeleton + first game live | `../insiculous_web/` (sibling of `insiculous_2d` and `games/`, NOT nested in `games/` — Jesse, Jul 30 2026): landing gallery + one dir per game, assembled from per-game `dist/`; GitHub Pages. Verify `.wasm` serving; document WebGPU browser requirements on the page |
-| I2 | Remaining games on the site | |
-| I3 | itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side |
-| I0 | AI-asset purge gate | Every publish path (I1 site assembly, I3 butler push) runs `../games/deion_assets/scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file — AI stand-ins never reach a storefront (DEION_STYLE.md §6) |
-| I4 | `docs/STEAM_CHECKLIST.md` | Doc only — Steam = native packaging + Steamworks, explicitly deferred (Steam doesn't host HTML5) |
+| I1 | First game live on the site | Drop the first H9 build into `public/games/<slug>/v1/`, flip that page to `playable`, verify `.wasm` serving + WebGPU browser requirements documented on the page. Blocked on: H9 first build + Cloudflare handoff milestone (b) below |
+| I2 | Remaining games on the site | Same drop-in per game as builds land |
+| I3 | Free itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side. **Free tier = AI art okay** (same builds as the site); a *paid* itch.io release would count as marketplace and take the I0 gate |
+| I0 | AI-asset purge gate — **paid/marketplace paths only** (retiered Aug 19 2026) | Any paid publish path (Phase J store builds, paid itch.io) runs `../games/deion_assets/scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file. Free web deploys (site, free itch.io) skip the purge by design — AI stand-ins there showcase the workflow (DEION_STYLE.md §6) |
+| I4 | `docs/STEAM_CHECKLIST.md` | Doc only — Steam = native packaging + Steamworks, deferred as Phase J groundwork (Steam doesn't host HTML5) |
+
+**insiculous_web handoff (Aug 19 2026):** milestone (a) ☑ local clone's origin
+→ `https://github.com/milyramic/insiculous_web.git` (repo transferred — old URL
+redirects to the same head). Milestone (b) is largely done Mily-side already:
+deploys run via GitHub Actions on every push to `main` (`wrangler deploy` with
+`CLOUDFLARE_API_TOKEN`/`ACCOUNT_ID` repo secrets; the dashboard's Workers
+Builds git integration is deliberately disconnected), and the production URL is
+the custom domain **`beinsiculous.com`** (wrangler route + astro `site`) —
+remaining manual step: the beinsiculous.com zone must exist in the target
+Cloudflare account with the registrar pointing at Cloudflare's nameservers
+(deploys succeed on workers.dev until then). The site also now hosts Mily's
+FortKnight/ForkKnife app alongside the games/engine/devlog surfaces — the
+AI-dev-studio umbrella in practice.
+
+## Phase J — Insiculous Arcade (marketplace compilation) — OUTLINE ONLY
+
+First marketplace release (Jesse, Aug 19 2026): **all non-original
+20-games-challenge games compiled into one Deion-skinned package** for paid
+storefronts (Steam, iOS, Android). Do not plan in detail yet — this section
+exists so the target is named and its gates are on record.
+
+Hard gates (all must hold before any store submission):
+- Phase G complete — every included game fully Deion re-skinned.
+- Hand-drawn art swap complete — no AI stand-ins anywhere in the package;
+  `check_no_ai_assets.sh` passes on the shipping asset tree (I0 gate).
+- Phase H/I stable — the games have shipped and soaked on the free web tier.
+
+Open questions (deliberately unanswered until Phase J planning starts):
+launcher/wrapper design (one binary hosting six games vs a hub scene),
+per-store native packaging (Steamworks; iOS/Android toolchains are entirely
+new scope), input/UX for storefront cert requirements, pricing.
+
+Note: "arcade scaffolding" in engine_core docs (`MenuInput`, `spawn_background`,
+etc.) is unrelated engine vocabulary that predates this product name — leave it.
 
 ---
 

@@ -16,12 +16,14 @@
 # `adversarial-review` skill (.claude/skills/adversarial-review/), which calls
 # scripts/request-review.sh for the review step — as does this driver.
 #
-# Non-interactive invocation (verified against installed CLIs, Jul 2026):
+# Non-interactive invocation (verified against installed CLIs, Aug 2026):
 #   claude: prompt piped on stdin to `claude -p`, response on stdout.
-#   kimi:   prompt piped on stdin to `kimi --quiet` (= --print --output-format
-#           text --final-message-only), final message on stdout. NOTE: kimi's
-#           --print mode auto-approves tool calls, so we pin --work-dir to
-#           review/ to scope any tool use; the prompts also instruct text-only.
+#   kimi:   prompt passed as an argument to `kimi -p <prompt>` (kimi-code
+#           0.36+; the old --quiet/--work-dir flags are gone). Progress logs
+#           go to stderr, the final message to stdout. No work-dir flag
+#           anymore, so the invocation cd's into review/ to keep any tool use
+#           scoped there; the prompts also instruct text-only. Linux caps a
+#           single argv string at ~128 KiB, so oversized payloads fail loud.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,7 +75,19 @@ rm -f "$REVIEW_DIR"/plan.md "$REVIEW_DIR"/plan-v*.md "$REVIEW_DIR"/review-*.md \
 invoke() {
     case "$1" in
         claude) claude -p ;;
-        kimi)   kimi --quiet --work-dir "$REVIEW_DIR" ;;
+        kimi)
+            local payload
+            payload="$(cat)"
+            # kimi -p takes the prompt as one argv string; Linux caps those
+            # at ~128 KiB (MAX_ARG_STRLEN) — fail loud, not cryptically.
+            local payload_bytes
+            payload_bytes=$(printf '%s' "$payload" | wc -c)
+            if [[ "$payload_bytes" -gt 120000 ]]; then
+                echo "error: payload is $payload_bytes bytes (>120000); too large for kimi -p" >&2
+                return 1
+            fi
+            (cd "$REVIEW_DIR" && kimi -p "$payload")
+            ;;
     esac
 }
 

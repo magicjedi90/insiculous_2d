@@ -9,14 +9,16 @@
 //!
 //! ```
 //! use engine_core::{PauseAction, PauseMenu};
+//! use glam::Vec2;
 //! use input::{InputHandler, InputSettings};
 //!
 //! let mut pause = PauseMenu::new();
 //! let settings = InputSettings::default_two_player();
 //! let input = InputHandler::new();
+//! let window_size = Vec2::new(800.0, 600.0);
 //!
 //! // Each frame, from a pausable gameplay state:
-//! match pause.update(&settings, &input) {
+//! match pause.update(&settings, &input, window_size) {
 //!     PauseAction::Restart => { /* self.start_game(...) */ }
 //!     PauseAction::QuitToTitle => { /* self.reset_to_title(...) */ }
 //!     PauseAction::ExitGame => { /* ctx.exit_requested = true */ }
@@ -33,6 +35,10 @@ use ui::UIContext;
 
 use crate::menu_input::MenuInput;
 use crate::menu_panel::{MenuPanel, MenuStyle};
+
+/// Width of the pause window — `update` (hit-testing) and `draw_labeled`
+/// (rendering) must agree on the same panel geometry.
+const PANEL_WIDTH: f32 = 300.0;
 
 /// What the pause menu decided this frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +62,7 @@ pub enum PauseAction {
 const ITEMS: [&str; 4] = ["Resume", "Restart", "Quit to Title", "Exit Game"];
 
 /// Default hint footer shown under the pause items.
-const HINT: &str = "ESC resumes - SPACE confirms";
+const HINT: &str = "ESC resumes - SPACE/ENTER or click confirms";
 
 /// Localizable label set for the pause menu. The defaults are the built-in
 /// English labels, so `PauseMenu::draw` keeps working unchanged; localized
@@ -111,9 +117,19 @@ impl PauseMenu {
     ///
     /// Not paused: a Menu edge (Escape / any pad's Start, either player)
     /// pauses. Paused: Menu or back (Escape/Start/B) always resumes —
-    /// the same button that pauses unpauses, predictably — and
-    /// confirm (Space/Enter/A) executes the highlighted item.
-    pub fn update(&mut self, players: &InputSettings, input: &InputHandler) -> PauseAction {
+    /// the same button that pauses unpauses, predictably — confirm
+    /// (Space/Enter/A) executes the highlighted item, hovering the mouse
+    /// moves the highlight, and a left-click on a row executes that row.
+    /// `window_size` locates the menu window for mouse hit-testing (the
+    /// same geometry [`draw`](Self::draw) renders at); pass
+    /// `ctx.window_size`. The mouse is read here, inside the paused branch
+    /// only, so gameplay never sees the clicks.
+    pub fn update(
+        &mut self,
+        players: &InputSettings,
+        input: &InputHandler,
+        window_size: Vec2,
+    ) -> PauseAction {
         let menu_pressed = players.just_activated_any(GameAction::Menu, input);
 
         if !self.active {
@@ -133,7 +149,14 @@ impl PauseMenu {
         }
 
         self.selection = nav.navigate(self.selection, ITEMS.len() as u8);
-        if nav.confirm {
+        let mouse = Self::panel("", window_size).mouse_select(input);
+        if let Some(hovered) = mouse.hovered {
+            self.selection = hovered;
+        }
+        if nav.confirm || mouse.clicked.is_some() {
+            if let Some(clicked) = mouse.clicked {
+                self.selection = clicked;
+            }
             self.active = false;
             return match self.selection {
                 0 => PauseAction::Resumed,
@@ -143,6 +166,12 @@ impl PauseMenu {
             };
         }
         PauseAction::Idle
+    }
+
+    /// The pause window's layout — shared by `update` (hit-testing) and
+    /// `draw_labeled` (rendering) so clicks always land where rows draw.
+    fn panel(title: &str, window_size: Vec2) -> MenuPanel {
+        MenuPanel::new(title, window_size / 2.0, PANEL_WIDTH, ITEMS.len())
     }
 
     /// Draw the standard pause overlay (input-blocking, dimmed backdrop,
@@ -162,7 +191,7 @@ impl PauseMenu {
         style: &MenuStyle,
         labels: &PauseMenuLabels<'_>,
     ) {
-        let panel = MenuPanel::new(labels.title, window_size / 2.0, 300.0, labels.items.len());
+        let panel = Self::panel(labels.title, window_size);
         panel.draw_as_overlay(ui, window_size, style, |panel, ui, mut y| {
             for (i, item) in labels.items.iter().enumerate() {
                 y = panel.item(ui, y, item, i as u8 == self.selection, style);
@@ -186,6 +215,9 @@ mod tests {
         input.process_queued_events();
     }
 
+    /// Window size shared by every test — the menu window centers in it.
+    const WIN: Vec2 = Vec2::new(800.0, 600.0);
+
     fn setup() -> (PauseMenu, InputSettings, InputHandler) {
         (PauseMenu::new(), InputSettings::default_two_player(), InputHandler::new())
     }
@@ -204,19 +236,19 @@ mod tests {
 
         // Escape edge pauses
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Idle);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
         assert!(pause.is_active());
 
         // Held Escape is not an edge — stays paused, no toggle-flapping
         frame(&mut input, &[]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Idle);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
         assert!(pause.is_active());
 
         // Release, press again: resumes
         frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Resumed);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Resumed);
         assert!(!pause.is_active());
     }
 
@@ -226,30 +258,30 @@ mod tests {
 
         // Player 2's pad (id 1) Start pauses...
         frame(&mut input, &[InputEvent::GamepadButtonPressed(1, GamepadButton::Start)]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Idle);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
         assert!(pause.is_active());
 
         // ...and player 1's pad Start resumes (any player controls pause)
         frame(&mut input, &[
             InputEvent::GamepadButtonReleased(1, GamepadButton::Start),
         ]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[InputEvent::GamepadButtonPressed(0, GamepadButton::Start)]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Resumed);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Resumed);
     }
 
     #[test]
     fn back_button_resumes() {
         let (mut pause, settings, mut input) = setup();
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         assert!(pause.is_active());
 
         frame(&mut input, &[
             InputEvent::KeyReleased(KeyCode::Escape),
             InputEvent::GamepadButtonPressed(0, GamepadButton::B),
         ]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Resumed);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Resumed);
     }
 
     #[test]
@@ -262,51 +294,108 @@ mod tests {
         ] {
             let (mut pause, settings, mut input) = setup();
             frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-            pause.update(&settings, &input);
+            pause.update(&settings, &input, WIN);
             frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
-            pause.update(&settings, &input);
+            pause.update(&settings, &input, WIN);
 
             for _ in 0..downs {
                 frame(&mut input, &[InputEvent::KeyPressed(KeyCode::KeyS)]);
-                assert_eq!(pause.update(&settings, &input), PauseAction::Idle);
+                assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
                 frame(&mut input, &[InputEvent::KeyReleased(KeyCode::KeyS)]);
-                pause.update(&settings, &input);
+                pause.update(&settings, &input, WIN);
             }
 
             frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Space)]);
-            assert_eq!(pause.update(&settings, &input), expected, "{downs} downs");
+            assert_eq!(pause.update(&settings, &input, WIN), expected, "{downs} downs");
             assert!(!pause.is_active(), "every confirm unpauses");
         }
+    }
+
+    #[test]
+    fn click_on_a_row_executes_it_and_hover_moves_the_highlight() {
+        let (mut pause, settings, mut input) = setup();
+        frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
+        pause.update(&settings, &input, WIN);
+        frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
+        pause.update(&settings, &input, WIN);
+
+        // Prime the mouse position: MouseState suppresses the first-ever
+        // move's delta (anti-startup-warp), and hover requires movement.
+        frame(&mut input, &[InputEvent::MouseMoved(0.0, 0.0)]);
+        pause.update(&settings, &input, WIN);
+
+        // Hover over "Quit to Title" (row 2) moves the highlight...
+        let panel = PauseMenu::panel("", WIN);
+        let row2 = panel.row_rect(2);
+        frame(&mut input, &[InputEvent::MouseMoved(
+            row2.x + row2.width / 2.0,
+            row2.y + row2.height / 2.0,
+        )]);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
+
+        // ...so a keyboard confirm now executes the hovered row
+        frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Space)]);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::QuitToTitle);
+
+        // Reopen; a direct click on "Restart" (row 1) executes it without
+        // any keyboard navigation
+        frame(&mut input, &[
+            InputEvent::KeyReleased(KeyCode::Space),
+            InputEvent::KeyPressed(KeyCode::Escape),
+        ]);
+        pause.update(&settings, &input, WIN);
+        let row1 = panel.row_rect(1);
+        frame(&mut input, &[
+            InputEvent::KeyReleased(KeyCode::Escape),
+            InputEvent::MouseMoved(row1.x + 4.0, row1.y + row1.height / 2.0),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Restart);
+        assert!(!pause.is_active());
+    }
+
+    #[test]
+    fn click_outside_the_menu_window_does_nothing() {
+        let (mut pause, settings, mut input) = setup();
+        frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
+        pause.update(&settings, &input, WIN);
+        frame(&mut input, &[
+            InputEvent::KeyReleased(KeyCode::Escape),
+            InputEvent::MouseMoved(10.0, 10.0),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Idle);
+        assert!(pause.is_active(), "stray clicks don't unpause");
     }
 
     #[test]
     fn selection_wraps_and_resets_on_reopen() {
         let (mut pause, settings, mut input) = setup();
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
 
         // Up from the top wraps to the last item (Exit Game) — confirm proves it
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::KeyW)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[
             InputEvent::KeyReleased(KeyCode::KeyW),
             InputEvent::KeyPressed(KeyCode::Space),
         ]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::ExitGame);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::ExitGame);
 
         // Reopening starts back at Resume
         frame(&mut input, &[
             InputEvent::KeyReleased(KeyCode::Space),
             InputEvent::KeyPressed(KeyCode::Escape),
         ]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[
             InputEvent::KeyReleased(KeyCode::Escape),
             InputEvent::KeyPressed(KeyCode::Space),
         ]);
-        assert_eq!(pause.update(&settings, &input), PauseAction::Resumed);
+        assert_eq!(pause.update(&settings, &input, WIN), PauseAction::Resumed);
     }
 
     #[test]
@@ -315,13 +404,13 @@ mod tests {
         assert_eq!(pause.time_scale(), 1.0);
 
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         assert_eq!(pause.time_scale(), 0.0);
 
         frame(&mut input, &[InputEvent::KeyReleased(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         frame(&mut input, &[InputEvent::KeyPressed(KeyCode::Escape)]);
-        pause.update(&settings, &input);
+        pause.update(&settings, &input, WIN);
         assert_eq!(pause.time_scale(), 1.0);
     }
 }

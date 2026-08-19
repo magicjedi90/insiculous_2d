@@ -74,14 +74,23 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
   own start_game/reset_to_title/`ctx.exit_requested` and skip their whole gameplay
   update while active;
   `time_scale()` feeds `ctx.time_scale` so engine particles freeze too). Takes
-  `&InputSettings + &InputHandler` (NOT GameContext) so it's headless-testable
+  `&InputSettings + &InputHandler + window_size: Vec2` (NOT GameContext) so it's
+  headless-testable; `window_size` locates the panel for mouse hit-testing
+  (hover moves the highlight, click executes a row) — mouse reads live inside
+  the paused branch only, so gameplay never sees the clicks
 - `menu_panel.rs` — `MenuPanel`/`MenuStyle`: shared menu window chrome (opaque
   themed panel, border, accent separator + corner ticks, ▶-cursor highlight
   rows, hint footer, input-blocking overlay variant). Flair is rect-based;
-  the ▶ cursor is verified in the games' shared font.ttf
-- `menu_input.rs` — `MenuInput` shared menu-screen input (W/S+arrows up/down, Space/Enter
-  confirm, Esc back — plus EVERY connected gamepad: dpad/left-stick edge up/down, A/Start
-  confirm, B back) + wraparound `navigate`; used by every game's title/select screens
+  the ▶ cursor is verified in the games' shared font.ttf. Rows are
+  mouse-clickable (Aug 2026): `row_rect`/`row_at` are the pure hit-test
+  geometry, `mouse_select(input) -> MenuMouse` reads hover + left-click from
+  `InputHandler` (headless). Convention: hover moves the shared selection
+  (only on frames the mouse moved — a resting cursor never fights keyboard
+  nav), click = select + confirm that row
+- `menu_input.rs` — `MenuInput` shared menu-screen input (W/S+arrows up/down,
+  Space/Enter/NumpadEnter confirm, Esc back — plus EVERY connected gamepad: dpad/left-stick
+  edge up/down, A/Start confirm, B back) + wraparound `navigate`; used by every game's
+  title/select screens
 - `spawn_helpers.rs` — shared entity recipes (`spawn_background` full-window backdrop); `RENDER_UNIT = 80.0` (pixels per world unit) lives at the crate root and is used by the render path in `game.rs`
 - `pickups.rs` — generic pickup/collectible tracking (`Pickups<K>` keyed by a game-defined kind, `EffectTimer` for timed effects); collection = started-collision events vs a collector set, once per pickup. Used by BOTH Pong (floating power-ups, balls collect) and Breakout (falling drops, paddle collects) — engine owns the mechanism, games own the meaning
 - `ui_integration.rs` — UI-to-renderer bridge. **Camera-relative**: UI sprites are positioned/scaled against the render camera so UI stays at fixed screen pixels when the camera moves/zooms (camera-follow games, editor). Emits SDF shapes: rounded rects, single-sprite borders, true circles, and `DrawCommand::Image` textured quads

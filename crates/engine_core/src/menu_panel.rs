@@ -25,7 +25,9 @@
 //! ```
 
 use glam::{Vec2, Vec4};
+use input::InputHandler;
 use ui::{Color, Rect, UIContext};
+use winit::event::MouseButton;
 
 use crate::chaos_theme::ChaosTheme;
 
@@ -84,6 +86,22 @@ impl MenuStyle {
     }
 }
 
+/// One frame's mouse interaction with a menu window's selectable rows,
+/// from [`MenuPanel::mouse_select`]. Convention (all games): **hover moves
+/// the shared selection cursor, a left-click on a row confirms it** — treat
+/// `clicked` exactly like [`MenuInput`](crate::MenuInput)'s `confirm` on
+/// that row. Clicks outside the rows do nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MenuMouse {
+    /// Row under the cursor — reported only on frames where the mouse
+    /// actually moved, so a resting cursor never fights keyboard/pad
+    /// navigation for the selection.
+    pub hovered: Option<u8>,
+    /// Row the left button was just pressed on this frame (reported whether
+    /// or not the mouse moved).
+    pub clicked: Option<u8>,
+}
+
 /// One menu window: fixed title/center/width/row-count, drawn as layered
 /// rects + labels. Construct per frame (it's just layout parameters).
 pub struct MenuPanel {
@@ -108,6 +126,50 @@ impl MenuPanel {
             self.width,
             height,
         )
+    }
+
+    /// The clickable bounds of selectable row `index` — the same footprint
+    /// the selection highlight bar covers, but the full row tall.
+    pub fn row_rect(&self, index: usize) -> Rect {
+        let rect = self.panel_rect();
+        let inset = PADDING + 2.0;
+        Rect::new(
+            rect.x + inset,
+            rect.y + PADDING + TITLE_BAND + index as f32 * ROW_HEIGHT,
+            rect.width - 2.0 * inset,
+            ROW_HEIGHT,
+        )
+    }
+
+    /// Which selectable row (if any) contains `pos` (window pixels).
+    /// The title band, hint band, and padding are not rows.
+    pub fn row_at(&self, pos: Vec2) -> Option<u8> {
+        (0..self.rows).find(|&i| self.row_rect(i).contains(pos)).map(|i| i as u8)
+    }
+
+    /// Read this frame's mouse interaction with the selectable rows (see
+    /// [`MenuMouse`] for the hover-selects / click-confirms convention).
+    /// Headless-testable: driven entirely by [`InputHandler`] state, like
+    /// [`MenuInput`](crate::MenuInput).
+    pub fn mouse_select(&self, input: &InputHandler) -> MenuMouse {
+        let pos = input.mouse_position();
+        let pos = Vec2::new(pos.x, pos.y);
+        let row = self.row_at(pos);
+        let moved = input.mouse_movement_delta() != (0.0, 0.0);
+        MenuMouse {
+            hovered: if moved { row } else { None },
+            clicked: if input.is_mouse_button_just_pressed(MouseButton::Left) { row } else { None },
+        }
+    }
+
+    /// Whether the left button was just pressed anywhere inside the window —
+    /// title band, rows, hint band, padding included. The dismiss check for
+    /// non-selectable info screens ("click to go back"), where row-band
+    /// hit-testing would ignore clicks on headers and margins.
+    pub fn clicked_inside(&self, input: &InputHandler) -> bool {
+        let pos = input.mouse_position();
+        input.is_mouse_button_just_pressed(MouseButton::Left)
+            && self.panel_rect().contains(Vec2::new(pos.x, pos.y))
     }
 
     /// Draw the window frame (opaque fill, border, title, accent separator,
@@ -256,6 +318,105 @@ mod tests {
         let rect = panel(4).panel_rect();
         assert!(rect.y > 0.0 && rect.y + rect.height < 600.0, "{rect:?}");
         assert!(rect.x > 0.0 && rect.x + rect.width < 800.0, "{rect:?}");
+    }
+
+    use input::InputEvent;
+
+    fn frame(handler: &mut InputHandler, events: &[InputEvent]) {
+        handler.end_frame();
+        for event in events {
+            handler.queue_event(event.clone());
+        }
+        handler.process_queued_events();
+    }
+
+    /// An InputHandler whose mouse already has a position: MouseState
+    /// suppresses the movement delta on the first-ever position update
+    /// (anti-startup-warp), so hover tests must move from somewhere.
+    fn input_with_mouse_at_origin() -> InputHandler {
+        let mut input = InputHandler::new();
+        frame(&mut input, &[InputEvent::MouseMoved(0.0, 0.0)]);
+        input
+    }
+
+    #[test]
+    fn row_at_round_trips_every_row_center_and_rejects_the_bands() {
+        let p = panel(3);
+        for i in 0..3 {
+            let r = p.row_rect(i);
+            let center = Vec2::new(r.x + r.width / 2.0, r.y + r.height / 2.0);
+            assert_eq!(p.row_at(center), Some(i as u8), "row {i}");
+        }
+        let rect = p.panel_rect();
+        // Title band, hint band, and points outside the window are not rows
+        assert_eq!(p.row_at(Vec2::new(400.0, rect.y + PADDING + TITLE_BAND / 2.0)), None);
+        assert_eq!(p.row_at(Vec2::new(400.0, rect.y + rect.height - PADDING - HINT_BAND / 2.0)), None);
+        assert_eq!(p.row_at(Vec2::new(rect.x - 5.0, 300.0)), None);
+    }
+
+    #[test]
+    fn click_on_a_row_reports_that_row() {
+        let p = panel(3);
+        let r = p.row_rect(1);
+        let mut input = input_with_mouse_at_origin();
+        frame(&mut input, &[
+            InputEvent::MouseMoved(r.x + r.width / 2.0, r.y + r.height / 2.0),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        let mouse = p.mouse_select(&input);
+        assert_eq!(mouse.hovered, Some(1));
+        assert_eq!(mouse.clicked, Some(1));
+    }
+
+    #[test]
+    fn resting_cursor_does_not_hover_but_still_clicks() {
+        let p = panel(3);
+        let r = p.row_rect(2);
+        let mut input = input_with_mouse_at_origin();
+        // Frame 1: move onto row 2
+        frame(&mut input, &[InputEvent::MouseMoved(r.x + 4.0, r.y + 4.0)]);
+        assert_eq!(p.mouse_select(&input).hovered, Some(2));
+        // Frame 2: no movement — hover stops fighting keyboard navigation...
+        frame(&mut input, &[InputEvent::MouseButtonPressed(winit::event::MouseButton::Left)]);
+        let mouse = p.mouse_select(&input);
+        assert_eq!(mouse.hovered, None);
+        // ...but a click on the resting position still confirms the row
+        assert_eq!(mouse.clicked, Some(2));
+    }
+
+    #[test]
+    fn click_outside_the_rows_reports_nothing() {
+        let p = panel(3);
+        let mut input = InputHandler::new();
+        frame(&mut input, &[
+            InputEvent::MouseMoved(10.0, 10.0),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        assert_eq!(p.mouse_select(&input), MenuMouse::default());
+    }
+
+    #[test]
+    fn clicked_inside_covers_the_whole_window_not_just_rows() {
+        let p = panel(3);
+        let rect = p.panel_rect();
+        // Click in the title band: no row registers, but the panel does —
+        // this is what lets info screens dismiss on any click.
+        let title_band = Vec2::new(400.0, rect.y + PADDING + TITLE_BAND / 2.0);
+        let mut input = InputHandler::new();
+        frame(&mut input, &[
+            InputEvent::MouseMoved(title_band.x, title_band.y),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        assert_eq!(p.mouse_select(&input).clicked, None);
+        assert!(p.clicked_inside(&input));
+
+        // Click outside the window entirely: neither registers.
+        let mut input = InputHandler::new();
+        frame(&mut input, &[
+            InputEvent::MouseMoved(rect.x - 20.0, rect.y - 20.0),
+            InputEvent::MouseButtonPressed(winit::event::MouseButton::Left),
+        ]);
+        assert!(!p.clicked_inside(&input));
     }
 
     #[test]

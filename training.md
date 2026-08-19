@@ -534,7 +534,7 @@ direct Menu→title exit):
 ```rust
 // Top of the gameplay update, BEFORE physics/timers (pausable states only):
 if matches!(self.state, GameState::Playing) {
-    let action = self.pause.update(ctx.players, ctx.input);
+    let action = self.pause.update(ctx.players, ctx.input, ctx.window_size);
     ctx.time_scale = self.pause.time_scale();   // freezes engine particles
     match action {
         PauseAction::Restart => { self.start_game(ctx); return; }
@@ -571,12 +571,31 @@ fn draw_title(&self, ctx: &mut GameContext, selection: u8) {
     for (i, item) in ["1 Player", "2 Player", "Achievements"].iter().enumerate() {
         y = panel.item(ctx.ui, y, item, i as u8 == selection, &style);
     }
-    panel.hint(ctx.ui, "W/S or D-Pad navigate - SPACE or (A) confirm", &style);
+    panel.hint(ctx.ui, "W/S or D-Pad navigate - SPACE/ENTER or click confirm", &style);
 }
 ```
 `item_colored` keeps caller-chosen row colors (breakout's level roster);
 `line` adds non-selectable rows (game-over panels); `draw_as_overlay` wraps
 the window in an input-blocking dimmed overlay (how the pause menu renders).
+
+**Menus are mouse-clickable (Aug 2026).** In the input half of a menu screen,
+build the SAME panel geometry the drawing half renders (title text doesn't
+matter, center/width/rows do) and read `panel.mouse_select(ctx.input)`:
+`hovered` (reported only on frames the mouse moved, so a resting cursor never
+fights keyboard navigation) overwrites the selection; `clicked` selects that
+row AND confirms it — treat it exactly like `MenuInput.confirm`. `PauseMenu`
+does this internally, which is why `pause.update` takes `ctx.window_size`.
+
+```rust
+let input = MenuInput::read(ctx.input);          // Space/Enter/NumpadEnter, pads
+let mouse = panel.mouse_select(ctx.input);       // hover + click
+if let Some(row) = mouse.hovered { self.selection = row; }
+self.selection = input.navigate(self.selection, 3);
+if input.confirm || mouse.clicked.is_some() {
+    if let Some(row) = mouse.clicked { self.selection = row; }
+    // enter the selected item
+}
+```
 
 **Files:** `engine_core/menu_panel.rs`, examples in every game's `drawing.rs`/`ui.rs`
 

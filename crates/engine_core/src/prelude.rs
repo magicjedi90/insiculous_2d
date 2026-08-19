@@ -31,7 +31,7 @@ pub use crate::{
     ui_element_system::{UiButtonPressed, UiElementsHidden},
     // Shared arcade scaffolding
     menu_input::MenuInput,
-    menu_panel::{MenuPanel, MenuStyle},
+    menu_panel::{MenuMouse, MenuPanel, MenuStyle},
     pause::{PauseAction, PauseMenu, PauseMenuLabels},
     spawn_helpers::spawn_background,
     RENDER_UNIT,
