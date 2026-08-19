@@ -17,18 +17,6 @@ use super::{Game, GameRunner};
 /// Shared slot the spawned init task fills and the frame loop drains.
 pub(super) type PendingRenderer = Rc<RefCell<Option<Result<Renderer, RendererError>>>>;
 
-/// The page canvas's pixel size (its `width`/`height` attributes), the
-/// authoritative render size for an embedded game.
-fn canvas_pixel_size() -> Option<(u32, u32)> {
-    use wasm_bindgen::JsCast;
-    let canvas = web_sys::window()?
-        .document()?
-        .get_element_by_id("game-canvas")?
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .ok()?;
-    Some((canvas.width(), canvas.height()))
-}
-
 impl<G: Game> GameRunner<G> {
     /// Kick off async renderer creation as a browser task. Called from
     /// `resumed()`; re-fire is prevented by its window-created guard.
@@ -58,15 +46,18 @@ impl<G: Game> GameRunner<G> {
             Some(Ok(renderer)) => {
                 self.render_manager.complete_init(renderer, self.config.clear_color);
                 self.finish_renderer_setup();
-                // The adopted canvas can report a 0 inner size during async
-                // init and winit may never deliver a Resized for it — push
-                // the canvas's actual pixel size through the resize path.
-                if let Some((width, height)) = canvas_pixel_size() {
-                    if width > 0 && height > 0 {
-                        self.window_manager.resize(width, height);
-                        self.render_manager.resize(width, height);
-                    }
-                }
+                // Force the surface to the game's configured size. The
+                // canvas CANNOT be trusted here: winit's resize observer may
+                // report 0 before first layout, the surface then configures
+                // at the clamped 1x1, and wgpu's configure() writes those
+                // 1x1 attrs back onto the canvas — which drives its CSS
+                // layout, so the observer keeps confirming 1x1 forever.
+                // Reconfiguring at the (always nonzero) GameConfig size
+                // resets the canvas attrs and breaks that feedback loop;
+                // genuine page-layout resizes still arrive as normal winit
+                // Resized events afterwards.
+                self.window_manager.resize(self.config.width, self.config.height);
+                self.render_manager.resize(self.config.width, self.config.height);
                 // The game draws its own frames from here on.
                 crate::web::set_boot_status("");
             }
