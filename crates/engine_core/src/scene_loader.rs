@@ -81,7 +81,7 @@ pub struct SceneLoader;
 impl SceneLoader {
     /// Load scene data from a RON file
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<SceneData, SceneLoadError> {
-        let content = std::fs::read_to_string(path.as_ref())?;
+        let content = common::vfs::read_to_string(path.as_ref())?;
         Self::parse(&content)
     }
 

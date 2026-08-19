@@ -2,7 +2,8 @@
 //!
 //! This module provides utilities for tracking time and managing frame rates.
 
-use std::time::{Duration, Instant};
+use common::clock::Instant;
+use std::time::Duration;
 
 /// A timer for tracking elapsed time
 pub struct Timer {

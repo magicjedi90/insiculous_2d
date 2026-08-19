@@ -9,6 +9,7 @@ use std::sync::Arc;
 use ecs::sprite_components::Transform2D;
 use ecs::World;
 use glam::Vec2;
+#[cfg(not(target_arch = "wasm32"))]
 use winit::window::Window;
 
 use renderer::{
@@ -53,7 +54,12 @@ impl RenderManager {
         }
     }
 
-    /// Initialize the renderer with a window.
+    /// Initialize the renderer with a window (native only).
+    ///
+    /// Blocks on the async wgpu setup via `pollster` — the one place the
+    /// engine may block, at the native outer edge. On the web, renderer
+    /// creation is spawned as a browser task and its result is handed to
+    /// [`Self::complete_init`] instead.
     ///
     /// # Arguments
     /// * `window` - The window to render to
@@ -62,15 +68,22 @@ impl RenderManager {
     /// # Returns
     /// * `Ok(())` on successful initialization
     /// * `Err(RendererError)` if initialization fails
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn init(
         &mut self,
         window: Arc<Window>,
         clear_color: [f32; 4],
         renderer_config: renderer::RendererConfig,
     ) -> Result<(), RendererError> {
-        // Use pollster for async execution
-        let mut renderer = pollster::block_on(renderer::init_with_config(window, renderer_config))?;
+        let renderer = pollster::block_on(renderer::init_with_config(window, renderer_config))?;
+        self.complete_init(renderer, clear_color);
+        Ok(())
+    }
 
+    /// Adopt an already-created renderer: set the clear color, build the
+    /// sprite pipeline, and mark the manager initialized. Shared tail of
+    /// native (blocking) and web (async task) renderer bring-up.
+    pub fn complete_init(&mut self, mut renderer: Renderer, clear_color: [f32; 4]) {
         renderer.set_clear_color(
             clear_color[0] as f64,
             clear_color[1] as f64,
@@ -85,7 +98,6 @@ impl RenderManager {
         self.sprite_pipeline = Some(sprite_pipeline);
 
         log::info!("RenderManager initialized");
-        Ok(())
     }
 
     /// Check if the renderer is initialized.

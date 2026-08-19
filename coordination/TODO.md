@@ -14,36 +14,46 @@ Challenge stays PAUSED at game 7 (Tetris). Full phase specs:
 rodio. Firefox needs a full restart after enabling `dom.webgpu.enabled`, not
 just a new tab. E3/E4 shipped Jul 30 — schema freeze REACHED; see PROGRESS.md.)
 
-### Ready now — Phase H (parallelizable across crates; specs in PROJECT_ROADMAP.md)
+**Aug 19 2026: the Pong vertical slice SHIPPED** (H2 ☑, H3 ☑ revised to a
+cfg-split — native loop unchanged, H4 ☑, H5 core ☑, H7 partial, H9 pong ☑
+at 2.5 MiB, I1 staged awaiting Jesse's push) — see PROGRESS.md and the
+updated roadmap Phase H table (incl. the detached-canvas / sRGB / 0-size
+lessons for the next ports).
 
-- **TASK-H2** — `web-time` swap: replaces `Instant`/`SystemTime` in
-  game_loop_manager, timing, lifecycle, achievements.
-- **TASK-H3** — Redraw-driven loop: `RedrawRequested` + `request_redraw` (one
-  model native+web); `thread::sleep` throttle native-only.
-- **TASK-H4** — Async renderer init: `wasm_bindgen_futures::spawn_local` on
-  wasm; pollster only at the native outer edge. SINGLE-AGENT.
-- **TASK-H5** — Asset manifest + fetch boot phase: generated per-game manifest;
-  web boot fetches all entries into a bytes map; loaders get bytes-primary
-  twins (`load_sound`/`play_music` become bytes-primary per H1 finding).
+### Ready now — Phase H remainders (specs in PROJECT_ROADMAP.md)
+
+- **TASK-H9 (remaining 5)** — Port snake → frogger → breakout →
+  space_invaders → asteroids with the pong recipe: lib.rs/main.rs/
+  `web_entry.rs` split (editor stays native-main-only), `[lib] cdylib+rlib`,
+  wasm-target deps (`wasm-bindgen = "=0.2.126"`), `[profile.wasm-release]`,
+  font path via `ctx.assets.base_path()`, then
+  `scripts/build_wasm.sh <game_dir> <slug> --serve` + browser check.
+  Breakout note: first game with scene RON files (loads via vfs — verify).
+  Audio path loaders already work on wasm (vfs-routed, review-2 F1) — the
+  first sound-using port still needs the H7 gesture gate to be audible.
+- **TASK-H5 (remainder)** — `include_bytes!` bootstrap-minimum decision only
+  (audio conversion landed via review-2 F1).
 - **TASK-H6** — `KvStore` trait: native = JSON files (achievements keep atomic
-  tmp+rename), wasm = localStorage; errors logged, never panic.
+  tmp+rename), wasm = localStorage; errors logged, never panic. (Web builds
+  currently degrade to in-memory achievements + default bindings by setting
+  no save paths.)
 - **TASK-H7 (remaining)** — gesture-gated `OutputStream` init (start
-  `disabled()`, upgrade on first gesture; `try_default()` Ok is NOT a health
-  check).
+  `disabled()` — already forced on wasm — upgrade on first gesture;
+  `try_default()` Ok is NOT a health check).
 - **TASK-H8** — Incremental wasm CI guard: `cargo check --target
   wasm32-unknown-unknown` starting on `common`/`ecs`, expanding crate-by-crate.
+  Includes deciding the 3 renderer `arc_with_non_send_sync` wasm-clippy
+  warnings (allow-lint vs restructure).
 
-### Sequenced after H2–H8
+### Deploy
 
-- **TASK-H9** — Port all 6 games: shared `scripts/build_wasm.sh` + index.html
-  template + release-profile snippet. Does NOT gate on Phase G — current look
-  ships.
-- **TASK-I1/I2** — Games live on the site (`../insiculous_web/`, Cloudflare
-  Workers, drop-in `public/games/<slug>/v1/` convention; flip a page to
-  `playable` only when its build lands). Deploys already run via GitHub
-  Actions on Mily's repo (`milyramic/insiculous_web`); the custom domain
-  `beinsiculous.com` is configured and waits only on the Cloudflare zone +
-  registrar nameservers (Jesse/Mily manual).
+- **TASK-I1 (final step)** — Jesse pushes the staged insiculous_web changes
+  (GameEmbed + pong.md + public/games/pong/v1/) to `milyramic/insiculous_web`
+  `main` → Actions deploys → verify live at beinsiculous.com.
+- **TASK-I2** — Remaining games on the site: same drop-in per game as H9
+  builds land (page flip only when the build exists). The custom domain
+  `beinsiculous.com` waits only on the Cloudflare zone + registrar
+  nameservers (Jesse/Mily manual).
 
 ### Parallel art track (Phases F/G — no longer gating anything)
 

@@ -26,21 +26,18 @@
 //! ```
 
 use glam::Vec2;
-use winit::{
-    application::ApplicationHandler,
-    event::{ElementState, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
-    keyboard::{KeyCode, PhysicalKey},
-    window::WindowId,
-};
+use winit::{event_loop::EventLoop, keyboard::KeyCode};
 
 use audio::AudioManager;
 use input::InputHandler;
 use renderer::{sprite::SpriteBatcher, texture::TextureHandle};
 
+mod app_handler;
 mod frame_tail;
 mod locale_font;
 mod render;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 use crate::{GameLoopManager, UIManager};
 use crate::game_config::GameConfig;
@@ -155,8 +152,21 @@ pub trait Game: Sized + 'static {
 /// ```
 pub fn run_game<G: Game>(game: G, config: GameConfig) -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
-    let mut runner = GameRunner::new(game, config);
-    event_loop.run_app(&mut runner)?;
+    let runner = GameRunner::new(game, config);
+
+    // Native: block until the window closes. Web: hand the runner to the
+    // browser's event loop and return immediately — `spawn_app` never blocks
+    // (the wasm entry point has nothing left to do after this call).
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut runner = runner;
+        event_loop.run_app(&mut runner)?;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(runner);
+    }
     Ok(())
 }
 
@@ -197,6 +207,10 @@ struct GameRunner<G: Game> {
     game_loop_manager: GameLoopManager,
     /// Cached glyph textures for text rendering
     glyph_textures: GlyphTextureCache,
+    /// Renderer being created asynchronously by a browser task (web only);
+    /// drained by the frame driver once the task completes.
+    #[cfg(target_arch = "wasm32")]
+    pending_renderer: web::PendingRenderer,
     /// Engine time multiplier mirrored onto `GameContext.time_scale`
     /// (read-write, persisted like chaos_mode). Scales particle stepping.
     time_scale: f32,
@@ -277,6 +291,8 @@ impl<G: Game> GameRunner<G> {
             ui_manager: UIManager::new(),
             game_loop_manager,
             glyph_textures: GlyphTextureCache::new(),
+            #[cfg(target_arch = "wasm32")]
+            pending_renderer: web::PendingRenderer::default(),
             time_scale: 1.0,
             exit_requested: false,
             scene: Scene::new("main"),
@@ -293,7 +309,9 @@ impl<G: Game> GameRunner<G> {
         }
     }
 
-    /// Initialize the render manager with the current window.
+    /// Initialize the render manager with the current window (native only —
+    /// blocks on wgpu setup; the web path spawns it async, see `game/web.rs`).
+    #[cfg(not(target_arch = "wasm32"))]
     fn init_renderer(&mut self) -> Result<(), renderer::RendererError> {
         let window = self.window_manager.window_clone().ok_or_else(|| {
             renderer::RendererError::WindowCreationError("No window".to_string())
@@ -305,6 +323,14 @@ impl<G: Game> GameRunner<G> {
             self.config.clear_color,
             renderer::RendererConfig { vsync: self.config.vsync },
         )?;
+        self.finish_renderer_setup();
+        Ok(())
+    }
+
+    /// Shared tail of renderer bring-up (native blocking / web async):
+    /// set the initial viewport and create the `AssetManager` from the live
+    /// device and queue.
+    fn finish_renderer_setup(&mut self) {
         self.render_manager.set_viewport_size(
             self.config.width as f32,
             self.config.height as f32,
@@ -316,8 +342,6 @@ impl<G: Game> GameRunner<G> {
             self.asset_manager = Some(AssetManager::with_config(device, queue, asset_config));
             log::info!("Asset manager initialized");
         }
-
-        Ok(())
     }
 
     /// Helper to get window size from window manager.
@@ -328,6 +352,11 @@ impl<G: Game> GameRunner<G> {
 
 
     fn update_and_render(&mut self) {
+        // Adopt the async-created renderer once its browser task lands
+        // (web only; no-op after initialization).
+        #[cfg(target_arch = "wasm32")]
+        self.drain_pending_renderer();
+
         // Update game loop timing
         let delta_time = self.game_loop_manager.update();
         let window_size = self.window_size();
@@ -435,147 +464,3 @@ impl<G: Game> GameRunner<G> {
     }
 
 }
-
-impl<G: Game> GameRunner<G> {
-    /// Clean shutdown: notify the game, persist input bindings, tear the
-    /// scene down, and exit the event loop. Shared by the window close
-    /// button and game-requested exits (`GameContext::exit_requested`).
-    fn shutdown(&mut self, event_loop: &ActiveEventLoop) {
-        self.game.on_exit();
-        // Persist input bindings (incl. runtime pad re-assignments)
-        if let Some(path) = &self.config.input_settings_path {
-            if let Err(e) = crate::input_settings_io::save(
-                std::path::Path::new(path),
-                &self.player_input,
-            ) {
-                log::warn!("Could not save input settings to {}: {}", path, e);
-            }
-        }
-        let _ = self.scene.stop();
-        let _ = self.scene.shutdown();
-        event_loop.exit();
-    }
-}
-
-impl<G: Game> ApplicationHandler<()> for GameRunner<G> {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Only create window once
-        if self.window_manager.is_created() {
-            return;
-        }
-
-        // Create window using window manager
-        if let Err(e) = self.window_manager.create(event_loop) {
-            log::error!("Failed to create window: {}", e);
-            event_loop.exit();
-            return;
-        }
-
-        // Initialize renderer
-        if let Err(e) = self.init_renderer() {
-            log::error!("Failed to initialize renderer: {}", e);
-            event_loop.exit();
-            return;
-        }
-
-        // Initialize scene lifecycle
-        if let Err(e) = self.scene.initialize() {
-            log::error!("Scene init error: {}", e);
-        }
-        if let Err(e) = self.scene.start() {
-            log::error!("Scene start error: {}", e);
-        }
-
-        log::info!("Game started: {}", self.config.title);
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        // Only handle events for our window
-        if !self.window_manager.is_our_window(window_id) {
-            return;
-        }
-
-        // Forward to input handler
-        self.input.handle_window_event(&event);
-
-        match event {
-            WindowEvent::CloseRequested => {
-                self.shutdown(event_loop);
-            }
-            WindowEvent::Resized(size) => {
-                // Update window manager's tracked size
-                self.window_manager.resize(size.width, size.height);
-                // Update render manager
-                self.render_manager.resize(size.width, size.height);
-                // Notify game
-                self.game.on_resize(size.width, size.height);
-            }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.window_manager.set_scale_factor(scale_factor);
-                log::info!("Scale factor changed to: {}", scale_factor);
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                if let PhysicalKey::Code(key) = event.physical_key {
-                    // Create context and call handlers
-                    let window_size = self.window_size();
-                    if let Some(asset_manager) = &mut self.asset_manager {
-                        let mut ctx = GameContext {
-                            input: &self.input,
-                            players: &mut self.player_input,
-                            world: &mut self.scene.world,
-                            assets: asset_manager,
-                            audio: &mut self.audio_manager,
-                            ui: self.ui_manager.ui_context(),
-                            delta_time: 0.0,
-                            window_size,
-                            chaos_mode: self.config.chaos_mode,
-                            time_scale: self.time_scale,
-                            exit_requested: false,
-                            achievements: &mut self.achievements,
-                            particles: &mut self.particles,
-                            lines: &mut self.lines,
-                            strings: &mut self.strings,
-                        };
-
-                        match event.state {
-                            ElementState::Pressed => {
-                                self.game.on_key_pressed(key, &mut ctx);
-                            }
-                            ElementState::Released => {
-                                self.game.on_key_released(key, &mut ctx);
-                            }
-                        }
-
-                        // Persist chaos-mode/time-scale/exit changes made in
-                        // key handlers too.
-                        self.config.chaos_mode = ctx.chaos_mode;
-                        self.time_scale = ctx.time_scale;
-                        self.exit_requested |= ctx.exit_requested;
-                    }
-                }
-            }
-            WindowEvent::RedrawRequested => {
-                // Rendering is done in about_to_wait
-            }
-            _ => {}
-        }
-    }
-
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        self.update_and_render();
-        if self.exit_requested {
-            self.shutdown(event_loop);
-            return;
-        }
-        // Enforce GameConfig::target_fps by sleeping out the frame budget.
-        self.game_loop_manager.throttle();
-        self.window_manager.request_redraw();
-    }
-}
-
-

@@ -1,15 +1,17 @@
-// Final composite: HDR + blurred bloom -> sRGB swapchain.
+// Final composite: HDR + blurred bloom -> swapchain.
 //
-// The swapchain is sRGB, so the GPU performs the linear -> sRGB encoding
-// automatically. We just need to tonemap from HDR (values potentially >> 1)
-// down to [0, 1] before writing.
+// On an sRGB swapchain (native) the GPU performs the linear -> sRGB
+// encoding automatically and inv_gamma is 1.0. WebGPU canvases expose no
+// sRGB formats, so there inv_gamma is 1/2.2 and the encoding happens here —
+// otherwise the web build renders visibly darker than native.
 
 struct CompositeParams {
     threshold: f32,    // unused here, kept for layout parity
     knee: f32,         // unused
     // Bloom contribution multiplier. 0 disables bloom entirely.
     intensity: f32,
-    _pad: f32,
+    // 1.0 for an sRGB target; 1.0/2.2 to gamma-encode for non-sRGB targets.
+    inv_gamma: f32,
 }
 
 @group(0) @binding(0)
@@ -48,5 +50,6 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     let bloom = textureSample(bloom_tex, linear_sampler, in.uv).rgb;
     let combined = scene + bloom * params.intensity;
     let mapped = tonemap(combined);
-    return vec4<f32>(mapped, 1.0);
+    let encoded = pow(mapped, vec3<f32>(params.inv_gamma));
+    return vec4<f32>(encoded, 1.0);
 }

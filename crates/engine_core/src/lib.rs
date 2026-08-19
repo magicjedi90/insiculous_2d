@@ -23,6 +23,8 @@
 //! ```
 
 pub mod behavior_runner;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 mod game;
 mod glyph_texture_cache;
 mod timing;

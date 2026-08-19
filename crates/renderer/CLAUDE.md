@@ -31,7 +31,17 @@ Renderer (WGPU device, queue, surface, RendererConfig{vsync})
 - `texture.rs` — `TextureManager`, `TextureHandle` (incl. `WHITE`), `SamplerConfig`
 - `texture_filter.rs` — `TextureFilter` (Linear/Nearest → `SamplerConfig` via `From`; the pixel-art knob engine_core plumbs from `GameConfig` and `.sheet.ron` sidecars); public path is still `renderer::TextureFilter`
 - `render_targets.rs` — HDR/depth/bloom textures, resize handling
-- `bloom.rs` — bloom passes + `BloomConfig` (runtime-tunable)
+- `bloom.rs` — bloom passes + `BloomConfig` (runtime-tunable); composite takes
+  a `SwapchainTarget { view, is_srgb }` — non-sRGB swapchains (WebGPU canvases
+  expose NO sRGB formats) get gamma-encoded in the shader via
+  `BloomParams.inv_gamma` so web brightness matches native
+- `window.rs` — window creation + **`insert_canvas_into_dom` (wasm)**: winit
+  NEVER inserts its canvas into the DOM (detached canvas = every pass valid,
+  page silently black); this swaps it in place of the page's `#game-canvas`
+  placeholder (id/size/a11y attrs copied, canvas focused) or appends to body.
+  Called from engine_core's `WindowManager::create` — any new window-creation
+  path must call it too. Adopting an existing canvas via `with_canvas` was
+  tried and abandoned (Aug 2026)
 - `line_pipeline.rs` — `LinePipeline`, `LineVertex`
 - `shaders/` — `sprite_instanced.wgsl`, `line.wgsl`, `bloom_{extract,blur,composite}.wgsl`
 

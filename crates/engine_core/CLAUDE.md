@@ -18,6 +18,21 @@ Core engine: Game trait, run_game(), managers, scene loading/saving, asset manag
 - `game.rs` — Game trait, run_game(), GameRunner orchestration (~530 lines; the render
   tail lives in the child module `game/render.rs` — new render passes go in their own
   module like `tilemap_render.rs`)
+- `game/app_handler.rs` — the winit `ApplicationHandler` impl + `shutdown` +
+  `drive_frame` (split out of game.rs, Aug 2026). **Frame driving is
+  cfg-split**: native = `about_to_wait` (unchanged behavior, throttle+redraw);
+  wasm = the `RedrawRequested` arm (maps to requestAnimationFrame). Never
+  unify them — an occluded/minimized native window stops receiving redraws on
+  some compositors (adversarial finding F2)
+- `game/web.rs` (wasm-only) — async renderer bring-up: `spawn_renderer_init`
+  (spawn_local fills `pending_renderer`), `drain_pending_renderer` (adopts via
+  `complete_init` + `finish_renderer_setup`, pushes the canvas's pixel size
+  through resize — the adopted surface starts 1×1)
+- `web/mod.rs` (wasm-only, `engine_core::web`) — the web boot phase:
+  `preload_assets(base)` fetches `{base}/manifest.json` + every entry into
+  `common::vfs` under `{base}/{entry}` keys BEFORE `run_game`;
+  `init_web_logging()`, `set_boot_status()` (writes `#game-loading`).
+  Game wasm entries call these from `#[wasm_bindgen(start)]`
 - `game/render.rs` — GameRunner's frame-render tail (`render_frame`, batch-ref sorting,
   particle append); child module of `game` so no field visibility changes were needed
 - `game/frame_tail.rs` — GameRunner's post-update tail (particles, **sprite animations**,

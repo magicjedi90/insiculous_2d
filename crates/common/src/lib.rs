@@ -3,8 +3,10 @@
 //! This crate provides shared types used across multiple engine crates,
 //! eliminating duplication and ensuring consistency.
 
+pub mod clock;
 pub mod color;
 pub mod hash;
+pub mod vfs;
 pub mod transform;
 pub mod camera;
 pub mod rect;

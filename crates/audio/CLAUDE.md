@@ -16,6 +16,12 @@ audio system is future work).
 - `AudioManager::new_or_disabled()` — never fails; *disabled* mode (no audio
   device) still loads/validates sounds, playback no-ops. In disabled mode
   `play_music*` returns `Ok` but `is_music_playing()` stays `false` (documented).
+  On wasm32 it ALWAYS starts disabled (browsers gate audio behind a user
+  gesture; the upgrade path is the open H7 work).
+- Path-based loads (`load_sound`, music) read through `common::vfs` (Aug 2026)
+  — std::fs natively, the prefetched in-memory map on the web — so the same
+  path API works on both targets. Music decodes from an in-memory `Cursor`
+  (eager, like all audio here).
 - Sound bytes cached as `Arc<[u8]>`; each play decodes from
   `Cursor<Arc<[u8]>>` — no buffer copy per play.
 - Volume model: sink volume = `base * bus * master`, re-applied to all live

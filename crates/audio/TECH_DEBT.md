@@ -6,6 +6,13 @@ Resolved history: root `log_archive.md` § audio.
 ## Game Programming Patterns Audit (July 2026 — closed; history in `log_archive.md`)
 No open items (GPP-L3 resolved Jul 13 2026 — see `log_archive.md`).
 
+## Open Items
+
+1. **`manager.rs` over the 600-line guardrail (689 lines, Aug 19 2026)** —
+   was already ~674 before the wasm-port VFS routing added ~15. Split along
+   the natural seams (device/output + SFX playback vs music + volume buses)
+   in its own reviewed change; do not grow it further.
+
 ## Known Limitations (By Design — current constraints, not open work)
 
 1. **No streaming for large files** — all sounds loaded into memory for instant playback

@@ -1,11 +1,22 @@
 # Common Crate — Agent Context
 
 Shared types used across all crates. Its only dependencies are `glam`, `serde`,
-`thiserror`, and `bytemuck` — anything added here must stay dependency-light,
-headless, and GPU-free. (Vector/matrix math comes straight from `glam`; there
-is no engine-owned math module.)
+`thiserror`, and `bytemuck` (plus wasm-only `web-time`) — anything added here
+must stay dependency-light, headless, and GPU-free. (Vector/matrix math comes
+straight from `glam`; there is no engine-owned math module.)
 
 ## File Map
+- `clock.rs` — time-source alias: re-exports `std::time::{Instant, SystemTime,
+  UNIX_EPOCH, SystemTimeError}` natively, `web_time::*` on wasm32 (those types
+  panic on the web). Import time types from here, never `std::time` directly
+  (`Duration` stays std). H2 (Aug 2026)
+- `vfs.rs` — asset-read seam: `read`/`read_to_string`/`list_dir_files` are
+  `std::fs` passthroughs natively; on wasm they serve an in-memory map the web
+  boot phase fills via `insert`. **Canonical key = the joined path string
+  `{asset_base}/{relative entry}`** — `MemFs` (the map) compiles + is unit
+  tested on ALL targets so the browser's exact lookup semantics are covered by
+  the native suite. `list_dir_files` is sorted + direct-children-only on both
+  targets. H5 (Aug 2026)
 - `color.rs` — `Color` (the engine-wide color type)
 - `rect.rs` — `Rect` (axis-aligned bounds: hit tests, intersection/union, UI layout)
 - `transform.rs` — `Transform2D` (position/rotation/scale + point transforms)

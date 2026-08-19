@@ -1,8 +1,7 @@
 //! Audio manager for loading and playing sounds.
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -106,7 +105,18 @@ impl AudioManager {
 
     /// Create an audio manager, falling back to disabled mode if no audio
     /// device is available. Never fails — the game keeps running either way.
+    ///
+    /// On the web this always starts disabled: browsers refuse (or silently
+    /// suspend) an `AudioContext` created outside a user gesture, and a
+    /// successful `try_default()` does NOT prove the context is running.
+    /// Gesture-gated upgrade to a real device is the deferred H7 work.
     pub fn new_or_disabled() -> Self {
+        #[cfg(target_arch = "wasm32")]
+        {
+            log::info!("Web audio starts disabled until gesture-gated init (H7)");
+            Self::disabled()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         match Self::new() {
             Ok(manager) => manager,
             Err(e) => {
@@ -146,9 +156,10 @@ impl AudioManager {
     pub fn load_sound<P: AsRef<Path>>(&mut self, path: P) -> AudioResult<SoundHandle> {
         let path = path.as_ref();
 
-        // Read the entire file into memory for replay support.
+        // Read the entire file into memory for replay support. Goes through
+        // the VFS so path-based loads also work on the web (prefetched map).
         // I/O failures convert via `From<io::Error>`.
-        let bytes = std::fs::read(path)?;
+        let bytes = common::vfs::read(path)?;
 
         let handle = self.load_sound_from_bytes(bytes).map_err(|e| match e {
             // Re-attach the file path for decode diagnostics.
@@ -276,10 +287,12 @@ impl AudioManager {
         // Stop current music if any
         self.stop_music();
 
+        // Whole-file read through the VFS (works on web too; music files are
+        // loaded eagerly like all audio — see TECH_DEBT on streaming).
         // I/O failures convert via `From<io::Error>`.
-        let file = File::open(path)?;
+        let bytes = common::vfs::read(path)?;
 
-        let source = Decoder::new(BufReader::new(file))
+        let source = Decoder::new(Cursor::new(bytes))
             .map_err(|e| AudioError::DecodeError(format!("{}: {}", path.display(), e)))?;
 
         // Disabled mode: file was validated above, playback is a no-op.

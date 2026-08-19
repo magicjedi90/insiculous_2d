@@ -86,7 +86,7 @@ pub fn prepare_sheet(base_path: &Path, texture_ref: &str) -> Result<PreparedShee
     let label = sidecar_rel.to_string_lossy().to_string();
     let full_sidecar = resolve_against(base_path, &sidecar_rel);
 
-    let text = std::fs::read_to_string(&full_sidecar).map_err(|e| {
+    let text = common::vfs::read_to_string(&full_sidecar).map_err(|e| {
         AssetError::NotFound(format!("{}: {e}", full_sidecar.to_string_lossy()))
     })?;
     let sheet = parse_sheet_file(&label, &text)?;
@@ -94,7 +94,7 @@ pub fn prepare_sheet(base_path: &Path, texture_ref: &str) -> Result<PreparedShee
     // A header probe, not a decode: the grid needs the PNG's pixel size and
     // nothing else, so validation stays cheap and GPU-free.
     let full_png = resolve_against(base_path, Path::new(texture_ref));
-    let (width, height) = image::image_dimensions(&full_png).map_err(|e| {
+    let (width, height) = png_dimensions(&full_png).map_err(|e| {
         AssetError::InvalidData(format!(
             "{}: cannot read image dimensions: {e}",
             full_png.to_string_lossy()
@@ -106,6 +106,19 @@ pub fn prepare_sheet(base_path: &Path, texture_ref: &str) -> Result<PreparedShee
         sheet: SheetData { grid, clips },
         filter,
     })
+}
+
+/// Read an image's pixel size through the VFS seam, decoding only its header.
+///
+/// The `image` crate's own `image_dimensions` goes straight to `std::fs`, which
+/// has no meaning on wasm; reading the bytes first keeps the probe target-neutral
+/// and still stops at the header.
+fn png_dimensions(path: &Path) -> Result<(u32, u32), image::ImageError> {
+    let bytes = common::vfs::read(path).map_err(image::ImageError::IoError)?;
+    image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(image::ImageError::IoError)?
+        .into_dimensions()
 }
 
 fn resolve_against(base_path: &Path, path: &Path) -> std::path::PathBuf {
@@ -152,8 +165,19 @@ impl SidecarCache {
             return None;
         }
         // No sidecar is the ordinary case for a plain image — not worth a
-        // warning, and not worth a parse attempt.
-        if !resolve_against(base_path, &sidecar_path_for(texture_ref)).exists() {
+        // warning, and not worth a parse attempt. A NotFound read is what
+        // "absent" looks like on every target (`Path::exists` is meaningless
+        // against the wasm map); any OTHER read failure means a sidecar
+        // exists but can't be reached (permissions, manifest gap) — warn.
+        let sidecar = resolve_against(base_path, &sidecar_path_for(texture_ref));
+        if let Err(e) = common::vfs::read(&sidecar) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "Sheet sidecar {:?} exists but is unreadable ({}); \
+                     using the default filter and baked values.",
+                    sidecar, e
+                );
+            }
             return None;
         }
 

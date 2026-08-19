@@ -5,9 +5,15 @@ edition = "2021"
 description = "Audio system for insiculous_2d game engine"
 
 [dependencies]
+common = { workspace = true }
 rodio = { version = "0.20", default-features = false, features = ["symphonia-all"] }
 log = { workspace = true }
 thiserror = { workspace = true }
+
+# Feature union: on wasm, rodio/cpal need their wasm-bindgen backend just to
+# compile (playback stays gated behind the deferred H7 gesture upgrade).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rodio = { version = "0.20", default-features = false, features = ["symphonia-all", "wasm-bindgen"] }
 
 [dev-dependencies]
 env_logger = { workspace = true }

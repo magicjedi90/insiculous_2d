@@ -3,7 +3,8 @@
 //! This module implements the Single Responsibility Principle by extracting
 //! game loop timing and lifecycle management from the overloaded GameRunner.
 
-use std::time::{Duration, Instant};
+use common::clock::Instant;
+use std::time::Duration;
 
 /// Upper bound on a single frame's delta time, in seconds.
 ///
@@ -37,6 +38,9 @@ impl GameLoopManager {
     }
 
     /// Cap the frame rate at `fps`. Pass 0 to uncap (vsync still applies).
+    ///
+    /// Native-only: on the web the loop is paced by `requestAnimationFrame`
+    /// (display rate) and this cap is ignored — see [`Self::throttle`].
     pub fn set_target_fps(&mut self, fps: u32) {
         self.min_frame_time = if fps == 0 {
             None
@@ -49,13 +53,19 @@ impl GameLoopManager {
     ///
     /// Call once per frame after update/render work. No-op when uncapped or
     /// when the frame already used its full budget.
+    /// On `wasm32` this is a no-op: blocking the browser's main thread is
+    /// forbidden, and `requestAnimationFrame` paces the loop instead.
     pub fn throttle(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(min_frame_time) = self.min_frame_time {
             let elapsed = self.last_frame_time.elapsed();
             if elapsed < min_frame_time {
                 std::thread::sleep(min_frame_time - elapsed);
             }
         }
+        // Keep the pacing state "read" on wasm so the field isn't dead code.
+        #[cfg(target_arch = "wasm32")]
+        let _ = self.min_frame_time;
     }
 
     /// Update the game loop timing and return delta time

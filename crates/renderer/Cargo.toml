@@ -14,6 +14,19 @@ glam = { workspace = true }
 bytemuck = { workspace = true }
 image = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Canvas lookup/adoption for the web window (see window.rs::attach_canvas).
+# wasm-bindgen pin must stay in sync with engine_core's.
+wasm-bindgen = "=0.2.126"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "Node",
+] }
+
 [dev-dependencies]
 pollster = { workspace = true }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

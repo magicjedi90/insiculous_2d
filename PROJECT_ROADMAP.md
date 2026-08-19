@@ -237,23 +237,37 @@ for wasm with unchanged Cargo.toml. Forced H2 API change: `load_sound` /
 
 | # | Task | Key decisions |
 |---|------|---------------|
-| H2 | `web-time` swap | Replaces `Instant`/`SystemTime` in game_loop_manager, timing, lifecycle, achievements |
-| H3 | Redraw-driven loop | Rendering moves to `RedrawRequested` + `request_redraw` (one model native+web); `thread::sleep` throttle native-only |
-| H4 | Async renderer init | `wasm_bindgen_futures::spawn_local` on wasm; pollster only at the native outer edge. Single-agent |
-| H5 | Asset manifest + fetch boot phase | Generated per-game manifest; web boot fetches all entries into a bytes map (loading screen), sync bytes-twin loaders consume; locale dir-scan becomes a manifest list; `include_bytes!` for bootstrap minimum only |
-| H6 | `KvStore` trait | Returns `Result`, errors logged never panic; native = JSON files (achievements keep atomic tmp+rename), wasm = localStorage. IndexedDB rejected (KB-scale blobs) |
-| H7 | Audio backend | ☑ DECIDED (H1 spike): stay on rodio. Remaining H7 work: gesture-gated `OutputStream` init (start in `disabled()` mode, upgrade on first gesture; `try_default()` Ok does NOT prove the context is running — don't use as a health check) |
-| H8 | Incremental wasm CI guard | `cargo check --target wasm32-unknown-unknown` starting on `common`/`ecs`, expanding crate-by-crate |
-| H9 | Port all 6 games | Shared `scripts/build_wasm.sh` + index.html template (wasm-bindgen loader) + `[profile.release]` snippet (opt-level="s", lto). Does NOT gate on G at all (Aug 19 2026): games ship in their current look; G art lands on the site as later updates |
+| H2 ☑ | `web-time` swap — **DONE Aug 19 2026** | `common::clock` re-exports `std::time` natively / `web_time` on wasm; swapped in game_loop_manager, timing, lifecycle, achievements |
+| H3 ☑ | Redraw-driven loop — **DONE Aug 19 2026, revised** | Adversarial review (F2) killed "one model native+web": on some compositors (Wayland/macOS occlusion) `RedrawRequested` stops for hidden windows, freezing native games. Shipped as a cfg-split instead: **native keeps the `about_to_wait` driver byte-for-byte**; wasm drives frames from `RedrawRequested` → `request_redraw` (rAF). Shared `drive_frame()` in `game/app_handler.rs`; `thread::sleep` throttle cfg'd out on wasm; `target_fps` documented native-only |
+| H4 ☑ | Async renderer init — **DONE Aug 19 2026** | `RenderManager::init` (native, pollster at the outer edge) + shared `complete_init`; wasm `spawn_local` fills `pending_renderer`, drained by the frame driver (`game/web.rs`). Init surface clamps 0→1px (adopted canvas reports 0 pre-layout); real size pushed from canvas attrs after adoption |
+| H5 ◐ | Asset manifest + fetch boot phase — **CORE DONE Aug 19 2026** | `common::vfs` (native = std::fs passthrough, wasm = in-memory map; canonical key = `{asset_base}/{entry}`); `engine_core::web::preload_assets` fetches `manifest.json` + all entries pre-`GameRunner`, so existing sync loaders work unchanged. Locale dir-scan solved by VFS prefix-scan (no manifest list needed). Converted: textures, fonts, locales, scenes, sheet sidecars, **and audio** (`load_sound`/`start_music` read via vfs — code-review F1; the bytes-primary API redesign is no longer forced). NOT yet: `include_bytes!` bootstrap decision |
+| H6 | `KvStore` trait — **deferred, degrade shipped** | Web builds set no save paths → existing `None`-path fallbacks (in-memory achievements, default bindings). Full trait: returns `Result`, errors logged never panic; native = JSON files (achievements keep atomic tmp+rename), wasm = localStorage. IndexedDB rejected (KB-scale blobs) |
+| H7 ◐ | Audio backend | ☑ DECIDED (H1 spike): stay on rodio. Shipped Aug 19: wasm `new_or_disabled()` always starts `disabled()` + rodio `wasm-bindgen` feature (compile). Remaining: gesture-gated upgrade to a real `OutputStream` (`try_default()` Ok does NOT prove the context is running — don't use as a health check) |
+| H8 | Incremental wasm CI guard | `cargo check --target wasm32-unknown-unknown` starting on `common`/`ecs`, expanding crate-by-crate. Note: wasm clippy of `renderer` has 3 pre-existing `arc_with_non_send_sync` warnings (`Arc<wgpu::Device>` — Device is !Send on web); decide allow-lint vs restructure when H8 lands |
+| H9 ◐ | Port all 6 games — **PONG DONE Aug 19 2026** | `scripts/build_wasm.sh <game_dir> <slug> [--serve]` (generic: CLI-version assert with remediation, manifest gen, guarded local test page); `[profile.wasm-release]` opt-level="s" + lto in the game's Cargo.toml; pong split into lib.rs + thin main.rs + `web_entry.rs` (`#[wasm_bindgen(start)]` → preload → `run_game`). Pong wasm = **2.5 MiB**. Browser-verified via Playwright Chromium on WebGPU (menus, mouse + keyboard, localization, in-memory achievements). Remaining: the other 5 games — same recipe |
 
 WebGPU-only at launch; WebGL2 fallback revisited at the post-I2 launch review.
-`thread::spawn` (lifecycle.rs) feature-gated to no-op on wasm; gilrs does NOT
-need gating (H1 finding: gilrs-core has a web-sys Gamepad backend — web
-gamepad support may be nearly free). H2–H6 parallelizable across crates now
-that the spike is done. Note for H6/H9: 1.83 MB wasm for triangle+audio —
-budget `wasm-opt -Oz` + compression; CI smoke tests need a real GPU session
-or headless Chrome `--enable-unsafe-swiftshader` (headless Firefox has no
-`navigator.gpu`).
+gilrs needed NO gating (H1 finding confirmed — compiles unchanged). Lessons
+paid for during the pong port (Aug 19 2026), for the next 5 ports:
+- **winit never inserts its canvas into the DOM.** A detached canvas renders
+  silently into nothing — every pass valid, page black, zero errors. The fix
+  lives in `renderer::insert_canvas_into_dom` (swaps winit's canvas in place
+  of the page's `#game-canvas` placeholder, copying id/size/a11y attrs),
+  called from `WindowManager::create`. Adopting an existing canvas via
+  `with_canvas` was abandoned — the winit-owns-the-canvas path is what the
+  spike verified. Don't re-litigate.
+- WebGPU canvases expose **no sRGB surface formats**; the bloom composite
+  shader gamma-encodes (`inv_gamma` in `BloomParams`) when the swapchain
+  isn't sRGB, so web brightness matches native.
+- Surfaces must never configure at 0×0 (validation error): init clamps to
+  1×1 and the adopted size is pushed through `resize()` after renderer
+  adoption (`game/web.rs`).
+- Headless-shell/swiftshader Chromium runs the full engine but composites
+  nothing visible — use Playwright's **full Chromium, headed** for pixel
+  verification (screenshots are ground truth; canvas `drawImage` readback of
+  a WebGPU canvas lies). Headless Firefox has no `navigator.gpu` at all.
+- Pong's whole bundle is 2.5 MiB wasm — the 25 MiB Cloudflare budget is a
+  non-issue at current scope; `wasm-opt` still uninstalled and unneeded.
 
 ## Phase I — Deployment
 
@@ -271,7 +285,7 @@ per-file limit). All six game pages exist at `status: alpha` today.
 
 | # | Task | Notes |
 |---|------|-------|
-| I1 | First game live on the site | Drop the first H9 build into `public/games/<slug>/v1/`, flip that page to `playable`, verify `.wasm` serving + WebGPU browser requirements documented on the page. Blocked on: H9 first build + Cloudflare handoff milestone (b) below |
+| I1 ◐ | First game live on the site — **PACKAGE STAGED Aug 19 2026** | Pong build dropped at `public/games/pong/v1/` (v1 = immutable once live; rebuilds bump v2), `pong.md` flipped to `playable` + `wasm:`, GameEmbed activated (WebGPU gate BEFORE the module import, `#game-canvas` placeholder the engine swaps into, controls note), `npm run verify` fully green (data + check + build + postbuild + a11y 43 pages). Remaining: Jesse-approved push to `milyramic/insiculous_web` `main` → Actions deploy → verify live at beinsiculous.com |
 | I2 | Remaining games on the site | Same drop-in per game as builds land |
 | I3 | Free itch.io via butler | `scripts/publish_itch.sh`, HTML5 project per game from the same dist zips; page copy/screenshots Jesse-side. **Free tier = AI art okay** (same builds as the site); a *paid* itch.io release would count as marketplace and take the I0 gate |
 | I0 | AI-asset purge gate — **paid/marketplace paths only** (retiered Aug 19 2026) | Any paid publish path (Phase J store builds, paid itch.io) runs `../games/deion_assets/scripts/check_no_ai_assets.sh` against the dist's assets and FAILS on any `ai_*` file. Free web deploys (site, free itch.io) skip the purge by design — AI stand-ins there showcase the workflow (DEION_STYLE.md §6) |

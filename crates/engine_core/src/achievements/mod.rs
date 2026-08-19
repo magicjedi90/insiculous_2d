@@ -29,8 +29,8 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use common::clock::{SystemTime, UNIX_EPOCH};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use ui::UIContext;

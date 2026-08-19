@@ -57,7 +57,18 @@ struct BloomParams {
     threshold: f32,
     knee: f32,
     intensity: f32,
-    _pad: f32,
+    /// Exponent applied to the composite output. 1.0 on an sRGB swapchain
+    /// (the hardware converts); 1.0/2.2 on non-sRGB swapchains (the web —
+    /// WebGPU canvases expose no sRGB formats) so brightness matches native.
+    inv_gamma: f32,
+}
+
+/// The composite pass's destination: the swapchain view plus whether its
+/// format is sRGB (non-sRGB targets — WebGPU canvases — get gamma-encoded
+/// in the shader instead of by the hardware).
+pub struct SwapchainTarget<'a> {
+    pub view: &'a TextureView,
+    pub is_srgb: bool,
 }
 
 /// GPU layout for the blur uniform buffer.
@@ -161,7 +172,7 @@ impl BloomPipeline {
 
         let bloom_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Bloom Params Buffer"),
-            contents: bytemuck::bytes_of(&BloomParams { threshold: 1.0, knee: 0.5, intensity: 0.8, _pad: 0.0 }),
+            contents: bytemuck::bytes_of(&BloomParams { threshold: 1.0, knee: 0.5, intensity: 0.8, inv_gamma: 1.0 }),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let blur_params_h_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -200,7 +211,7 @@ impl BloomPipeline {
         queue: &Queue,
         encoder: &mut CommandEncoder,
         targets: &RenderTargets,
-        swapchain: &TextureView,
+        swapchain: SwapchainTarget<'_>,
         config: &BloomConfig,
     ) {
         // 1. Update the extract/composite params (tunable at runtime).
@@ -212,7 +223,7 @@ impl BloomPipeline {
                 threshold: config.threshold,
                 knee: config.knee,
                 intensity,
-                _pad: 0.0,
+                inv_gamma: if swapchain.is_srgb { 1.0 } else { 1.0 / 2.2 },
             }),
         );
 
@@ -257,7 +268,7 @@ impl BloomPipeline {
             encoder,
             &self.composite_pipeline,
             &cached.composite,
-            swapchain,
+            swapchain.view,
             "Bloom Composite",
         );
     }

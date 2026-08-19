@@ -107,7 +107,7 @@ impl FontManager {
 
     /// Load a font from a file path.
     pub fn load_font_file(&mut self, path: &str) -> Result<FontHandle, FontError> {
-        let font_data = std::fs::read(path)
+        let font_data = common::vfs::read(std::path::Path::new(path))
             .map_err(|e| FontError::LoadError(format!("Failed to read file {}: {}", path, e)))?;
         self.load_font(&font_data)
     }

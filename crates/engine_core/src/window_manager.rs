@@ -111,6 +111,10 @@ impl WindowManager {
         match event_loop.create_window(window_attributes) {
             Ok(window) => {
                 let window = Arc::new(window);
+                // winit never inserts its canvas into the DOM; a detached
+                // canvas renders silently into nothing.
+                #[cfg(target_arch = "wasm32")]
+                renderer::insert_canvas_into_dom(&window);
                 self.scale_factor = window.scale_factor();
                 self.window = Some(window.clone());
                 log::info!("Window created: {} (scale: {})", self.config.title, self.scale_factor);

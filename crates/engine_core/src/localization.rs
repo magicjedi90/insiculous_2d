@@ -89,23 +89,23 @@ impl Strings {
     /// files are warned about and skipped — never a panic.
     pub fn load_dir(dir: &Path) -> Self {
         let mut strings = Self::empty();
-        let entries = match std::fs::read_dir(dir) {
-            Ok(entries) => entries,
+        let files = match common::vfs::list_dir_files_checked(dir, "ron") {
+            Ok(files) => files,
             Err(e) => {
                 log::warn!("Locales dir {:?} not readable ({}); no translations loaded", dir, e);
                 return strings;
             }
         };
+        if files.is_empty() {
+            log::warn!("No locale files under {:?}; no translations loaded", dir);
+            return strings;
+        }
 
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("ron") {
-                continue;
-            }
+        for path in files {
             let Some(id) = path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };
-            match std::fs::read_to_string(&path) {
+            match common::vfs::read_to_string(&path) {
                 Ok(content) => strings.insert_locale_source(id, &content),
                 Err(e) => log::warn!("Could not read locale file {:?}: {}", path, e),
             }

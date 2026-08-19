@@ -161,8 +161,12 @@ impl TextureManager {
 
         log::info!("Loading texture from path: {:?}", path);
 
-        // Load the image from file
-        let img = image::open(path).map_err(|e| {
+        // Load the image through the VFS seam so wasm can serve it from the
+        // boot-populated map with the same synchronous call shape.
+        let bytes = common::vfs::read(path).map_err(|e| {
+            TextureError::ImageLoadError(format!("Failed to load {:?}: {}", path, e))
+        })?;
+        let img = image::load_from_memory(&bytes).map_err(|e| {
             TextureError::ImageLoadError(format!("Failed to load {:?}: {}", path, e))
         })?;
 

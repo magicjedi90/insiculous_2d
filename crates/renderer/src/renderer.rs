@@ -47,6 +47,10 @@ impl Default for RendererConfig {
 /// The main renderer struct - now with proper lifetime management
 pub struct Renderer {
     window: Arc<Window>,
+    /// Kept alive for the surface's whole life: on the WebGPU backend
+    /// (Chromium's Dawn) dropping the instance invalidates presentation
+    /// silently — frames submit without errors but never reach the canvas.
+    _instance: wgpu::Instance,
     surface: Surface<'static>, // 'static is safe because we control the lifetime
     adapter: Adapter,
     device: Arc<Device>,
@@ -119,7 +123,12 @@ impl Renderer {
         // Configure surface. The bloom composite pass writes the final tonemapped
         // color and relies on the GPU's automatic linear -> sRGB conversion when
         // writing to an sRGB swapchain, so we prefer an sRGB surface format.
-        let size = window.inner_size();
+        // Clamp to 1x1: a zero-size surface is a wgpu validation error. On
+        // the web the adopted canvas can report 0 until its first layout —
+        // the real size arrives via resize() right after adoption.
+        let mut size = window.inner_size();
+        size.width = size.width.max(1);
+        size.height = size.height.max(1);
         let surface_caps = surface.get_capabilities(&adapter);
         let format = surface_caps
             .formats
@@ -138,10 +147,27 @@ impl Renderer {
             } else {
                 wgpu::PresentMode::AutoNoVsync
             },
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            // Prefer an opaque surface: on the web, `Auto` can resolve to
+            // premultiplied alpha and any pass writing alpha < 1 turns the
+            // canvas transparent (a "black" page with zero errors). Native
+            // swapchains ignore alpha, so this changes nothing there.
+            alpha_mode: if surface_caps
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::Opaque)
+            {
+                wgpu::CompositeAlphaMode::Opaque
+            } else {
+                wgpu::CompositeAlphaMode::Auto
+            },
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
+
+        log::info!(
+            "surface config: {}x{} format {:?} alpha {:?} (caps: formats {:?}, alpha {:?})",
+            config.width, config.height, config.format, config.alpha_mode,
+            surface_caps.formats, surface_caps.alpha_modes
+        );
 
         // Configure the surface before moving it
         surface.configure(&device, &config);
@@ -167,6 +193,7 @@ impl Renderer {
 
         Ok(Self {
             window,
+            _instance: instance,
             surface,
             adapter,
             device,
@@ -310,7 +337,10 @@ impl Renderer {
             &self.queue,
             &mut encoder,
             &self.render_targets,
-            &swapchain_view,
+            crate::bloom::SwapchainTarget {
+                view: &swapchain_view,
+                is_srgb: self.config.format.is_srgb(),
+            },
             &self.bloom_config,
         );
 
