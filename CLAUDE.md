@@ -89,7 +89,12 @@ expertise and Godot oracle references.
 
 ## How to Dispatch Work
 
-Read `coordination/TODO.md` for available tasks. Dispatch subagents by crate:
+**Task source of truth (Aug 19 2026): the org taskboard**
+https://github.com/orgs/beinsiculous/projects/1 — query it with
+`gh issue list -R beinsiculous/insiculous_2d` (games: their own repos).
+Claim by assigning/commenting on the issue; close via "fixes …#N" commits.
+`coordination/TODO.md` is a pointer; `coordination/PROGRESS.md` stays the
+narrative log. Dispatch subagents by crate:
 
 ```
 Task(subagent_type="general-purpose", prompt="
@@ -106,12 +111,12 @@ Wait for all to complete, then verify with `cargo test --workspace`.
 ## Coordination Protocol
 
 ### Task Lifecycle
-1. **Claim**: Before dispatching, check `coordination/current_tasks/` for locks
-2. **Lock**: Create `coordination/current_tasks/TASK-XXX.lock` with agent description
-3. **Work**: Subagent implements the task, writes tests, verifies
-4. **Verify**: `cargo test --workspace` must pass (1040 tests, 0 failures, 0 ignored)
-5. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
-6. **Release**: Remove the lock file
+1. **Claim**: Comment on / assign yourself the GitHub issue (replaces the old
+   `coordination/current_tasks/` lock files)
+2. **Work**: Subagent implements the task, writes tests, verifies
+3. **Verify**: `cargo test --workspace` must pass (0 failures, 0 ignored)
+4. **Log**: Append to `coordination/PROGRESS.md` with timestamp and summary
+5. **Close**: Commit message references the issue ("fixes beinsiculous/insiculous_2d#N")
 
 ### Parallel Safety Rules
 - Dispatch agents to **different crates** to avoid merge conflicts
