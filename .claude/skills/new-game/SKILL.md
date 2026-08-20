@@ -7,7 +7,14 @@ description: Scaffold a new game for the 20 Games Challenge following the establ
 
 Games are **standalone cargo projects in `../games/<name>/`** (sibling of the
 engine repo) — NOT workspace members; each is its OWN git repo (`git init -b
-main`, copy breakout's `.gitignore`, commit when the game is green). Before
+main`, copy breakout's `.gitignore`, commit when the game is green). The
+GitHub home is the **`beinsiculous` org** (Aug 2026): create the remote with
+`gh repo create beinsiculous/<name> --private --source . --push`, copy
+`.github/workflows/add-to-project.yml` from any existing game (auto-adds new
+issues to the org Studio Board, https://github.com/orgs/beinsiculous/projects/1),
+and set its secret: `gh secret set ADD_TO_PROJECT_PAT -R beinsiculous/<name>`
+(a token with `project` scope — ask Jesse, never commit it). Task tracking
+for the new game happens as issues on that board, not in md files. Before
 writing anything,
 open `../games/space_invaders/` (most recent) and `../games/breakout/` and
 mirror their structure. When conventions here conflict with what those games
